@@ -1,0 +1,6 @@
+# dsh bundle layer: mount the dsh-shadow plugin via the package root export.
+# The profile's own cordis.patch.yml stays the user's layer; this ships with the
+# package and is applied as a bundle, mirroring dsh-wechat.
+- insert:
+    - id: dsh-shadow
+      name: 'dsh-shadow'
