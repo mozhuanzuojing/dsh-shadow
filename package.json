@@ -15,6 +15,14 @@
     "LICENSE",
     "package.json"
   ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "agent-memory",
+    "memory-tree",
+    "plugin"
+  ],
   "engines": {
     "node": ">=20"
   },
