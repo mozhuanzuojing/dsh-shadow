@@ -50,7 +50,10 @@ export interface ShadowConfig {
     retention?: {
         enabled?: boolean;
         halfLifeDays?: number;
+        staleDays?: number;
     };
+    /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
+    writeConsent?: boolean;
 }
 /** 兼容 DSH Agent / Session 的最小形状（只读 id 与 cwd 相关字段）。 */
 export interface AgentLike {
