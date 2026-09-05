@@ -129,7 +129,9 @@ export function apply(ctx, rawConfig = {}) {
         const arr = pending.get(agentId) || [];
         arr.push({ time: stamp(), ...rec });
         pending.set(agentId, arr);
-        if (rec.comp) {
+        // 只把"语义"comp（读/改文件路径）计入主题入口；纯工具名（pwsh/edit/read 等）不作为入口，
+        // 避免把多个事务的动作聚成一条"工具名"主题（防跨事务串线、召回命中错主题）。
+        if (rec.comp && rec.source !== "tool") {
             const cs = comps.get(agentId) || [];
             cs.push(rec.comp);
             comps.set(agentId, cs);

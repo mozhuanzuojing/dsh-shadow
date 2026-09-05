@@ -676,4 +676,45 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   console.log("✔ 场景14 session/flush 兜底：无 turn-stopping 也落盘（防采集积压）");
 }
 
+
+// ─────────────────────────────────────────────
+// 场景 15：主题/入口切分 —— 语义路径域作 entry，工具名不作入口（防跨事务串线）
+// ─────────────────────────────────────────────
+{
+  const store15 = new Map<string, string>();
+  const fs15 = {
+    async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+    async readText(t: any) { return store15.get(t.displayPath) ?? ""; },
+    async writeText(t: any, c: string) { store15.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t: any) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/"; const names = new Set<string>();
+      for (const k of store15.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const listeners15 = new Map<string, Function>();
+  const services15 = { fs: fs15, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx15: any = { get: (k: string) => services15[k], on: (e: string, fn: Function) => { listeners15.set(e, fn); return () => listeners15.delete(e); }, inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services15[k] }) };
+  const P15 = { name, inject, apply };
+  P15.apply(ctx15, { shadowRoot: "C:/ws15", summary: { enabled: false }, recall: {} });
+  const f15 = (ev: string, ...a: any[]) => { const fn = listeners15.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const ag15 = { id: "T15", session: { header: { cwd: "C:/ws15" } } };
+  agentsById.set("T15", ag15 as any);
+  // 大量工具名动作（不应作为入口）
+  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
+  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
+  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
+  f15("tools/result", { agent: ag15, tool: { name: "edit" } });
+  // 一个语义文件改动（应作为 entry）
+  f15("fs/observed", { targetKey: "C:/ws15/proj/file.txt", displayPath: "C:/ws15/proj/file.txt" }, { kind: "present", version: "v1" }, { agent: { id: "T15" } });
+  await f15("session/flush", { id: "T15" });
+  const keys15 = [...store15.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  assert.ok(keys15.length === 1, `应生成 1 条记忆：${keys15.join(",")}`);
+  const fname15 = keys15[0].replace(/\\/g, "/");
+  assert.ok(!fname15.includes("pwsh") && !fname15.includes("edit"), `entry 不应是工具名（防串线）：${fname15}`);
+  assert.ok(fname15.includes("proj"), `entry 应为语义路径域：${fname15}`);
+  console.log("✔ 场景15 入口/主题切分：语义路径域作 entry，工具名不作入口（防跨事务串线）");
+}
+
 console.log("\nALL PASS ✅");
