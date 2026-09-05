@@ -234,4 +234,59 @@ assert.ok(!String(rec).startsWith("ERR"), `无 llm 时不应抛错：${rec}`);
 console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回（不抛错）");
 
 // 摘要在 llm 缺失时应返回 ""（不写摘要、不影响正文）
+// ─────────────────────────────────────────────
+// 场景 5：一句话总结回填（回归）——SUMMARY 为 enabled 且有 llm 时，flush 后文件头得 `> 摘要：`
+// ─────────────────────────────────────────────
+{
+  const llmSummary = {
+    stream: async function* () {
+      yield { type: "text-delta", index: 0, text: "这是测试摘要" };
+      yield { type: "finish", reason: { kind: "stop" } };
+    },
+  };
+  agent("SUMMARY_AGENT");
+  const services5 = { fs, agents, systemPrompt, tools, llm: llmSummary, agentDefaultModel: undefined };
+  const listeners5 = new Map();
+  const ctx5 = {
+    get: (k) => services5[k],
+    on: (e, fn) => listeners5.set(e, fn),
+    inject: (deps, cb) => cb({ get: (k) => services5[k] }),
+  };
+  const plugin5 = { name, inject, apply };
+  plugin5.apply(ctx5, { summary: { enabled: true, provider: "p", model: "m" }, recall: {} });
+  listeners5.get("session/event")(
+    { id: "SUMMARY_AGENT", header: { cwd: WS } },
+    { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-s", role: "user", content: [{ type: "text", text: "总结一下这轮。" }], source: { kind: "user" } } },
+  );
+  await listeners5.get("agent/turn-stopping")({ agent: agentsById.get("SUMMARY_AGENT"), turn: 1, signal: undefined });
+  // patchSummary 是 detached（void），给一 tick 让它回填。
+  await new Promise((r) => setTimeout(r, 30));
+  const sumPath = [...files.keys()].find((k) => k.includes("shadow/") && files.get(k)?.includes("总结一下这轮"));
+  assert.ok(sumPath, "SUMMARY_AGENT 的记忆应已落盘");
+  const sumText = files.get(sumPath);
+  assert.ok(sumText.includes("> 摘要：这是测试摘要"), `应有摘要回填：\n${sumText.slice(0, 120)}`);
+  console.log("✔ 场景5 摘要回填：flush 后文件头回填 `> 摘要：`（回归正常）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 6：无 llm 时一句话总结也不抛错、不阻塞
+// ─────────────────────────────────────────────
+{
+  const noLlmPlugin = { name, inject, apply };
+  const services6 = { fs, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const listeners6 = new Map();
+  const ctx6 = { get: (k) => services6[k], on: (e, fn) => listeners6.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services6[k] }) };
+  agent("NO_LLM_AGENT");
+  noLlmPlugin.apply(ctx6, { summary: { enabled: true }, recall: {} });
+  listeners6.get("session/event")(
+    { id: "NO_LLM_AGENT", header: { cwd: WS } },
+    { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-n", role: "user", content: [{ type: "text", text: "无模型也要能落盘。" }], source: { kind: "user" } } },
+  );
+  await listeners6.get("agent/turn-stopping")({ agent: agentsById.get("NO_LLM_AGENT"), turn: 1, signal: undefined });
+  await new Promise((r) => setTimeout(r, 10));
+  const noLlmPath = [...files.keys()].find((k) => k.includes("shadow/") && files.get(k)?.includes("无模型也要能落盘"));
+  assert.ok(noLlmPath, "无 llm 时记忆仍应落盘");
+  console.log("✔ 场景6 无模型降级：无 llm 时落盘不抛错、无摘要但不影响正文");
+}
+
 console.log("\nALL PASS ✅");
