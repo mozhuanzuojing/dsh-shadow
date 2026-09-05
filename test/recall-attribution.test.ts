@@ -611,4 +611,69 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   }
 }
 
+
+// ─────────────────────────────────────────────
+// 场景 13：flush 写失败不再静默 —— read_shadow 应暴露「数据不可达/落盘失败」信号（区分召回不足）
+// ─────────────────────────────────────────────
+{
+  const store13 = new Map<string, string>();
+  const fail = { deny: true };
+  const fs13 = {
+    async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+    async readText(t: any) { return store13.get(t.displayPath) ?? ""; },
+    async writeText(_t: any, _c: string) { if (fail.deny) throw new Error("EACCES: permission denied (write target outside workspace)"); return { version: "v1" }; },
+    async listDir(t: any) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/"; const names = new Set<string>();
+      for (const k of store13.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const listeners13 = new Map<string, Function>();
+  const services13 = { fs: fs13, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx13: any = { get: (k: string) => services13[k], on: (e: string, fn: Function) => { listeners13.set(e, fn); return () => listeners13.delete(e); }, inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services13[k] }) };
+  const P13 = { name, inject, apply };
+  P13.apply(ctx13, { shadowRoot: "C:/sandbox", summary: { enabled: false }, recall: {} });
+  const f13 = (ev: string, ...a: any[]) => { const fn = listeners13.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const ag13 = { id: "F13", session: { header: { cwd: "D:/project" } } };
+  agentsById.set("F13", ag13 as any);
+  f13("fs/observed", { targetKey: "C:/sandbox/a.txt", displayPath: "C:/sandbox/a.txt" }, { kind: "present", version: "v1" }, { agent: { id: "F13" } });
+  f13("session/event", { id: "F13", header: { cwd: "D:/project" } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m13", role: "user", content: [{ type: "text", text: "写沙箱应失败" }], source: { kind: "user" } } });
+  await f13("agent/turn-stopping", { agent: ag13, turn: 1, signal: undefined });
+  const r13 = await toolRegistry.get("read_shadow").execute({ topic: "写沙箱" }, { agent: ag13 });
+  assert.ok(String(r13).includes("落盘失败") || String(r13).includes("shadowRoot 可写"), `flush 写失败应在 read_shadow 暴露信号（非静默）：\n${String(r13).slice(0, 200)}`);
+  console.log("✔ 场景13 flush 失败可见：read_shadow 暴露『数据不可达』信号，区分召回不足");
+}
+
+// ─────────────────────────────────────────────
+// 场景 14：session/flush 兜底 —— 无 turn-stopping 也落盘（避免采集积压不落盘）
+// ─────────────────────────────────────────────
+{
+  const store14 = new Map<string, string>();
+  const fs14 = {
+    async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+    async readText(t: any) { return store14.get(t.displayPath) ?? ""; },
+    async writeText(t: any, c: string) { store14.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t: any) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/"; const names = new Set<string>();
+      for (const k of store14.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const listeners14 = new Map<string, Function>();
+  const services14 = { fs: fs14, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx14: any = { get: (k: string) => services14[k], on: (e: string, fn: Function) => { listeners14.set(e, fn); return () => listeners14.delete(e); }, inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services14[k] }) };
+  const P14 = { name, inject, apply };
+  P14.apply(ctx14, { shadowRoot: "C:/sandbox14", summary: { enabled: false }, recall: {} });
+  const f14 = (ev: string, ...a: any[]) => { const fn = listeners14.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const ag14 = { id: "F14", session: { header: { cwd: "D:/project" } } };
+  agentsById.set("F14", ag14 as any);
+  f14("fs/observed", { targetKey: "C:/sandbox14/a.txt", displayPath: "C:/sandbox14/a.txt" }, { kind: "present", version: "v1" }, { agent: { id: "F14" } });
+  // 关键：不触发 turn-stopping，仅靠 session/flush 兜底落盘
+  await f14("session/flush", { id: "F14" });
+  assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
+  console.log("✔ 场景14 session/flush 兜底：无 turn-stopping 也落盘（防采集积压）");
+}
+
 console.log("\nALL PASS ✅");

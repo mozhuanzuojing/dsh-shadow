@@ -84,6 +84,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     rawConfig && Object.keys(rawConfig).length
       ? rawConfig
       : (() => { try { return (ctx?.config ?? {}) as ShadowConfig; } catch { return {}; } })() ?? {};
+  // 采集落盘可靠性：记录最近一次落盘失败，read_shadow 用于区分「数据不可达」与「召回不足」。
+  let lastFlushError: { at: number; err: string } | undefined;
+  // pending 超阈值即异步落盘，避免依赖单一 turn-stopping 事件导致积压不落盘。
+  const MAX_PENDING = 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   const today = (offset = 0) => {
     const d = new Date();
@@ -148,6 +152,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       const cs = comps.get(agentId) || [];
       cs.push(rec.comp);
       comps.set(agentId, cs);
+    }
+    // 兜底：pending 超阈值即异步落盘，避免依赖单一 turn-stopping 事件导致积压不落盘。
+    if (arr.length >= MAX_PENDING) {
+      void flush(agentById(agentId) || { id: agentId });
     }
   };
   const primaryComp = (agentId: string) => {
@@ -490,7 +498,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       await registerMeta(fs, ws, rel);
       void patchSummary(fs, ws, rel, entry, arr);
     } catch (e: any) {
-      console.log("[dsh-shadow] flush failed:", e && e.message);
+      lastFlushError = { at: Date.now(), err: (e && e.message) || String(e) };
+      console.error("[dsh-shadow][error] flush FAILED:", lastFlushError.err);
     }
   };
 
@@ -531,6 +540,14 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
 
   context.on("agent/turn-stopping", async (payload: any) => {
     await flush(payload && payload.agent);
+    return undefined;
+  });
+
+  // 兜底：session 收口（session/flush）时把仍在 pending 的全部落盘，防遗漏/进程重启丢数据。
+  context.on("session/flush", async () => {
+    for (const id of [...pending.keys()]) {
+      await flush(agentById(id) || { id });
+    }
     return undefined;
   });
 
@@ -679,10 +696,14 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
           if (!ws) return "（无法确定工作区，shadow 不可用）";
           const fs = context.get("fs");
           if (!fs) return "（fs 服务不可用）";
+          // 落盘失败信号：把「数据不可达」与「召回不足」区分开，避免误判插件召回能力。
+          const flushWarn = lastFlushError
+            ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(lastFlushError.at).toISOString()}：${lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
+            : "";
           const topic = String(args?.topic || "").trim();
           if (!topic) {
             const idx = await readRel(fs, ws, "shadow/_index.md");
-            return RECALL_PREFIX + (idx || "（暂无 shadow 索引）");
+            return RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn;
           }
           const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
           const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
@@ -712,7 +733,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             if (score > 0) scored.push({ mm, text, entry, tier, score, tokens });
           }
           scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
-          if (!scored.length) return RECALL_PREFIX + `（无匹配「${topic}」的记忆）`;
+          if (!scored.length) return RECALL_PREFIX + `（无匹配「${topic}」的记忆）` + flushWarn;
           const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
           const ledger = await readLedger(fs, ws);
           const turn = (ledger.turn || 0) + 1;
@@ -723,7 +744,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             if (cooled) continue;
             available.push(s);
           }
-          if (!available.length) return `（无匹配「${topic}」的记忆）`;
+          if (!available.length) return `（无匹配「${topic}」的记忆）` + flushWarn;
           const n = available.length;
           const parts: string[] = [];
           let used = 0;
@@ -764,7 +785,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             }
             await writeMeta(fs, ws, next);
           }
-          return RECALL_PREFIX + parts.join("\n\n");
+          return RECALL_PREFIX + parts.join("\n\n") + flushWarn;
         },
       });
     });
