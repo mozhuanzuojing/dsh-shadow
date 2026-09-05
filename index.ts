@@ -386,6 +386,9 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     return s;
   };
   const isUnsafe = (line: unknown) => UNSAFE_CONTROL.test(String(line));
+  // 剔除控制/双向覆盖字符：用于线索头等“正文之外”的文本（正文已由 isUnsafe 过滤整行剔除）。
+  // 保留密钥打码后的可读内容，仅移除会被终端/模型当特殊指令解析的不可见控制及 Bidi 字符。
+  const scrubUnsafe = (s: unknown) => String(s || "").replace(/[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g, "");
   const referencedMaterials = (text: unknown) => {
     const out: string[] = [];
     const add = (x: unknown) => {
@@ -450,13 +453,15 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     const userPoints: string[] = [];
     const seen = new Set<string>();
     const addMat = (x: unknown) => {
-      const p = String(x || "").trim();
+      const p = scrubUnsafe(String(x || "").trim());
       if (p && !seen.has(p)) { seen.add(p); mats.push(p); }
     };
     for (const e of arr) {
       if (e.kind === "action" && /^改\/读 /.test(e.text)) addMat(e.text.replace(/^改\/读 /, "").trim());
       if (e.kind === "user") {
-        const raw = e.text.replace(/^用户：/, "");
+        // 用户文本在 push 时已做密钥打码，但控制/双向字符仍可能残留；此处再 scrub，
+        // 确保线索头（背景/材料、用户提示、用户要点）不含会被终端/模型误当指令的不可见字符。
+        const raw = scrubUnsafe(e.text.replace(/^用户：/, ""));
         const refs = referencedMaterials(raw);
         for (const r of refs.slice(0, 6)) addMat(r);
         if (e.sub) prompts.push(`「${raw.slice(0, 48)}」〔${e.sub}〕`);
@@ -686,7 +691,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
           type: "object",
           properties: {
             topic: { type: "string", description: "要穿透的入口/主题（如某路径片段、组件名、工具名、决策词）" },
-            limit: { type: "number", description: "最多返回的记忆文件数，默认 20" },
+            limit: { type: "number", description: "最多返回的记忆文件数，默认 10" },
             max_tokens: { type: "number", description: "召回内容预算（粗略 token 数），越大返回越深，默认 1600" },
           },
         },
