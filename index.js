@@ -42,12 +42,17 @@ export function apply(ctx, rawConfig = {}) {
     return (t || "mem").slice(0, 40);
   };
   const normalize = (p) => String(p || "").replace(/\\/g, "/");
+  // 空串视为无效：避免 `"" ?? fallback` 返回空串导致 workspace 解析短路（F1）。
+  const firstNonEmpty = (...values) =>
+    values.find((v) => typeof v === "string" && v.trim().length > 0);
+  // 采集侧与读取侧共用的**单一** workspace 解析；严禁两处各自复制推导，防漂移。
   const workspaceFor = (agent) =>
-    agent?.session?.header?.cwd ??
-    agent?.session?.cwd ??
-    (agent?.id ? cwdBySession.get(String(agent.id)) : undefined) ??
-    rawConfig?.shadowRoot ??
-    "";
+    firstNonEmpty(
+      agent?.session?.header?.cwd,
+      agent?.session?.cwd,
+      agent?.id ? cwdBySession.get(String(agent.id)) : undefined,
+      rawConfig?.shadowRoot,
+    ) ?? "";
   const under = (abs, ws) => {
     const a = normalize(abs);
     const w0 = normalize(ws);

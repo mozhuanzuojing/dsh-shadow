@@ -483,4 +483,69 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   console.log("✔ 场景10 P2遗忘：retention 下 stale 排除 + 召回前缀");
 }
 
+// ─────────────────────────────────────────────
+// 场景 11：F1 —— workspace 解析契约（共享 resolver + 空串回退）
+//   ①write A / read A   => 同索引可见
+//   ②write A / read B   => 不泄漏
+//   ③header.cwd="" 但 cwdBySession=A => 回退到 A（空串短路修复）
+// ─────────────────────────────────────────────
+{
+  const files11 = new Map();
+  const fs11 = {
+    async resolve(path) { return { targetKey: path, displayPath: path }; },
+    async readText(t) { return files11.get(t.displayPath) ?? ""; },
+    async writeText(t, c) { files11.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/";
+      const names = new Set();
+      for (const k of files11.keys()) {
+        const nk = k.replace(/\\/g, "/");
+        if (!nk.startsWith(prefix)) continue;
+        const first = nk.slice(prefix.length).split("/")[0];
+        if (first !== "_index.md") names.add(first);
+      }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const WSA = "C:/wsA", WSB = "C:/wsB";
+  const agentFA = { id: "F1A", session: { header: { cwd: WSA } } };
+  const agentFB = { id: "F1B", session: { header: { cwd: WSB } } };
+  const agentFE = { id: "F1E", session: { header: { cwd: "" } } }; // 空串
+  agentsById.set("F1A", agentFA); agentsById.set("F1B", agentFB); agentsById.set("F1E", agentFE);
+  const listeners11 = new Map();
+  const services11 = { fs: fs11, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx11 = { get: (k) => services11[k], on: (e, fn) => listeners11.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services11[k] }) };
+  const P11 = { name, inject, apply };
+  P11.apply(ctx11, { summary: { enabled: false }, recall: {} });
+  const f11 = (ev, ...a) => { const fn = listeners11.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const rs11 = toolRegistry.get("read_shadow");
+
+  // ① write to A（agentFA）
+  f11("fs/observed", { targetKey: `${WSA}/a.txt`, displayPath: `${WSA}/a.txt` }, { kind: "present", version: "v1" }, { agent: { id: "F1A" } });
+  f11("session/event", { id: "F1A", header: { cwd: WSA } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-a", role: "user", content: [{ type: "text", text: "A 工作区的记录" }], source: { kind: "user" } } });
+  await f11("agent/turn-stopping", { agent: agentFA, turn: 1, signal: undefined });
+
+  // ① read A 应看到 A 索引
+  const raA = await rs11.execute({}, { agent: agentFA });
+  assert.ok(String(raA).includes("shadow 目录说明与索引"), `①write A/read A 应见索引：\n${String(raA).slice(0, 80)}`);
+  // 索引只列记忆文件名，正文放在主题召回里验证
+  assert.ok([...files11.keys()].some((k) => k.includes("C:/wsA/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "①A 工作区应已落盘记忆文件");
+  const raTopic = await rs11.execute({ topic: "工作区" }, { agent: agentFA });
+  assert.ok(String(raTopic).includes("A 工作区的记录"), `①A 主题召回应命中：\n${String(raTopic).slice(0, 120)}`);
+  console.log("✔ 场景11-① 正：write A / read A 同索引可见 + 主题召回");
+
+  // ② read B 不应泄漏 A
+  const rbB = await rs11.execute({}, { agent: agentFB });
+  assert.ok(String(rbB).includes("暂无"), `②write A/read B 不应看到 A：\n${String(rbB).slice(0, 80)}`);
+  assert.ok(!String(rbB).includes("A 工作区的记录"), "②B 不应泄漏 A 的记忆");
+  console.log("✔ 场景11-② 隔离：write A / read B 不泄漏");
+
+  // ③ 空串回退：先给 F1E 缓存 cwd=A（模拟 session/event 曾带 A），再让 agent.header.cwd=""
+  f11("session/event", { id: "F1E", header: { cwd: WSA } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-e", role: "user", content: [{ type: "text", text: "E 记录" }], source: { kind: "user" } } });
+  const reE = await rs11.execute({}, { agent: agentFE });
+  assert.ok(String(reE).includes("shadow 目录说明与索引"), `③空串应回退到 cached A：\n${String(reE).slice(0, 80)}`);
+  console.log("✔ 场景11-③ 空串回退：header.cwd=\"\" 时按 cached cwdBySession=A 解析");
+}
+
 console.log("\nALL PASS ✅");
