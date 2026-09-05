@@ -1,20 +1,25 @@
 {
   "name": "dsh-shadow",
   "version": "0.4.0",
-  "description": "agent 思维/上下文/灵魂的投影——一切皆文件，每条记忆一个文件，记录「完整线索链」（背景/材料 + 用户提示/决策 + 概况）；read_shadow 分层召回 + 记忆遗忘(retention) + 护栏(数据非指令)。",
+  "description": "agent 思维/上下文/灵魂的投影——一切皆文件，每条记忆一个文件，记录「完整线索链」（背景/材料 + 用户提示/决策 + 概况）；read_shadow 分层召回 + 记忆遗忘(retention) + 护栏(数据非指令)。TypeScript 源码 index.ts → tsc → dist/index.js（DSH 加载编译后 JS）。",
   "type": "module",
-  "main": "./index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./index.js",
+    ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
+    "dist",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
     "package.json"
   ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w"
+  },
   "keywords": [
     "dsh",
     "deepseek-harness",
@@ -31,5 +36,9 @@
       "patch": "./cordis.patch.yml"
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  }
 }

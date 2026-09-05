@@ -40,7 +40,7 @@ agent「思维/上下文/灵魂」的投影——**一切皆文件**，每条记
 pnpm install
 ```
 
-改动 `cordis.patch.yml` / `index.js` 后需重启 profile 生效。
+改动 `cordis.patch.yml` 后需重启 profile 生效。源码为 TypeScript：`index.ts` → `tsc`（TypeScript 7.x）→ `dist/index.js`（DSH/Cordis 加载的是编译后 JS，package.json.main 指向 `dist/index.js`）；改源码后需重新 `pnpm run build` 再重启。
 
 ## 验证（重启后）
 

@@ -4,11 +4,8 @@
 //   2) 召回：read_shadow(topic) 加权打分排序，正确地把相关的记忆排到最前；
 //   3) 无 topic 返回索引；LLM 扩词（recall.enabled）在 llm 缺失时静默降级。
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const mod = require("../index.js");
-const { apply, name, inject } = mod;
+import * as mod from "../dist/index.js";
+const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty } = mod;
 
 const WS = "D:/ws";
 
@@ -546,6 +543,72 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const reE = await rs11.execute({}, { agent: agentFE });
   assert.ok(String(reE).includes("shadow 目录说明与索引"), `③空串应回退到 cached A：\n${String(reE).slice(0, 80)}`);
   console.log("✔ 场景11-③ 空串回退：header.cwd=\"\" 时按 cached cwdBySession=A 解析");
+}
+
+// ─────────────────────────────────────────────
+// 场景 12：O2 —— project scope 显式化（resolveShadowScope/resolveWorkspace 导出契约 + 集成）
+// ─────────────────────────────────────────────
+{
+  const cwdEmpty = new Map<string, string>();
+  // ── resolver 单元 ├
+  assert.equal(resolveWorkspace({ session: { header: { cwd: "D:/project" } } } as any, cwdEmpty, { shadowRoot: "C:/sandbox" }), "C:/sandbox", "①显式 shadowRoot 覆盖 session cwd");
+  assert.equal(resolveWorkspace({ session: { header: { cwd: "D:/project" } } } as any, cwdEmpty, { projectRoot: "C:/proj" }), "C:/proj", "①显式 projectRoot 也生效");
+  assert.equal(resolveWorkspace({ session: { header: { cwd: "D:/dsh1" } } } as any, cwdEmpty, {}), "D:/dsh1", "②无显式 scope 回退 session cwd");
+  const cmap = new Map<string, string>([["S1", "C:/cachedA"]]);
+  assert.equal(resolveWorkspace({ id: "S1", session: { header: { cwd: "" } } } as any, cmap, {}), "C:/cachedA", "③空串(session.cwd=空) 回退 cwdBySession");
+  assert.equal(resolveWorkspace({ id: "S2", session: { header: { cwd: "D:/other" } } } as any, cmap, {}), "D:/other", "③非空 cwd 优先于缓存");
+  assert.equal(firstNonEmpty("", "   ", "C:/x"), "C:/x", "firstNonEmpty 视空串为无效");
+  const done0: any = resolveShadowScope({ session: { header: { cwd: "D:/dsh1" } } } as any, cwdEmpty, {});
+  assert.equal(done0.scope, "implicit", "resolveShadowScope 返回隐式 scope");
+  const done1: any = resolveShadowScope({}, cwdEmpty, { shadowRoot: "C:/snb" });
+  assert.equal(done1.scope, "explicit", "resolveShadowScope 返回显式 scope");
+
+  // ── 集成：带 shadowRoot 的插件实例，写/读都落在 sandbox ──
+  const mkFs = (m: Map<string, string>) => ({
+    async resolve(path: string) { return { targetKey: path, displayPath: path }; },
+    async readText(t: any) { return m.get(t.displayPath) ?? ""; },
+    async writeText(t: any, c: string) { m.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t: any) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/"; const names = new Set<string>();
+      for (const k of m.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  });
+  const mkPlugin = (fsMap: Map<string, string>, cfg: any) => {
+    const listeners = new Map<string, Function>();
+    const services = { fs: mkFs(fsMap), agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+    const ctx: any = { get: (k: string) => services[k], on: (e: string, fn: Function) => listeners.set(e, fn), inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services[k] }) };
+    const P = { name, inject, apply }; P.apply(ctx, cfg);
+    const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+    return { fire };
+  };
+  {
+    const store = new Map<string, string>();
+    const { fire } = mkPlugin(store, { shadowRoot: "C:/sandbox" });
+    const ag = { id: "O2A", session: { header: { cwd: "D:/project" } } };
+    agentsById.set("O2A", ag as any);
+    fire("fs/observed", { targetKey: "C:/sandbox/a.txt", displayPath: "C:/sandbox/a.txt" }, { kind: "present", version: "v1" }, { agent: { id: "O2A" } });
+    fire("session/event", { id: "O2A", header: { cwd: "D:/project" } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-a", role: "user", content: [{ type: "text", text: "沙箱项目记忆" }], source: { kind: "user" } } });
+    await fire("agent/turn-stopping", { agent: ag, turn: 1, signal: undefined });
+    const r = await toolRegistry.get("read_shadow").execute({ topic: "沙箱" }, { agent: ag });
+    assert.ok(String(r).includes("沙箱项目记忆"), `④a 显式 shadowRoot 应落 sandbox：\n${String(r).slice(0, 120)}`);
+    assert.ok([...store.keys()].some((k) => k.includes("C:/sandbox/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "④a 记忆落在 sandbox/shadow");
+    console.log("✔ 场景12-④a 显式 shadowRoot 落 sandbox，覆盖 session cwd");
+  }
+  {
+    const storeB = new Map<string, string>();
+    const { fire: fireA } = mkPlugin(new Map(), { shadowRoot: "C:/pA" });
+    mkPlugin(storeB, { shadowRoot: "C:/pB" });
+    const agA = { id: "O2A2", session: { header: { cwd: "C:/pA" } } };
+    agentsById.set("O2A2", agA as any);
+    fireA("fs/observed", { targetKey: "C:/pA/s.txt", displayPath: "C:/pA/s.txt" }, { kind: "present", version: "v1" }, { agent: { id: "O2A2" } });
+    fireA("session/event", { id: "O2A2", header: { cwd: "C:/pA" } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m-a2", role: "user", content: [{ type: "text", text: "A项目私有" }], source: { kind: "user" } } });
+    await fireA("agent/turn-stopping", { agent: agA, turn: 1, signal: undefined });
+    const rb = await toolRegistry.get("read_shadow").execute({ topic: "A项目" }, { agent: { id: "O2A2", session: { header: { cwd: "C:/pB" } } } });
+    assert.ok(!String(rb).includes("A项目私有"), `④b B 不应读到 A 项目记忆：\n${String(rb).slice(0, 120)}`);
+    console.log("✔ 场景12-④b 两项目隔离：A(shadowRoot=pA) 写 / B(shadowRoot=pB) 读 不泄漏");
+  }
 }
 
 console.log("\nALL PASS ✅");
