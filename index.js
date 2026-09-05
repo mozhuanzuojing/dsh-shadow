@@ -528,6 +528,66 @@ export function apply(ctx, rawConfig = {}) {
     }
   };
 
+  // ─── 分层召回增强（L0/L1/L2 + 预算 + 冷热淘汰） ───
+  // 借鉴 OpenViking 的分层思想（见 ADR-0001：不用向量库，仅借「按深度分级返回 / 预算驱动
+  // 先给便宜的、有余再深化 / 跨回合冷热淘汰」）。语义：L0=摘要行（路径+摘要），L1=+命中片段，
+  // L2=+头部骨架（正文里的非纯动作小结行）。
+  const memorySummary = (text) => (String(text || "").match(/^> 摘要：(.+)$/m) || [])[1] || "";
+  // 记忆默认层级：按正文启发式定。纯动作背景 → L0（摘要即可）；含思维/决策/结论 → L2；
+  // 介于 → L1。仅改召回返回深度，不影响落盘。
+  const tierFor = (text) => {
+    const body = String(text || "");
+    const bodyLines = body.split("\n").filter((l) => /^\s*-\s*\[/.test(l)); // 正文行，不含标题/摘要/索引
+    const actionLines = bodyLines.filter((l) => /改\/读 |调用 /.test(l)).length;
+    const hasThought = /(用户：|决定 |结论|分析|为什么|注意|边界|坑|要\b)/.test(body);
+    if (hasThought) return "L2";
+    if (bodyLines.length && actionLines / bodyLines.length > 0.6) return "L0";
+    return "L1";
+  };
+  const renderByTier = (s, budgetChars, forceL0 = false, tokens = []) => {
+    const { mm, text, tier, score } = s;
+    const summary = memorySummary(text);
+    const head = `[${mm.rel}]${summary ? `\n摘要：${summary}` : ""}`;
+    let out = head;
+    const wantL2 = !forceL0 && tier === "L2" && budgetChars >= head.length + 60;
+    const wantL1 = !forceL0 && tier !== "L0" && budgetChars >= head.length + 30;
+    if (wantL2) {
+      const snip = snippetFor(text, tokens);
+      if (snip) out += `\n…${snip}…`;
+      const skeleton = String(text || "")
+        .split("\n")
+        .filter((l) => /^\s*-\s*\[/.test(l) && !/改\/读 |调用 /.test(l))
+        .slice(0, 2);
+      if (skeleton.length) out += `\n${skeleton.map((l) => l.trim().slice(0, 80)).join("\n")}`;
+    } else if (wantL1) {
+      const snip = snippetFor(text, tokens);
+      if (snip) out += `\n…${snip}…`;
+    }
+    out += `（相关度 ${score}）`;
+    return out;
+  };
+  // 冷热淘汰账本（shadow/_recall_log.json）：记本轮“带内容”发过的路径 + 轮次；纯 URI 不带
+  // 内容则不冷却。写失败降级为“不去重”，绝不影响召回。
+  const readLedger = async (fs, ws) => {
+    if (!fs || !ws) return { turn: 0, served: {} };
+    try {
+      const t = await fs.resolve(`${ws}/shadow/_recall_log.json`, { cwd: ws });
+      const txt = await fs.readText(t);
+      return txt ? (JSON.parse(txt) || { turn: 0, served: {} }) : { turn: 0, served: {} };
+    } catch {
+      return { turn: 0, served: {} };
+    }
+  };
+  const writeLedger = async (fs, ws, data) => {
+    if (!fs || !ws) return;
+    try {
+      const t = await fs.resolve(`${ws}/shadow/_recall_log.json`, { cwd: ws });
+      await fs.writeText(t, JSON.stringify(data));
+    } catch (e) {
+      console.log("[dsh-shadow] recall ledger write failed:", e && e.message);
+    }
+  };
+
   // ─── 注册 model 可见工具 read_shadow ───
   if (typeof context.inject === "function") {
     context.inject(["tools"], (toolsCtx) => {
@@ -536,12 +596,13 @@ export function apply(ctx, rawConfig = {}) {
       toolsService.register({
         name: "read_shadow",
         description:
-          "读取 agent 的记忆树（shadow）。无参数返回目录与索引；带 topic/entry 按入口或主题穿透到具体记忆文件。当判断上下文不足、需要回忆最近想过/决定过什么时调用。",
+          "读取 agent 的记忆树（shadow）。无参数返回目录与索引；带 topic/entry 按入口或主题穿透到具体记忆文件。穿透按分层召回（先精后深、预算内返回）：低分记忆只给摘要，高分记忆给摘要+命中片段+正文骨架。当判断上下文不足、需要回忆最近想过/决定过什么时调用。",
         parameters: {
           type: "object",
           properties: {
             topic: { type: "string", description: "要穿透的入口/主题（如某路径片段、组件名、工具名、决策词）" },
             limit: { type: "number", description: "最多返回的记忆文件数，默认 20" },
+            max_tokens: { type: "number", description: "召回内容预算（粗略 token 数），越大返回越深，默认 1600" },
           },
         },
         output: {
@@ -560,6 +621,8 @@ export function apply(ctx, rawConfig = {}) {
             return idx || "（暂无 shadow 索引）";
           }
           const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
+          const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
+          const maxChars = maxTokens * 4; // 粗估 1 token ≈ 4 字符，用于分层预算
           const memories = await listMemories(fs, ws);
           let tokens = tokenize(topic);
           if (!tokens.length) tokens = [String(topic).toLowerCase()];
@@ -573,17 +636,68 @@ export function apply(ctx, rawConfig = {}) {
             const text = await readRel(fs, ws, mm.rel);
             if (!text) continue;
             const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
+            const tier = tierFor(text);
             const score = scoreMemory(text, mm.rel, entry, tokens);
-            if (score > 0) scored.push({ mm, text, score });
+            if (score > 0) scored.push({ mm, text, entry, tier, score, tokens });
           }
           scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
           if (!scored.length) return `（无匹配「${topic}」的记忆）`;
-          const parts = scored.slice(0, limit).map(({ mm, text, score }) => {
-            const summary = (text.match(/^> 摘要：(.+)$/m) || [])[1] || "";
-            const snip = snippetFor(text, tokens);
-            const head = `[${mm.rel}]${summary ? `\n摘要：${summary}` : ""}`;
-            return `${head}${snip ? `\n…${snip}…` : ""}（相关度 ${score}）`;
-          });
+
+          // 冷热淘汰：显式开启（recall.cooldownTurns>0）时，N 回合内“带内容”发过（detail=true）
+          // 的路径本轮跳过；纯 URI 不带内容则不冷却。默认关，避免压制模型显式召回。
+          const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
+          const ledger = await readLedger(fs, ws);
+          const turn = (ledger.turn || 0) + 1;
+          const available = [];
+          for (const s of scored) {
+            const rec = ledger.served && ledger.served[s.mm.rel];
+            const cooled =
+              cooldownTurns > 0 &&
+              rec &&
+              rec.detail &&
+              typeof rec.turn === "number" &&
+              turn - rec.turn <= cooldownTurns;
+            if (cooled) continue;
+            available.push(s);
+          }
+          if (!available.length) return `（无匹配「${topic}」的记忆）`;
+
+          // 预算分层：每候选一个 cap，按 score 分配深化额度；同预算下不再“10 条各给 1 句”，
+          // 而是“高分给更深（L1/L2）、低分只给摘要（L0）”，超预算降级到上一档、不截断。
+          const n = available.length;
+          const parts = [];
+          let used = 0;
+          const servedDetail = [];
+          for (const s of available) {
+            if (parts.length >= limit) break;
+            const sharedPool = Math.max(0, Math.floor((maxChars - used) / Math.max(1, n)));
+            const cap = Math.max(120, Math.floor((maxChars / n) * 2) + sharedPool);
+            let render = renderByTier(s, cap, false, tokens);
+            if (used + render.length > maxChars) {
+              const degraded = renderByTier(s, cap, true, tokens); // 降级到 L0
+              if (used + degraded.length > maxChars) break;
+              render = degraded;
+            }
+            parts.push(render);
+            used += render.length;
+            if (s.tier !== "L0" && render.includes("…")) servedDetail.push(s.mm.rel);
+          }
+          // 记录本轮带内容发过的路径（仅当冷热淘汰显式开启），供下轮去重；修剪过期项。
+          if (cooldownTurns > 0 && servedDetail.length) {
+            const nextServed = Object.assign({}, ledger.served || {});
+            for (const p of servedDetail) nextServed[p] = { turn, detail: true };
+            for (const k of Object.keys(nextServed)) {
+              if (turn - nextServed[k].turn > cooldownTurns * 4) delete nextServed[k];
+            }
+            const keys = Object.keys(nextServed);
+            if (keys.length > 500) {
+              keys
+                .sort((a, b) => (nextServed[a].turn || 0) - (nextServed[b].turn || 0))
+                .slice(0, keys.length - 500)
+                .forEach((k) => delete nextServed[k]);
+            }
+            await writeLedger(fs, ws, { turn, served: nextServed });
+          }
           return parts.join("\n\n");
         },
       });

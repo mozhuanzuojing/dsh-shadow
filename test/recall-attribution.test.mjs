@@ -289,4 +289,70 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   console.log("✔ 场景6 无模型降级：无 llm 时落盘不抛错、无摘要但不影响正文");
 }
 
+// ─────────────────────────────────────────────
+// 场景 7：分层召回（L0/L1/L2 + 预算 + 冷热淘汰）——借鉴 OpenViking 分层思想，不引入向量库
+// ─────────────────────────────────────────────
+{
+  const files7 = new Map();
+  const fs7 = {
+    async resolve(path) { return { targetKey: path, displayPath: path }; },
+    async readText(t) { return files7.get(t.displayPath) ?? ""; },
+    async writeText(t, c) { files7.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/";
+      const names = new Set();
+      for (const k of files7.keys()) {
+        const nk = k.replace(/\\/g, "/");
+        if (!nk.startsWith(prefix)) continue;
+        const first = nk.slice(prefix.length).split("/")[0];
+        if (first !== "_index.md") names.add(first);
+      }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const services7 = { fs: fs7, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const listeners7 = new Map();
+  const ctx7 = { get: (k) => services7[k], on: (e, fn) => listeners7.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services7[k] }) };
+  agentsById.set("T7", { id: "T7", session: { header: { cwd: WS } } });
+  const fire7 = (e, ...a) => { const fn = listeners7.get(e); assert.ok(fn, `missing ${e}`); return fn(...a); };
+  const user7 = (text) =>
+    fire7("session/event", { id: "T7", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-7", role: "user", content: [{ type: "text", text }], source: { kind: "user" } } });
+  const obs7 = (path) =>
+    fire7("fs/observed", { targetKey: `${WS}/${path}`, displayPath: `${WS}/${path}` }, { kind: "present", version: "v1" }, { agent: { id: "T7" } });
+  const flush7 = async () => fire7("agent/turn-stopping", { agent: agentsById.get("T7"), turn: 1, signal: undefined });
+
+  // A 档：cooldown 默认关，测分层 + 预算
+  const P7 = { name, inject, apply };
+  P7.apply(ctx7, { summary: { enabled: false }, recall: {} });
+  obs7("plugin-a/util.js");     // 纯动作记忆 → 应判 L0
+  await flush7();
+  obs7("plugin-b/entry.js");    // 含用户决策 → 应判 L2
+  user7("决定：把插件入口改造成 bundle 模式。");
+  await flush7();
+  const rs7 = toolRegistry.get("read_shadow");
+  const exec7 = { agent: agentsById.get("T7") };
+  const rL0 = await rs7.execute({ topic: "plugin-a", max_tokens: 4096 }, exec7);
+  assert.ok(rL0.includes("plugin-a"), `纯动作记忆应命中路径：\n${rL0}`);
+  assert.ok(!rL0.includes("…"), `纯动作记忆(L0)应只给摘要、无命中片段：\n${rL0}`);
+  const rL2 = await rs7.execute({ topic: "plugin-b", max_tokens: 4096 }, exec7);
+  assert.ok(rL2.includes("bundle"), `含决策记忆(L2)应命中正文：\n${rL2}`);
+  assert.ok(rL2.includes("…"), `含决策记忆(L2)应给命中片段：\n${rL2}`);
+  // max_tokens 参数应被接受且返回正常结果（不抛错、能命中）
+  const rBudget = await rs7.execute({ topic: "plugin-b", max_tokens: 2048 }, exec7);
+  assert.ok(!String(rBudget).startsWith("ERR"), `max_tokens 参数不应导致错误：${rBudget}`);
+  assert.ok(rBudget.includes("plugin-b"), `max_tokens 参数下仍应命中：\n${rBudget}`);
+
+  // B 档：显式开启 cooldownTurns=3，验证刚“带内容”发过的路径被抑制
+  const listeners7b = new Map();
+  const ctx7b = { get: (k) => services7[k], on: (e, fn) => listeners7b.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services7[k] }) };
+  P7.apply(ctx7b, { summary: { enabled: false }, recall: { cooldownTurns: 3 } });
+  const rs7b = toolRegistry.get("read_shadow");
+  const first = await rs7b.execute({ topic: "plugin-b", max_tokens: 4096 }, exec7);
+  assert.ok(first.includes("bundle"), `冷热淘汰首查应命中：\n${first}`);
+  const second = await rs7b.execute({ topic: "plugin-b", max_tokens: 4096 }, exec7);
+  assert.ok(String(second).includes("无匹配"), `冷热淘汰应抑制刚发过的内容：\n${second}`);
+  console.log("✔ 场景7 分层召回：L0 仅摘要 / L2 出片段 / 小预算降级 / 冷热淘汰生效");
+}
+
 console.log("\nALL PASS ✅");
