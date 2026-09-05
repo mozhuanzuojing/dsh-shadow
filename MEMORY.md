@@ -27,9 +27,20 @@
 - `read_shadow`：无参读索引；带 `topic` 穿透到记忆文件。
 - 按工作区隔离（`agent.session.header.cwd`，可 `shadowRoot` 覆盖）。
 
+**能（增强：一句话总结）**
+- 每一回合落盘后用 `llm.stream` 生成一两句中文摘要，回填记忆文件头（`> 摘要：…`），让纯聊天/无工具回合也沉淀成可读记忆。
+- 实现要点：
+  - **detach 后台任务**：`flush` 先落正文 + 重建索引，再 `void patchSummary(...)` 去生成/回填摘要，绝不 `await` 在回合收口（`agent/turn-stopping`）里——否则每次回合收口都会被一次模型调用阻塞。
+  - **降级策略**：`llm` 服务缺失、路由缺失、`finish` 为 error/aborted、超时（默认 8s）都返回 `""`，回填阶段只在摘要可用时改写文件；正文已在第一步写入，失败不影响。
+  - **消息可手构**：deepseek adapter 只读 `message.role`/`message.content`（`assertTextOnly`/`flattenText`），`id`/`source` 不在 serialize 校验路径里，所以手构 `{ id, role:'user', content:[{type:'text',text}] , source:{kind:'plugin',plugin:'dsh-shadow'}}` 即可，无需引 `createUserMessage`。
+  - **路由**：默认 `agentDefaultModel.currentSelection()`；`rawConfig.summary = { enabled, provider, model, maxTokens, timeoutMs }` 可覆盖，`enabled:false` 关闭。
+  - **AbortController + setTimeout**：host 侧用 Node 原生计时器 + AbortController 做超时取消（动态 cordis 不可用全局计时器，但本包是 host bundle 插件，Node 全局可用）。
+
 **不能 / 边界**
 - **不记录模型内部链式推理**——只记 agent **表达出来**的结论/分析，不是 COT 全程。
-- **最大不确定点**：`session/event` 消息的**确切载荷未验证**。若 `extractMessage` 匹配不上，交互/思维正文会**静默为空**——纯对话回合将产出 0 记忆，插件会退化回"动作日志"。**必须先重启后抓一个真实消息载荷，据实修正字段名，才算把这层做实。**
+- **`session/event` 载荷已按类型契约核实并修正（2026-09-05）**：`SessionEvent = { type, seq, time, data }`；`user/message` → `data` 即 UserMessage（`data.content[]`），`assistant/message` → `data.message` 即 AssistantMessage（`data.message.content[]`）。`extractMessage` 只取 `type==="text"` 块，跳过 reasoning/tool-call。已用真实导出记录核对形状成立，此前"静默为空"的最大不确定点已解除。
+- **`fs/observed` 曾误用 `target.path/uri`**：`FsTarget` 实际是 `{ targetKey, displayPath }`，会拿不到路径 → 入口点（客观锚）静默丢失。已改读 `target.displayPath`。
+- **工作区解析盲区**：`Agent` 公开形状只保证 `id`；已用 `session/event` 的真实 `Session.header.cwd` 缓存（`cwdBySession`）兜底 `workspaceFor`，避免 flush 因取不到 cwd 而静默不写。
 - **进程级 `session/event` 监听会"张冠李戴"**：host 层监听收所有 session 事件，却一律归属 `currentInitiator`。单 session 部署 OK；多 session/子 agent 会串。
 - 索引/穿透是**文本子串匹配**，不是语义检索；同名跨上下文召回较弱。
 - 采集不含"纯聊天但没工具/文件"的回合（若消息解析失败）。需要 LLM 摘要层级（一句话总结）是后续增强。

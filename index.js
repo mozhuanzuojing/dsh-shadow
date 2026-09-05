@@ -11,7 +11,12 @@
  *   - fs/observed   → 入口点（实际改/读的组件，客观锚）
  *   - goal/changed  → 决策/意向
  *   - tools/result  → 动作背景
- *   - session/event → 交互 + 思维落点（尽力而为，守卫式；确切载荷重启后精修）
+ *   - session/event → 交互 + 思维落点（按 SessionEvent 契约抽 text 块，跳过 reasoning）
+ *
+ * 增强：每一回合落盘后，detach 一个后台任务，用 llm.stream 生成一两句话总结并回填到
+ * 记忆文件头（`> 摘要：…`）。纯聊天/无工具回合也能据此沉淀成可读记忆；失败/超时静默降级，
+ * 不影响正文。默认路由取 agentDefaultModel.currentSelection()，可用 rawConfig.summary 配置
+ * （enabled/provider/model/maxTokens/timeoutMs）。
  *
  * Cordis host plugin entry。经 cordis.patch.yml bundle layer 挂载（dsh-wechat 模式）。
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
@@ -38,7 +43,11 @@ export function apply(ctx, rawConfig = {}) {
   };
   const normalize = (p) => String(p || "").replace(/\\/g, "/");
   const workspaceFor = (agent) =>
-    agent?.session?.header?.cwd ?? agent?.session?.cwd ?? rawConfig?.shadowRoot ?? "";
+    agent?.session?.header?.cwd ??
+    agent?.session?.cwd ??
+    (agent?.id ? cwdBySession.get(String(agent.id)) : undefined) ??
+    rawConfig?.shadowRoot ??
+    "";
   const under = (abs, ws) => {
     const a = normalize(abs);
     const w0 = normalize(ws);
@@ -64,6 +73,8 @@ export function apply(ctx, rawConfig = {}) {
   // pending[agentId] = [{ time, kind, text, comp }]
   const pending = new Map();
   const comps = new Map();
+  // session.id → cwd（从 session/event 的真实 Session 取得；覆盖 Agent 公开形状只有 id 的盲区）
+  const cwdBySession = new Map();
   const push = (agentId, rec) => {
     if (!agentId) return;
     const arr = pending.get(agentId) || [];
@@ -83,24 +94,30 @@ export function apply(ctx, rawConfig = {}) {
     return Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
   };
 
-  // 从 session/event 里尽力抽一条 user/assistant 消息（守卫式，多种形状）。
+  // 从 session/event 的 SessionEvent 里抽 user/assistant 消息文本。
+  // SessionEvent 的确切形状（event = { type, seq, time, data }）：
+  //   type==="user/message"      → data 即 UserMessage，文本在 data.content: ContentBlock[]
+  //   type==="assistant/message" → data 为 { turn, step, message, usage?, interrupted? }，
+  //                                文本在 data.message.content: ContentBlock[]
+  // 只取 text 块（agent 表达出来的结论 / 用户正文），跳过 reasoning（内部推理，不记）、
+  // tool-call / tool-result / image，避免把 COT 与工具载荷当正文。
   const extractMessage = (event) => {
     if (!event) return null;
-    const e = event;
-    const role = e.role || e.speaker || e.message?.role || (e.type === "user" ? "user" : e.type === "assistant" ? "assistant" : undefined);
-    if (role !== "user" && role !== "assistant") return null;
-    let text =
-      e.text ||
-      e.content ||
-      e.message?.text ||
-      e.message?.content ||
-      "";
-    if (Array.isArray(text)) {
-      text = text.map((b) => b?.text || b?.content || "").filter(Boolean).join("\n");
-    }
-    text = String(text || "").trim();
+    const type = event.type;
+    if (type !== "user/message" && type !== "assistant/message") return null;
+    const data = event.data;
+    if (!data || typeof data !== "object") return null;
+    const kind = type === "user/message" ? "user" : "assistant";
+    const msg = type === "user/message" ? data : data.message;
+    if (!msg || typeof msg !== "object") return null;
+    const content = Array.isArray(msg.content) ? msg.content : [];
+    const text = content
+      .filter((b) => b && b.type === "text" && typeof b.text === "string")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
     if (!text) return null;
-    return { kind: role, text: text.slice(0, 600) };
+    return { kind, text: text.slice(0, 600) };
   };
 
   const goalText = (change) => {
@@ -111,6 +128,72 @@ export function apply(ctx, rawConfig = {}) {
     if (obj) parts.push(String(obj).slice(0, 160));
     if (act) parts.push(`〔${act}〕`);
     return parts.join(" ") || "（决策）";
+  };
+
+  // ─── LLM 一句话总结（可选增强，纯聊天/无工具回合也能沉淀成可读记忆） ───
+  // 配置：rawConfig.summary = { enabled?, provider?, model?, maxTokens?, timeoutMs? }
+  // 默认用 agentDefaultModel.currentSelection() 的路由；失败/超时静默降级为「无摘要」，
+  // 绝不影响正文落盘。
+  const summaryCfg = rawConfig?.summary ?? {};
+  const routeFor = () => {
+    const explicit =
+      summaryCfg.provider && summaryCfg.model
+        ? { provider: summaryCfg.provider, model: summaryCfg.model }
+        : undefined;
+    if (explicit) return explicit;
+    try {
+      const sel = context.get("agentDefaultModel")?.currentSelection();
+      return sel?.provider && sel?.model ? { provider: sel.provider, model: sel.model } : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const summarizeTurn = async (agent, body) => {
+    if (summaryCfg.enabled === false) return "";
+    const llm = context.get("llm");
+    if (!llm) return "";
+    const route = routeFor();
+    if (!route) return "";
+    const maxTokens = Math.max(1, Number(summaryCfg.maxTokens) || 80);
+    const timeoutMs = Math.max(1, Number(summaryCfg.timeoutMs) || 8000);
+    const system =
+      "用一句话概括给定内容（这轮对话/动作的要点）。只用中文，不超过 40 个字；只输出这一句话，不加解释、引号、Markdown 或任何前缀。";
+    const framed = String(body || "").trim().slice(0, 2000) || "（无正文）";
+    const messages = [
+      {
+        id: `shadow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role: "user",
+        content: [{ type: "text", text: framed }],
+        source: { kind: "plugin", plugin: "dsh-shadow" },
+      },
+    ];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      let text = "";
+      for await (const chunk of llm.stream({
+        provider: route.provider,
+        model: route.model,
+        messages,
+        system,
+        maxTokens,
+        signal: controller.signal,
+      })) {
+        if (!chunk) continue;
+        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
+        else if (chunk.type === "finish") {
+          if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return "";
+          break;
+        }
+      }
+      const one = String(text || "").replace(/\s+/g, " ").trim();
+      return one ? one.slice(0, 120) : "";
+    } catch (e) {
+      console.log("[dsh-shadow] summarize skipped:", e && e.message);
+      return "";
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   const readRel = async (fs, ws, rel) => {
@@ -231,6 +314,23 @@ export function apply(ctx, rawConfig = {}) {
     }
   };
 
+  // 后台补一句话总结（detached：绝不阻塞回合收口）。失败/超时保持原文，不影响已写的正文。
+  const patchSummary = async (fs, ws, rel, entry, arr) => {
+    const summary = await summarizeTurn(null, arr.map((e) => `- [${e.comp || entry}] ${e.text}`).join("\n"));
+    if (!summary) return;
+    try {
+      const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
+      const existing = await fs.readText(t);
+      const patched = existing.replace(/^(# .+\n\n)/, `$1> 摘要：${summary}\n\n`);
+      if (patched !== existing) {
+        await fs.writeText(t, patched);
+        await rebuildIndex(fs, ws);
+      }
+    } catch (e) {
+      console.log("[dsh-shadow] summarize patch failed:", e && e.message);
+    }
+  };
+
   const flush = async (agent) => {
     const id = agent?.id;
     const arr = pending.get(id);
@@ -250,8 +350,11 @@ export function apply(ctx, rawConfig = {}) {
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       const head = `# ${entry}\n\n`;
       const body = arr.map((e) => `- [${e.time}] [${e.comp || entry}] ${e.text}`).join("\n");
+      // 先落正文（快、不依赖模型），再 detach 去后台补一句话总结。
       await fs.writeText(t, `${head}${body}\n`);
       await rebuildIndex(fs, ws);
+      // 后台任务：生成摘要并回填文件头；不计入回合收口等待。
+      void patchSummary(fs, ws, rel, entry, arr);
     } catch (e) {
       console.log("[dsh-shadow] flush failed:", e && e.message);
     }
@@ -259,7 +362,8 @@ export function apply(ctx, rawConfig = {}) {
 
   // ─── 采集：入口点（真实改/读组件，客观锚） ───
   context.on("fs/observed", (target) => {
-    const abs = (target && (target.path || target.uri)) || "";
+    // FsTarget 确切形状是 { targetKey, displayPath }；此前误用 target.path/uri 会拿不到路径。
+    const abs = (target && (target.displayPath || target.targetKey)) || "";
     if (!abs) return undefined;
     let initiator;
     try {
@@ -290,6 +394,10 @@ export function apply(ctx, rawConfig = {}) {
 
   // ─── 采集：交互 + 思维落点（尽力而为） ───
   context.on("session/event", (session, event) => {
+    // Agent 公开形状只保证 id；真实 Session（此事件首个参数）带 header.cwd，先缓存以便 flush 解析工作区。
+    const sid = session?.id;
+    const cwd = session?.header?.cwd;
+    if (sid && cwd) cwdBySession.set(String(sid), cwd);
     const m = extractMessage(event);
     if (!m) return undefined;
     const id = initiatorId();

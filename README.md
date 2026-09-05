@@ -14,7 +14,8 @@ agent「思维/上下文/灵魂」的投影——**一切皆文件**，每条记
 - **说明文档 + 索引 + 意识轨迹**：`shadow/_index.md` 讲清格式、列出近期记忆、给出「入口/主题 → 记忆文件」索引，并生成**按时间的意识轨迹**（可反推用户/自己的思考方向）。
 - **读(可穿透)**：`read_shadow` 无参数返回 `_index.md`（目录）；带 `topic` 按主题穿透到具体记忆文件。
 - **提示**：通过 `systemPrompt.context(...)` 注入一句——缺上下文时先调 `read_shadow` 再回答（用 context 而非 section，避免被 complete-section replacement 覆盖）。
-- **自动过滤噪声**：纯聊天、无工具调用/无文件改动的回合自然跳过，不污染投影。
+- **一句话总结（增强）**：每一回合落盘后，detach 一个后台任务用 `llm.stream` 生成一两句中文摘要，回填到记忆文件头（`> 摘要：…`）。纯聊天/无工具回合也能据此沉淀成可读记忆；失败/超时静默降级，不影响正文。
+  - 默认路由取 `agentDefaultModel.currentSelection()`；可用 `rawConfig.summary` 配置：`{ enabled, provider, model, maxTokens, timeoutMs }`。`enabled: false` 关闭。
 
 ## 安装（持久化）
 
