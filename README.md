@@ -46,3 +46,13 @@ dsh --profile web --dump-config   # 确认无 Error:
 ## 目录位置
 
 `<工作区>/shadow/<日期>/<时刻>-<主题slug>.md`。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。
+
+## 投影模式（DSH agent 预设）
+
+`dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`，用户预设）：
+
+- 位置：`~/.dsh/.agent-presets/projection/`（`agent.cordis.yml` + `preset.yml`）。
+- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、一切皆文件、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow`。
+- 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过。
+
+该预设是**用户本地预设**（`~/.dsh/`），不随本包入库。
