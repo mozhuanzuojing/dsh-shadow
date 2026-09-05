@@ -355,4 +355,48 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   console.log("✔ 场景7 分层召回：L0 仅摘要 / L2 出片段 / 小预算降级 / 冷热淘汰生效");
 }
 
+// ─────────────────────────────────────────────
+// 场景 8：完整线索头 —— 记忆文件含「背景/材料 + 用户提示/决策 + 概况」，用户消息按分类标记
+// ─────────────────────────────────────────────
+{
+  const files8 = new Map();
+  const fs8 = {
+    async resolve(path) { return { targetKey: path, displayPath: path }; },
+    async readText(t) { return files8.get(t.displayPath) ?? ""; },
+    async writeText(t, c) { files8.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/";
+      const names = new Set();
+      for (const k of files8.keys()) {
+        const nk = k.replace(/\\/g, "/");
+        if (!nk.startsWith(prefix)) continue;
+        const first = nk.slice(prefix.length).split("/")[0];
+        if (first !== "_index.md") names.add(first);
+      }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  const services8 = { fs: fs8, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const listeners8 = new Map();
+  const ctx8 = { get: (k) => services8[k], on: (e, fn) => listeners8.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services8[k] }) };
+  agentsById.set("T8", { id: "T8", session: { header: { cwd: WS } } });
+  const P8 = { name, inject, apply };
+  P8.apply(ctx8, { summary: { enabled: false }, recall: {} });
+  const fire8 = (e, ...a) => { const fn = listeners8.get(e); assert.ok(fn, `missing ${e}`); return fn(...a); };
+  // 材料 + 用户决策消息 + 一个 goal 决策
+  fire8("fs/observed", { targetKey: `${WS}/docs/arch.md`, displayPath: `${WS}/docs/arch.md` }, { kind: "present", version: "v1" }, { agent: { id: "T8" } });
+  fire8("session/event", { id: "T8", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-8", role: "user", content: [{ type: "text", text: "就这么定了，按这个方案做。" }], source: { kind: "user" } } });
+  fire8("goal/changed", { agent: { id: "T8" }, change: { action: "complete", objective: "测试完整线索头" } });
+  await fire8("agent/turn-stopping", { agent: agentsById.get("T8"), turn: 1, signal: undefined });
+  const mem8 = [...files8.keys()].find((k) => k.includes("shadow/") && files8.get(k)?.includes("就这么定了"));
+  assert.ok(mem8, "T8 记忆应落盘");
+  const t8 = files8.get(mem8);
+  assert.ok(t8.includes("> 完整线索"), `应有完整线索头：\n${t8}`);
+  assert.ok(t8.includes("> 背景/材料：docs/arch.md"), `应列背景/材料：\n${t8}`);
+  assert.ok(t8.includes("> 用户提示/决策：「就这么定了，按这个方案做。」"), `应列用户提示/决策：\n${t8}`);
+  assert.ok(t8.includes("> 概况：1 动作"), `应有概况计数：\n${t8}`);
+  console.log("✔ 场景8 完整线索头：记忆文件含背景/材料 + 用户提示/决策 + 概况");
+}
+
 console.log("\nALL PASS ✅");

@@ -145,6 +145,20 @@ export function apply(ctx, rawConfig = {}) {
     if (act) parts.push(`〔${act}〕`);
     return parts.join(" ") || "（决策）";
   };
+  // 用户消息分类：判断是否属于「用户提示/决策」（把任务带到完成的关键交互），用于完整线索头。
+  // 启发式关键词；纯交互不命中则返回 ""。decision=拍板/定夺；reminder=提醒/注意事项。
+  const classifyUser = (text) => {
+    const t = String(text || "");
+    if (
+      /(决定|就这么|就这样|按这个|按你说的|按.*(做|来|改|办)|拍板|选[^。]{0,6}$|就[^。]{0,6}(吧|好)|同意|批准|不行|不要.*(做|用)|停止|先[^。]{0,8}再[^。]{0,8}|先做|定[^。]{0,8}$|可以|结论|方案.*(选|用)|最终.*(定|选)|行[,，。]?$|好[,，。]?$)/.test(t)
+    )
+      return "decision";
+    if (
+      /(注意|提醒|重点|不要|别|小心|切记|别忘了|另外|补充|但是|错误|不对|错了|反了|前提|前提是|关键是|优先|边界|坑|留[^。]{0,5}(神|意))/.test(t)
+    )
+      return "reminder";
+    return "";
+  };
 
   // ─── LLM 一句话总结（可选增强，纯聊天/无工具回合也能沉淀成可读记忆） ───
   // 配置：rawConfig.summary = { enabled?, provider?, model?, maxTokens?, timeoutMs? }
@@ -352,6 +366,35 @@ export function apply(ctx, rawConfig = {}) {
     }
   };
 
+  // ─── 完整线索头：把一条记忆的「背景/材料 + 用户提示/决策 + 概况」结构化，一眼可读的线索链 ───
+  // 背景/材料 = 本回合改/读过的路径（去重，任务是建立在什么材料上）；用户提示/决策 = 带
+  // classifyUser 分类的用户消息；概况 = 动作/用户消息/决策计数。
+  const buildClueHeader = (entry, arr) => {
+    const mats = [];
+    const prompts = [];
+    const seen = new Set();
+    for (const e of arr) {
+      if (e.kind === "action" && /^改\/读 /.test(e.text)) {
+        const p = e.text.replace(/^改\/读 /, "").trim();
+        if (p && !seen.has(p)) {
+          seen.add(p);
+          mats.push(p);
+        }
+      }
+      if (e.kind === "user" && e.sub) {
+        prompts.push(`「${e.text.replace(/^用户：/, "").slice(0, 48)}」`);
+      }
+    }
+    const acts = arr.filter((e) => e.kind === "action").length;
+    const usr = arr.filter((e) => e.kind === "user").length;
+    const decs = arr.filter((e) => e.kind === "decision").length;
+    const lines = ["> 完整线索"];
+    if (mats.length) lines.push(`> 背景/材料：${mats.slice(0, 8).join("、")}`);
+    if (prompts.length) lines.push(`> 用户提示/决策：${prompts.slice(0, 6).join("；")}`);
+    lines.push(`> 概况：${acts} 动作 · ${usr} 用户消息 · ${decs} 决策`);
+    return lines.join("\n") + "\n";
+  };
+
   const flush = async (agent) => {
     const id = agent?.id;
     const arr = pending.get(id);
@@ -370,9 +413,10 @@ export function apply(ctx, rawConfig = {}) {
       const rel = `shadow/${today()}/${compact()}-${slug(entry)}.md`;
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       const head = `# ${entry}\n\n`;
+      const clue = buildClueHeader(entry, arr);
       const body = arr.map((e) => `- [${e.time}] [${e.comp || entry}] ${e.text}`).join("\n");
-      // 先落正文（快、不依赖模型），再 detach 去后台补一句话总结。
-      await fs.writeText(t, `${head}${body}\n`);
+      // 先落正文 + 完整线索头（快、不依赖模型），再 detach 去后台补一句话总结。
+      await fs.writeText(t, `${head}${clue}${body}\n`);
       await rebuildIndex(fs, ws);
       // 后台任务：生成摘要并回填文件头；不计入回合收口等待。
       void patchSummary(fs, ws, rel, entry, arr);
@@ -419,7 +463,8 @@ export function apply(ctx, rawConfig = {}) {
     // 归属：按 session 自己的 agent（session.id 即该 agent 的 SessionId），不再张冠李戴到全局 initiator。
     const id = agentById(sid)?.id || (sid ? String(sid) : undefined) || initiatorId();
     const tag = m.kind === "user" ? "用户" : "我";
-    push(id, { kind: m.kind, text: `${tag}：${m.text}`, comp: "" });
+    const sub = m.kind === "user" ? classifyUser(m.text) : "";
+    push(id, { kind: m.kind, text: `${tag}：${m.text}`, comp: "", sub });
     return undefined;
   });
 
@@ -465,7 +510,7 @@ export function apply(ctx, rawConfig = {}) {
   // 其次取任意命中行，最后回退首个非空正文行。
   const snippetFor = (text, tokens) => {
     const lines = String(text || "").split("\n");
-    const skip = (l) => /^\s*($|# |> 摘要)/.test(l);
+    const skip = (l) => /^\s*($|#|> )/.test(l);
     const isAction = (l) => /改\/读 |调用 /.test(l);
     const low = (l) => l.toLowerCase();
     for (const l of lines) {
