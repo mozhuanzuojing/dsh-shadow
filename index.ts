@@ -79,7 +79,11 @@ type CtxLike = any;
 
 export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   const context: CtxLike = ctx;
-  const config: ShadowConfig = rawConfig ?? {};
+  // 配置读取：测试直接传 rawConfig；live 走 Cordis 的 ctx.config（插件行 config，经 cordis.patch.yml 注入）。
+  const config: ShadowConfig =
+    rawConfig && Object.keys(rawConfig).length
+      ? rawConfig
+      : (() => { try { return (ctx?.config ?? {}) as ShadowConfig; } catch { return {}; } })() ?? {};
   const pad = (n: number) => String(n).padStart(2, "0");
   const today = (offset = 0) => {
     const d = new Date();
@@ -472,6 +476,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     if (id) comps.delete(id);
     const ws = resolveWorkspace(agent, cwdBySession, config);
     const fs = context.get("fs");
+    console.log("[dsh-shadow][diag] flush", JSON.stringify({ id, entry, ws, count: arr.length, cfg: config }));
     if (!ws || !fs) return;
     try {
       const rel = `shadow/${today()}/${compact()}-${slug(entry)}.md`;
@@ -670,6 +675,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
         async execute(args: any, exec: any) {
           const agent: AgentLike | undefined = exec?.agent;
           const ws = resolveWorkspace(agent, cwdBySession, config);
+          console.log("[dsh-shadow][diag] read_shadow", JSON.stringify({ ws, cfg: config }));
           if (!ws) return "（无法确定工作区，shadow 不可用）";
           const fs = context.get("fs");
           if (!fs) return "（fs 服务不可用）";
