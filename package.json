@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "agent 思维/上下文/灵魂的投影——一切皆文件，每条记忆一个文件；read_shadow 可按主题穿透。",
   "type": "module",
   "main": "./index.js",

@@ -41,8 +41,9 @@
 - **`session/event` 载荷已按类型契约核实并修正（2026-09-05）**：`SessionEvent = { type, seq, time, data }`；`user/message` → `data` 即 UserMessage（`data.content[]`），`assistant/message` → `data.message` 即 AssistantMessage（`data.message.content[]`）。`extractMessage` 只取 `type==="text"` 块，跳过 reasoning/tool-call。已用真实导出记录核对形状成立，此前"静默为空"的最大不确定点已解除。
 - **`fs/observed` 曾误用 `target.path/uri`**：`FsTarget` 实际是 `{ targetKey, displayPath }`，会拿不到路径 → 入口点（客观锚）静默丢失。已改读 `target.displayPath`。
 - **工作区解析盲区**：`Agent` 公开形状只保证 `id`；已用 `session/event` 的真实 `Session.header.cwd` 缓存（`cwdBySession`）兜底 `workspaceFor`，避免 flush 因取不到 cwd 而静默不写。
-- **进程级 `session/event` 监听会"张冠李戴"**：host 层监听收所有 session 事件，却一律归属 `currentInitiator`。单 session 部署 OK；多 session/子 agent 会串。
-- 索引/穿透是**文本子串匹配**，不是语义检索；同名跨上下文召回较弱。
+- **进程级 `session/event` 监听已按 session 归属（2026-09-05 修复）**：不再一律归属 `currentInitiator`。契约确认 `Agent.id` 与 `Session.id` 同为 `SessionId`，`agents.get(session.id)` 可取到该 session 的 agent，故 `session/event` 用 `agentById(sid)?.id` 归属；`fs/observed` 无 agent 参数，用 `actor.agent?.id`（tool-execution context）优先、回退 `initiatorId()`。多 session/子 agent 不再串线。
+- **索引/穿透已升级为加权召回（2026-09-05）**：`read_shadow(topic)` 不再纯子串匹配，改为「入口(6) > 主题标签(4) > 路径(3) > 正文(1) + 时间衰减」打分排序，并优先返回**摘要行 + 命中片段**（命中片段优先取非纯动作行）。B 档语义召回用 `rawConfig.recall = { enabled, provider, model, ... }` 开启，会用 `llm.stream` 扩词后打分；失败/未配置静默回退 A 档。
+- **边界**：多 session 且同一秒 flush 且入口相同（如都 fallback 到 `shadow`）时，记忆文件名会撞（`compact()` 秒级 + 同 slug）。纯聊天无 comp 的回合在并发多 agent 下可能同名覆盖；单 session 无此问题。
 - 采集不含"纯聊天但没工具/文件"的回合（若消息解析失败）。需要 LLM 摘要层级（一句话总结）是后续增强。
 - 主题粒度 = 路径前两级组件/工具名，非自然语言主题。
 

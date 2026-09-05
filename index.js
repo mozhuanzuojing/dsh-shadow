@@ -69,6 +69,22 @@ export function apply(ctx, rawConfig = {}) {
       return undefined;
     }
   };
+  // 归属解析：从 tool-execution context / actor 里尽量取到 agent；取不到再回退 initiator。
+  // fs/observed 的 actor 是「observing tool-execution context」，含 agent；ToolsExecution 亦带 .agent。
+  const agentIdOf = (thing) => {
+    if (!thing || typeof thing !== "object") return undefined;
+    const nested = thing.agent && typeof thing.agent === "object" ? thing.agent.id : undefined;
+    const direct = typeof thing.id === "string" ? thing.id : undefined;
+    return (typeof nested === "string" && nested) || direct || undefined;
+  };
+  const agentById = (id) => {
+    if (!id) return undefined;
+    try {
+      return context.get("agents")?.get(id);
+    } catch {
+      return undefined;
+    }
+  };
 
   // pending[agentId] = [{ time, kind, text, comp }]
   const pending = new Map();
@@ -135,10 +151,13 @@ export function apply(ctx, rawConfig = {}) {
   // 默认用 agentDefaultModel.currentSelection() 的路由；失败/超时静默降级为「无摘要」，
   // 绝不影响正文落盘。
   const summaryCfg = rawConfig?.summary ?? {};
-  const routeFor = () => {
+  // read_shadow 的语义召回：默认加权关键词+标签+路径+时间衰减；recall.enabled=true 且配了
+  // provider/model 时，先用 llm.stream 扩几个相关检索词，再打分（B 档，默认关）。
+  const recallCfg = rawConfig?.recall ?? {};
+  const routeFor = (cfg = summaryCfg) => {
     const explicit =
-      summaryCfg.provider && summaryCfg.model
-        ? { provider: summaryCfg.provider, model: summaryCfg.model }
+      cfg.provider && cfg.model
+        ? { provider: cfg.provider, model: cfg.model }
         : undefined;
     if (explicit) return explicit;
     try {
@@ -233,6 +252,8 @@ export function apply(ctx, rawConfig = {}) {
     const re = /\[[^\]]+\] \[([^\]]+)\]/g;
     let m;
     while ((m = re.exec(text))) set.add(m[1]);
+    const h = String(text || "").match(/^# (.+)$/m);
+    if (h) set.add(h[1].trim());
     if (fallback) set.add(fallback);
     return [...set];
   };
@@ -361,19 +382,14 @@ export function apply(ctx, rawConfig = {}) {
   };
 
   // ─── 采集：入口点（真实改/读组件，客观锚） ───
-  context.on("fs/observed", (target) => {
+  context.on("fs/observed", (target, observation, actor) => {
     // FsTarget 确切形状是 { targetKey, displayPath }；此前误用 target.path/uri 会拿不到路径。
     const abs = (target && (target.displayPath || target.targetKey)) || "";
     if (!abs) return undefined;
-    let initiator;
-    try {
-      initiator = context.get("agents")?.currentInitiator();
-    } catch {
-      initiator = undefined;
-    }
-    const id = initiator?.id;
+    // 归属：actor（tool-execution context）优先，取不到再回退当前 initiator。
+    const id = agentIdOf(actor) || initiatorId();
     if (!id) return undefined;
-    const ws = workspaceFor(initiator) || "";
+    const ws = workspaceFor(agentById(id)) || "";
     push(id, { kind: "action", text: `改/读 ${under(abs, ws) || abs}`, comp: component(abs, ws) });
     return undefined;
   });
@@ -400,7 +416,8 @@ export function apply(ctx, rawConfig = {}) {
     if (sid && cwd) cwdBySession.set(String(sid), cwd);
     const m = extractMessage(event);
     if (!m) return undefined;
-    const id = initiatorId();
+    // 归属：按 session 自己的 agent（session.id 即该 agent 的 SessionId），不再张冠李戴到全局 initiator。
+    const id = agentById(sid)?.id || (sid ? String(sid) : undefined) || initiatorId();
     const tag = m.kind === "user" ? "用户" : "我";
     push(id, { kind: m.kind, text: `${tag}：${m.text}`, comp: "" });
     return undefined;
@@ -411,6 +428,105 @@ export function apply(ctx, rawConfig = {}) {
     await flush(payload && payload.agent);
     return undefined;
   });
+
+  // ─── read_shadow 召回：加权关键词 + 标签 + 路径 + 时间衰减（默认）；可选 LLM 扩展（recall.enabled） ───
+  // 词面化：非 CJK 词要求长度 >= 2，CJK 词保留（>=1 字），避免中文单字被误过滤。
+  const tokenize = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .split(/[\s,，。、;；:：()（）\[\]"'`]+/)
+      .map((t) => t.trim())
+      .filter((t) => t && (/[\u4e00-\u9fff]/.test(t) ? t.length >= 1 : t.length >= 2));
+  // 打分：入口(6) > 主题标签(4) > 路径(3) > 正文(1)；同日/近期给少量时间加成。
+  const scoreMemory = (text, rel, entry, tokens) => {
+    if (!tokens.length) return 0;
+    const low = String(text || "").toLowerCase();
+    const lowRel = String(rel || "").toLowerCase();
+    const entryLow = String(entry || "").toLowerCase();
+    const tags = topicsInText(text, entry);
+    let score = 0;
+    for (const t of tokens) {
+      let hit = 0;
+      if (entryLow.includes(t)) hit = Math.max(hit, 6);
+      if (tags.some((tag) => String(tag).toLowerCase().includes(t))) hit = Math.max(hit, 4);
+      if (lowRel.includes(t)) hit = Math.max(hit, 3);
+      if (low.includes(t)) hit = Math.max(hit, 1);
+      score += hit;
+    }
+    if (!score) return 0;
+    const m = String(rel || "").match(/(\d{4}-\d{2}-\d{2})/);
+    if (m) {
+      const days = Math.round((Date.parse(today()) - Date.parse(m[1])) / 86400000);
+      score += Math.max(0, 3 - Math.floor(days / 7));
+    }
+    return score;
+  };
+  // 命中片段：优先取第一个命中 token 的"非纯动作"正文行（用户/决策/结论），
+  // 其次取任意命中行，最后回退首个非空正文行。
+  const snippetFor = (text, tokens) => {
+    const lines = String(text || "").split("\n");
+    const skip = (l) => /^\s*($|# |> 摘要)/.test(l);
+    const isAction = (l) => /改\/读 |调用 /.test(l);
+    const low = (l) => l.toLowerCase();
+    for (const l of lines) {
+      if (skip(l) || !l.trim() || isAction(l)) continue;
+      if (tokens.some((t) => low(l).includes(t))) return l.trim().slice(0, 140);
+    }
+    for (const l of lines) {
+      if (skip(l) || !l.trim()) continue;
+      if (tokens.some((t) => low(l).includes(t))) return l.trim().slice(0, 140);
+    }
+    for (const l of lines) {
+      if (!skip(l) && l.trim()) return l.trim().slice(0, 140);
+    }
+    return "";
+  };
+  // 可选 LLM 扩词（B 档）：返回最多 10 个相关检索词；失败/关/未配置则返回 []。
+  const expandTerms = async (topic) => {
+    if (recallCfg.enabled !== true) return [];
+    const llm = context.get("llm");
+    if (!llm) return [];
+    const route = routeFor(recallCfg);
+    if (!route) return [];
+    const maxTokens = Math.max(1, Number(recallCfg.maxTokens) || 60);
+    const timeoutMs = Math.max(1, Number(recallCfg.timeoutMs) || 6000);
+    const system =
+      "你是检索扩词助手。给定一个主题/入口，输出 5~10 个最相关的检索词，每行一个，只输出词本身，不要编号、解释或标点。";
+    const messages = [
+      {
+        id: `shadow-r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role: "user",
+        content: [{ type: "text", text: topic }],
+        source: { kind: "plugin", plugin: "dsh-shadow" },
+      },
+    ];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      let text = "";
+      for await (const chunk of llm.stream({
+        provider: route.provider,
+        model: route.model,
+        messages,
+        system,
+        maxTokens,
+        signal: controller.signal,
+      })) {
+        if (!chunk) continue;
+        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
+        else if (chunk.type === "finish") {
+          if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return [];
+          break;
+        }
+      }
+      return tokenize(text).slice(0, 10);
+    } catch (e) {
+      console.log("[dsh-shadow] recall expand skipped:", e && e.message);
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   // ─── 注册 model 可见工具 read_shadow ───
   if (typeof context.inject === "function") {
@@ -443,19 +559,32 @@ export function apply(ctx, rawConfig = {}) {
             const idx = await readRel(fs, ws, "shadow/_index.md");
             return idx || "（暂无 shadow 索引）";
           }
-          const limit = Math.max(1, Math.min(50, Number(args?.limit) || 20));
-          const needle = topic.toLowerCase();
+          const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
           const memories = await listMemories(fs, ws);
-          memories.sort((a, b) =>
-            a.date === b.date ? b.name.localeCompare(a.name) : b.date.localeCompare(a.date),
-          );
-          const hits = [];
-          for (const mm of memories) {
-            if (hits.length >= limit) break;
-            const text = await readRel(fs, ws, mm.rel);
-            if (text.toLowerCase().includes(needle)) hits.push(`[${mm.rel}]\n${text.trim()}`);
+          let tokens = tokenize(topic);
+          if (!tokens.length) tokens = [String(topic).toLowerCase()];
+          // 可选 LLM 扩词（recall.enabled），为召回增强语义。
+          if (recallCfg.enabled === true && recallCfg.provider && recallCfg.model) {
+            const extra = await expandTerms(topic);
+            if (extra.length) tokens = Array.from(new Set([...tokens, ...extra]));
           }
-          return hits.length ? hits.join("\n\n") : `（无匹配「${topic}」的记忆）`;
+          const scored = [];
+          for (const mm of memories) {
+            const text = await readRel(fs, ws, mm.rel);
+            if (!text) continue;
+            const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
+            const score = scoreMemory(text, mm.rel, entry, tokens);
+            if (score > 0) scored.push({ mm, text, score });
+          }
+          scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
+          if (!scored.length) return `（无匹配「${topic}」的记忆）`;
+          const parts = scored.slice(0, limit).map(({ mm, text, score }) => {
+            const summary = (text.match(/^> 摘要：(.+)$/m) || [])[1] || "";
+            const snip = snippetFor(text, tokens);
+            const head = `[${mm.rel}]${summary ? `\n摘要：${summary}` : ""}`;
+            return `${head}${snip ? `\n…${snip}…` : ""}（相关度 ${score}）`;
+          });
+          return parts.join("\n\n");
         },
       });
     });
