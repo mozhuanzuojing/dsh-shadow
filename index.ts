@@ -36,6 +36,12 @@ import { readLedger, writeLedger } from "./retrieval/ledger.js";
 import { fsEvidenceProvider, fsExists } from "./evidence/filesystem.js";
 import { zgEvidenceProvider, zgVerify, runZg, parseZgMatches } from "./evidence/zg.js";
 import { builtinEvidenceProviders, routeVerify } from "./evidence/gateway.js";
+import { evidencePathsOf, isPathLike } from "./evidence/paths.js";
+import { experienceOf, renderExperience } from "./core/experience.js";
+import { judgmentOf, renderJudgment } from "./core/judgment.js";
+import { lifecycleOf } from "./core/lifecycle.js";
+import { readSoul, soulText } from "./soul/soul.js";
+import { tasteOf, renderTaste } from "./soul/taste.js";
 import { SECRET_PATTERNS, UNSAFE_CONTROL, sanitizeText, isUnsafe, scrubUnsafe, SYSTEM_TAG_NAMES, SYSTEM_TAG_RE, SYSTEM_TAG_RESIDUE_RE, stripSystemScaffold, SYSTEM_SCAFFOLD_MARKERS, isScaffoldBlock, INJECTION_PHRASES, scrubFinal, referencedMaterials } from "./security/scrub.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
@@ -490,17 +496,6 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     const reflection = superseded ? "后续已迭代（存在同入口更新记忆）" : (conflictCount > 0 ? "证据缺失，需重新验证" : "无后续修正记录");
     return { superseded, verdict, outcome, reflection };
   };
-  // 证据路径候选：优先读 `> 证据链：证据(...)`，旧记忆回退 `> 背景/材料：`。
-  const evidencePathsOf = (text: string) => {
-    const clue = (String(text).match(/^> 证据链：(.+)$/m) || [])[1] || "";
-    if (clue) {
-      const evM = clue.match(/证据\(([^)]*)\)/);
-      if (evM) return evM[1].split(/[、,]/).map((s) => s.trim()).filter(Boolean);
-    }
-    const mats = (String(text).match(/^> 背景\/材料：(.+)$/m) || [])[1] || "";
-    return mats.split(/[、,]/).map((s) => s.trim()).filter(Boolean);
-  };
-  const isPathLike = (p: string) => p && !/^https?:|github\.com|arxiv/i.test(p) && (/[\\\/]/.test(p) || /\.[a-z0-9]{1,6}$/i.test(p) || /^[A-Za-z]:/.test(p));
   const conflictOf = async (fs: any, ws: string, text: string) => {
     const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 12);
     if (!paths.length) return { missing: [] as string[] };
@@ -515,20 +510,6 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   // ── Evidence Gateway（v0.14）已迁移至 evidence/{filesystem,zg,gateway}.ts；此处保持薄封装。 ──
   // zg 是「眼睛/Evidence Sensor」；Arbitration(它意味着什么) 留在 Shadow Core。zg 未装 → 明确 unavailable，绝不静默 fallback。
   const verifyEvidence = (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => routeVerify(ref, ctx, config.evidenceProvider || "fs", config.evidenceProviders);
-  // 生命周期状态机（②）：由 meta 信号派生（pinned/status/confirms/hits/age/conflict），确定性、可解释。
-  const lifecycleOf = (rec: any, ageDays: number, conflictCount: number, stale: boolean) => {
-    if (rec?.pinned) return "TRUSTED";
-    if (rec?.status === "archived") return "ARCHIVED";
-    if (rec?.status === "superseded") return "SUPERSEDED";
-    const confirms = Array.isArray(rec?.confirmedBy) ? rec.confirmedBy.length : 0;
-    const hits = Number(rec?.hits) || 0;
-    if (conflictCount > 0) return "STALE"; // 证据路径缺失 → 可能已过时/冲突
-    if (stale) return "DECAYING";
-    if (confirms >= 2) return "TRUSTED";
-    if (confirms >= 1) return "VERIFIED";
-    if (hits > 0) return "OBSERVED";
-    return "NEW";
-  };
   // ⑥ 工程知识图谱（起步地基）：从记忆树派生「组件/域 → 依赖 → 相关记忆」的可查询索引，`kg:true` 时输出邻接追踪。
   // 节点：组件（记忆 title = 路径/域）、域（路径首段）；边：组件→域（belongs_to）、组件→证据路径（depends_on/changed_by）、组件↔记忆（related_to）。
   const kgTrace = async (fs: any, ws: string, memories: any[], topic: string) => {
@@ -572,59 +553,6 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   };
   // ── Soul / Experience（灵魂投影系统，v0.9.0）─────────────────────────────
   // Soul Kernel：curated 公理层（身份/价值观/原则/品味/边界），非事件流，按需查询。存 shadow/soul/soul.json。
-  const readSoul = async (fs: any, ws: string) => {
-    try {
-      const t = await fs.resolve(`${ws}/shadow/soul/soul.json`, { cwd: ws });
-      const txt = await fs.readText(t);
-      return txt ? (JSON.parse(txt) || null) : null;
-    } catch {
-      return null;
-    }
-  };
-  const soulText = (soul: any) => {
-    const lines = ["[Soul Kernel]"];
-    if (soul?.identity) lines.push(`身份 ${typeof soul.identity === "string" ? soul.identity : (soul.identity.name || soul.identity.role || JSON.stringify(soul.identity))}`);
-    if (Array.isArray(soul?.values) && soul.values.length) lines.push(`价值观 ${soul.values.join("、")}`);
-    if (Array.isArray(soul?.principles) && soul.principles.length) lines.push(`原则 ${soul.principles.join("、")}`);
-    if (soul?.taste) lines.push(`品味 ${JSON.stringify(soul.taste)}`);
-    if (Array.isArray(soul?.boundaries) && soul.boundaries.length) lines.push(`边界 ${soul.boundaries.join("、")}`);
-    return lines.join("\n");
-  };
-  // Experience：从现有"完整线索"头派生出结构化工程经验对象（situation/problem/decision/implementation/evidence/outcome/lesson）。
-  const experienceOf = (text: string, mm: any) => {
-    const body = String(text || "");
-    const m = (re: RegExp) => (body.match(re) || [])[1] || "";
-    const clue = m(/^> 证据链：(.+)$/m);
-    const evidence = (clue.match(/证据\(([^)]*)\)/) || [])[1] || "";
-    return {
-      situation: (body.match(/^# (.+)$/m) || [])[1] || "",
-      problem: m(/^> 背景\/材料：(.+)$/m),
-      decision: m(/^> 用户提示\/决策：(.+)$/m),
-      implementation: evidence || m(/^> 背景\/材料：(.+)$/m),
-      evidence,
-      summary: m(/^> 概况：(.+)$/m),
-      lesson: m(/^> 摘要：(.+)$/m),
-      session: m(/^> 来源会话：(.+)$/m),
-      project: m(/^> 项目：(.+)$/m),
-      goal: m(/^> 目标：(.+)$/m),
-      date: mm?.date || "",
-    };
-  };
-  const renderExperience = (e: any) => {
-    const lines = [`[Experience] ${e.situation}`];
-    if (e.problem) lines.push(`问题 ${e.problem}`);
-    if (e.decision) lines.push(`决策 ${e.decision}`);
-    if (e.implementation) lines.push(`实现 ${e.implementation}`);
-    if (e.evidence) lines.push(`证据 ${e.evidence}`);
-    if (e.verdict) lines.push(`裁决 ${e.verdict}`);
-    if (e.outcome) lines.push(`结果 ${e.outcome}`);
-    if (e.summary) lines.push(`概况 ${e.summary}`);
-    if (e.reflection) lines.push(`反思 ${e.reflection}`);
-    if (e.lesson) lines.push(`教训 ${e.lesson}`);
-    if (e.project) lines.push(`项目 ${e.project}`);
-    if (e.goal) lines.push(`目标 ${e.goal}`);
-    return lines.join("\n");
-  };
   // ── v0.12 Projection：用 Observer 透镜把全局模型投影成「此刻相关的局部上下文」（含 excluded）。
   // Observer 透镜 = soul.observer（curated）或默认；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
   const projectContext = async (fs: any, ws: string, memories: any[], task: string, soul: any) => {
@@ -668,52 +596,6 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     return lines.join("\n");
   };
   // ── v0.13 Judgment / Taste ─────────────────────────────────────────────
-  // Judgment：从记忆派生「面对<情境> → 我判断/选择<决策>」模式（Knowledge ≠ Judgment）。
-  const judgmentOf = async (fs: any, ws: string, memories: any[], topic: string) => {
-    const tokens = tokenize(topic);
-    const out: { situation: string; decision: string; date: string }[] = [];
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      const exp = experienceOf(text, mm);
-      if (!exp.decision) continue;
-      const hay = `${exp.situation} ${exp.decision}`.toLowerCase();
-      if (tokens.length && !tokens.some((t) => hay.includes(t))) continue;
-      out.push({ situation: exp.situation, decision: exp.decision, date: mm.date });
-    }
-    // 按情境去重，保留最近一次判断
-    const seen = new Map<string, any>();
-    for (const j of out) if (!seen.has(j.situation) || j.date >= seen.get(j.situation).date) seen.set(j.situation, j);
-    return [...seen.values()].slice(0, 10);
-  };
-  const renderJudgment = (js: any[]) => {
-    const lines = ["[Judgment]"];
-    if (!js.length) { lines.push("（暂无判断模式：需要含「决策」的记忆）"); return lines.join("\n"); }
-    for (const j of js) lines.push(`面对 ${j.situation} → 我判断/选择 ${j.decision}`);
-    return lines.join("\n");
-  };
-  // Taste：curated 偏好 = 灵魂 taste + shadow/taste/taste.json。默认关。
-  const tasteOf = async (fs: any, ws: string, soul: any) => {
-    let extra: any = null;
-    try {
-      const t = await fs.resolve(`${ws}/shadow/taste/taste.json`, { cwd: ws });
-      const txt = await fs.readText(t);
-      if (txt) extra = JSON.parse(txt);
-    } catch { /* 无 extra */ }
-    return { soul: soul?.taste || null, extra };
-  };
-  const renderTaste = (t: any) => {
-    const lines = ["[Taste]"];
-    if (t.soul) lines.push(`品味 ${JSON.stringify(t.soul)}`);
-    if (t.extra && (t.extra.likes || t.extra.dislikes || t.extra.preferences)) {
-      if (Array.isArray(t.extra.likes) && t.extra.likes.length) lines.push(`喜欢 ${t.extra.likes.join("、")}`);
-      if (Array.isArray(t.extra.dislikes) && t.extra.dislikes.length) lines.push(`不喜欢 ${t.extra.dislikes.join("、")}`);
-      const pref = t.extra.preferences;
-      if (pref && typeof pref === "object") lines.push(`偏好 ${JSON.stringify(pref)}`);
-    }
-    if (!t.soul && !t.extra) lines.push("（暂无品味配置：可在 soul.json.taste 或 shadow/taste/taste.json 定义）");
-    return lines.join("\n");
-  };
   const expandTerms = async (topic: string) => {
     if (recallCfg.enabled !== true) return [];
     const llm = context.get("llm");
