@@ -2,7 +2,7 @@
 // Delegation ≠ Ownership ≠ Authority Expansion；Adaptation ≠ Self Direction。委派执行下"有限适应"，无隐性扩权/自主。
 import type { DelegationContext, AutonomyBoundaryEvent } from "../types/index.js";
 import { actionWithinScope, permissionNotOwnership } from "../guard/scope-guard.js";
-import { notRevoked, notExpired } from "../guard/revocation-guard.js";
+import { lifecycleOf } from "../guard/lifecycle-guard.js";
 import { contextHasNoExpansionField, resultNoPermissionUpgrade, resultNoLongRunAuthority, resultNoOwnership, resultNoIdentityClaim } from "../guard/expansion-guard.js";
 import { writeDelegationContext, readDelegationContext, writeDelegationEvent } from "../persistence/persist.js";
 import { today } from "../../core/util.js";
@@ -31,9 +31,10 @@ export const checkDelegation = async (fs: any, ws: string, args: any): Promise<{
   const action = String(args?.action || "");
   const objRef = String(args?.objectiveRef || "");
   if (objRef && objRef !== ctx.objectiveRef) return { ok: false, reason: "执行目标与委派目标不一致（Adaptation ≠ Objective Change：禁 execution difficulty → change objective）" };
-  if (!notRevoked(ctx)) return { ok: false, reason: "授权已撤销（Revocation First：Authority revoked + history ≠ still allowed）" };
   const now = String(args?.now || today());
-  if (!notExpired(ctx, now)) return { ok: false, reason: `授权已过期（expiration ${ctx.expiration}；Expiration ≠ Historical Permission：过期即失效，历史成功不续期）` };
+  const lc = lifecycleOf(ctx, now);
+  if (lc === "revoked") return { ok: false, reason: "授权已撤销（Revocation First：Authority revoked + history ≠ still allowed）" };
+  if (lc === "expired") return { ok: false, reason: `授权已过期（expiration ${ctx.expiration}；Expiration ≠ Historical Permission：过期即失效，历史成功不续期）` };
   const scopeOk = actionWithinScope(ctx.allowedScope, action);
   if (!scopeOk) return { ok: false, reason: `scope 越界：${action} 不在 allowedScope [${ctx.allowedScope.join(",")}] 内（Scope 不可扩大）` };
   const satisfied = (args?.satisfiedConstraints as string[]) || [];
@@ -47,8 +48,9 @@ export const recordDelegationEvent = async (fs: any, ws: string, args: any): Pro
   const ctx = await readDelegationContext(fs, ws, String(args?.delegationId || ""));
   if (!ctx) return { ok: false, reason: "无 delegation（Delegation Lineage 不可断：Action→Plan→Objective→Delegation→Authority Source）" };
   if (String(args?.objectiveRef || "") && args.objectiveRef !== ctx.objectiveRef) return { ok: false, reason: "执行目标与委派目标不一致（Adaptation ≠ Objective Change：禁 execution difficulty → change objective）" };
-  if (!notRevoked(ctx)) return { ok: false, reason: "授权已撤销（Revocation First：Authority revoked + history ≠ still allowed）" };
-  if (!notExpired(ctx, today())) return { ok: false, reason: `授权已过期（expiration ${ctx.expiration}；Expiration ≠ Historical Permission：过期即失效，历史成功不续期）` };
+  const lc = lifecycleOf(ctx, today());
+  if (lc === "revoked") return { ok: false, reason: "授权已撤销（Revocation First：Authority revoked + history ≠ still allowed）" };
+  if (lc === "expired") return { ok: false, reason: `授权已过期（expiration ${ctx.expiration}；Expiration ≠ Historical Permission：过期即失效，历史成功不续期）` };
   const action = String(args?.candidateAction || "");
   const scopeOk = actionWithinScope(ctx.allowedScope, action);
   if (!scopeOk) return { ok: false, reason: `scope 越界：${action} 不在 allowedScope [${ctx.allowedScope.join(",")}] 内（Scope 不可扩大）` };

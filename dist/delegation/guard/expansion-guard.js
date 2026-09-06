@@ -6,7 +6,7 @@ export const assertNoExpansionField = (ctx) => ({
     reason: contextHasNoExpansionField(ctx) ? undefined : "DelegationContext 禁 trust/confidence/reputation/capabilityLevel（防 授权历史→信任分→更多权限 绕过 184）",
 });
 // 184: Feedback ≠ Permission Upgrade（success → more authority 禁）。
-const PERMISSION_UPGRADE = /more authority|permission upgrade|更多权限|权限提升|更自主|授权扩大|allowedActions|trust more|信任更多/i;
+const PERMISSION_UPGRADE = /more authority|permission upgrade|更多权限|权限提升|更自主|授权扩大|allowedActions|trust more|信任更多|permission restored|restore permission|恢复权限|重新授权/i;
 export const resultNoPermissionUpgrade = (r) => !PERMISSION_UPGRADE.test(r || "");
 export const assertResultNoPermissionUpgrade = (r) => ({
     ok: resultNoPermissionUpgrade(r),

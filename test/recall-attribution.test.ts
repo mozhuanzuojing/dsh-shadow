@@ -3878,4 +3878,108 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   console.log("✔ 189 Expiration ≠ Historical Permission：过期即失效，历史成功不续期（Time says stop）");
 }
 
+// ─────────────────────────────────────────────
+// v0.36.1 Delegation Lifecycle Integrity Lock：ADR-0030.1。
+// 冻结 Created → Active → Expired/Revoked → Cannot resurrect。引入 lifecycle-guard（active/expired/revoked 独立于 revocation）。
+// 190-197: Expiration Immutable / Cannot Resume / History No Reactivate / Scope Needs New Delegation /
+//          Adaptation No Mutate / Event No Authority / Expired No Plan / Lineage Append-only。
+// ─────────────────────────────────────────────
+// 190：Delegation Expiration Immutable（expired + old success ≠ active；不可复活）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2026-12-31" });
+  for (let i = 0; i < 100; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
+  const r1 = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "update_service_config", now: "2027-03-01" });
+  assert.ok(String(r1).includes("过期") || String(r1).includes("Expiration"), "过期后应拒绝");
+  const r2 = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "update_service_config", now: "2027-03-01" });
+  assert.ok(String(r2).includes("Expiration") || String(r2).includes("过期"), "重复检查仍拒绝（不可复活）");
+  console.log("✔ 190 Delegation Expiration Immutable：expired + old success ≠ active（不可复活）");
+}
+
+// 191：Revoked Delegation Cannot Resume（revoke→new execution→same delegation 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-ok", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
+  for (let i = 0; i < 100; i++) await dlgevt(fs, WS, { delegationId: "dlg-ok", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
+  const evBefore = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-")).length;
+  await dlgctx(fs, WS, { delegationId: "dlg-rev", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01", revocation: true });
+  for (let i = 0; i < 5; i++) { const r = await dlgevt(fs, WS, { delegationId: "dlg-rev", candidateAction: "update_service_config", executionResult: `resume ${i}`, satisfiedConstraints: [] }); assert.ok(String(r).includes("Revocation First"), "revoked 不可 resume（每次执行都拒绝）"); }
+  const evAfter = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-")).length;
+  assert.ok(evAfter === evBefore, "revoked delegation 无新事件记录（cannot resume）");
+  console.log("✔ 191 Revoked Delegation Cannot Resume（revoke→new execution→same delegation 禁）");
+}
+
+// 192：History Cannot Reactivate Permission（historical success → permission restored 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
+  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const before = store.get(delegFile);
+  for (let i = 0; i < 100; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
+  assert.ok(store.get(delegFile) === before, "历史成功不修改/恢复权限（context 不变）");
+  const r = await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "permission restored by history", satisfiedConstraints: [] });
+  assert.ok(String(r).includes("DelegationEvent Rejected"), "执行结果声称恢复权限应拒绝");
+  console.log("✔ 192 History Cannot Reactivate Permission（historical success → permission restored 禁）");
+}
+
+// 193：Scope Expansion Requires New Delegation（旧委派不可扩；须新委派）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
+  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const before = store.get(delegFile);
+  const r = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "redesign_architecture" });
+  assert.ok(String(r).includes("scope 越界"), "旧委派不可扩大 scope");
+  assert.ok(store.get(delegFile) === before, "scope 扩大不改写旧委派");
+  await dlgctx(fs, WS, { delegationId: "dlg-2", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config", "redesign_architecture"], constraints: [], expiration: "2099-01-01" });
+  const r2 = await dlgcheck(fs, WS, { delegationId: "dlg-2", action: "redesign_architecture" });
+  assert.ok(String(r2).includes("ALLOWED"), "新委派（扩大后 scope）才允许");
+  console.log("✔ 193 Scope Expansion Requires New Delegation（旧委派不可扩，须新委派）");
+}
+
+// 194：Adaptation Cannot Mutate DelegationContext（改执行策略，不改 authority）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config", "optimize_config"], constraints: [], expiration: "2099-01-01" });
+  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const before = store.get(delegFile);
+  const same = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "optimize_config" });
+  assert.ok(String(same).includes("ALLOWED"), "同权限不同执行策略允许");
+  assert.ok(store.get(delegFile) === before, "Adaptation 不改写 DelegationContext（authority 不变）");
+  console.log("✔ 194 Adaptation Cannot Mutate DelegationContext（改执行策略，不改 authority）");
+}
+
+// 195：Delegation Event Cannot Become Authority Source（successful event → new delegation 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
+  for (let i = 0; i < 50; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
+  const deps = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("delegation-"));
+  assert.ok(deps.length === 1, "事件不自动产生新委派（Delegation 数不变）");
+  console.log("✔ 195 Delegation Event Cannot Become Authority Source（successful event → new delegation 禁）");
+}
+
+// 196：Expired Permission Not Used For Planning（expired → 报告不可用，不进 plan 可用候选）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2026-09-01" });
+  const r = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "update_service_config" });
+  assert.ok(String(r).includes("过期") || String(r).includes("Expiration"), "过期权限在 check 中不可用（不 ALLOWED）");
+  assert.ok(!String(r).includes("ALLOWED"), "过期权限不进入可用候选（planner 不可选）");
+  console.log("✔ 196 Expired Permission Not Used For Planning（expired → 报告不可用，不进 plan）");
+}
+
+// 197：Delegation Lineage Append-only（事件只追加，不重写；lineage 完整）。
+{
+  const { fs, store } = mkV(new Map());
+  await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
+  await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev1", satisfiedConstraints: [] });
+  await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev2", satisfiedConstraints: [] });
+  const evs = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-"));
+  assert.ok(evs.length === 2, "事件 append-only（每条一文件，不覆盖）");
+  const r = await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev3", satisfiedConstraints: [] });
+  assert.ok(String(r).includes("delegation") && String(r).includes("authority"), "event 带 lineage（Action→Delegation→Authority）");
+  console.log("✔ 197 Delegation Lineage Append-only（事件只追加，不重写；lineage 完整）");
+}
+
 console.log("\nALL PASS ✅");
