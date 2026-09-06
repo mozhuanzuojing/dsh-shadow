@@ -4289,4 +4289,75 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
   console.log("✔ 223 Adaptation Does Not Upgrade Agency（长期成功适应 → 提升自主等级 禁）");
 }
 
+// ─────────────────────────────────────────────
+// v0.39 Long Horizon Interaction Kernel：ADR-0033。时间可增加经验，但不能增加主体性。
+// 224-229: Temporal≠AuthorityGrowth / LongHistory≠Preference / AdaptChain≠IdentityChain /
+//          Compression≠RealitySimplification / Pattern≠Objective / Success≠SelfConfidence。
+// 关注点 A（HistorySummary 访问辅助）+ B（Continuity ≠ Identity Mutation）。
+// ─────────────────────────────────────────────
+const hzctx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "horizon-context", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const hzsum = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "horizon-summary", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const hzevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "horizon-event", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const hzlink = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "horizon-link", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const hzEvtOk = { historyRef: "h-1", previousAccessibility: "forgotten", currentAccessibility: "available", recallRef: "r-1", adaptationRef: "a-1" };
+const hzLinkOk = { historyRef: "h-1", recallRef: "r-1", adaptationRef: "a-1" };
+
+// 224：Temporal Accumulation ≠ Authority Growth（执行越久→更可信→权限增加 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzevt(fs, WS, { ...hzEvtOk, result: "executed longer → more trusted → permission increase" });
+  assert.ok(String(r).includes("ContinuityEvent Rejected"), "时间累积声称可信/权限应拒绝（Temporal ≠ Authority Growth）");
+  assert.ok(String(r).includes("Authority") || String(r).includes("authority"), "应标注");
+  console.log("✔ 224 Temporal Accumulation ≠ Authority Growth（执行越久→更可信→权限增加 禁）");
+}
+
+// 225：Long History ≠ Preference（长期选择 A → 偏好 A 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzlink(fs, WS, { ...hzLinkOk, result: "long history → I prefer A" });
+  assert.ok(String(r).includes("InteractionLink Rejected"), "长期偏好应拒绝（Long History ≠ Preference）");
+  assert.ok(String(r).includes("Preference") || String(r).includes("偏好"), "应标注");
+  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference"));
+  assert.ok(pref.length === 0, "无 preference 产物");
+  console.log("✔ 225 Long History ≠ Preference（长期选择 A → 偏好 A 禁）");
+}
+
+// 226：Adaptation Chain ≠ Identity Chain（100 次调整 ≠ 我是新主体）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzlink(fs, WS, { ...hzLinkOk, result: "100 adjustments → self model expansion" });
+  assert.ok(String(r).includes("InteractionLink Rejected"), "适应性链声称身份演化应拒绝（Adapt Chain ≠ Identity Chain）");
+  assert.ok(String(r).includes("Identity Chain") || String(r).includes("identity"), "应标注");
+  console.log("✔ 226 Adaptation Chain ≠ Identity Chain（100 次调整 ≠ 我是新主体）");
+}
+
+// 227：History Compression ≠ Reality Simplification（摘要是访问辅助，非新事实源）。
+{
+  const { fs, store } = mkV(new Map());
+  const ok = await hzsum(fs, WS, { sourceRefs: ["obs-1", "obs-2"], compressionMethod: "temporal-window", accessibility: "available" });
+  assert.ok(String(ok).includes("[History Summary]"), "合规摘要通过");
+  const bad = await hzsum(fs, WS, { sourceRefs: ["obs-1"], compressionMethod: "summarizes reality", accessibility: "available" });
+  assert.ok(String(bad).includes("HistorySummary Rejected"), "摘要声称事实应拒绝（Compression ≠ Reality Simplification）");
+  assert.ok(String(bad).includes("Reality Simplification") || String(bad).includes("事实源"), "应标注");
+  console.log("✔ 227 History Compression ≠ Reality Simplification（摘要是访问辅助，非新事实源）");
+}
+
+// 228：Interaction Pattern ≠ Objective（长期合作模式→系统自己推断目标 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzlink(fs, WS, { ...hzLinkOk, result: "long pattern → inferred objective" });
+  assert.ok(String(r).includes("InteractionLink Rejected"), "交互模式声称推断目标应拒绝（Pattern ≠ Objective）");
+  assert.ok(String(r).includes("Objective") || String(r).includes("目标"), "应标注");
+  console.log("✔ 228 Interaction Pattern ≠ Objective（长期合作模式→系统自己推断目标 禁）");
+}
+
+// 229：Long Horizon Success ≠ Self Confidence（长期成功→能力提升→自我信任→自主扩大 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzevt(fs, WS, { ...hzEvtOk, result: "long success → more confident → autonomy increase" });
+  assert.ok(String(r).includes("ContinuityEvent Rejected"), "长期成功声称自信/自主应拒绝（Success ≠ Self Confidence）");
+  assert.ok(String(r).includes("Self Confidence") || String(r).includes("confidence"), "应标注");
+  console.log("✔ 229 Long Horizon Success ≠ Self Confidence（长期成功→能力提升→自我信任→自主扩大 禁）");
+}
+
 console.log("\nALL PASS ✅");

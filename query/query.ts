@@ -70,6 +70,9 @@ import { writeForgottenRecord } from "../recall/persistence/persist.js";
 import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../adaptation/render/render.js";
 import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../adaptation/engine/adaptation.js";
 import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
+import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../long-horizon/render/render.js";
+import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../long-horizon/engine/interaction.js";
+import { writeInteractionContext, writeHistorySummary } from "../long-horizon/persistence/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -345,6 +348,30 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const v = await validateAdaptation(fs, ws, args);
     if (!v.ok || !v.validation) return scrubFinal(RECALL_PREFIX + "[AdaptationValidation Rejected] " + v.reason + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + flushWarn);
+  }
+  // v0.39 Long Horizon Interaction Kernel：InteractionContext / HistorySummary / HistoryContinuityEvent / InteractionAdaptationLink。
+  // 时间可增加经验，但不能增加主体性：Longer≠MoreAuthority / History≠Purpose / Experience≠Identity / Adaptation≠Evolution / Continuity≠Autonomy。
+  if (String(args?.mode) === "horizon-context") {
+    const c = buildInteractionContext(args);
+    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[Interaction Rejected] " + c.reason + flushWarn);
+    await writeInteractionContext(fs, ws, c.ctx);
+    return scrubFinal(RECALL_PREFIX + renderHorizonContext(c.ctx) + flushWarn);
+  }
+  if (String(args?.mode) === "horizon-summary") {
+    const s = buildHistorySummary(args);
+    if (!s.ok || !s.summary) return scrubFinal(RECALL_PREFIX + "[HistorySummary Rejected] " + s.reason + flushWarn);
+    await writeHistorySummary(fs, ws, s.summary);
+    return scrubFinal(RECALL_PREFIX + renderSummary(s.summary) + flushWarn);
+  }
+  if (String(args?.mode) === "horizon-event") {
+    const e = await buildContinuityEvent(fs, ws, args);
+    if (!e.ok || !e.event) return scrubFinal(RECALL_PREFIX + "[ContinuityEvent Rejected] " + e.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderHorizonEvent(e.event) + flushWarn);
+  }
+  if (String(args?.mode) === "horizon-link") {
+    const l = await buildInteractionAdaptationLink(fs, ws, args);
+    if (!l.ok || !l.link) return scrubFinal(RECALL_PREFIX + "[InteractionLink Rejected] " + l.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderLink(l.link) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
