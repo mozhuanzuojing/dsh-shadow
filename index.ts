@@ -32,6 +32,8 @@ import { runReadShadow } from "./query/query.js";
 import type { ShadowQueryDeps } from "./query/types.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
+export { recordObservationTrace, renderObservationTrace } from "./observer/trace.js";
+export { reflectOf } from "./reflection/engine.js";
 
 export const name = "dsh-shadow";
 export const inject: string[] = [];
@@ -104,6 +106,9 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
             lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
             state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
+            mode: { type: "string", description: "模式开关：reflection 时从历史 ObservationTrace 发现候选规律（旁支，非 Memory 查询）；配合 from/to 限定周期。否则按布尔参数分派。" },
+            from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
+            to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },

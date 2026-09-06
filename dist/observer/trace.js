@@ -32,3 +32,65 @@ export const renderObservationTrace = (tr) => {
     lines.push(`distortion: ${tr.projection.distortion.join(" · ") || "—"}`);
     return lines.join("\n");
 };
+// 把 ObservationTrace markdown 解析回结构化对象（v0.24 Reflection 消费）。
+export const parseObservationTrace = (text) => {
+    if (!/^# Observation Trace/m.test(String(text || "")))
+        return null;
+    const m = (re) => (String(text || "").match(re) || [])[1] || "";
+    const intentRaw = m(/^> intent: (.+)$/m);
+    const intentParts = intentRaw.split(" · ");
+    const decisionRaw = m(/^> decision: (.+)$/m);
+    const dm = decisionRaw.match(/^(.*?)(?: \((.*)\))?$/);
+    const outcomeRaw = m(/^> outcome: (.+)$/m);
+    const exp = (outcomeRaw.match(/expected=([^·]*)/) || [])[1]?.trim();
+    const act = (outcomeRaw.match(/actual=([^·]*)/) || [])[1]?.trim();
+    const vis = m(/^visible: (.+)$/m).split("、").filter((x) => x && x !== "—");
+    const hid = m(/^hidden: (.+)$/m).split("、").filter((x) => x && x !== "—");
+    const dis = m(/^distortion: (.+)$/m).split(" · ").filter((x) => x && x !== "—");
+    const stateRaw = m(/^> state: (.+)$/m);
+    let state;
+    try {
+        state = stateRaw ? JSON.parse(stateRaw) : undefined;
+    }
+    catch {
+        state = undefined;
+    }
+    return {
+        observerId: m(/^> observer: (.+)$/m),
+        createdAt: m(/^> createdAt: (.+)$/m),
+        realityAnchor: (m(/^> realityAnchor: (.+)$/m) || "current"),
+        intent: { goal: intentParts[0] || "", question: intentParts[1] || "" },
+        projection: { visible: vis, hidden: hid, distortion: dis },
+        decision: (dm && dm[1]) ? { action: dm[1], rationale: (dm[2] || "") || undefined } : undefined,
+        outcome: (exp || act) ? { expected: exp || undefined, actual: act || undefined } : undefined,
+        uncertainty: { level: Number((m(/^> uncertainty: (\d+)/) || "")) || 0, reasons: [] },
+        metadata: { source: "read_shadow" },
+        state,
+    };
+};
+// 读取 shadow/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
+export const readObservationTraces = async (fs, ws) => {
+    const out = [];
+    try {
+        const root = await fs.resolve(`${ws}/shadow/observation`, { cwd: ws });
+        const dates = (await fs.listDir(root).catch(() => [])) || [];
+        for (const d of dates) {
+            if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name))
+                continue;
+            const dt = await fs.resolve(`${ws}/shadow/observation/${d.name}`, { cwd: ws });
+            const files = (await fs.listDir(dt).catch(() => [])) || [];
+            for (const f of files) {
+                if (!f?.name || !f.name.endsWith(".md"))
+                    continue;
+                const p = await fs.resolve(`${ws}/shadow/observation/${d.name}/${f.name}`, { cwd: ws });
+                const t = parseObservationTrace(await fs.readText(p));
+                if (t) {
+                    t.id = f.name.replace(/\.md$/, "");
+                    out.push(t);
+                }
+            }
+        }
+    }
+    catch { /* 无 observation 目录 */ }
+    return out;
+};

@@ -5,8 +5,7 @@ import type { ObservationTrace } from "../core/types.js";
 import { today } from "../core/util.js";
 import { scrubUnsafe } from "../security/scrub.js";
 
-export const recordObservationTrace = async (fs: any, ws: string, trace: Omit<ObservationTrace, "id"> & { id?: string }) => {
-  try {
+export const recordObservationTrace = async (fs: any, ws: string, trace: Omit<ObservationTrace, "id"> & { id?: string }) => {  try {
     const id = trace.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const rel = `shadow/observation/${today()}/${id}.md`;
     const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
@@ -34,4 +33,55 @@ export const renderObservationTrace = (tr: ObservationTrace) => {
   lines.push(`hidden: ${tr.projection.hidden.join("、") || "—"}`);
   lines.push(`distortion: ${tr.projection.distortion.join(" · ") || "—"}`);
   return lines.join("\n");
+};
+
+// 把 ObservationTrace markdown 解析回结构化对象（v0.24 Reflection 消费）。
+export const parseObservationTrace = (text: string): Partial<ObservationTrace> | null => {
+  if (!/^# Observation Trace/m.test(String(text || ""))) return null;
+  const m = (re: RegExp) => (String(text || "").match(re) || [])[1] || "";
+  const intentRaw = m(/^> intent: (.+)$/m);
+  const intentParts = intentRaw.split(" · ");
+  const decisionRaw = m(/^> decision: (.+)$/m);
+  const dm = decisionRaw.match(/^(.*?)(?: \((.*)\))?$/);
+  const outcomeRaw = m(/^> outcome: (.+)$/m);
+  const exp = (outcomeRaw.match(/expected=([^·]*)/) || [])[1]?.trim();
+  const act = (outcomeRaw.match(/actual=([^·]*)/) || [])[1]?.trim();
+  const vis = m(/^visible: (.+)$/m).split("、").filter((x) => x && x !== "—");
+  const hid = m(/^hidden: (.+)$/m).split("、").filter((x) => x && x !== "—");
+  const dis = m(/^distortion: (.+)$/m).split(" · ").filter((x) => x && x !== "—");
+  const stateRaw = m(/^> state: (.+)$/m);
+  let state: any; try { state = stateRaw ? JSON.parse(stateRaw) : undefined; } catch { state = undefined; }
+  return {
+    observerId: m(/^> observer: (.+)$/m),
+    createdAt: m(/^> createdAt: (.+)$/m),
+    realityAnchor: (m(/^> realityAnchor: (.+)$/m) || "current") as any,
+    intent: { goal: intentParts[0] || "", question: intentParts[1] || "" },
+    projection: { visible: vis, hidden: hid, distortion: dis },
+    decision: (dm && dm[1]) ? { action: dm[1], rationale: (dm[2] || "") || undefined } : undefined,
+    outcome: (exp || act) ? { expected: exp || undefined, actual: act || undefined } : undefined,
+    uncertainty: { level: Number((m(/^> uncertainty: (\d+)/) || "") as any) || 0, reasons: [] },
+    metadata: { source: "read_shadow" },
+    state,
+  };
+};
+
+// 读取 shadow/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
+export const readObservationTraces = async (fs: any, ws: string): Promise<Partial<ObservationTrace>[]> => {
+  const out: Partial<ObservationTrace>[] = [];
+  try {
+    const root = await fs.resolve(`${ws}/shadow/observation`, { cwd: ws });
+    const dates = (await fs.listDir(root).catch(() => [])) || [];
+    for (const d of dates) {
+      if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name)) continue;
+      const dt = await fs.resolve(`${ws}/shadow/observation/${d.name}`, { cwd: ws });
+      const files = (await fs.listDir(dt).catch(() => [])) || [];
+      for (const f of files) {
+        if (!f?.name || !f.name.endsWith(".md")) continue;
+        const p = await fs.resolve(`${ws}/shadow/observation/${d.name}/${f.name}`, { cwd: ws });
+        const t = parseObservationTrace(await fs.readText(p));
+        if (t) { t.id = f.name.replace(/\.md$/, ""); out.push(t); }
+      }
+    }
+  } catch { /* 无 observation 目录 */ }
+  return out;
 };

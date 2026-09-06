@@ -5,7 +5,7 @@
 //   3) 无 topic 返回索引；LLM 扩词（recall.enabled）在 llm 缺失时静默降级。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
-const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty } = mod;
+const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty, recordObservationTrace } = mod;
 
 const WS = "D:/ws";
 
@@ -1921,6 +1921,107 @@ const obsTexts = (store: Map<string, string>) =>
   assert.ok(String(r50).includes("visible: 架构/重构"), "state 不影响事实（projection 不变）");
   assert.ok(!String(r50).includes("focus"), "state 不应污染答案正文（只进 trace）");
   console.log("✔ 场景50 Observation Trace state 注入：focus=deep 进 trace，但不影响事实（projection 不变）");
+}
+
+// ─────────────────────────────────────────────
+// v0.24 Reflection Engine（Candidate Generator）：输入 ObservationTrace[] → Pattern → Candidate Reflection。
+// 旁支（不是 Memory 查询）；只产 candidate；不写回 Identity。
+// helper：往 store 写一条 ObservationTrace（含 decision/outcome）供 reflection 消费。
+const putTrace = async (fs: any, ws: string, opts: { decision?: string; outcome?: string; hidden?: string[]; visible?: string[] }) =>
+  recordObservationTrace(fs, ws, {
+    observerId: "T-refl",
+    createdAt: "2026-09-05 10:00:00",
+    realityAnchor: "current",
+    intent: { goal: "test", question: "系统" },
+    projection: { visible: opts.visible || [], hidden: opts.hidden || [], distortion: [] },
+    decision: opts.decision ? { action: opts.decision } : undefined,
+    outcome: opts.outcome ? { actual: opts.outcome } : undefined,
+    uncertainty: { level: 0, reasons: [] },
+    metadata: { source: "manual" },
+  });
+
+// ─────────────────────────────────────────────
+// 场景 51：重复成功模式 → candidate principle。
+// ─────────────────────────────────────────────
+{
+  const store51 = new Map();
+  const fs51 = mkFs(store51);
+  agentsById.set("T51", { id: "T51", session: { header: { cwd: WS } } });
+  const listeners51 = new Map();
+  const services51 = { fs: fs51, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx51 = { get: (k) => services51[k], on: (e, fn) => listeners51.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services51[k] }) };
+  const P51 = { name, inject, apply };
+  P51.apply(ctx51, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 10; i++) await putTrace(fs51, WS, { decision: "边界隔离", outcome: "维护成本下降" });
+  const r51 = await toolRegistry.get("read_shadow").execute({ mode: "reflection", max_tokens: 4096 }, { agent: agentsById.get("T51") });
+  assert.ok(!String(r51).startsWith("ERR"), "reflection 不应报错");
+  assert.ok(String(r51).includes("# Reflection"), "应输出 Reflection 段");
+  assert.ok(String(r51).includes("learning: principle"), "重复成功应产 candidate principle");
+  assert.ok(String(r51).includes("边界隔离 → 维护成本下降"), "应含 decision→outcome 相关性");
+  assert.ok(String(r51).includes("成功率 100%"), "应含成功率");
+  assert.ok(String(r51).includes("status: candidate"), "v0.24 只产 candidate");
+  const obs = [...store51.entries()].map(([k, v]) => v).join("\n");
+  assert.ok(obs.includes("# Reflection"), "Reflection 应写入 shadow/reflection/");
+  console.log("✔ 场景51 Reflection：重复成功模式 → candidate principle（decision→outcome 统计 + 成功率）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 52：失败模式 → anti-pattern candidate。
+// ─────────────────────────────────────────────
+{
+  const store52 = new Map();
+  const fs52 = mkFs(store52);
+  agentsById.set("T52", { id: "T52", session: { header: { cwd: WS } } });
+  const listeners52 = new Map();
+  const services52 = { fs: fs52, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx52 = { get: (k) => services52[k], on: (e, fn) => listeners52.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services52[k] }) };
+  const P52 = { name, inject, apply };
+  P52.apply(ctx52, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 8; i++) await putTrace(fs52, WS, { decision: "过早优化", outcome: "复杂性增加" });
+  const r52 = await toolRegistry.get("read_shadow").execute({ mode: "reflection", max_tokens: 4096 }, { agent: agentsById.get("T52") });
+  assert.ok(String(r52).includes("learning: anti_pattern"), "失败模式应产 anti-pattern candidate");
+  assert.ok(String(r52).includes("过早优化 → 复杂性增加"), "应含相关性");
+  assert.ok(String(r52).includes("成功率 0%"), "应含成功率 0%");
+  console.log("✔ 场景52 Reflection：失败模式 → anti-pattern candidate");
+}
+
+// ─────────────────────────────────────────────
+// 场景 53：投影偏差（projection.hidden → outcome.actual）→ distortion pattern。
+// ─────────────────────────────────────────────
+{
+  const store53 = new Map();
+  const fs53 = mkFs(store53);
+  agentsById.set("T53", { id: "T53", session: { header: { cwd: WS } } });
+  const listeners53 = new Map();
+  const services53 = { fs: fs53, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx53 = { get: (k) => services53[k], on: (e, fn) => listeners53.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services53[k] }) };
+  const P53 = { name, inject, apply };
+  P53.apply(ctx53, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 6; i++) await putTrace(fs53, WS, { decision: "边界隔离", outcome: "性能瓶颈出现", hidden: ["性能风险"] });
+  const r53 = await toolRegistry.get("read_shadow").execute({ mode: "reflection", max_tokens: 4096 }, { agent: agentsById.get("T53") });
+  assert.ok(String(r53).includes("deviationPatterns: 低估/漏看「性能风险」"), "hidden→actual 应产 distortion 偏差");
+  console.log("✔ 场景53 Reflection：投影偏差（hidden→actual）→ distortion pattern");
+}
+
+// ─────────────────────────────────────────────
+// 场景 54：不完整 Trace 不参与 Reflection（reflectionEligible=false 质量闸门）。
+// ─────────────────────────────────────────────
+{
+  const store54 = new Map();
+  const fs54 = mkFs(store54);
+  agentsById.set("T54", { id: "T54", session: { header: { cwd: WS } } });
+  const listeners54 = new Map();
+  const services54 = { fs: fs54, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx54 = { get: (k) => services54[k], on: (e, fn) => listeners54.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services54[k] }) };
+  const P54 = { name, inject, apply };
+  P54.apply(ctx54, { summary: { enabled: false }, recall: {} });
+  // 只有 projection，无 decision/outcome → 不参与 Reflection（Reflection 不编故事）。
+  await putTrace(fs54, WS, { visible: ["架构"] });
+  const r54 = await toolRegistry.get("read_shadow").execute({ mode: "reflection", max_tokens: 4096 }, { agent: agentsById.get("T54") });
+  assert.ok(String(r54).includes("learning: unknown"), "不完整轨迹不足时 learning 应为 unknown");
+  assert.ok(String(r54).includes("（无足够模式"), "无完整轨迹应给出说明，不编故事");
+  assert.ok(!String(r54).includes("principle"), "不应把不完整轨迹编成 principle");
+  console.log("✔ 场景54 Reflection：不完整 Trace（无 decision/outcome）不参与，不编故事");
 }
 
 console.log("\nALL PASS ✅");

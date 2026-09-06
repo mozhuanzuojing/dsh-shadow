@@ -19,6 +19,7 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
+import { reflectOf, renderReflection } from "../reflection/engine.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
@@ -29,6 +30,11 @@ export async function runReadShadow(deps, args, exec) {
     if (!fs)
         return "（fs 服务不可用）";
     const flushWarn = deps.getFlushWarn();
+    // v0.24 Reflection：旁支（不是 Memory 查询），用 mode:"reflection" 而非 reflect:true 布尔。
+    if (String(args?.mode) === "reflection") {
+        const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
+        return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
+    }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};
     if (args?.soul) {
