@@ -1,5 +1,5 @@
 // dsh-shadow —— adaptation/guard/epistemic-guard.ts：209 Experience≠Truth / 215 Cannot Improve Epistemic Status / Validation 弱语义。
-const EPISTEMIC = /confidence.*increase|certainty.*increase|truth.*increase|knowledge upgrade|变成知识|becomes.*truth|now.*(true|certain)|更有信心|更确定|certainty \^/i;
+const EPISTEMIC = /confidence.*increase|certainty.*increase|truth.*increase|knowledge upgrade|变成知识|becomes.*truth|now.*(true|certain)|更有信心|更确定|certainty \^|proven correct|belief upgrade|策略正确|证明.*正确/i;
 export const resultNoEpistemicIncrease = (r: string) => !EPISTEMIC.test(String(r || ""));
 export const assertResultNoEpistemicIncrease = (r: string) => ({ ok: resultNoEpistemicIncrease(r), reason: resultNoEpistemicIncrease(r) ? undefined : "Adaptation Cannot Improve Epistemic Status（禁 confidence↑/truth↑/certainty↑；Adaptation success 不提升确定性）" });
 

@@ -13,3 +13,8 @@ export declare const assertResultNoAuthorityIncrease: (r: string) => {
     ok: boolean;
     reason: string;
 };
+export declare const resultNoAgencyUpgrade: (r: string) => boolean;
+export declare const assertResultNoAgencyUpgrade: (r: string) => {
+    ok: boolean;
+    reason: string;
+};

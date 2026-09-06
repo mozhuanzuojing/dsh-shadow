@@ -4217,4 +4217,76 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
   console.log("✔ 216 Adaptation Does Not Increase Authority（Adaptation ≠ Capability/Permission/Authority Increase）");
 }
 
+// ─────────────────────────────────────────────
+// v0.38.1 Adaptation Integrity Lock：ADR-0032.1。只冻结，不扩展（除真实绕过：补 objective/preference/agency 三个 after 守卫）。
+// 217-223: No Knowledge / No Modify Past Experience / No Change Objective / No Create Preference /
+//          Failure Remains Evidence / Lineage Required / No Upgrade Agency。
+// ─────────────────────────────────────────────
+// 217：Adaptation Does Not Create Knowledge（AdaptationValidation → Knowledge 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  await adchange(fs, WS, adChangeOk);
+  await advalid(fs, WS, { changeObserved: true, validationReferences: ["v1"], sideEffectsObserved: ["latency down"] });
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world/") || k.includes("shadow/model/"));
+  assert.ok(knows.length === 0, "Adaptation 不产生 Knowledge（AdaptationValidation→Knowledge 禁）");
+  console.log("✔ 217 Adaptation Does Not Create Knowledge");
+}
+
+// 218：Adaptation Does Not Modify Past Experience（History append-only）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcZ", observation: "Service-Z exposes /users", perspectives: ["A"] });
+  const obsFile = [...store.keys()].find((k) => k.includes("shadow/model/observations/"))!;
+  const before = store.get(obsFile);
+  await adchange(fs, WS, { ...adChangeOk, sourceExperience: "svcZ" });
+  assert.ok(store.get(obsFile) === before, "Adaptation 不修改过去 Experience/Observation（append-only）");
+  console.log("✔ 218 Adaptation Does Not Modify Past Experience（History append-only）");
+}
+
+// 219：Adaptation Does Not Change Objective（strategy adjustment → goal reinterpretation 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "goal changed to reduce cost" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称改目标应拒绝（≠ Change Objective）");
+  assert.ok(String(r).includes("Objective") || String(r).includes("目标"), "应标注");
+  console.log("✔ 219 Adaptation Does Not Change Objective（strategy adjustment → goal reinterpretation 禁）");
+}
+
+// 220：Adaptation Does Not Create Preference（Repeated success →『I prefer this』禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "I prefer this strategy" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称偏好应拒绝（≠ Create Preference）");
+  assert.ok(String(r).includes("Preference") || String(r).includes("偏好"), "应标注");
+  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference"));
+  assert.ok(pref.length === 0, "无 preference 产物");
+  console.log("✔ 220 Adaptation Does Not Create Preference（Repeated success →『I prefer this』禁）");
+}
+
+// 221：Adaptation Failure Remains Evidence（Failure ≠ Ignore）。
+{
+  const { fs, store } = mkV(new Map());
+  await advalid(fs, WS, { changeObserved: false, validationReferences: ["v1"], sideEffectsObserved: ["latency up"] });
+  const v = [...store.keys()].filter((k) => k.includes("shadow/adapt/") && k.includes("validation-"));
+  assert.ok(v.length >= 1, "失败 adaptation 也保留（Failure ≠ Ignore；不删除历史）");
+  console.log("✔ 221 Adaptation Failure Remains Evidence（Failure ≠ Ignore）");
+}
+
+// 222：Adaptation Lineage Required（为什么改变/来自哪个 Experience/改变范围是什么）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, adChangeOk);
+  assert.ok(String(r).includes("target method") && String(r).includes("sourceExperience exp-1") && String(r).includes("basedOn exp-1"), "Adaptation 能答『为什么改变/来自哪个 Experience/改变范围』");
+  console.log("✔ 222 Adaptation Lineage Required（为什么改变/来自哪个 Experience/改变范围是什么）");
+}
+
+// 223：Adaptation Does Not Upgrade Agency（长期成功适应 → 提升自主等级 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "long term success → agency level increased" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称 agency 升级应拒绝（≠ Upgrade Agency）");
+  assert.ok(String(r).includes("Agency") || String(r).includes("agency"), "应标注 223");
+  console.log("✔ 223 Adaptation Does Not Upgrade Agency（长期成功适应 → 提升自主等级 禁）");
+}
+
 console.log("\nALL PASS ✅");

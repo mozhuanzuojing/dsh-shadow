@@ -12,3 +12,8 @@ export const assertResultNoBetterSelf = (r: string) => ({ ok: resultNoBetterSelf
 const AUTHORITY_INCREASE = /increase authority|more authority|增加权限|权限提升|更多权限|authority increase|capability increase|能力提升|扩权|升权/i;
 export const resultNoAuthorityIncrease = (r: string) => !AUTHORITY_INCREASE.test(String(r || ""));
 export const assertResultNoAuthorityIncrease = (r: string) => ({ ok: resultNoAuthorityIncrease(r), reason: resultNoAuthorityIncrease(r) ? undefined : "Adaptation Does Not Increase Authority（Adaptation ≠ Capability/Permission/Authority Increase；防『调整更好→允许更多→Authority Expansion』绕过 v0.35/v0.36）" });
+
+// 223: Adaptation ≠ Agency Level Increase（防"长期成功→更成熟→提升自主等级"）。
+const AGENCY_UPGRADE = /agency level|agencyLevel|更成熟|升级自主|提升自主|autonomy increase|更自主|become more autonomous|自主等级|成熟度上升/i;
+export const resultNoAgencyUpgrade = (r: string) => !AGENCY_UPGRADE.test(String(r || ""));
+export const assertResultNoAgencyUpgrade = (r: string) => ({ ok: resultNoAgencyUpgrade(r), reason: resultNoAgencyUpgrade(r) ? undefined : "Adaptation Does Not Upgrade Agency（Adaptation ≠ Agency Level Increase；防『长期成功适应→更成熟→提升自主等级』）" });

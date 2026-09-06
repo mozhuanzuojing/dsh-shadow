@@ -1,8 +1,8 @@
 // dsh-shadow —— adaptation/engine/adaptation.ts：Adaptation 三对象（context/change/validation），守卫 208–216。
 // Adaptation = 行为策略调整（How I do），不是身份/目标/价值观演化（Who I am）；不提升 epistemic status / authority。
 import type { AdaptationContext, AdaptationChange, AdaptationTarget, AdaptationValidation } from "../types/index.js";
-import { assertTargetNotIdentity, assertResultNoBetterSelf, assertResultNoAuthorityIncrease } from "../guard/identity-guard.js";
-import { assertTargetInScope } from "../guard/scope-guard.js";
+import { assertTargetNotIdentity, assertResultNoBetterSelf, assertResultNoAuthorityIncrease, assertResultNoAgencyUpgrade } from "../guard/identity-guard.js";
+import { assertTargetInScope, assertResultNoObjectiveChange, assertResultNoPreference } from "../guard/scope-guard.js";
 import { assertResultNoEpistemicIncrease, resultNotKnowledge, assertValidationNoCorrectness } from "../guard/epistemic-guard.js";
 import { writeAdaptationContext, writeAdaptationChange, writeAdaptationValidation } from "../persistence/persist.js";
 import { today } from "../../core/util.js";
@@ -33,6 +33,9 @@ export const buildAdaptationChange = async (fs: any, ws: string, args: any): Pro
   const g4 = assertResultNoAuthorityIncrease(after); if (!g4.ok) return { ok: false, reason: g4.reason };
   const g5 = assertResultNoEpistemicIncrease(after); if (!g5.ok) return { ok: false, reason: g5.reason };
   if (!resultNotKnowledge(after)) return { ok: false, reason: "Experience ≠ Truth（Adaptation 来源是 Observation/Experience，非 Knowledge；after 禁『这是知识』）" };
+  const g6 = assertResultNoObjectiveChange(after); if (!g6.ok) return { ok: false, reason: g6.reason };
+  const g7 = assertResultNoPreference(after); if (!g7.ok) return { ok: false, reason: g7.reason };
+  const g8 = assertResultNoAgencyUpgrade(after); if (!g8.ok) return { ok: false, reason: g8.reason };
   const change: AdaptationChange = { id: `ad-${Date.now()}-${rand()}`, target: target as AdaptationTarget, before: String(args?.before || ""), after, basedOn, sourceExperience, validationRequired: true };
   await writeAdaptationChange(fs, ws, change);
   return { ok: true, change };
