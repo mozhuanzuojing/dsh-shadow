@@ -109,3 +109,22 @@ export interface ObserverContext {
   lens?: string;
   realityAnchor: RealityAnchor;
 }
+
+// ── v0.22 Judgment：Observer 决定，Evidence 是输入。Claim → Evidence → Judgment。 ──
+// 同一 Evidence 在不同 Observer 下结论不同（架构师→重构、老板→延投）；Judgment 挂在 Observer 下。
+export interface JudgmentConfidence {
+  retrieval: number;
+  evidence: number;
+  experience: number;
+  judgment: number;
+  projection: number;
+  overall: number;
+}
+export interface Judgment {
+  observerId: string;
+  claim: string;
+  evidence: EvidenceResult | null;
+  conclusion: "evidence_live" | "evidence_stale" | "superseded";
+  confidence: JudgmentConfidence;
+  rationale: string;
+}

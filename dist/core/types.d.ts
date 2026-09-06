@@ -119,3 +119,19 @@ export interface ObserverContext {
     lens?: string;
     realityAnchor: RealityAnchor;
 }
+export interface JudgmentConfidence {
+    retrieval: number;
+    evidence: number;
+    experience: number;
+    judgment: number;
+    projection: number;
+    overall: number;
+}
+export interface Judgment {
+    observerId: string;
+    claim: string;
+    evidence: EvidenceResult | null;
+    conclusion: "evidence_live" | "evidence_stale" | "superseded";
+    confidence: JudgmentConfidence;
+    rationale: string;
+}

@@ -16,6 +16,7 @@ import { tasteOf, renderTaste } from "../soul/taste.js";
 import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
+import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
@@ -86,6 +87,25 @@ export async function runReadShadow(deps, args, exec) {
     if (args?.judgment) {
         const js = await judgmentOf(fs, ws, memories, topic);
         return scrubFinal(RECALL_PREFIX + renderJudgment(js) + flushWarn);
+    }
+    if (args?.claim) {
+        const identity = await readIdentity(fs, ws, agent?.id);
+        const ctx = observerContextOf(args, topic, identity, agent?.id);
+        const tokens = tokenize(topic);
+        const js = [];
+        for (const mm of memories) {
+            let matched = !topic;
+            if (!matched) {
+                const text = await readRel(fs, ws, mm.rel);
+                matched = !!text && tokens.some((t) => `${claimOf(text)} ${mm.rel}`.toLowerCase().includes(t));
+            }
+            if (!matched)
+                continue;
+            const j = await judgmentOfClaim(fs, ws, mm, { observerId: ctx.observerId, lens: ctx.lens, identity }, deps.verifyEvidence);
+            if (j)
+                js.push(j);
+        }
+        return scrubFinal(RECALL_PREFIX + renderJudgments(js) + flushWarn);
     }
     if (args?.verify) {
         const texts = [];

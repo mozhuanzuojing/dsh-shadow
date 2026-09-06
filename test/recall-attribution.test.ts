@@ -1810,4 +1810,36 @@ const todayStr = todayLocal();
   console.log("✔ 场景46 RealityProjection：publicContext 输出 distortion + excluded_reason（为什么这个视角看到这些/没看到那些）");
 }
 
+// ─────────────────────────────────────────────
+// 场景 47：Judgment —— read_shadow(topic, {claim:true}) 对匹配记忆的断言验证证据，由 Observer 下结论/置信/理由。
+//           结构：Claim → Evidence → Judgment；Evidence 是输入，Observer 决定 Judgment。
+// ─────────────────────────────────────────────
+{
+  const store47 = new Map();
+  const fs47 = mkFs(store47);
+  agentsById.set("T47", { id: "T47", session: { header: { cwd: WS } } });
+  const listeners47 = new Map();
+  const services47 = { fs: fs47, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx47 = { get: (k) => services47[k], on: (e, fn) => listeners47.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services47[k] }) };
+  const P47 = { name, inject, apply };
+  P47.apply(ctx47, { summary: { enabled: false }, recall: {} });
+  store47.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+    identity: { name: "architect" },
+    decision_style: ["architecture_first", "verify_before_modify"],
+  }));
+  store47.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-claim.md",
+    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：重构系统入口。\n");
+  store47.set("D:/ws/acshModel/entry.js", "export {}"); // 证据存在 → evidence_live
+  const r47 = await toolRegistry.get("read_shadow").execute({ topic: "系统", claim: true, max_tokens: 4096 }, { agent: agentsById.get("T47") });
+  assert.ok(!String(r47).startsWith("ERR"), "Judgment(claim) 不应报错");
+  assert.ok(String(r47).includes("[Judgments]"), "应输出 Judgments 段");
+  assert.ok(String(r47).includes("observer=T47"), "应含 observer（Observer 决定 Judgment）");
+  assert.ok(String(r47).includes("claim=重构系统入口"), "应含 claim 断言");
+  assert.ok(String(r47).includes("evidence: verified"), "应含 evidence 验证结果");
+  assert.ok(String(r47).includes("conclusion evidence_live"), "证据在应判 evidence_live");
+  assert.ok(String(r47).includes("conf="), "应含置信");
+  assert.ok(String(r47).includes("视角 architecture_first"), "rationale 应含 Observer 决策风格");
+  console.log("✔ 场景47 Judgment：claim→Evidence→Judgment，Observer 决定结论/置信/理由（Evidence 是输入）");
+}
+
 console.log("\nALL PASS ✅");
