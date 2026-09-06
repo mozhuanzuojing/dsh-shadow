@@ -2532,7 +2532,7 @@ const seedHypothesis = (store87, id, opts = {}) => store87.set(`D:/ws/shadow/hyp
 }));
 const ev = async (fs: any, ws: string, hid: string, outcome: string) => toolRegistry.get("read_shadow").execute({ mode: "evidence", hypothesisId: hid, actualOutcome: outcome, observedAt: "2026-09-06", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
 const val = async (fs: any, ws: string, hid: string, ctx: any) => toolRegistry.get("read_shadow").execute({ mode: "validate", hypothesisId: hid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById.set("T-val", { id: "T-val", session: { header: { cwd: WS } } }); const l = new Map(); const s = { fs, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined }; const c = { get: (k) => s[k], on: (e, fn) => l.set(e, fn), inject: (deps, cb) => cb({ get: (k) => s[k] }) }; const P = { name, inject, apply }; P.apply(c, { summary: { enabled: false }, recall: {} }); return { fs, store }; };
+const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = mkFs(store); agentsById.set("T-val", { id: "T-val", session: { header: { cwd: WS } } }); const l = new Map(); const s = { fs, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined }; const c = { get: (k) => s[k], on: (e, fn) => l.set(e, fn), inject: (deps, cb) => cb({ get: (k) => s[k] }) }; const P = { name, inject, apply }; P.apply(c, { summary: { enabled: false }, recall: {}, ...extraConfig }); return { fs, store }; };
 
 // ─────────────────────────────────────────────
 // 场景 76：pending hypothesis 接收 future evidence。
@@ -4388,6 +4388,69 @@ const hzLinkOk = { historyRef: "h-1", recallRef: "r-1", adaptationRef: "a-1" };
   assert.ok(String(r).includes("InteractionLink Rejected"), "reliability→authority expansion 应拒绝（Continuity ≠ Autonomy）");
   assert.ok(String(r).includes("Authority") || String(r).includes("authority"), "应标注 231");
   console.log("✔ 231 Continuity Does Not Increase Autonomy（Duration≠Authority；Reliability≠Permission；SuccessRate≠AutonomyLevel）");
+}
+
+// ─────────────────────────────────────────────
+// v1.0.1 Observer Continuity Storage Boundary：ADR-0036/0036.1。Global(observer层)/Workspace(world层) 双层，不可混合。
+// 232-236: Global≠WorkspaceMemory / NoObjective / RecallIndex≠Content / WorkspaceIsolation / NoPreferenceModel。
+// 关系 Constraint ⊃ Context，非 Memory Union。全局只存 config/boundary/recall-index/lineage。
+// ─────────────────────────────────────────────
+const OB = { observerGlobalRoot: "C:/obs" };
+const obcfg = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "observer-config", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const obsbnd = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "observer-boundary", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const rcidx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "recall-index", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const wsrec = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "workspace-record", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const wsctx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "workspace-context", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 232：Global Shadow ≠ Workspace Memory（项目代码知识不入 observer 层）。
+{
+  const { fs, store } = mkV(new Map(), OB);
+  const rBad = await obcfg(fs, WS, { interactionStyle: "strict", outputPreference: "adr", defaultProtocol: "bank-service uses Oracle" });
+  assert.ok(String(rBad).includes("ObserverConfig Rejected"), "observer-config 带项目知识应拒绝（Global ≠ Workspace Memory）");
+  assert.ok(String(rBad).includes("Workspace Memory"), "应标注 232");
+  const ok = await obcfg(fs, WS, { interactionStyle: "strict", outputPreference: "adr", defaultProtocol: "boundary-first" });
+  assert.ok(String(ok).includes("[Observer Config]"), "合法 config 通过");
+  console.log("✔ 232 Global Shadow ≠ Workspace Memory（项目代码知识不入 observer 层）");
+}
+
+// 233：Global Shadow Cannot Store Objective（项目目标不入 observer 连续性）。
+{
+  const { fs, store } = mkV(new Map(), OB);
+  const rBad = await obsbnd(fs, WS, { planningCannotCreateObjective: true, recallCannotCreateKnowledge: true, adaptationCannotIncreaseAuthority: true, delegationCannotExpandAuthority: true, agencyCannotCreatePurpose: true, goal: "complete payment system" });
+  assert.ok(String(rBad).includes("ObserverBoundary Rejected"), "observer-boundary 带 goal 应拒绝（Global Cannot Store Objective）");
+  assert.ok(String(rBad).toLowerCase().includes("objective") || String(rBad).includes("goal"), "应标注 233");
+  console.log("✔ 233 Global Shadow Cannot Store Objective（项目目标不入 observer 连续性）");
+}
+
+// 234：Recall Index ≠ Recall Content（recall-index 是导航，只存 {id, location}）。
+{
+  const { fs, store } = mkV(new Map(), OB);
+  const rBad = await rcidx(fs, WS, { workspace: "/project/a", records: [{ id: "x1", location: "project/.dsh-shadow" }, { id: "x2", knowledge: "secret" }] });
+  assert.ok(String(rBad).includes("RecallIndex Rejected"), "recall-index 带 knowledge 应拒绝（Recall Index ≠ Recall Content）");
+  assert.ok(String(rBad).toLowerCase().includes("knowledge") || String(rBad).includes("Recall Index") || String(rBad).includes("导航"), "应标注 234");
+  const ok = await rcidx(fs, WS, { workspace: "/project/a", records: [{ id: "x1", location: "project/.dsh-shadow" }] });
+  assert.ok(String(ok).includes("[Continuity Index]"), "合法导航通过");
+  console.log("✔ 234 Recall Index ≠ Recall Content（recall-index 是导航，只存 {id, location}）");
+}
+
+// 235：Workspace Isolation（project-A shadow → project-B context 禁）。
+{
+  const { fs, store } = mkV(new Map());
+  await wsrec(fs, WS, { workspace: "project-A", kind: "observation", content: "Service-A exposes /users" });
+  const ctxA = await wsctx(fs, WS, { workspace: "project-A" });
+  assert.ok(String(ctxA).includes("Service-A exposes /users"), "project-A 读到自己的记录");
+  const ctxB = await wsctx(fs, WS, { workspace: "project-B" });
+  assert.ok(!String(ctxB).includes("Service-A exposes /users"), "project-B 读不到 project-A 的记录（Workspace 隔离）");
+  console.log("✔ 235 Workspace Isolation（project-A shadow → project-B context 禁）");
+}
+
+// 236：Global State Cannot Become Preference Model（observer/config 是 configuration 非 preference model）。
+{
+  const { fs, store } = mkV(new Map(), OB);
+  const rBad = await obcfg(fs, WS, { interactionStyle: "strict", outputPreference: "I prefer typescript", defaultProtocol: "boundary-first" });
+  assert.ok(String(rBad).includes("ObserverConfig Rejected"), "config 带偏好应拒绝（Global State ≠ Preference Model）");
+  assert.ok(String(rBad).toLowerCase().includes("preference"), "应标注 236");
+  console.log("✔ 236 Global State Cannot Become Preference Model（interaction history→pattern→preference→identity 禁）");
 }
 
 console.log("\nALL PASS ✅");

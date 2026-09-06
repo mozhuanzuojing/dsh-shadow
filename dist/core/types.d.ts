@@ -6,6 +6,8 @@ export interface ShadowScope {
 export interface ShadowConfig {
     shadowRoot?: string;
     projectRoot?: string;
+    /** v1.0.1 observer 层全局根：Global Observer Continuity Shadow 根（默认 ~/.dsh-observer）。 */
+    observerGlobalRoot?: string;
     summary?: {
         enabled?: boolean;
         provider?: string;

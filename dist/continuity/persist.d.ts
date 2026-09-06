@@ -1,0 +1,10 @@
+import type { ObserverConfig, ObserverBoundary, RecallIndex, ContinuityRecord, WorkspaceRecord } from "./types.js";
+export declare const DEFAULT_OBSERVER_ROOT: string;
+export declare const writeObserverConfig: (fs: any, root: string, c: ObserverConfig) => Promise<void>;
+export declare const writeObserverBoundary: (fs: any, root: string, b: ObserverBoundary) => Promise<void>;
+export declare const writeRecallIndex: (fs: any, root: string, ri: RecallIndex) => Promise<void>;
+export declare const writeLineage: (fs: any, root: string, lr: ContinuityRecord) => Promise<void>;
+export declare const writeWorkspaceRecord: (fs: any, ws: string, r: WorkspaceRecord) => Promise<void>;
+export declare const readObserverBoundary: (fs: any, root: string) => Promise<ObserverBoundary | null>;
+export declare const readRecallIndex: (fs: any, root: string) => Promise<RecallIndex | null>;
+export declare const readLineage: (fs: any, root: string) => Promise<ContinuityRecord | null>;
