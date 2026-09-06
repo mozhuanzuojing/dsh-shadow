@@ -3143,4 +3143,80 @@ const repClaim = async (fs: any, ws: string, subject: string, observation: strin
   console.log("✔ 123 Temporal 不越权：无 supported claim 不产 representation");
 }
 
+// ─────────────────────────────────────────────
+// v0.31.1 World Representation Integrity Lock：ADR-0025 的 5 条 Invariant 固化为不可回退测试。
+// 124-130: Repr<=Evidence / Repr no predicate / Graph no reality entity / Relation no upgrade /
+//          Explain lineage / Repr no Identity / Repr no Decision。
+// ─────────────────────────────────────────────
+// 124：unsupported RealityClaim 不生成 Representation（Invariant 116）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcG", "Service-G exposes /users", []);  // 无验证 → candidate
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-represent", subject: "svcG", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("Representation Rejected"), "unsupported claim 不生成 Representation");
+  console.log("✔ 124 unsupported RealityClaim 不生成 Representation");
+}
+
+// 125：Representation 不增加 predicate（不加解释/评价，Invariant 116）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcH", "Service-H exposes /users");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcH", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("Service-H exposes /users"), "Representation 保留原 claim（组织结构）");
+  assert.ok(!String(r).includes("stable user service") && !String(r).includes("should handle"), "不添加解释/评价 predicate");
+  console.log("✔ 125 Representation 不增加 predicate（只组织结构，不创造意义）");
+}
+
+// 126：Graph 不产生 Reality Entity（Invariant 117）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcI", "Service-I exposes /users");
+  await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcI", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const gk = [...store.keys()].find((k) => k.includes("shadow/world/") && k.endsWith("graph.json"));
+  const g = store.get(gk!);
+  assert.ok(!g!.includes("causalGraph") && !g!.includes("entityGraph") && !g!.includes("worldGraph") && !g!.includes("realityGraph"), "Graph 无 causalGraph/entityGraph/worldGraph/realityGraph");
+  console.log("✔ 126 Graph 不产生 Reality Entity（命名保持 RepresentationGraph）");
+}
+
+// 127：RelationHypothesis 不升级（Invariant 118）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-relation", from: "A", to: "B", relation: "depends_on", evidence: ["c1", "c2"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("status hypothesis"), "多 evidence 也不升级");
+  assert.ok(!String(r).includes("confirmed_relation") && !String(r).includes("reality_relation"), "不升级为 confirmed/reality");
+  console.log("✔ 127 RelationHypothesis 不升级（关系本身仍不是事实）");
+}
+
+// 128：Explain lineage 完整（Invariant 119）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcJ", "Service-J exposes /users");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcJ", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("RealityObservation:"), "lineage 应含 RealityObservation");
+  assert.ok(String(r).includes("perspectives:"), "lineage 应含 Perspective");
+  assert.ok(String(r).includes("Validation History:"), "lineage 应含 Validation");
+  assert.ok(!String(r).includes("generated_reason") && !String(r).includes("inferred_knowledge"), "无 generated_reason/inferred_knowledge");
+  console.log("✔ 128 Explain lineage 完整（Repr→Claim→Observation→Perspective→Validation）");
+}
+
+// 129：Representation 不进入 Identity（Invariant 120）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await repClaim(fs, WS, "svcK", "Service-K exposes /users");
+  await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcK", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Representation 不进入 Identity");
+  console.log("✔ 129 Representation 不进入 Identity");
+}
+
+// 130：Representation 不直接驱动 Decision（Invariant 120）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcL", "Service-L exposes /users");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcL", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(!String(r).includes("use Service-L") && !String(r).includes("应该") && !String(r).includes("recommend"), "Representation 不直接驱动决策");
+  console.log("✔ 130 Representation 不直接驱动 Decision（属 Planning/Decision Hypothesis 层）");
+}
+
 console.log("\nALL PASS ✅");

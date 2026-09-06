@@ -62,3 +62,11 @@ Simulation: 如果条件变化，会怎样？
 
 - 本 ADR 只审查、不改功能。实现验收在 v0.31.1：`tsc` + `node --check` + mock 1–130。
 - 无 LLM、无 Knowledge、无因果、无 Simulation、无 Decision；Representation 永远低于 Reality Layer。
+
+---
+
+## 附录：v0.31.1 实现说明（Invariant Lock）
+
+- 5 条 边界固化为不可回退测试（mock 124–130）：unsupported 不生成 Representation / Representation 不增加 predicate / Graph 无 causalGraph·entityGraph·worldGraph·realityGraph / RelationHypothesis 不升级 / Explain lineage 完整 / Representation 不进入 Identity / Representation 不直接驱动 Decision。
+- 无运行时改动（v0.31 三个守卫已满足全部 invariant；本轮只加测试固化）。全量 mock 1–130 全绿；tag `v0.31.1 World Representation Integrity Lock`。
+- 通过后进入 v0.32 Simulation Boundary Protocol（真正 World Model 是"对可能世界模拟"，第三层最易污染前两层）。
