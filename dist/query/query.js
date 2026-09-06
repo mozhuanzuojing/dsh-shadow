@@ -53,6 +53,8 @@ import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/gua
 import { renderOutcome } from "../simulation/explain/explain.js";
 import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean, assertExecutionEvent, feedbackIsNeutral } from "../action/guard.js";
 import { writeExecution, writeFeedback } from "../action/persistence.js";
+import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../planning/guard.js";
+import { renderContext, renderEvaluation } from "../planning/render.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -249,6 +251,37 @@ export async function runReadShadow(deps, args, exec) {
             return scrubFinal(RECALL_PREFIX + "[Feedback Rejected] Success ≠ Capability/Identity（只记观察结果，断言『我预测正确』禁）" + flushWarn);
         await writeFeedback(fs, ws, fb);
         return scrubFinal(RECALL_PREFIX + renderFeedback(fb) + flushWarn);
+    }
+    // v0.34 Adaptive Planning：constrained comparison，不是 autonomous desire formation；objective 外部来源；无 score/winner。
+    if (String(args?.mode) === "plan") {
+        const objective = { source: "external", description: String(args?.objective || ""), constraints: args?.constraints || [] };
+        const g = assertObjectiveExternal(objective);
+        if (!g.ok)
+            return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g.reason + flushWarn);
+        if (String(args?.objectiveSource) === "observer")
+            return scrubFinal(RECALL_PREFIX + "[Planning Rejected] objective 禁自生成（observer.generateObjective()）" + flushWarn);
+        const criteria = String(args?.criteria || "");
+        const gc = assertCriteriaNotValue(criteria);
+        if (!gc.ok)
+            return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + gc.reason + flushWarn);
+        const candidates = args?.candidates || [];
+        const planCandidates = candidates.map((c, i) => ({ id: `pc-${Date.now()}-${i}`, basedOnSimulation: c.basedOnSimulation || [], actionSequence: c.actionSequence || [], assumptions: c.assumptions || [], constraints: c.constraints || [], uncertainty: Number(c.uncertainty) || 0.5 }));
+        let badScore = null;
+        for (const c of planCandidates) {
+            const g2 = assertCandidateNoScore(c);
+            if (!g2.ok) {
+                badScore = g2.reason;
+                break;
+            }
+        }
+        if (badScore)
+            return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + badScore + flushWarn);
+        const ctx = { id: `ctx-${Date.now()}`, realitySnapshot: [], representationSnapshot: [], simulationReferences: args?.simulationRefs || [], objective };
+        const ev = { candidates: planCandidates, tradeoffs: String(criteria) ? [{ condition: criteria, consequence: "possible", uncertainty: 0.5 }] : [], unresolvedQuestions: ["只比较路径，非系统价值判断（需外部约束权衡）"] };
+        const g3 = assertEvaluationComparison(ev);
+        if (!g3.ok)
+            return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g3.reason + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderContext(ctx) + "\n" + renderEvaluation(ev) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

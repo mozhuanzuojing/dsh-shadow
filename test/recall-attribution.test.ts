@@ -3445,4 +3445,77 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   console.log("✔ 151 Action Scope ≠ Reality Ownership（Action 只产生 changed_at，不产生 should_exist/correct）");
 }
 
+// ─────────────────────────────────────────────
+// v0.34 Adaptive Planning Boundary：constrained comparison，非 autonomous desire formation。
+// 152-158: no Goal / no Preference / Plan≠Execute / criteria≠Value / Success≠SelfImprove / objective lineage / no Preference from history。
+// ─────────────────────────────────────────────
+const plan = async (fs: any, ws: string, objective: string, criteria: string, candidates: any[], objectiveSource?: string) => toolRegistry.get("read_shadow").execute({ mode: "plan", objective, criteria, candidates, objectiveSource, constraints: ["constraint X"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 152：Planning 不产生 Goal（objective 外部来源）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(r).includes("objective(source:external)"), `objective 应外部来源。实际：\n${r}`);
+  assert.ok(!String(r).includes("new goal") && !String(r).includes("New Goal"), "不产 New Goal");
+  console.log("✔ 152 Planning 不产生 Goal（objective 外部来源）");
+}
+
+// 153：Planning 不产生 Preference。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }, { actionSequence: ["B"], assumptions: [], constraints: [] }]);
+  assert.ok(!String(r).includes("preference") && !String(r).includes("Preference"), "不产 Preference");
+  assert.ok(!String(r).includes("winner"), "不选 winner（无偏好）");
+  console.log("✔ 153 Planning 不产生 Preference");
+}
+
+// 154：Plan 不直接 Execute（只比较路径）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(r).includes("[Planning Evaluation]"), "只产出 comparison");
+  assert.ok(!String(r).includes("executed") && !String(r).includes("ActionExecution"), "Plan 不直接 Execute");
+  console.log("✔ 154 Plan 不直接 Execute（只比较路径）");
+}
+
+// 155：Evaluation Criteria 不产生 Value（禁 better/optimal/best）。
+{
+  const { fs, store } = mkV(new Map());
+  const rBad = await plan(fs, WS, "reduce latency", "best architecture", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(rBad).includes("Planning Rejected"), "criteria better/optimal/best 应拒绝");
+  assert.ok(String(rBad).includes("better/optimal/best"), "应标注 criteria≠value");
+  const rGood = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(rGood).includes("[Planning Evaluation]"), "外部约束导向 criteria 通过");
+  console.log("✔ 155 Evaluation Criteria 不产生 Value（禁 better/optimal/best）");
+}
+
+// 156：Success 不产生 Self Improvement。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(!String(r).includes("trust myself") && !String(r).includes("self improvement") && !String(r).includes("confidence increase"), "Success 不产生 Self Improvement");
+  console.log("✔ 156 Success 不产生 Self Improvement");
+}
+
+// 157：External Objective lineage 保留。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency from external target", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(r).includes("objective(source:external)"), "objective lineage（source:external）保留");
+  assert.ok(String(r).includes("reduce latency"), "objective description 保留");
+  console.log("✔ 157 External Objective lineage 保留（objective 哪来的）");
+}
+
+// 158：Planning History 不形成 Preference（Repeated Planning ≠ Preference Formation）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "反复 Planning 不形成 Preference/Identity");
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/knowledge"));
+  assert.ok(knows.length === 0, "无 Preference/Knowledge 生成");
+  console.log("✔ 158 Planning History 不形成 Preference（Repeated Behavior ≠ Preference，≠ Identity）");
+}
+
 console.log("\nALL PASS ✅");

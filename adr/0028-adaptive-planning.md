@@ -79,3 +79,16 @@ ADR-0028（只协议）→ review 五类污染风险 → v0.34 Planning Boundary
 ## 一句话
 
 现在架构已进入**最接近 Agent 自主性的区域**——Planning 边界比 Action 边界更值得先锁：**系统可以比较路径，但不能因此拥有"我要什么"。**
+
+---
+
+## 附录：v0.34 实现说明（Invariant 158 已落地）
+
+1. **PlanningContext（objective 外部来源）**：`planning/types.ts` `PlanningContext{objective:{source:"external", description, constraints}}`——`guard.assertObjectiveExternal` 拒绝 observer/generateObjective；`objectiveSource:"observer"` 拒绝。
+2. **PlanCandidate（无 score）**：`{basedOnSimulation, actionSequence, assumptions, constraints, uncertainty}`——`assertCandidateNoScore` 拒 score/optimal（score→optimization→preference→value→identity 入口）。
+3. **PlanEvaluation（comparison 非 winner）**：`{candidates, tradeoffs{condition,consequence,uncertainty}, unresolvedQuestions}`——`assertEvaluationComparison` 拒 winner/bestPlan/optimal/ranking；`assertCriteriaNotValue` 拒 better/optimal/best/preferred（只允外部约束导向措辞）。
+4. **Invariant 158 Repeated Planning ≠ Preference Formation**：`PlanningHistory → Observation/Validation`（禁 `PlanningHistory→Preference`）；反复 Planning 不形成 Preference/Identity。
+
+结构：`planning/{types, guard, render}.ts`。`mode:"plan"`。
+
+mock 152–158 验证：Planning 不产 Goal / 不产 Preference / Plan 不 Execute / criteria≠Value / Success 不 SelfImprove / objective lineage / Planning History 不形成 Preference。
