@@ -1,6 +1,6 @@
 import { parseAsOf } from "../core/util.js";
 import { intentOf } from "../core/intent.js";
-export const observerContextOf = (args, topic, identity, agentId) => {
+export const observerContextOf = (args, topic, identity, agentId, state) => {
     const observerId = agentId || identity?.id || "unknown";
     const asOfObj = parseAsOf(args?.asOf);
     const asOf = asOfObj ? asOfObj.date : undefined;
@@ -18,6 +18,7 @@ export const observerContextOf = (args, topic, identity, agentId) => {
         asOf,
         lens,
         realityAnchor,
+        state,
     };
 };
 export const renderObserverContext = (o) => {
@@ -25,5 +26,8 @@ export const renderObserverContext = (o) => {
     lines.push(`observerId ${o.observerId} · identityRef ${o.identityRef}`);
     lines.push(`intent ${o.intent.goal}${o.intent.question ? ` · ${o.intent.question}` : ""}`);
     lines.push(`asOf ${o.asOf || "now"} · lens ${o.lens || "default"} · realityAnchor ${o.realityAnchor}`);
+    if (o.state && (o.state.focus || o.state.energy || o.state.goalStage || o.state.uncertainty !== undefined)) {
+        lines.push(`state ${JSON.stringify(o.state)}`);
+    }
     return lines.join("\n");
 };

@@ -108,6 +108,34 @@ export interface ObserverContext {
   asOf?: string;
   lens?: string;
   realityAnchor: RealityAnchor;
+  /** 观察者当前生命状态（v0.23）：只读取、不自动推断（energy/focus/goalStage 可能来自 soul/config/manual）。 */
+  state?: ObserverState;
+}
+
+/** ObserverState：此刻观察者处于什么生命状态。非情绪；灵魂信号 vs 认知噪声分层的起点。 */
+export interface ObserverState {
+  energy?: string;
+  focus?: string;
+  uncertainty?: number;
+  goalStage?: string;
+}
+
+// ── v0.23 Observation Trace：Observer 记录"我当时是怎么看见这个世界"的可回放记录。 ──
+// 与 Experience 分离（Experience=发生了什么；ObservationTrace=我怎么看见发生的）。旁路记录：不影响 recall/排序/答案。
+export type TraceSource = "read_shadow" | "projection" | "manual";
+export interface ObservationTrace {
+  id: string;
+  observerId: string;
+  createdAt: string;
+  realityAnchor: RealityAnchor;
+  intent: Intent;
+  projection: { visible: string[]; hidden: string[]; distortion: string[] };
+  decision?: { action: string; rationale?: string };
+  outcome?: { expected?: string; actual?: string };
+  uncertainty: { level: number; reasons: string[] };
+  metadata: { source: TraceSource };
+  /** 观察事件携带的观察者状态（v0.23 只读取、不自动推断），供回看时还原"当时处于什么状态"。 */
+  state?: ObserverState;
 }
 
 // ── v0.22 Judgment：Observer 决定，Evidence 是输入。Claim → Evidence → Judgment。 ──

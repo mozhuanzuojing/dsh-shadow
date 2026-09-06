@@ -1842,4 +1842,85 @@ const todayStr = todayLocal();
   console.log("✔ 场景47 Judgment：claim→Evidence→Judgment，Observer 决定结论/置信/理由（Evidence 是输入）");
 }
 
+// ─────────────────────────────────────────────
+// v0.23 Observation Trace：旁路记录"我当时怎么看见"，不影响 recall/排序/答案。
+// 存储 shadow/observation/<date>/<id>.md（listMemories 跳过非日期目录，不会当记忆采集）。
+const obsTexts = (store: Map<string, string>) =>
+  [...store.entries()].filter(([k]) => k.includes("/shadow/observation/")).map(([, v]) => v).join("\n---\n");
+
+// ─────────────────────────────────────────────
+// 场景 48：同一事实、不同 Observer 透镜 → 不同 trace visible（不是 Memory 命中，而是 Observer Projection）。
+// ─────────────────────────────────────────────
+{
+  const store48 = new Map();
+  const fs48 = mkFs(store48);
+  agentsById.set("T48", { id: "T48", session: { header: { cwd: WS } } });
+  const listeners48 = new Map();
+  const services48 = { fs: fs48, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx48 = { get: (k) => services48[k], on: (e, fn) => listeners48.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services48[k] }) };
+  const P48 = { name, inject, apply };
+  P48.apply(ctx48, { summary: { enabled: false }, recall: {} });
+  store48.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store48.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-ux.md",
+    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+  store48.set("D:/ws/arch/x.js", "export {}");
+  store48.set("D:/ws/product/ux.js", "export {}");
+  await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T48") });
+  await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["体验"], avoided: ["重构"] } }, { agent: agentsById.get("T48") });
+  const obs = obsTexts(store48);
+  assert.ok(obs.includes("visible: 架构/重构"), `架构师 trace 应记录 visible 架构：\n${obs}`);
+  assert.ok(obs.includes("visible: 产品/体验"), `产品 trace 应记录 visible 产品体验：\n${obs}`);
+  assert.ok(obs.includes("realityAnchor: current"), "trace 应记录 realityAnchor");
+  console.log("✔ 场景48 Observation Trace：同一事实、不同 Observer 透镜 → 不同 trace visible（Observer Projection，非 Memory 命中）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 49：asOf 回放 —— 现在已知结果，但 trace.asOf=t1 只记录 t1 可知，未来不污染过去。
+// ─────────────────────────────────────────────
+{
+  const store49 = new Map();
+  const fs49 = mkFs(store49);
+  agentsById.set("T49", { id: "T49", session: { header: { cwd: WS } } });
+  const listeners49 = new Map();
+  const services49 = { fs: fs49, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx49 = { get: (k) => services49[k], on: (e, fn) => listeners49.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services49[k] }) };
+  const P49 = { name, inject, apply };
+  P49.apply(ctx49, { summary: { enabled: false }, recall: {} });
+  store49.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-past.md",
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store49.set("D:/ws/shadow/2026-09-06/2026-09-06--090000-future.md",
+    "# 架构/新方案\n\n> 完整线索\n> 用户提示/决策：最终方案已确定。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/新方案] 用户：最终方案已确定。\n");
+  store49.set("D:/ws/arch/x.js", "export {}");
+  const r49 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, asOf: "2026-09-05" }, { agent: agentsById.get("T49") });
+  assert.ok(!String(r49).includes("架构/新方案"), `asOf=09-05 不应看到未来(09-06)信息：\n${r49}`);
+  const obs = obsTexts(store49);
+  assert.ok(obs.includes("realityAnchor: known-at-time"), "asOf 时 trace 应记录 realityAnchor=known-at-time");
+  assert.ok(!obs.includes("最终方案已确定"), "trace 不应记录未来信息（未来不污染过去）");
+  console.log("✔ 场景49 Observation Trace asOf 回放：trace.asOf=t1 只记录 t1 可知，未来不污染过去");
+}
+
+// ─────────────────────────────────────────────
+// 场景 50：state 注入 —— focus=deep 进入 trace，但不影响事实（projection 不变）。
+// ─────────────────────────────────────────────
+{
+  const store50 = new Map();
+  const fs50 = mkFs(store50);
+  agentsById.set("T50", { id: "T50", session: { header: { cwd: WS } } });
+  const listeners50 = new Map();
+  const services50 = { fs: fs50, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx50 = { get: (k) => services50[k], on: (e, fn) => listeners50.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services50[k] }) };
+  const P50 = { name, inject, apply };
+  P50.apply(ctx50, { summary: { enabled: false }, recall: {} });
+  store50.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store50.set("D:/ws/arch/x.js", "export {}");
+  const r50 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, state: { focus: "deep", goalStage: "exploration" } }, { agent: agentsById.get("T50") });
+  const obs = obsTexts(store50);
+  assert.ok(obs.includes("> state: {\"focus\":\"deep\""), `state 应进入 trace：\n${obs}`);
+  assert.ok(String(r50).includes("visible: 架构/重构"), "state 不影响事实（projection 不变）");
+  assert.ok(!String(r50).includes("focus"), "state 不应污染答案正文（只进 trace）");
+  console.log("✔ 场景50 Observation Trace state 注入：focus=deep 进 trace，但不影响事实（projection 不变）");
+}
+
 console.log("\nALL PASS ✅");

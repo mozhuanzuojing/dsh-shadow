@@ -103,6 +103,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             goal: { type: "string", description: "观察意图 goal（我想改变什么），与 topic 合成 Intent。默认按模式推断。" },
             realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
             lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
+            state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },

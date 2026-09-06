@@ -15,6 +15,8 @@ import { kgTrace } from "../observer/observer.js";
 import { readSoul, soulText } from "../soul/soul.js";
 import { readIdentity, renderIdentity } from "../soul/identity.js";
 import { observerContextOf, renderObserverContext } from "../observer/core.js";
+import { readObserverState } from "../observer/state.js";
+import { recordObservationTrace } from "../observer/trace.js";
 import { tasteOf, renderTaste } from "../soul/taste.js";
 import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
@@ -50,7 +52,9 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   }
   if (args?.context) {
     const identity = await readIdentity(fs, ws, agent?.id);
-    const ctx = observerContextOf(args, String(args?.topic || "").trim(), identity, agent?.id);
+    const soul = await readSoul(fs, ws);
+    const state = await readObserverState(fs, ws, soul, args.state);
+    const ctx = observerContextOf(args, String(args?.topic || "").trim(), identity, agent?.id, state);
     return scrubFinal(RECALL_PREFIX + renderObserverContext(ctx) + flushWarn);
   }
   const topic = String(args?.topic || "").trim();
@@ -68,6 +72,11 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const observerMode = Boolean(args?.observer);
   if (asOf) memories = memories.filter((m: any) => m.date <= asOf.date);
   if (debugMode) diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf.date}` : ""}`);
+  // v0.23 Observation Trace：旁路记录观察轨迹（不影响 recall/排序/答案）；ObserverState 只读取不自动推断。
+  const obsSoul = await readSoul(fs, ws);
+  const obsIdentity = await readIdentity(fs, ws, agent?.id);
+  const obsState = await readObserverState(fs, ws, obsSoul, args.state);
+  const obsCtx = observerContextOf(args, topic, obsIdentity, agent?.id, obsState);
   let tokens = tokenize(topic);
   if (!tokens.length) tokens = [String(topic).toLowerCase()];
   if (recallCfg.enabled === true && recallCfg.provider && recallCfg.model) {
@@ -77,10 +86,21 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (args?.project) {
     const soul = await readSoul(fs, ws);
     const identity = await readIdentity(fs, ws, agent?.id);
-    const ctx = observerContextOf(args, topic, identity, agent?.id);
+    const state = await readObserverState(fs, ws, soul, args.state);
+    const ctx = observerContextOf(args, topic, identity, agent?.id, state);
     const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
     const task = `${ctx.intent.goal} ${ctx.intent.question}`.trim() || topic;
     const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens, identity, ctx.intent);
+    await recordObservationTrace(fs, ws, {
+      observerId: ctx.observerId,
+      createdAt: today(),
+      realityAnchor: ctx.realityAnchor,
+      intent: ctx.intent,
+      projection: { visible: p.visible || [], hidden: p.hidden || [], distortion: p.distortion?.reason ? [p.distortion.reason] : [] },
+      uncertainty: { level: p.unc.length, reasons: p.unc.slice(0, 3) },
+      metadata: { source: "projection" },
+      state: ctx.state,
+    });
     return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project, ctx) + flushWarn);
   }
   if (args?.judgment) {
@@ -256,5 +276,16 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     await writeMeta(fs, ws, next);
   }
   const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
-  return scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + flushWarn);
+  const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + flushWarn);
+  await recordObservationTrace(fs, ws, {
+    observerId: obsCtx.observerId,
+    createdAt: today(),
+    realityAnchor: obsCtx.realityAnchor,
+    intent: obsCtx.intent,
+    projection: { visible: available.slice(0, limit).map((s: any) => s.entry || s.mm?.name || ""), hidden: [], distortion: obsCtx.intent.goal ? [obsCtx.intent.goal] : [] },
+    uncertainty: { level: available.length ? 0 : memories.length, reasons: [] },
+    metadata: { source: "read_shadow" },
+    state: obsCtx.state,
+  });
+  return out;
 }
