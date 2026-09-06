@@ -1157,4 +1157,474 @@ const todayStr = todayLocal();
   console.log("✔ 场景26 P5 回写显式同意：默认关照常落盘 / writeConsent=true 无显式要求仅累积不落盘 / 显式要求才落盘");
 }
 
+// ─────────────────────────────────────────────
+// 场景 27：系统提示不泄漏 —— 宿主注入的 `<system-reminder>`（workspace 指令 / runtime context /
+//          skill 目录）等系统级脚手架不得进入记忆；纯系统消息应整体跳过，只留真实用户/助手文本。
+// ─────────────────────────────────────────────
+{
+  const store27 = new Map();
+  const fs27 = mkFs(store27);
+  agentsById.set("T27", { id: "T27", session: { header: { cwd: WS } } });
+  const listeners27 = new Map();
+  const services27 = { fs: fs27, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx27 = { get: (k) => services27[k], on: (e, fn) => listeners27.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services27[k] }) };
+  const P27 = { name, inject, apply };
+  P27.apply(ctx27, { summary: { enabled: false }, recall: {} });
+  const f27 = (ev, ...a) => { const fn = listeners27.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const userMsg27 = (text) =>
+    f27("session/event", { id: "T27", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-27", role: "user", content: [{ type: "text", text }], source: { kind: "user" } } });
+
+  // (a) 真实文本 + 内联系统脚手架 → 脚手架应被剔除，只留真实用户文本
+  userMsg27(
+    "<system-reminder>\nThe following workspace instructions may be relevant to your work.\n</system-reminder>\n" +
+      "把入口改造成 bundle 模式，记住这个决策。",
+  );
+  // (b) 纯系统脚手架消息（workspace 指令 / runtime context / skill 目录分别注入）→ 应整体跳过
+  userMsg27("<system-reminder>\nCurrent runtime context. This snapshot supersedes earlier runtime-context snapshots.\n</system-reminder>");
+  userMsg27("<system-reminder>\nA skill is a reusable set of task-specific instructions.\n</system-reminder>");
+  // (c) 孤立/未闭合标签变体 → 残留标签应被清掉，不把标签文本当正文
+  userMsg27("<system-reminder>孤立标签<system-reminder> 尾部</system-reminder>");
+  // (d) 无标签"裸"系统脚手架块（宿主未用 <system-reminder> 包裹）→ 仍应被识别并跳过
+  userMsg27("Current runtime context. This snapshot supersedes earlier runtime-context snapshots. 上一快照已被本快照取代。");
+  userMsg27("The following workspace instructions may be relevant to your work. Use them as guidance when applicable.");
+  // (e) 误伤守卫：正常用户文本只是"提到"这些措辞，作为整段消息（非系统注入）仍应被记录
+  userMsg27("关于这段，Current runtime context is what we care about, 请按方案 A 处理。");
+
+  await f27("agent/turn-stopping", { agent: agentsById.get("T27"), turn: 1, signal: undefined });
+  const mem27 = [...store27.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  assert.ok(mem27.length >= 1, "T27 应至少落一条（含真实文本）的记忆");
+  const joined27 = mem27.map((k) => store27.get(k)).join("\n");
+  // 真实用户文本保留
+  assert.ok(joined27.includes("把入口改造成 bundle 模式"), "真实用户文本应被记录");
+  // 概况只计真实用户消息 (a)+(e)=2（纯系统消息被跳过）
+  assert.ok(joined27.includes("2 用户消息"), `纯系统消息应被跳过，只留真实消息：\n${joined27}`);
+  // (e) 误伤守卫：提到措辞但作为整段真实消息 → 应保留
+  assert.ok(joined27.includes("Current runtime context is what we care about"), "正常用户文本（仅提到措辞）不应被误伤");
+  // 系统脚手架不得泄漏进记忆
+  assert.ok(!joined27.includes("system-reminder"), "记忆不得含 <system-reminder> 标签");
+  assert.ok(!joined27.includes("The following workspace"), "记忆不得含 workspace 指令片段");
+  assert.ok(!joined27.includes("Current runtime context. This snapshot"), "记忆不得含 runtime context 片段");
+  assert.ok(!joined27.includes("snapshot supersedes"), "记忆不得含 runtime context 细节");
+  assert.ok(!joined27.includes("A skill is a reusable"), "记忆不得含 skill 目录片段");
+  assert.ok(!joined27.includes("task-specific instructions"), "记忆不得含 skill 目录细节");
+  console.log("✔ 场景27 系统提示不泄漏：<system-reminder>/裸脚手架被剔除+跳过，正常用户文本保留");
+}
+
+// ─────────────────────────────────────────────
+// 场景 28：证据链（provenance）—— 每条记忆文件自带 `> 证据链：`（来源种类·日期·证据路径）；
+//          read_shadow 召回每条暴露 来源/状态/置信(派生)/证据，且不虚构 commit。
+// ─────────────────────────────────────────────
+{
+  const store28 = new Map();
+  const fs28 = mkFs(store28);
+  agentsById.set("T28", { id: "T28", session: { header: { cwd: WS } } });
+  const listeners28 = new Map();
+  const services28 = { fs: fs28, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx28 = { get: (k) => services28[k], on: (e, fn) => listeners28.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services28[k] }) };
+  const P28 = { name, inject, apply };
+  P28.apply(ctx28, { summary: { enabled: false }, recall: {} });
+  const f28 = (ev, ...a) => { const fn = listeners28.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  // 触发一个含「用户消息 + 文件改动」的回合 → 落一条带证据链的记忆
+  f28("fs/observed", { targetKey: `${WS}/src/vxeTableDragFix.js`, displayPath: `${WS}/src/vxeTableDragFix.js` }, { kind: "present", version: "v1" }, { agent: { id: "T28" } });
+  f28("session/event", { id: "T28", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m28", role: "user", content: [{ type: "text", text: "C9：vxe-table 拖选与行点击竞争，改用全局 capture 拦截。" }], source: { kind: "user" } } });
+  await f28("agent/turn-stopping", { agent: agentsById.get("T28"), turn: 1, signal: undefined });
+  const mem28 = [...store28.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  assert.ok(mem28.length >= 1, "T28 应落盘一条记忆");
+  const t28 = store28.get(mem28[0]);
+  // 写侧：记忆文件自带 `> 证据链：`（来源种类·日期·证据路径）
+  assert.ok(t28.includes("> 证据链：来源"), `记忆文件应含 \`> 证据链：来源(...)\`：\n${t28.slice(0, 300)}`);
+  assert.ok(t28.includes("vxeTableDragFix.js"), "证据链应含被改动文件路径");
+  // 读侧：read_shadow(topic) 应暴露 provenance 行（来源/状态/置信/证据）
+  const r28 = await toolRegistry.get("read_shadow").execute({ topic: "vxe-table", max_tokens: 4096 }, { agent: agentsById.get("T28") });
+  assert.ok(!String(r28).startsWith("ERR"), "read_shadow 不应报错");
+  assert.ok(r28.includes("来源 动作·用户"), `召回应暴露来源种类：\n${r28}`);
+  assert.ok(r28.includes("状态"), "召回应暴露状态（active/stale）");
+  assert.ok(r28.includes("置信"), "召回应暴露派生置信");
+  assert.ok(r28.includes("vxeTableDragFix.js"), "召回应暴露证据路径");
+  assert.ok(!/\bcommit\b/i.test(r28), "证据链不应虚构 commit id");
+  console.log("✔ 场景28 证据链：记忆文件自带`> 证据链：`，召回暴露 来源/状态/置信/证据，不虚构commit");
+}
+
+// ─────────────────────────────────────────────
+// 场景 29：Memory Debugger —— read_shadow(debug:true) 输出召回管线 trace
+//          （候选/命中/冷却/预算/返回） + 每条召回「为什么命中(入口/主题/路径/正文)/状态」。
+// ─────────────────────────────────────────────
+{
+  const store29 = new Map();
+  const fs29 = mkFs(store29);
+  agentsById.set("T29", { id: "T29", session: { header: { cwd: WS } } });
+  const listeners29 = new Map();
+  const services29 = { fs: fs29, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx29 = { get: (k) => services29[k], on: (e, fn) => listeners29.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services29[k] }) };
+  const P29 = { name, inject, apply };
+  P29.apply(ctx29, { summary: { enabled: false }, recall: {} });
+  // 种 3 条候选记忆：alpha/gamma 含 bundle（命中），beta 不含（打分0）
+  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-alpha.md",
+    `# plugin-alpha\n\n> 完整线索\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(alpha.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [plugin-alpha] 用户：决定把 alpha 入口 bundle 化。\n`);
+  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-beta.md",
+    `# plugin-beta\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(beta.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [plugin-beta] 改/读 plugin-beta/beta.js\n`);
+  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--110000-gamma.md",
+    `# plugin-gamma\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(gamma.js)\n> 概况：1 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [plugin-gamma] 用户：gamma 也要 bundle 化。\n`);
+  const r29 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", debug: true, max_tokens: 4096 }, { agent: agentsById.get("T29") });
+  assert.ok(!String(r29).startsWith("ERR"), "debug 模式不应报错");
+  assert.ok(r29.includes("候选 3"), `debug trace 应含候选计数：\n${r29}`);
+  assert.ok(/命中（打分>0）\d+/.test(r29), "debug trace 应含命中计数");
+  assert.ok(/返回 \d+ 条/.test(r29), "debug trace 应含返回计数");
+  assert.ok(/入口\d+ 主题\d+ 路径\d+ 正文\d+/.test(r29), "debug trace 应含打分拆解(入口/主题/路径/正文)");
+  assert.ok(r29.includes("· 状态"), "debug trace 应含每条 memory 的状态");
+  // 默认（非 debug）应无 trace
+  const r29b = await toolRegistry.get("read_shadow").execute({ topic: "bundle", max_tokens: 4096 }, { agent: agentsById.get("T29") });
+  assert.ok(!String(r29b).includes("候选 3"), "非 debug 不应输出候选 trace");
+  console.log("✔ 场景29 Memory Debugger：debug=true 输出 候选/命中/返回/打分拆解/状态 trace");
+}
+
+// ─────────────────────────────────────────────
+// 场景 30：记忆生命周期（②）—— deriveLifecycle 从 meta 信号派生状态（NEW/OBSERVED/VERIFIED/
+//          TRUSTED/SUPERSEDED/ARCHIVED/DECAYING/pinned→TRUSTED），并在召回 provenance 暴露。
+// ─────────────────────────────────────────────
+{
+  const store30 = new Map();
+  const fs30 = mkFs(store30);
+  agentsById.set("T30", { id: "T30", session: { header: { cwd: WS } } });
+  const listeners30 = new Map();
+  const services30 = { fs: fs30, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx30 = { get: (k) => services30[k], on: (e, fn) => listeners30.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services30[k] }) };
+  const P30 = { name, inject, apply };
+  P30.apply(ctx30, { summary: { enabled: false }, recall: {} });
+  const body30 = (entry: string, note: string) => `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] 生命周期：${note}\n`;
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-lc-new.md", body30("lc-new", "新记忆"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-lc-obs.md", body30("lc-obs", "被观察"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090002-lc-ver.md", body30("lc-ver", "单源确认"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090003-lc-tru.md", body30("lc-tru", "多源确认"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090004-lc-sup.md", body30("lc-sup", "被取代"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090005-lc-arc.md", body30("lc-arc", "已归档"));
+  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090006-lc-pin.md", body30("lc-pin", "固定"));
+  store30.set("D:/ws/shadow/2020-01-01/2020-01-01--000000-lc-dec.md", body30("lc-dec", "衰减"));
+  store30.set("D:/ws/shadow/_meta.json", JSON.stringify({
+    "shadow/2026-09-05/2026-09-05--090001-lc-obs.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: [] },
+    "shadow/2026-09-05/2026-09-05--090002-lc-ver.md": { created: "2026-09-05", hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
+    "shadow/2026-09-05/2026-09-05--090003-lc-tru.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
+    "shadow/2026-09-05/2026-09-05--090004-lc-sup.md": { created: "2026-09-05", hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
+    "shadow/2026-09-05/2026-09-05--090005-lc-arc.md": { created: "2026-09-05", hits: 1, status: "archived", pinned: false, confirmedBy: [] },
+    "shadow/2026-09-05/2026-09-05--090006-lc-pin.md": { created: "2026-09-05", hits: 1, status: "active", pinned: true, confirmedBy: [] },
+  }));
+  const r30 = await toolRegistry.get("read_shadow").execute({ topic: "生命周期", max_tokens: 8000 }, { agent: agentsById.get("T30") });
+  assert.ok(!String(r30).startsWith("ERR"), "生命周期召回不应报错");
+  for (const lc of ["NEW", "OBSERVED", "VERIFIED", "TRUSTED", "SUPERSEDED", "ARCHIVED", "DECAYING"]) {
+    assert.ok(r30.includes(`生命周期 ${lc}`), `应暴露生命周期 ${lc}：\n${r30}`);
+  }
+  assert.ok((r30.match(/生命周期 TRUSTED/g) || []).length >= 2, "pinned 也应算出 TRUSTED");
+  console.log("✔ 场景30 生命周期：从 meta 信号派生 NEW/OBSERVED/VERIFIED/TRUSTED/SUPERSEDED/ARCHIVED/DECAYING 并暴露");
+}
+
+// ─────────────────────────────────────────────
+// 场景 31：冲突检测（③）—— 记忆里的证据路径在当前工作区缺失 → 降权 + 标记 stale/STALE，
+//          召回 provenance 暴露 `(⚠证据缺N)`；证据存在的记忆则无冲突。
+// ─────────────────────────────────────────────
+{
+  const store31 = new Map();
+  // 严格 fs：readText 对"不在 map 里"的路径抛错（模拟真实 fs 对不存在文件报 ENOENT）。
+  const fs31 = {
+    async resolve(p) { return { targetKey: p, displayPath: p }; },
+    async readText(t) { const v = store31.get(t.displayPath); if (v === undefined) throw new Error("ENOENT"); return v; },
+    async writeText(t, c) { store31.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/";
+      const names = new Set();
+      for (const k of store31.keys()) {
+        const nk = k.replace(/\\/g, "/");
+        if (!nk.startsWith(prefix)) continue;
+        const f = nk.slice(prefix.length).split("/")[0];
+        if (f !== "_index.md") names.add(f);
+      }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  agentsById.set("T31", { id: "T31", session: { header: { cwd: WS } } });
+  const listeners31 = new Map();
+  const services31 = { fs: fs31, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx31 = { get: (k) => services31[k], on: (e, fn) => listeners31.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services31[k] }) };
+  const P31 = { name, inject, apply };
+  P31.apply(ctx31, { summary: { enabled: false }, recall: {} });
+  // src/gone.js 缺失（不放进 map）→ 冲突；src/exists.js 存在（放进 map）→ 无冲突。
+  store31.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-conflict.md",
+    `# conflict-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [conflict-entry] 改/读 src/gone.js\n`);
+  store31.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-good.md",
+    `# good-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/exists.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [good-entry] 改/读 src/exists.js\n`);
+  store31.set("D:/ws/src/exists.js", "export {}");
+  const r31 = await toolRegistry.get("read_shadow").execute({ topic: "src", max_tokens: 4096 }, { agent: agentsById.get("T31") });
+  assert.ok(!String(r31).startsWith("ERR"), "冲突检测不应报错");
+  assert.ok(r31.includes("⚠证据缺"), `证据路径缺失应标记冲突：\n${r31}`);
+  assert.ok(r31.includes("生命周期 STALE"), "证据缺失 → 生命周期 STALE");
+  assert.ok(r31.includes("090000-conflict.md"), "冲突记忆应被召回");
+  assert.ok(r31.includes("090001-good.md"), "无冲突记忆也应被召回");
+  assert.ok(!/\bcommit\b/i.test(r31), "不应虚构 commit");
+  console.log("✔ 场景31 冲突检测：证据路径缺失 → 降权+STALE+⚠证据缺；存在则无冲突");
+}
+
+// ─────────────────────────────────────────────
+// 场景 32：任务/目标/会话/项目分层（④）—— 记忆文件自带 `> 项目：`/`> Agent：`/`> 目标：`，
+//          召回 provenance 暴露 `目标 ...`/`项目 ...`。
+// ─────────────────────────────────────────────
+{
+  const store32 = new Map();
+  const fs32 = mkFs(store32);
+  agentsById.set("T32", { id: "T32", session: { header: { cwd: WS } } });
+  const listeners32 = new Map();
+  const services32 = { fs: fs32, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx32 = { get: (k) => services32[k], on: (e, fn) => listeners32.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services32[k] }) };
+  const P32 = { name, inject, apply };
+  P32.apply(ctx32, { summary: { enabled: false }, recall: {} });
+  const f32 = (ev, ...a) => { const fn = listeners32.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  f32("goal/changed", { agent: { id: "T32" }, change: { objective: "OpenAPI 改造：统一 API 错误处理" } });
+  f32("fs/observed", { targetKey: `${WS}/src/api.js`, displayPath: `${WS}/src/api.js` }, { kind: "present", version: "v1" }, { agent: { id: "T32" } });
+  f32("session/event", { id: "T32", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m32", role: "user", content: [{ type: "text", text: "统一 API 错误处理。" }], source: { kind: "user" } } });
+  store32.set("D:/ws/src/api.js", "export {}"); // 证据路径存在，避免误判冲突
+  await f32("agent/turn-stopping", { agent: agentsById.get("T32"), turn: 1, signal: undefined });
+  const mem32 = [...store32.keys()].find((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md") && store32.get(k)?.includes("统一 API"));
+  assert.ok(mem32, "T32 记忆应落盘");
+  const t32 = store32.get(mem32);
+  assert.ok(t32.includes("> 项目：ws"), `记忆应含 项目：\n${t32.slice(0, 200)}`);
+  assert.ok(t32.includes("> Agent：T32"), "记忆应含 Agent");
+  assert.ok(t32.includes("> 目标：OpenAPI 改造"), "记忆应含 目标");
+  const r32 = await toolRegistry.get("read_shadow").execute({ topic: "统一 API", max_tokens: 4096 }, { agent: agentsById.get("T32") });
+  assert.ok(!String(r32).startsWith("ERR"), "分层召回不应报错");
+  assert.ok(r32.includes("目标 OpenAPI 改造"), `召回应暴露 目标：\n${r32}`);
+  assert.ok(r32.includes("项目 ws"), "召回应暴露 项目");
+  console.log("✔ 场景32 分层：记忆含 项目/Agent/目标，召回暴露 目标/项目");
+}
+
+// ─────────────────────────────────────────────
+// 场景 33：工程知识图谱（⑥，v0.8.0 起步地基）—— read_shadow(kg:true) 从记忆树派生邻接追踪
+//          「主题 → 域 → 同域组件 → 依赖/证据路径」，回答"X 为什么这么设计"的链路。
+// ─────────────────────────────────────────────
+{
+  const store33 = new Map();
+  const fs33 = mkFs(store33);
+  agentsById.set("T33", { id: "T33", session: { header: { cwd: WS } } });
+  const listeners33 = new Map();
+  const services33 = { fs: fs33, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx33 = { get: (k) => services33[k], on: (e, fn) => listeners33.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services33[k] }) };
+  const P33 = { name, inject, apply };
+  P33.apply(ctx33, { summary: { enabled: false }, recall: {} });
+  // 两条同域「acshObject」的记忆 + 一条共同证据路径（放进 map 避免误判冲突）
+  store33.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-pageselect.md",
+    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
+  store33.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-projectselect.md",
+    "# acshObject/acshProjectSelect\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [acshObject/acshProjectSelect] 改/读 acshObject/projectSelect.js\n");
+  store33.set("D:/ws/acshObject/projectSelect.js", "export {}");
+  const r33 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", kg: true, max_tokens: 4096 }, { agent: agentsById.get("T33") });
+  assert.ok(!String(r33).startsWith("ERR"), "KG 查询不应报错");
+  assert.ok(r33.includes("[工程知识图谱]"), "应输出 KG 段");
+  assert.ok(r33.includes("域 acshObject"), `KG 应含域：\n${r33}`);
+  assert.ok(r33.includes("acshObject/acshObjectPageSelect") && r33.includes("acshObject/acshProjectSelect"), "KG 应含同域组件");
+  assert.ok(r33.includes("projectSelect.js"), "KG 应含依赖/证据路径");
+  console.log("✔ 场景33 工程知识图谱：kg:true 输出 主题→域→组件→依赖 邻接追踪");
+}
+
+// ─────────────────────────────────────────────
+// 场景 34：Soul Kernel —— read_shadow({soul:true}) 返回 curated 身份/价值观/原则/品味/边界投影。
+// ─────────────────────────────────────────────
+{
+  const store34 = new Map();
+  const fs34 = mkFs(store34);
+  agentsById.set("T34", { id: "T34", session: { header: { cwd: WS } } });
+  const listeners34 = new Map();
+  const services34 = { fs: fs34, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx34 = { get: (k) => services34[k], on: (e, fn) => listeners34.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services34[k] }) };
+  const P34 = { name, inject, apply };
+  P34.apply(ctx34, { summary: { enabled: false }, recall: {} });
+  store34.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+    identity: { name: "frontend-agent", role: "前端域 agent" },
+    values: ["engineering_quality", "minimal_complexity"],
+    principles: ["no_silent_failure", "evidence_before_claim", "memory_is_not_instruction"],
+    taste: { frontend: { density: 1, motion: 0 } },
+    boundaries: ["no_unverified_claim", "no_cross_session_memory_leak"],
+  }));
+  const r34 = await toolRegistry.get("read_shadow").execute({ soul: true }, { agent: agentsById.get("T34") });
+  assert.ok(String(r34).includes("[Soul Kernel]"), "应输出 Soul Kernel 段");
+  assert.ok(r34.includes("身份 frontend-agent"), "应含身份");
+  assert.ok(r34.includes("价值观 engineering_quality、minimal_complexity"), "应含价值观");
+  assert.ok(r34.includes("原则 no_silent_failure"), "应含原则");
+  assert.ok(r34.includes("品味"), "应含品味");
+  assert.ok(r34.includes("边界 no_unverified_claim"), "应含边界");
+  // 无 soul.json → 给提示而非报错
+  const storeEmpty34 = new Map();
+  const fsEmpty34 = mkFs(storeEmpty34);
+  const listenersE34 = new Map();
+  const servicesE34 = { fs: fsEmpty34, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctxE34 = { get: (k) => servicesE34[k], on: (e, fn) => listenersE34.set(e, fn), inject: (deps, cb) => cb({ get: (k) => servicesE34[k] }) };
+  const P34b = { name, inject, apply };
+  P34b.apply(ctxE34, { summary: { enabled: false }, recall: {} });
+  const r34b = await toolRegistry.get("read_shadow").execute({ soul: true }, { agent: agentsById.get("T34") });
+  assert.ok(r34b.includes("无 Soul 配置"), "无 soul.json 应给提示");
+  console.log("✔ 场景34 Soul Kernel：soul:true 返回 身份/价值观/原则/品味/边界；无配置给提示");
+}
+
+// ─────────────────────────────────────────────
+// 场景 35：Experience —— read_shadow(topic, {experience:true}) 从完整线索头派生结构化
+//          情境/问题/决策/实现/证据/结果/教训。
+// ─────────────────────────────────────────────
+{
+  const store35 = new Map();
+  const fs35 = mkFs(store35);
+  agentsById.set("T35", { id: "T35", session: { header: { cwd: WS } } });
+  const listeners35 = new Map();
+  const services35 = { fs: fs35, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx35 = { get: (k) => services35[k], on: (e, fn) => listeners35.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services35[k] }) };
+  const P35 = { name, inject, apply };
+  P35.apply(ctx35, { summary: { enabled: false }, recall: {} });
+  store35.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-exp.md",
+    "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 背景/材料：acshObject/projectSelect.js\n> 用户提示/决策：「对象页选择器直接选择」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
+  store35.set("D:/ws/acshObject/projectSelect.js", "export {}"); // 证据存在 → 裁决 fresh
+  const r35 = await toolRegistry.get("read_shadow").execute({ topic: "对象页", experience: true, max_tokens: 4096 }, { agent: agentsById.get("T35") });
+  assert.ok(!String(r35).startsWith("ERR"), "Experience 查询不应报错");
+  assert.ok(r35.includes("[Experience] acshObject/acshObjectPageSelect"), `应输出结构化 Experience：\n${r35}`);
+  assert.ok(r35.includes("决策 「对象页选择器直接选择」〔decision〕"), "应含决策");
+  assert.ok(r35.includes("证据 acshObject/projectSelect.js"), "应含证据");
+  assert.ok(r35.includes("裁决 fresh"), "应含裁决(证据存在)");
+  assert.ok(r35.includes("结果 evidence_live"), "应含结果");
+  assert.ok(r35.includes("教训 对象页选择器改直接选择"), "应含教训(摘要)");
+  assert.ok(r35.includes("目标 OpenAPI 改造"), "应含目标");
+  console.log("✔ 场景35 Experience：experience:true 从完整线索头派生 情境/问题/决策/实现/证据/裁决/结果/反思/教训");
+}
+
+// ─────────────────────────────────────────────
+// 场景 36：Memory≠Evidence 裁决 · supersede —— 同一入口存在更新记忆 → 旧记忆判 superseded + 降权 + 反思；
+//          更新记忆（同入口最新）判 fresh。
+// ─────────────────────────────────────────────
+{
+  const store36 = new Map();
+  const fs36 = mkFs(store36);
+  agentsById.set("T36", { id: "T36", session: { header: { cwd: WS } } });
+  const listeners36 = new Map();
+  const services36 = { fs: fs36, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx36 = { get: (k) => services36[k], on: (e, fn) => listeners36.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services36[k] }) };
+  const P36 = { name, inject, apply };
+  P36.apply(ctx36, { summary: { enabled: false }, recall: {} });
+  const b36 = (time: string) => `# xyz/compA\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [${time}] [xyz/compA] 改/读 xyz/a.js\n`;
+  store36.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-c1.md", b36("09:00:00"));
+  store36.set("D:/ws/shadow/2026-09-05/2026-09-05--120000-c2.md", b36("12:00:00"));
+  store36.set("D:/ws/xyz/a.js", "export {}"); // 证据存在
+  const r36 = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T36") });
+  assert.ok(!String(r36).startsWith("ERR"), "supersede 裁决不应报错");
+  assert.ok(r36.includes("裁决 superseded"), `旧记忆应判 superseded：\n${r36}`);
+  assert.ok(r36.includes("裁决 fresh"), "新记忆应判 fresh");
+  assert.ok(r36.includes("后续已迭代"), "旧记忆反思应提示已迭代");
+  console.log("✔ 场景36 Memory≠Evidence supersede：同入口更新记忆 → 旧的 superseded+降权+反思，新的 fresh");
+}
+
+// ─────────────────────────────────────────────
+// 场景 37：Observer / Observation Window —— read_shadow(topic, {observer:true, asOf}) 
+//          ① asOf 时间锚定：晚于 asOf 的记忆不入窗口；② 窗口诚实：只呈现「当时可知」，
+//          把 outcome/lesson/verdict 等「后来才知」标为 [后验]，不让全局/后验答案假装成当下已知。
+// ─────────────────────────────────────────────
+{
+  const store37 = new Map();
+  const fs37 = mkFs(store37);
+  agentsById.set("T37", { id: "T37", session: { header: { cwd: WS } } });
+  const listeners37 = new Map();
+  const services37 = { fs: fs37, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx37 = { get: (k) => services37[k], on: (e, fn) => listeners37.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services37[k] }) };
+  const P37 = { name, inject, apply };
+  P37.apply(ctx37, { summary: { enabled: false }, recall: {} });
+  store37.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-c1.md",
+    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：「先确认调用方再判断兼容成本」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
+  store37.set("D:/ws/shadow/2026-09-06/2026-09-06--090000-c2.md",
+    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：兼容层已被移除。\n> 证据链：来源(动作·用户) · 日期(2026-09-06) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：兼容层已移除。\n");
+  store37.set("D:/ws/xyz/a.js", "export {}");
+  // 默认（非 observer）会看到新记忆（2026-09-06）
+  const r37norm = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T37") });
+  assert.ok(String(r37norm).includes("2026-09-06"), "默认(非 observer)应能看到更新记忆");
+  // observer + asOf=2026-09-05 → 窗口只有当时可知，且把后验标 [后验]
+  const r37 = await toolRegistry.get("read_shadow").execute({ topic: "compA", observer: true, asOf: "2026-09-05", max_tokens: 4096 }, { agent: agentsById.get("T37") });
+  assert.ok(!String(r37).startsWith("ERR"), "observer 模式不应报错");
+  assert.ok(r37.includes("[Observation Window]"), "应输出 Observation Window");
+  assert.ok(r37.includes("as-of 2026-09-05"), "应标注 as-of");
+  assert.ok(r37.includes("当时可知"), "应呈现「当时可知」(t0 决策上下文)");
+  assert.ok(r37.includes("[后验]"), "应把「后来才知」标为 [后验]");
+  assert.ok(!r37.includes("2026-09-06"), "observer+asOf 不应看到晚于窗口的记忆");
+  console.log("✔ 场景37 Observer 窗口：asOf 时间锚定 + 当时可知/[后验] 分离，不把后验答案假装成当下已知");
+}
+
+// ─────────────────────────────────────────────
+// 场景 38：Projection —— read_shadow(topic, {project:true}) 用 Observer 透镜把全局模型投影成
+//          LocalContext（relevant 原则/经验/偏好 + current_state + uncertainty + excluded）。
+//          匹配任务但被 what_to_ignore 命中的记忆 → 显式 excluded。
+// ─────────────────────────────────────────────
+{
+  const store38 = new Map();
+  const fs38 = mkFs(store38);
+  agentsById.set("T38", { id: "T38", session: { header: { cwd: WS } } });
+  const listeners38 = new Map();
+  const services38 = { fs: fs38, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx38 = { get: (k) => services38[k], on: (e, fn) => listeners38.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services38[k] }) };
+  const P38 = { name, inject, apply };
+  P38.apply(ctx38, { summary: { enabled: false }, recall: {} });
+  store38.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+    principles: ["bundle 化优先", "no_compatibility_shell"],
+    taste: { frontend: { density: 1 } },
+    observer: { what_matters: ["bundle"], what_to_ignore: ["遗留"] },
+  }));
+  // M1：匹配任务 + what_matters 命中 → relevant（显著加权）
+  store38.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-flow.md",
+    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
+  store38.set("D:/ws/shadow/2026-09-05/2026-09-05--090002-compat.md",
+    "# 遗留/bundle兼容\n\n> 完整线索\n> 背景/材料：legacy/compat.js\n> 用户提示/决策：遗留 bundle 兼容层。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:01:00] [遗留/bundle兼容] 用户：遗留 bundle 兼容层。\n");
+  store38.set("D:/ws/acshModel/entry.js", "export {}");
+  const r38 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", project: true, max_tokens: 4096 }, { agent: agentsById.get("T38") });
+  assert.ok(!String(r38).startsWith("ERR"), "Projection 不应报错");
+  assert.ok(r38.includes("[Projection]"), "应输出 Projection");
+  assert.ok(r38.includes("scope: project=ws · task=bundle"), "应含 scope");
+  assert.ok(r38.includes("原则 bundle 化优先"), "应含匹配任务的原则");
+  assert.ok(r38.includes("经验 acshModel/acshFlow"), "应含相关经验");
+  assert.ok(r38.includes("excluded:"), "应含 excluded 段");
+  assert.ok(r38.includes("090002-compat.md"), "应排除被 what_to_ignore 命中的记忆(compat)");
+  console.log("✔ 场景38 Projection：Observer 透镜算显著→relevant，what_to_ignore→excluded，输出 LocalContext");
+}
+
+// ─────────────────────────────────────────────
+// 场景 39：Judgment —— read_shadow(topic, {judgment:true}) 从记忆派生「面对<情境> → 我判断/选择<决策>」。
+// ─────────────────────────────────────────────
+{
+  const store39 = new Map();
+  const fs39 = mkFs(store39);
+  agentsById.set("T39", { id: "T39", session: { header: { cwd: WS } } });
+  const listeners39 = new Map();
+  const services39 = { fs: fs39, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx39 = { get: (k) => services39[k], on: (e, fn) => listeners39.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services39[k] }) };
+  const P39 = { name, inject, apply };
+  P39.apply(ctx39, { summary: { enabled: false }, recall: {} });
+  store39.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-j.md",
+    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 用户提示/决策：先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
+  const r39 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", judgment: true, max_tokens: 4096 }, { agent: agentsById.get("T39") });
+  assert.ok(!String(r39).startsWith("ERR"), "Judgment 不应报错");
+  assert.ok(r39.includes("[Judgment]"), "应输出 Judgment 段");
+  assert.ok(r39.includes("面对 acshObject/acshObjectPageSelect → 我判断/选择 先确认调用方再判断兼容成本"), `应含判断模式：\n${r39}`);
+  console.log("✔ 场景39 Judgment：从记忆派生「面对情境→我判断/选择决策」");
+}
+
+// ─────────────────────────────────────────────
+// 场景 40：Taste —— read_shadow({taste:true}) 读 curated 偏好（灵魂 taste + shadow/taste/taste.json）。
+// ─────────────────────────────────────────────
+{
+  const store40 = new Map();
+  const fs40 = mkFs(store40);
+  agentsById.set("T40", { id: "T40", session: { header: { cwd: WS } } });
+  const listeners40 = new Map();
+  const services40 = { fs: fs40, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx40 = { get: (k) => services40[k], on: (e, fn) => listeners40.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services40[k] }) };
+  const P40 = { name, inject, apply };
+  P40.apply(ctx40, { summary: { enabled: false }, recall: {} });
+  store40.set("D:/ws/shadow/soul/soul.json", JSON.stringify({ taste: { frontend: { density: 1 } } }));
+  store40.set("D:/ws/shadow/taste/taste.json", JSON.stringify({ likes: ["简洁", "高信息密度"], dislikes: ["无意义渐变", "过度 wrapper"] }));
+  const r40 = await toolRegistry.get("read_shadow").execute({ taste: true }, { agent: agentsById.get("T40") });
+  assert.ok(String(r40).includes("[Taste]"), "应输出 Taste 段");
+  assert.ok(r40.includes("喜欢 简洁、高信息密度"), "应含喜欢");
+  assert.ok(r40.includes("不喜欢 无意义渐变、过度 wrapper"), "应含不喜欢");
+  assert.ok(r40.includes("品味"), "应含灵魂 taste");
+  console.log("✔ 场景40 Taste：curated 偏好(灵魂 taste + taste.json) 返回 品味/喜欢/不喜欢");
+}
+
 console.log("\nALL PASS ✅");

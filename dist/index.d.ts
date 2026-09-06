@@ -46,6 +46,7 @@ export interface ShadowConfig {
         maxTokens?: number;
         timeoutMs?: number;
         cooldownTurns?: number;
+        debug?: boolean;
     };
     retention?: {
         enabled?: boolean;
