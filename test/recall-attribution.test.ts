@@ -3381,4 +3381,68 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   console.log("✔ 145 Success ≠ Capability：Action success 不改 Identity/Knowledge/Confidence");
 }
 
+// ─────────────────────────────────────────────
+// v0.33.1 Action Integrity Lock：ADR-0027.1 的 6 条 Invariant。
+// 146-151: Execution≠RealityClaim / Feedback≠ModelValidation / Failure persist / 不改历史 /
+//          Success 不改Identity / ActionScope≠RealityOwnership。
+// ─────────────────────────────────────────────
+// 146：ActionExecution 不生成 RealityClaim。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await exec2(fs, WS, "ac-1", "RealityClaim: A depends_on B");
+  assert.ok(String(r).includes("[Action Rejected]"), "执行结果声称 RealityClaim 应拒绝");
+  assert.ok(String(r).includes("不得声称 RealityClaim"), "应标注");
+  console.log("✔ 146 ActionExecution 不生成 RealityClaim（禁行动自证）");
+}
+
+// 147：Feedback 不直接 validate hypothesis。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await fb(fs, WS, "ax-1", "修改配置证明架构优化方向正确");
+  assert.ok(String(r).includes("[Feedback Rejected]"), "feedback 跨入解释层应拒绝");
+  assert.ok(String(r).includes("Success ≠ Capability"), "应标注成功≠能力/验证");
+  console.log("✔ 147 Feedback 不直接 validate hypothesis（只记观察结果）");
+}
+
+// 148：Failure 保留（append-only，进 ValidationHistory 非 discard）。
+{
+  const { fs, store } = mkV(new Map());
+  await fb(fs, WS, "ax-2", "observed latency up");
+  const f = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  assert.ok(f.length >= 1, "失败 feedback 也保留（ValidationHistory）");
+  console.log("✔ 148 Failure 保留（append-only，非 discard）");
+}
+
+// 149：Action 不修改历史 Observation（append-only）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcN", observation: "Service-N exposes /users", perspectives: ["A"] });
+  const obk = [...store.keys()].find((k) => k.includes("shadow/model/observations/") && k.endsWith(".json"));
+  const before = store.get(obk!);
+  await sim(fs, WS, "Assume latency increases", ["rep-1"]);
+  assert.ok(store.get(obk!) === before, "Action/Simulation 不改历史 Observation（append-only）");
+  console.log("✔ 149 Action 不修改历史 Observation（append-only）");
+}
+
+// 150：Success 不改 Identity。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await exec2(fs, WS, "ac-1", "event occurred");
+  await fb(fs, WS, "ax-3", "observed latency down");
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Success 不改 Identity");
+  console.log("✔ 150 Success 不改 Identity（走 v0.25 人格闸门）");
+}
+
+// 151：Action Scope ≠ Reality Ownership（不产 should_exist/is correct）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await exec2(fs, WS, "ac-1", "this architecture is correct");
+  assert.ok(String(r).includes("[Action Rejected]"), "执行结果声称架构正确应拒绝");
+  const execs = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("exec-"));
+  assert.ok(execs.length === 0, "被拒的 RealityOwnership 不持久化（Action 不产 should_exist/correct）");
+  console.log("✔ 151 Action Scope ≠ Reality Ownership（Action 只产生 changed_at，不产生 should_exist/correct）");
+}
+
 console.log("\nALL PASS ✅");
