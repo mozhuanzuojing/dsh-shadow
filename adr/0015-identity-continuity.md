@@ -65,3 +65,14 @@ interface CandidateIdentityChange {
 Observer → Observe → Experience → Reflection → Candidate Self Model → Identity Evolution → Future Observation
 灵魂=Observer Core（稳定参考系）；经历=Observation Trace；思考=Reflection；自我认识=Identity Model；成长=Identity Timeline
 ```
+
+---
+
+## 附录：v0.25 实现说明（4 条约束已落地）
+
+1. **Identity Timeline 是一等对象**：`shadow/identity/<at>-v<N>.json`（不可变版本切片）+ `timeline.md`。**不覆盖 soul.json**——Core 来自 soul.json（curated 稳定锚），Learned/CurrentModel 由 approval 推进的派生切片承载。`identity/timeline.ts`：`identityV1Of/readIdentityVersions/readCurrentIdentity/writeIdentityVersion/nextVersion/renderIdentityModel`。
+2. **CandidateIdentityChange 不含人格结论**：`proposal { type, content }` 只允许 `add_principle/remove_principle/change_decision_style/add_boundary`，content 来自 Reflection.learning.statement（重复行为→决策规律→原则），**无 personality 字段**。`identity/candidate.ts`：`candidateOf`（learning.type→proposal type，unknown→不成候选）、`identityConfidenceOf`、`renderCandidate`。
+3. **confidence 多维度**：`IdentityConfidence { frequency, recency, consistency, contradiction, overall }`（Identity ≠ Assertion）；反证 = reflection.deviationPatterns 数量 ×0.1。
+4. **Evaluator（非 Gate）**：`identity/evaluator.ts` `evaluateCandidate`（重复性 minCount / 时间稳定 minRecency+halfLifeDays 衰减 / 反证 maxContradiction → `IdentityChangeDecision{status, reasons}`）+ `advanceIdentity`（读反思→候选→三道闸门→接受者推进 identity(t0)→t1）。`read_shadow({mode:"identity"})`。
+
+实现为 3 个逻辑步（Identity Model → Candidate → Evaluator），因模块相互依赖合并为一个可编译提交；每步语义独立。mock 55–60 验证：一次失败不改 Identity / 多次一致→candidate / 冲突证据降 confidence / 确认后进 timeline / 时间衰减 / 两候选共存（context-dependent 不覆盖）。

@@ -28,7 +28,7 @@ import type { ShadowConfig } from "./core/types.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 export { recordObservationTrace, renderObservationTrace } from "./observer/trace.js";
-export { reflectOf } from "./reflection/engine.js";
+export { reflectOf, renderReflection } from "./reflection/engine.js";
 export declare const name = "dsh-shadow";
 export declare const inject: string[];
 type CtxLike = any;

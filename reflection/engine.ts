@@ -68,6 +68,7 @@ export const renderReflection = (r: Reflection) => {
   lines.push(`> status: ${r.status}`);
   lines.push(`> period: ${r.period.from || "…"} → ${r.period.to || "…"}`);
   lines.push(`> confidence: ${r.confidence.score.toFixed(2)} (${r.confidence.reasons.join("、")})`);
+  lines.push(`> evidenceCount: ${r.learning.evidenceCount}`);
   lines.push("");
   lines.push(`learning: ${r.learning.type} · ${r.learning.statement}`);
   lines.push(`observation: repeatedDecisions=${r.observation.repeatedDecisions.join("、") || "—"} · repeatedOutcomes=${r.observation.repeatedOutcomes.join("、") || "—"}`);
@@ -77,4 +78,51 @@ export const renderReflection = (r: Reflection) => {
     for (const c of r.pattern.decisionOutcomeCorrelation.slice(0, 6)) lines.push(`  ${c.decision} → ${c.outcome} (×${c.count} · 成功率 ${(c.successRate * 100).toFixed(0)}%)`);
   }
   return lines.join("\n");
+};
+
+// parseReflection：把 reflection markdown 解析回结构化（v0.25 Candidate 消费）。
+export const parseReflection = (text: string): Reflection | null => {
+  if (!/^# Reflection/m.test(String(text || ""))) return null;
+  const m = (re: RegExp) => (String(text || "").match(re) || [])[1] || "";
+  const learningRaw = m(/^learning: (.+)$/m);
+  const lm = learningRaw.match(/^(\w+) · (.*)$/);
+  const corr: any[] = [];
+  for (const line of String(text || "").split("\n")) {
+    const cm = line.match(/^\s+(.+?) → (.+?) \(×(\d+) · 成功率 (\d+)%\)$/);
+    if (cm) corr.push({ decision: cm[1], outcome: cm[2], count: Number(cm[3]) || 0, successRate: (Number(cm[4]) || 0) / 100 });
+  }
+  const obs = m(/^observation: (.+)$/m);
+  const rD = (obs.match(/repeatedDecisions=([^·]*)/) || [])[1]?.trim() || "";
+  return {
+    id: m(/^> period: (.*)$/m) || "",
+    observerId: m(/^> observer: (.+)$/m),
+    sourceTraces: [],
+    period: { from: m(/^> period: ([^→]*)→/).trim() || "", to: m(/^> period: [^→]*→\s*(.*)$/m).trim() || "" },
+    observation: { repeatedDecisions: rD.split("、").filter(Boolean), repeatedOutcomes: [], deviationPatterns: m(/^deviationPatterns: (.+)$/m).split("、").filter(Boolean) },
+    pattern: { decisionOutcomeCorrelation: corr },
+    learning: { statement: lm ? lm[2] : "", type: (lm ? lm[1] : "unknown") as any, evidenceCount: Number(m(/^> evidenceCount: (.+)$/m)) || 0 },
+    confidence: { score: Number(m(/^> confidence: ([\d.]+)/) || 0) || 0, reasons: [] },
+    status: (m(/^> status: (.+)$/m) || "candidate") as any,
+  };
+};
+
+// 读取 shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
+export const readReflections = async (fs: any, ws: string): Promise<Reflection[]> => {
+  const out: Reflection[] = [];
+  try {
+    const root = await fs.resolve(`${ws}/shadow/reflection`, { cwd: ws });
+    const dates = (await fs.listDir(root).catch(() => [])) || [];
+    for (const d of dates) {
+      if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name)) continue;
+      const dt = await fs.resolve(`${ws}/shadow/reflection/${d.name}`, { cwd: ws });
+      const files = (await fs.listDir(dt).catch(() => [])) || [];
+      for (const f of files) {
+        if (!f?.name || !f.name.endsWith(".md")) continue;
+        const p = await fs.resolve(`${ws}/shadow/reflection/${d.name}/${f.name}`, { cwd: ws });
+        const r = parseReflection(await fs.readText(p));
+        if (r) { r.id = f.name.replace(/\.md$/, ""); out.push(r); }
+      }
+    }
+  } catch { /* 无 reflection 目录 */ }
+  return out;
 };

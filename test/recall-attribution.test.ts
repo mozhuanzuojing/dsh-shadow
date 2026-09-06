@@ -5,7 +5,7 @@
 //   3) 无 topic 返回索引；LLM 扩词（recall.enabled）在 llm 缺失时静默降级。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
-const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty, recordObservationTrace } = mod;
+const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty, recordObservationTrace, renderReflection } = mod;
 
 const WS = "D:/ws";
 
@@ -2022,6 +2022,148 @@ const putTrace = async (fs: any, ws: string, opts: { decision?: string; outcome?
   assert.ok(String(r54).includes("（无足够模式"), "无完整轨迹应给出说明，不编故事");
   assert.ok(!String(r54).includes("principle"), "不应把不完整轨迹编成 principle");
   console.log("✔ 场景54 Reflection：不完整 Trace（无 decision/outcome）不参与，不编故事");
+}
+
+// ─────────────────────────────────────────────
+// v0.25 Identity Continuity：Reflection → CandidateIdentityChange → 三道闸门 → Evaluator → Identity Timeline。
+// Identity 不"增长"而"连续"：time-sliced、只推进派生切片，不自动改 soul.json；proposal 禁人格结论。
+// helper：往 store 写一条 Reflection（供 identity 消费）。
+const reflType = "principle";
+const putReflection = (store: Map<string, string>, id: string, opts: { type?: string; statement: string; evidenceCount: number; corr?: any[]; deviations?: string[]; periodTo?: string }) => {
+  store.set(`D:/ws/shadow/reflection/2026-09-05/${id}.md`, renderReflection({
+    id, observerId: "T", sourceTraces: [],
+    period: { from: "2026-01-01", to: opts.periodTo || "2026-09-05" },
+    observation: { repeatedDecisions: [], repeatedOutcomes: [], deviationPatterns: opts.deviations || [] },
+    pattern: { decisionOutcomeCorrelation: opts.corr || [] },
+    learning: { statement: opts.statement, type: (opts.type || reflType) as any, evidenceCount: opts.evidenceCount },
+    confidence: { score: 0.8, reasons: [] },
+    status: "candidate",
+  }));
+};
+
+// ─────────────────────────────────────────────
+// 场景 55：一次失败不改变 Identity（candidate 不升 accepted，Identity 不推进）。
+// ─────────────────────────────────────────────
+{
+  const store55 = new Map();
+  const fs55 = mkFs(store55);
+  agentsById.set("T55", { id: "T55", session: { header: { cwd: WS } } });
+  const listeners55 = new Map();
+  const services55 = { fs: fs55, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx55 = { get: (k) => services55[k], on: (e, fn) => listeners55.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services55[k] }) };
+  const P55 = { name, inject, apply };
+  P55.apply(ctx55, { summary: { enabled: false }, recall: {} });
+  putReflection(store55, "r55", { statement: "一次失败不生成原则", evidenceCount: 1, corr: [{ decision: "过早优化", outcome: "复杂性增加", count: 1, successRate: 0 }] });
+  const r55 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T55") });
+  assert.ok(!String(r55).startsWith("ERR"), "identity 不应报错");
+  assert.ok(String(r55).includes("version v1"), "一次失败不应推进 identity（仍 v1）");
+  assert.ok(!String(r55).includes("version v2"), "不应推进到 v2");
+  assert.ok(String(r55).includes("重复性不足"), "应给出重复性不足闸门原因");
+  console.log("✔ 场景55 Identity：一次失败不能改变 Identity（candidate 不升 accepted，不推进 v2）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 56：多次一致行为 → candidate（重复性闸门触发 candidate/accepted）。
+// ─────────────────────────────────────────────
+{
+  const store56 = new Map();
+  const fs56 = mkFs(store56);
+  agentsById.set("T56", { id: "T56", session: { header: { cwd: WS } } });
+  const listeners56 = new Map();
+  const services56 = { fs: fs56, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx56 = { get: (k) => services56[k], on: (e, fn) => listeners56.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services56[k] }) };
+  const P56 = { name, inject, apply };
+  P56.apply(ctx56, { summary: { enabled: false }, recall: {} });
+  putReflection(store56, "r56", { statement: "设计前先验证需求", evidenceCount: 10, corr: [{ decision: "边界隔离", outcome: "维护成本下降", count: 10, successRate: 0.9 }] });
+  const r56 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, minCount: 20 }, { agent: agentsById.get("T56") });
+  assert.ok(String(r56).includes("add_principle"), "多次一致应形成候选（add_principle）");
+  assert.ok(String(r56).includes("设计前先验证需求"), "候选内容应为可验证规则（非人格结论）");
+  assert.ok(String(r56).includes("重复性不足"), "minCount=20 时重复性不足→candidate");
+  assert.ok(!String(r56).includes("version v2"), "未过闸门不应推进 v2");
+  console.log("✔ 场景56 Identity：多次一致行为形成 candidate（重复性闸门）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 57：冲突证据降低 confidence（deviationPatterns → contradiction → overall 下降）。
+// ─────────────────────────────────────────────
+{
+  const store57 = new Map();
+  const fs57 = mkFs(store57);
+  agentsById.set("T57", { id: "T57", session: { header: { cwd: WS } } });
+  const listeners57 = new Map();
+  const services57 = { fs: fs57, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx57 = { get: (k) => services57[k], on: (e, fn) => listeners57.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services57[k] }) };
+  const P57 = { name, inject, apply };
+  P57.apply(ctx57, { summary: { enabled: false }, recall: {} });
+  putReflection(store57, "r57", { statement: "架构优先", evidenceCount: 10, corr: [{ decision: "架构优先", outcome: "稳定", count: 10, successRate: 0.8 }], deviations: ["低估/漏看X", "低估/漏看Y", "低估/漏看Z", "低估/漏看W", "低估/漏看V"] });
+  const r57 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, maxContradiction: 0.3 }, { agent: agentsById.get("T57") });
+  assert.ok(String(r57).includes("contradiction=0.50"), "反证应映射到 confidence.contradiction");
+  assert.ok(String(r57).includes("反证过多"), "超过反证上限应拒绝");
+  assert.ok(!String(r57).includes("version v2"), "反证过多不应推进 v2");
+  console.log("✔ 场景57 Identity：冲突证据降低 confidence（contradiction→overall 下降，反证闸门）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 58：规则确认后才进 timeline（accepted → identity(t1) 推进 + learned 增长）。
+// ─────────────────────────────────────────────
+{
+  const store58 = new Map();
+  const fs58 = mkFs(store58);
+  agentsById.set("T58", { id: "T58", session: { header: { cwd: WS } } });
+  const listeners58 = new Map();
+  const services58 = { fs: fs58, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx58 = { get: (k) => services58[k], on: (e, fn) => listeners58.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services58[k] }) };
+  const P58 = { name, inject, apply };
+  P58.apply(ctx58, { summary: { enabled: false }, recall: {} });
+  putReflection(store58, "r58", { statement: "在大型系统设计前优先建立验证闭环", evidenceCount: 12, corr: [{ decision: "验证闭环", outcome: "返工下降", count: 12, successRate: 0.92 }] });
+  const r58 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T58") });
+  assert.ok(String(r58).includes("version v2"), "过三道闸门应推进 identity(t1)=v2");
+  assert.ok(String(r58).includes("accepted"), "应标记 accepted");
+  assert.ok(String(r58).includes("在大型系统设计前优先建立验证闭环"), "learned 应含新原则");
+  assert.ok(String(r58).includes("learned 1"), "learned 应 +1");
+  const tl = [...store58.keys()].find((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(!!tl, "应写入 identity 时间切片 json");
+  console.log("✔ 场景58 Identity：规则确认后进 timeline（accepted→v2，learned+1）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 59：时间衰减（period.to 久远 → recency 低 → confidence 下降，时间稳定闸门）。
+// ─────────────────────────────────────────────
+{
+  const store59 = new Map();
+  const fs59 = mkFs(store59);
+  agentsById.set("T59", { id: "T59", session: { header: { cwd: WS } } });
+  const listeners59 = new Map();
+  const services59 = { fs: fs59, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx59 = { get: (k) => services59[k], on: (e, fn) => listeners59.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services59[k] }) };
+  const P59 = { name, inject, apply };
+  P59.apply(ctx59, { summary: { enabled: false }, recall: {} });
+  putReflection(store59, "r59", { statement: "久远的原则", evidenceCount: 12, corr: [{ decision: "老决策", outcome: "收益明显", count: 12, successRate: 0.9 }], periodTo: "2024-01-01" });
+  const r59 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, halfLifeDays: 90 }, { agent: agentsById.get("T59") });
+  assert.ok(String(r59).includes("时间稳定不足"), "久远观察应被时间衰减闸门拦截");
+  assert.ok(!String(r59).includes("version v2"), "时间衰减不应推进 v2");
+  console.log("✔ 场景59 Identity：时间衰减（period.to 久远→recency 低→confidence 下降）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 60：两个身份候选共存（context-dependent，不互相覆盖）。
+// ─────────────────────────────────────────────
+{
+  const store60 = new Map();
+  const fs60 = mkFs(store60);
+  agentsById.set("T60", { id: "T60", session: { header: { cwd: WS } } });
+  const listeners60 = new Map();
+  const services60 = { fs: fs60, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx60 = { get: (k) => services60[k], on: (e, fn) => listeners60.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services60[k] }) };
+  const P60 = { name, inject, apply };
+  P60.apply(ctx60, { summary: { enabled: false }, recall: {} });
+  putReflection(store60, "r60a", { statement: "偏好快速验证", evidenceCount: 10, corr: [{ decision: "快速验证", outcome: "返工下降", count: 10, successRate: 0.9 }] });
+  putReflection(store60, "r60b", { statement: "偏好架构稳定", evidenceCount: 10, corr: [{ decision: "架构稳定", outcome: "维护成本下降", count: 10, successRate: 0.9 }] });
+  const r60 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T60") });
+  assert.ok(String(r60).includes("learned 2"), "两条不同原则应共存（learned 2）");
+  assert.ok(String(r60).includes("偏好快速验证"), "应保留原则1");
+  assert.ok(String(r60).includes("偏好架构稳定"), "应保留原则2（context-dependent，不覆盖）");
+  console.log("✔ 场景60 Identity：两个候选共存（context-dependent，不互相覆盖）");
 }
 
 console.log("\nALL PASS ✅");

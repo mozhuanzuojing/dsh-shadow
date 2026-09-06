@@ -11,3 +11,5 @@ export interface ReflectOpts {
 export declare const reflectTraces: (traces: Partial<ObservationTrace>[], opts: ReflectOpts) => Reflection;
 export declare const reflectOf: (fs: any, ws: string, opts: ReflectOpts) => Promise<Reflection>;
 export declare const renderReflection: (r: Reflection) => string;
+export declare const parseReflection: (text: string) => Reflection | null;
+export declare const readReflections: (fs: any, ws: string) => Promise<Reflection[]>;

@@ -20,6 +20,8 @@ import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
 import { reflectOf, renderReflection } from "../reflection/engine.js";
+import { readCurrentIdentity } from "../identity/timeline.js";
+import { advanceIdentity, renderEvaluator } from "../identity/evaluator.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
@@ -34,6 +36,17 @@ export async function runReadShadow(deps, args, exec) {
     if (String(args?.mode) === "reflection") {
         const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
         return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
+    }
+    // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
+    if (String(args?.mode) === "identity") {
+        const current = await readCurrentIdentity(fs, ws, agent?.id);
+        const { model, decisions } = await advanceIdentity(fs, ws, current, {
+            minCount: Math.max(1, Number(args?.minCount) || 5),
+            minRecency: Number(args?.minRecency) || 0.4,
+            maxContradiction: Number(args?.maxContradiction) || 0.3,
+            halfLifeDays: Math.max(1, Number(args?.halfLifeDays) || 90),
+        });
+        return scrubFinal(RECALL_PREFIX + renderEvaluator(decisions, model) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

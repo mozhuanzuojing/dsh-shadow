@@ -33,7 +33,7 @@ import type { ShadowQueryDeps } from "./query/types.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 export { recordObservationTrace, renderObservationTrace } from "./observer/trace.js";
-export { reflectOf } from "./reflection/engine.js";
+export { reflectOf, renderReflection } from "./reflection/engine.js";
 
 export const name = "dsh-shadow";
 export const inject: string[] = [];
@@ -109,6 +109,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             mode: { type: "string", description: "模式开关：reflection 时从历史 ObservationTrace 发现候选规律（旁支，非 Memory 查询）；配合 from/to 限定周期。否则按布尔参数分派。" },
             from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
             to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
+            minCount: { type: "number", description: "Identity 重复性闸门：同向轨迹最小次数（默认 5）。与 mode:identity 配合。" },
+            minRecency: { type: "number", description: "Identity 时间稳定闸门：recency 下限（默认 0.4）。与 mode:identity 配合。" },
+            maxContradiction: { type: "number", description: "Identity 反证闸门：contradiction 上限（默认 0.3）。与 mode:identity 配合。" },
+            halfLifeDays: { type: "number", description: "Identity 时间衰减半衰期（天，默认 90）。与 mode:identity 配合。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
