@@ -58,6 +58,9 @@ import { renderContext, renderEvaluation } from "../planning/render.js";
 import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../agency/render.js";
 import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../agency/engine.js";
 import { writeAgencyContext } from "../agency/persistence.js";
+import { renderContext as renderDelegationContext, renderCheck, renderEvent as renderDelegationEvent } from "../delegation/render/render.js";
+import { buildDelegationContext, checkDelegation, recordDelegationEvent } from "../delegation/engine/delegated-execution.js";
+import { writeDelegationContext } from "../delegation/persistence/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -306,6 +309,29 @@ export async function runReadShadow(deps, args, exec) {
         if (!e.ok || !e.ev)
             return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
         return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + flushWarn);
+    }
+    // v0.36 Delegated Execution Boundary Kernel：DelegationContext / DelegationCheck / AutonomyBoundaryEvent。
+    // 委派执行 + 有限适应；不新增 trust/reputation/capabilityLevel；AutonomyBoundaryEvent 是纯审计事件。
+    if (String(args?.mode) === "delegation-context") {
+        const c = buildDelegationContext(args);
+        if (!c.ok || !c.ctx)
+            return scrubFinal(RECALL_PREFIX + "[DelegationContext Rejected] " + c.reason + flushWarn);
+        await writeDelegationContext(fs, ws, c.ctx);
+        return scrubFinal(RECALL_PREFIX + renderDelegationContext(c.ctx) + flushWarn);
+    }
+    if (String(args?.mode) === "delegation-check") {
+        const r = await checkDelegation(fs, ws, args);
+        if (r.notFound)
+            return scrubFinal(RECALL_PREFIX + "[DelegationCheck Rejected] " + r.reason + flushWarn);
+        if (!r.ok)
+            return scrubFinal(RECALL_PREFIX + "[DelegationCheck Rejected] " + r.reason + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderCheck(r.result) + flushWarn);
+    }
+    if (String(args?.mode) === "delegation-event") {
+        const e = await recordDelegationEvent(fs, ws, args);
+        if (!e.ok || !e.ev)
+            return scrubFinal(RECALL_PREFIX + "[DelegationEvent Rejected] " + e.reason + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderDelegationEvent(e.ev) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};
