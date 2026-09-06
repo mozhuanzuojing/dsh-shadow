@@ -1627,4 +1627,66 @@ const todayStr = todayLocal();
   console.log("✔ 场景40 Taste：curated 偏好(灵魂 taste + taste.json) 返回 品味/喜欢/不喜欢");
 }
 
+// ─────────────────────────────────────────────
+// 场景 41：Evidence Gateway（v0.14）· fs Provider 默认 —— read_shadow(topic, {verify:true})
+//           对匹配记忆的证据路径逐个 verifyEvidence：存在的 → verified，缺失 → not_found。
+// ─────────────────────────────────────────────
+{
+  const store41 = new Map();
+  // 严格 fs：不在 map 里的路径 readText 抛错 → fsExists=false → not_found。
+  const fs41 = {
+    async resolve(p) { return { targetKey: p, displayPath: p }; },
+    async readText(t) { const v = store41.get(t.displayPath); if (v === undefined) throw new Error("ENOENT"); return v; },
+    async writeText(t, c) { store41.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/";
+      const names = new Set();
+      for (const k of store41.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  agentsById.set("T41", { id: "T41", session: { header: { cwd: WS } } });
+  const listeners41 = new Map();
+  const services41 = { fs: fs41, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx41 = { get: (k) => services41[k], on: (e, fn) => listeners41.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services41[k] }) };
+  const P41 = { name, inject, apply };
+  P41.apply(ctx41, { summary: { enabled: false }, recall: {} });
+  store41.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-verify.md",
+    "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js、acshModel/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
+  store41.set("D:/ws/acshModel/entry.js", "export {}"); // 现存
+  // acshModel/gone.js 缺失 → not_found
+  const r41 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verify: true, max_tokens: 4096 }, { agent: agentsById.get("T41") });
+  assert.ok(!String(r41).startsWith("ERR"), "verify 模式不应报错");
+  assert.ok(String(r41).includes("[Evidence Verify]"), "应输出 Evidence Verify 段");
+  assert.ok(String(r41).includes("verified  acshModel/entry.js"), "存在的路径应 verified");
+  assert.ok(String(r41).includes("not_found  acshModel/gone.js"), "缺失的路径应 not_found");
+  assert.ok(String(r41).includes("provider=fs"), "默认 provider 应为 fs");
+  console.log("✔ 场景41 Evidence Gateway(fs 默认)：verify:true 对证据路径反馈 verified/not_found");
+}
+
+// ─────────────────────────────────────────────
+// 场景 42：Evidence Gateway · zg 未装 → 明确 unavailable，绝不静默 fallback 成 verified。
+//           即使磁盘存在文件，zg provider 也不假装 verified。
+// ─────────────────────────────────────────────
+{
+  const store42 = new Map();
+  const fs42 = mkFs(store42);
+  agentsById.set("T42", { id: "T42", session: { header: { cwd: WS } } });
+  const listeners42 = new Map();
+  const services42 = { fs: fs42, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx42 = { get: (k) => services42[k], on: (e, fn) => listeners42.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services42[k] }) };
+  const P42 = { name, inject, apply };
+  P42.apply(ctx42, { summary: { enabled: false }, recall: {}, evidenceProvider: "zg" }); // 强制走 zg
+  store42.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-zg.md",
+    "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
+  store42.set("D:/ws/acshModel/entry.js", "export {}"); // 磁盘存在，但 zg provider 不查 fs
+  const r42 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verify: true, max_tokens: 4096 }, { agent: agentsById.get("T42") });
+  assert.ok(!String(r42).startsWith("ERR"), "zg unavailable 不应报错");
+  assert.ok(String(r42).includes("unavailable"), "zg 未装应报 unavailable，绝不静默 fallback 成 verified");
+  assert.ok(String(r42).includes("provider=zg"), "应标明 provider=zg");
+  assert.ok(!String(r42).includes("verified  acshModel"), "zg 未装不得假报 verified");
+  console.log("✔ 场景42 Evidence Gateway(zg 未装)：报 unavailable，绝不静默 fallback 成 verified");
+}
+
 console.log("\nALL PASS ✅");

@@ -38,6 +38,42 @@ export interface ShadowConfig {
   retention?: { enabled?: boolean; halfLifeDays?: number; staleDays?: number };
   /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
   writeConsent?: boolean;
+  /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
+  evidenceProvider?: string;
+  /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */
+  evidenceProviders?: Record<string, EvidenceProvider>;
+}
+
+// ── Evidence Gateway（v0.14）：Shadow 只问 verify(EvidenceRef)，不关心底层是 fs/zg/git/... ──
+// zg 是「眼睛/Evidence Sensor」：discover(找证据)/verify(验证证据)；Arbitration(它意味着什么)留在 Shadow Core。
+export interface EvidenceRef {
+  path: string;
+  query?: string;                    // semantic/exact 查询串，如 "@Path"、"为什么拒绝 fallback"
+  kind?: "path" | "symbol" | "query";
+}
+export interface EvidenceMatch {
+  path: string;
+  startLine?: number;
+  endLine?: number;
+  matchedText?: string;
+  score?: number;
+  route: "exact" | "fts" | "vector" | "hybrid" | "fs";
+}
+export type EvidenceStatus = "verified" | "not_found" | "stale" | "ambiguous" | "unavailable" | "error";
+export type EvidenceFreshness = "fresh" | "possibly_stale" | "stale";
+export interface EvidenceResult {
+  status: EvidenceStatus;           // unavailable/zg未装 → 明确报错；绝不静默 fallback 成 verified
+  source: string;                   // "fs" | "zg" | provider name
+  matches: EvidenceMatch[];
+  confidence: number;
+  freshness: EvidenceFreshness;
+  provenance: { provider: string; at?: string };
+}
+export interface EvidenceProvider {
+  /** 找证据：可能相关的候选。 */
+  discover(request: EvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
+  /** 验证证据：给出 EvidenceResult。 */
+  verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
 }
 /** 兼容 DSH Agent / Session 的最小形状（只读 id 与 cwd 相关字段）。 */
 export interface AgentLike {
@@ -743,17 +779,83 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     return mats.split(/[、,]/).map((s) => s.trim()).filter(Boolean);
   };
   const isPathLike = (p: string) => p && !/^https?:|github\.com|arxiv/i.test(p) && (/[\\\/]/.test(p) || /\.[a-z0-9]{1,6}$/i.test(p) || /^[A-Za-z]:/.test(p));
-  // 轻量冲突检测：证据路径在当前工作区是否存在。缺失 → 该记忆可能已过时 / 源码已改（"capture handler 已不存在"类）。
-  const fsExists = async (fs: any, ws: string, rel: string) => {
-    if (!fs || !ws || !rel) return true; // 无法判定时视为存在，避免误伤
-    try { await fs.readText(await fs.resolve(`${ws}/${rel}`, { cwd: ws })); return true; } catch { return false; }
-  };
   const conflictOf = async (fs: any, ws: string, text: string) => {
     const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 12);
     if (!paths.length) return { missing: [] as string[] };
     const missing: string[] = [];
-    for (const p of paths) if (!(await fsExists(fs, ws, p))) missing.push(p);
+    for (const p of paths) {
+      const res = await verifyEvidence({ path: p, kind: "path" }, { fs, ws });
+      // zg 未装/unavailable → 不当作"缺失"（避免把"证据不可验证"猜成"证据已失效"）。
+      if (res.status === "not_found") missing.push(p);
+    }
     return { missing };
+  };
+  // ── Evidence Gateway（v0.14）：Shadow 只问 verifyEvidence(EvidenceRef)，不碰底层 fs/zg/git... ──
+  // zg 是「眼睛/Evidence Sensor」；Arbitration(它意味着什么) 留在 Shadow Core。zg 未装 → 明确 unavailable，绝不静默 fallback。
+  const fsExists = async (fs: any, ws: string, rel: string) => {
+    if (!fs || !ws || !rel) return true; // 无法判定时视为存在，避免误伤
+    try { await fs.readText(await fs.resolve(`${ws}/${rel}`, { cwd: ws })); return true; } catch { return false; }
+  };
+  const fsEvidenceProvider: EvidenceProvider = {
+    async discover(ref, ctx) {
+      const exists = await fsExists(ctx.fs, ctx.ws, ref.path);
+      return exists ? [{ path: ref.path, route: "fs" }] : [];
+    },
+    async verify(ref, ctx) {
+      const exists = await fsExists(ctx.fs, ctx.ws, ref.path);
+      const matches: EvidenceMatch[] = exists ? [{ path: ref.path, route: "fs" }] : [];
+      return { status: exists ? "verified" : "not_found", source: "fs", matches, confidence: exists ? 0.99 : 0.01, freshness: exists ? "fresh" : "stale", provenance: { provider: "fs", at: new Date().toISOString() } };
+    },
+  };
+  const runZg = async (args: string[], ctx: any, timeoutMs = 8000): Promise<any> => {
+    try {
+      const cp: any = await import("child_process");
+      const { execFile } = cp;
+      return await new Promise((resolve) => {
+        execFile("zg", args, { cwd: ctx.ws, timeout: timeoutMs, maxBuffer: 1024 * 1024 }, (err: any, stdout: string, stderr: string) => {
+          if (err) {
+            if (err.code === "ENOENT") return resolve({ unavailable: true, reason: "zg_not_installed" });
+            const s = String(stderr || "");
+            if (/index/i.test(s)) return resolve({ unavailable: false, freshness: "possibly_stale", reason: "index_missing", stdout: s });
+            return resolve({ unavailable: false, reason: "error", stdout: (stdout || "") + s });
+          }
+          resolve({ unavailable: false, stdout: String(stdout || "") });
+        });
+      });
+    } catch {
+      return { unavailable: true, reason: "zg_not_installed" };
+    }
+  };
+  const parseZgMatches = (stdout: string, ref: EvidenceRef): EvidenceMatch[] => {
+    const out: EvidenceMatch[] = [];
+    for (const line of String(stdout || "").split("\n")) {
+      if (!line.trim()) continue;
+      const lm = line.match(/(\d+):(.*)$/);
+      const pm = line.match(/[A-Za-z]:[\\\/]|\/([\w\-./\\]+):(\d+)/);
+      out.push({ path: pm ? line.slice(0, line.indexOf(":") > 0 ? line.indexOf(":") : 0) || ref.path : ref.path, startLine: lm ? Number(lm[1]) : undefined, matchedText: (lm ? lm[2] : line).slice(0, 120), route: "exact" });
+      if (out.length >= 8) break;
+    }
+    if (!out.length && String(stdout).includes(ref.path || "") || (ref.query && String(stdout).includes(ref.query))) out.push({ path: ref.path, route: "exact", matchedText: String(stdout).slice(0, 120) });
+    return out;
+  };
+  const zgVerify = async (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => {
+    const res = await runZg(["query", "--rg", "-n", "-F", ref.query || ref.path, "-g", "**"], ctx);
+    const base = { source: "zg", provenance: { provider: "zg", at: new Date().toISOString() } };
+    if (res.unavailable) return { ...base, status: "unavailable", matches: [], confidence: 0, freshness: "stale" };
+    if (res.reason === "index_missing" || res.freshness === "possibly_stale") return { ...base, status: "ambiguous", matches: parseZgMatches(res.stdout || "", ref), confidence: 0.3, freshness: "possibly_stale" };
+    const matches = parseZgMatches(res.stdout || "", ref);
+    return matches.length ? { ...base, status: "verified", matches, confidence: 0.8, freshness: "fresh" } : { ...base, status: "not_found", matches: [], confidence: 0.1, freshness: "stale" };
+  };
+  const zgEvidenceProvider: EvidenceProvider = {
+    async discover(ref, ctx) { const r = await zgVerify(ref, ctx); return r.status === "verified" ? r.matches : []; },
+    async verify(ref, ctx) { return zgVerify(ref, ctx); },
+  };
+  const builtinEvidenceProviders: Record<string, EvidenceProvider> = { fs: fsEvidenceProvider, zg: zgEvidenceProvider };
+  const evidenceProviderName = config.evidenceProvider || "fs";
+  const verifyEvidence = (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => {
+    const extra = config.evidenceProviders || {};
+    const p = extra[evidenceProviderName] || builtinEvidenceProviders[evidenceProviderName] || builtinEvidenceProviders.fs;
+    return p.verify(ref, ctx);
   };
   // 生命周期状态机（②）：由 meta 信号派生（pinned/status/confirms/hits/age/conflict），确定性、可解释。
   const lifecycleOf = (rec: any, ageDays: number, conflictCount: number, stale: boolean) => {
@@ -1093,6 +1195,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             project: { type: "boolean", description: "Projection：把 topic 视为当前任务，返回 LocalContext（relevant 原则/经验/偏好 + current_state + uncertainty + excluded），用 Observer 透镜算显著、显式排除。默认关。" },
             judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
             taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
+            verify: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
@@ -1146,6 +1249,26 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
           if (args?.judgment) {
             const js = await judgmentOf(fs, ws, memories, topic);
             return scrubFinal(RECALL_PREFIX + renderJudgment(js) + flushWarn);
+          }
+          if (args?.verify) {
+            // Evidence Gateway 验证：对匹配记忆的证据路径逐个 verifyEvidence，报告 EvidenceResult。
+            const texts: any[] = [];
+            for (const mm of memories) {
+              const text = await readRel(fs, ws, mm.rel);
+              if (!text) continue;
+              const exp = experienceOf(text, mm);
+              const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence}`.toLowerCase();
+              if (tokens.some((t) => hay.includes(t))) texts.push(text);
+            }
+            const rows: string[] = [];
+            const ctx = { fs, ws };
+            for (const text of texts.slice(0, 3)) {
+              for (const p of evidencePathsOf(text).filter(isPathLike).slice(0, 6)) {
+                const r = await verifyEvidence({ path: p, kind: "path" }, ctx);
+                rows.push(`${r.status}  ${p}  (provider=${r.source} · freshness=${r.freshness} · conf=${r.confidence.toFixed(2)})`);
+              }
+            }
+            return scrubFinal(RECALL_PREFIX + "[Evidence Verify]" + (rows.length ? "\n" + rows.join("\n") : "\n（无可验证证据路径）") + flushWarn);
           }
           if (args?.experience) {
             const matched: any[] = [];            const entryList: any[] = [];

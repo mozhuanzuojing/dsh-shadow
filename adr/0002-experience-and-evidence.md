@@ -93,6 +93,17 @@ dsh-shadow 已从"记忆插件"升级为"人类→Agent 投影系统"。在灵�
   **curated-first**：自动品味识别不可靠，v0.13 只做 curated；采样（从偏好类用户消息抽 like/dislike）留后续。
 - **验证**：mock 场景 39（Judgment）/ 40（Taste）。至此灵魂四对象（Soul/Experience/Judgment/Taste）+ Memory 五层就位。
 
+## Evidence Gateway（v0.14.0 补充）
+
+> **zg 是眼睛 / Evidence Sensor，不是大脑。** Shadow 只问 `verifyEvidence(EvidenceRef)`，不碰底层是 fs/zg/git/IDE。
+
+- **接口**：`EvidenceProvider { discover(EvidenceRef)→EvidenceCandidate[]; verify(EvidenceRef)→EvidenceResult }`；
+  `EvidenceResult{ status(verified/not_found/stale/ambiguous/unavailable/error), source, matches[], confidence, freshness(fresh/possibly_stale/stale), provenance }`。
+- **职责边界**：Discovery/Ranking/Verification 在 Provider；**Arbitration(它意味着什么) 留在 Shadow Core**（zg 找到→Candidate，Shadow 裁决→Verified/Stale/Superseded）。
+- **不做静默 fallback**：zg 未装 → `unavailable`（明确报错），**绝不**退回 fs 假装 verified——延续"禁止静默失败"。
+- **Provider 可插拔**：`config.evidenceProvider`（默认 fs）+ `config.evidenceProviders`（额外注入）。zg/git/GitHub/IDE 未来只是换 Provider。
+- **验证**：mock 场景 41（fs 默认 verify verified/not_found）/ 42（zg 未装→unavailable，绝不假报 verified）。live zg 测试需先装 `@zvec/zvec-grep` + 建索引。
+
 ## 与 benchmark 的关系
 
 将 dsh-shadow-probe 的"召回成功与否"判定升级为：
