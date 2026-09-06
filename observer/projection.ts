@@ -4,11 +4,11 @@ import { readRel } from "../persistence/files.js";
 import { experienceOf } from "../core/experience.js";
 import { conflictOf } from "./arbitrate.js";
 
-// Observer 透镜 = soul.observer（curated）或默认；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
-export const projectContext = async (fs: any, ws: string, memories: any[], task: string, soul: any, verifyEvidence: any) => {
-  const ob = (soul && soul.observer) || { what_matters: [], what_to_ignore: [] };
-  const matters = Array.isArray(ob.what_matters) ? ob.what_matters : [];
-  const ignore = Array.isArray(ob.what_to_ignore) ? ob.what_to_ignore : [];
+// Observer 透镜 = soul.observer 或注入的 lens（v0.20 支持按 Observer 覆盖）；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
+export const projectContext = async (fs: any, ws: string, memories: any[], task: string, soul: any, verifyEvidence: any, lens?: { preferred?: string[]; avoided?: string[] }) => {
+  const ob = lens || ((soul && soul.observer) || { what_matters: [], what_to_ignore: [] });
+  const matters = Array.isArray(ob.preferred ?? ob.what_matters) ? (ob.preferred ?? ob.what_matters) : [];
+  const ignore = Array.isArray(ob.avoided ?? ob.what_to_ignore) ? (ob.avoided ?? ob.what_to_ignore) : [];
   const tokens = tokenize(task);
   const rel: any[] = []; const excl: string[] = []; const unc: string[] = []; const experiences: any[] = [];
   for (const mm of memories) {
@@ -28,11 +28,14 @@ export const projectContext = async (fs: any, ws: string, memories: any[], task:
   }
   rel.sort((a, b) => b.salience - a.salience);
   const principles = (Array.isArray(soul?.principles) ? soul.principles : []).filter((p: string) => tokens.some((t) => String(p).toLowerCase().includes(t)));
-  return { rel: rel.slice(0, 8), experiences, principles, taste: soul?.taste || null, unc, excl };
+  const visible = rel.slice(0, 8).map((r) => r.exp.situation);
+  const hidden = excl;
+  return { rel: rel.slice(0, 8), experiences, principles, taste: soul?.taste || null, unc, excl, visible, hidden };
 };
 
-export const renderProjection = (p: any, task: string, project: string) => {
+export const renderProjection = (p: any, task: string, project: string, ctx?: any) => {
   const lines = ["[Projection]"];
+  if (ctx) lines.push(`observer ${ctx.observerId} · lens ${ctx.lens || "default"} · intent ${ctx.intent.goal}`);
   lines.push(`scope: project=${project || "?"} · task=${task}`);
   lines.push("relevant:");
   if (p.principles.length) lines.push(`  原则 ${p.principles.join("、")}`);
@@ -41,7 +44,9 @@ export const renderProjection = (p: any, task: string, project: string) => {
   }
   if (p.taste) lines.push(`  偏好 ${JSON.stringify(p.taste)}`);
   lines.push(`current_state: 候选相关 ${p.rel.length} · 不确定 ${p.unc.length} · 排除 ${p.excl.length}`);
+  if (p.visible?.length) lines.push(`visible: ${p.visible.slice(0, 4).join("、")}`);
   if (p.unc.length) lines.push(`uncertainty: ${p.unc.slice(0, 4).join("、")}`);
+  if (p.hidden?.length) lines.push(`hidden: ${p.hidden.slice(0, 6).join("、")}`);
   if (p.excl.length) lines.push(`excluded: ${p.excl.slice(0, 6).join("、")}`);
   return lines.join("\n");
 };

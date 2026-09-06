@@ -1692,4 +1692,89 @@ const todayStr = todayLocal();
   console.log("✔ 场景42 Evidence Gateway(zg 未装)：报 unavailable，绝不静默 fallback 成 verified");
 }
 
+// ─────────────────────────────────────────────
+// 场景 43：Identity 主体锚 —— read_shadow({identity:true}) 从 soul.json 读 身份/价值观/原则/反模式/决策风格/边界/Observer Lens。
+//           Identity 是长期实体（observer 的"主体"），不是一次观察事件的字段。
+// ─────────────────────────────────────────────
+{
+  const store43 = new Map();
+  const fs43 = mkFs(store43);
+  agentsById.set("T43", { id: "T43", session: { header: { cwd: WS } } });
+  const listeners43 = new Map();
+  const services43 = { fs: fs43, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx43 = { get: (k) => services43[k], on: (e, fn) => listeners43.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services43[k] }) };
+  const P43 = { name, inject, apply };
+  P43.apply(ctx43, { summary: { enabled: false }, recall: {} });
+  store43.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+    identity: { name: "architect", role: "域 agent" },
+    values: ["engineering_quality", "minimal_complexity"],
+    principles: ["evidence_before_claim", "no_silent_failure"],
+    anti_patterns: ["premature_optimization", "hidden_state"],
+    decision_style: ["architecture_first", "verify_before_modify"],
+    observerLens: { preferred: ["bundle", "架构"], avoided: ["遗留", "魔法配置"] },
+  }));
+  const r43 = await toolRegistry.get("read_shadow").execute({ identity: true }, { agent: agentsById.get("T43") });
+  assert.ok(String(r43).includes("[Identity]"), "应输出 Identity 段");
+  assert.ok(String(r43).includes("id architect"), "应含 identity.id");
+  assert.ok(String(r43).includes("价值观 engineering_quality、minimal_complexity"), "应含价值观");
+  assert.ok(String(r43).includes("原则 evidence_before_claim"), "应含原则");
+  assert.ok(String(r43).includes("反模式 premature_optimization"), "应含反模式");
+  assert.ok(String(r43).includes("决策风格 architecture_first"), "应含决策风格");
+  assert.ok(String(r43).includes("Observer Lens"), "应含 Observer Lens");
+  console.log("✔ 场景43 Identity：read_shadow({identity:true}) 返回 主体锚（身份/价值观/原则/反模式/决策风格/边界/Observer Lens）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 44：ObserverContext + Intent + realityAnchor —— read_shadow({context:true}) 返回一次观察事件。
+//           验证 observerId / identityRef / goal-oriented intent / asOf / realityAnchor。
+// ─────────────────────────────────────────────
+{
+  const store44 = new Map();
+  const fs44 = mkFs(store44);
+  agentsById.set("T44", { id: "T44", session: { header: { cwd: WS } } });
+  const listeners44 = new Map();
+  const services44 = { fs: fs44, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx44 = { get: (k) => services44[k], on: (e, fn) => listeners44.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services44[k] }) };
+  const P44 = { name, inject, apply };
+  P44.apply(ctx44, { summary: { enabled: false }, recall: {} });
+  store44.set("D:/ws/shadow/soul/soul.json", JSON.stringify({ identity: { name: "architect" } }));
+  const r44 = await toolRegistry.get("read_shadow").execute({ context: true, topic: "数据库慢", goal: "降低 P99", realityAnchor: "known-at-time", asOf: "2026-09-05" }, { agent: agentsById.get("T44") });
+  assert.ok(String(r44).includes("[Observer]"), "应输出 Observer 段");
+  assert.ok(String(r44).includes("observerId T44"), "应含 observerId");
+  assert.ok(String(r44).includes("identityRef architect"), "应含 identityRef（指向 Identity 实体）");
+  assert.ok(String(r44).includes("intent 降低 P99"), "应含 goal-oriented intent");
+  assert.ok(String(r44).includes("asOf 2026-09-05"), "应含 asOf");
+  assert.ok(String(r44).includes("realityAnchor known-at-time"), "应含 realityAnchor");
+  console.log("✔ 场景44 ObserverContext+Intent：read_shadow({context:true}) 返回 观察事件（observerId/identityRef/intent/asOf/realityAnchor）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 45：Observer 一致性 —— 同一个事实（"系统"任务），不同 Observer 透镜（架构师 vs 产品）→ 不同 projection visible/hidden。
+//           证明 dsh-shadow 不是记忆检索，而是观察投影：事实一样，Projection 不同。
+// ─────────────────────────────────────────────
+{
+  const store45 = new Map();
+  const fs45 = mkFs(store45);
+  agentsById.set("T45", { id: "T45", session: { header: { cwd: WS } } });
+  const listeners45 = new Map();
+  const services45 = { fs: fs45, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx45 = { get: (k) => services45[k], on: (e, fn) => listeners45.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services45[k] }) };
+  const P45 = { name, inject, apply };
+  P45.apply(ctx45, { summary: { enabled: false }, recall: {} });
+  store45.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store45.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-ux.md",
+    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+  store45.set("D:/ws/arch/x.js", "export {}");
+  store45.set("D:/ws/product/ux.js", "export {}");
+  const r45a = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T45") });
+  const r45b = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["体验"], avoided: ["重构"] } }, { agent: agentsById.get("T45") });
+  assert.ok(!String(r45a).startsWith("ERR") && !String(r45b).startsWith("ERR"), "Observer 一致性不应报错");
+  assert.ok(String(r45a).includes("visible: 架构/重构"), `架构师视角应看到架构：\n${r45a}`);
+  assert.ok(String(r45b).includes("visible: 产品/体验"), `产品视角应看到用户体验：\n${r45b}`);
+  assert.ok(String(r45a).includes("2026-09-05--090001-ux.md"), "架构师视角应隐藏产品/体验");
+  assert.ok(!String(r45a).includes("visible: 产品/体验"), "架构师视角不应看到产品/体验");
+  console.log("✔ 场景45 Observer 一致性：同一事实、不同 Observer 透镜 → 不同 projection visible/hidden（不是记忆检索，而是观察投影）");
+}
+
 console.log("\nALL PASS ✅");

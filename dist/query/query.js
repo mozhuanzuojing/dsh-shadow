@@ -2,7 +2,7 @@ import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
-import { tokenize, today, ageDaysOf, RECALL_PREFIX } from "../core/util.js";
+import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -10,25 +10,13 @@ import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
 import { kgTrace } from "../observer/observer.js";
 import { readSoul, soulText } from "../soul/soul.js";
+import { readIdentity, renderIdentity } from "../soul/identity.js";
+import { observerContextOf, renderObserverContext } from "../observer/core.js";
 import { tasteOf, renderTaste } from "../soul/taste.js";
 import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
-// Observer v2（ADR-0003 §3-9）：asOf 支持 `{ timestamp, timezone }` 对象，或 YYYY-MM-DD 日期串。
-// 记忆按日期归档，故主过滤按 date；timestamp/timezone 供窗口展示与语义锚定。
-const parseAsOf = (v) => {
-    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v))
-        return { date: v };
-    if (v && typeof v === "object") {
-        const ts = String(v.timestamp || "");
-        const date = ts.slice(0, 10) || String(v.date || v.timestamp || "").slice(0, 10);
-        if (!date)
-            return null;
-        return { date, timestamp: ts || undefined, timezone: v.timezone ? String(v.timezone) : undefined };
-    }
-    return null;
-};
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
     const ws = resolveWorkspace(agent, deps.cwdBySession, deps.config);
@@ -50,6 +38,16 @@ export async function runReadShadow(deps, args, exec) {
         const soul = await readSoul(fs, ws);
         const t = await tasteOf(fs, ws, soul);
         return scrubFinal(RECALL_PREFIX + renderTaste(t) + flushWarn);
+    }
+    // v0.20 Observer Kernel：Identity 主体锚 + ObserverContext（谁在看/为什么看/从哪层看）。
+    if (args?.identity) {
+        const identity = await readIdentity(fs, ws, agent?.id);
+        return scrubFinal(RECALL_PREFIX + renderIdentity(identity) + flushWarn);
+    }
+    if (args?.context) {
+        const identity = await readIdentity(fs, ws, agent?.id);
+        const ctx = observerContextOf(args, String(args?.topic || "").trim(), identity, agent?.id);
+        return scrubFinal(RECALL_PREFIX + renderObserverContext(ctx) + flushWarn);
     }
     const topic = String(args?.topic || "").trim();
     if (!topic) {
@@ -78,9 +76,12 @@ export async function runReadShadow(deps, args, exec) {
     }
     if (args?.project) {
         const soul = await readSoul(fs, ws);
+        const identity = await readIdentity(fs, ws, agent?.id);
+        const ctx = observerContextOf(args, topic, identity, agent?.id);
         const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
-        const p = await projectContext(fs, ws, memories, topic, soul, deps.verifyEvidence);
-        return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project) + flushWarn);
+        const task = `${ctx.intent.goal} ${ctx.intent.question}`.trim() || topic;
+        const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens);
+        return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project, ctx) + flushWarn);
     }
     if (args?.judgment) {
         const js = await judgmentOf(fs, ws, memories, topic);

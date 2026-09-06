@@ -87,3 +87,35 @@ export interface Trace {
     sub?: string;
     source: string;
 }
+/** Identity：主体锚（你是谁、看重什么、怎么决策）。长期实体。 */
+export interface Identity {
+    id: string;
+    name?: string;
+    role?: string;
+    principles: string[];
+    antiPatterns?: string[];
+    decisionStyle?: string[];
+    observerLens?: {
+        preferred?: string[];
+        avoided?: string[];
+    };
+    values?: string[];
+    boundaries?: string[];
+}
+/** Intent：目标导向的观察意图（人观察世界不是随机的——"我为什么现在看这个、想改变什么"）。 */
+export interface Intent {
+    goal: string;
+    question: string;
+    desiredOutcome?: string;
+    constraints?: string[];
+}
+export type RealityAnchor = "known-at-time" | "current" | "historical";
+/** ObserverContext：一次观察事件（是谁在看 + 为什么看 + 从何时/哪层看）。稀疏，不携带 Identity 实体。 */
+export interface ObserverContext {
+    observerId: string;
+    identityRef: string;
+    intent: Intent;
+    asOf?: string;
+    lens?: string;
+    realityAnchor: RealityAnchor;
+}
