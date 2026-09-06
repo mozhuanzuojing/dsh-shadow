@@ -64,6 +64,9 @@ import { writeDelegationContext } from "../delegation/persistence/persist.js";
 import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../recall/render/render.js";
 import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../recall/engine/recall-continuity.js";
 import { writeForgottenRecord } from "../recall/persistence/persist.js";
+import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../adaptation/render/render.js";
+import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../adaptation/engine/adaptation.js";
+import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -356,6 +359,27 @@ export async function runReadShadow(deps, args, exec) {
         if (!v.ok || !v.result)
             return scrubFinal(RECALL_PREFIX + "[RecallValidation Rejected] " + v.reason + flushWarn);
         return scrubFinal(RECALL_PREFIX + renderRecallValidation(v.result) + flushWarn);
+    }
+    // v0.38 Controlled Adaptation Kernel：AdaptationContext / AdaptationChange / AdaptationValidation。
+    // Adaptation = 行为策略调整（How I do），不是身份/目标/价值观演化（Who I am）；不提升 epistemic status / authority。
+    if (String(args?.mode) === "adapt-context") {
+        const c = buildAdaptationContext(args);
+        if (!c.ok || !c.ctx)
+            return scrubFinal(RECALL_PREFIX + "[Adaptation Rejected] " + c.reason + flushWarn);
+        await writeAdaptationContext(fs, ws, c.ctx);
+        return scrubFinal(RECALL_PREFIX + renderAdaptContext(c.ctx) + flushWarn);
+    }
+    if (String(args?.mode) === "adapt-change") {
+        const ch = await buildAdaptationChange(fs, ws, args);
+        if (!ch.ok || !ch.change)
+            return scrubFinal(RECALL_PREFIX + "[AdaptationChange Rejected] " + ch.reason + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderChange(ch.change) + flushWarn);
+    }
+    if (String(args?.mode) === "adapt-validation") {
+        const v = await validateAdaptation(fs, ws, args);
+        if (!v.ok || !v.validation)
+            return scrubFinal(RECALL_PREFIX + "[AdaptationValidation Rejected] " + v.reason + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

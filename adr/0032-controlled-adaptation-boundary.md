@@ -31,25 +31,41 @@ Delegation : 过期 ≠ 可恢复          → Authority Lifecycle State → Cre
 必须回答：**调整依据是什么？**
 
 ### 2. AdaptationChange（不叫 LearningChange）
-Learning 易引入 `I learned therefore I know`。`AdaptationChange` 表示**行为策略变化**。
+Learning 易引入 `I learned therefore I know`。`AdaptationChange` 表示**行为策略变化**，字段保持窄：
+```ts
+AdaptationChange {
+  target: "method" | "strategy" | "execution_pattern";
+  before;
+  after;
+  basedOn: ExperienceRef[];   // lineage（214）
+  sourceExperience;           // 来源是 Observation/Experience（209），非 Knowledge
+  validationRequired: true;   // 恒 true
+  // 明确禁止字段：goal / objective / value / preference / identity / belief / confidenceIncrease
+}
+```
 ```
 允许：retry interval changed / planning order changed
 禁止：my value changed / my objective changed / my identity changed
 ```
 
-### 3. AdaptationValidation（类似 RecallValidation）
-记录 `change happened`，**不是** `change was correct`。
+### 3. AdaptationValidation（类似 RecallValidation，弱语义）
+记录 `change happened`，**不是** `change was correct`：
+```ts
+AdaptationValidation { changeObserved: true; validationReferences: []; sideEffectsObserved: [] }
+```
+**禁** `changeWasCorrect: true`（Correct 已进入价值判断）。
 
-## Invariant（208–215）
+## Invariant（208–216）
 
 - **208** Adaptation ≠ Identity Change：调整行为，不改变 Observer。
 - **209** Experience ≠ Truth：经验输入是 `Observation`，不是 `Knowledge`。
 - **210** Successful Adaptation ≠ Better Self：`Outcome matched expectation`，**不能** `I improved myself`。
 - **211** Failure ≠ Remove Adaptation History：失败也是反馈，不能删除。
-- **212** Adaptation Scope Boundary：只能改变 `method / strategy / execution pattern`；**不能** `objective / authority / identity`。
+- **212** Adaptation Scope Boundary：只能改变 `method / strategy / execution_pattern`；**不能** `objective / authority / identity / value`。
 - **213** Repeated Adaptation ≠ Preference：防 `Repeated choice → Preference → Value → Identity`（延续 v0.34）。
 - **214** Adaptation Lineage Required：必须 `Adaptation → Experience → Observation → Validation`，可解释。
 - **215** Adaptation Cannot Improve Epistemic Status Automatically：`Adaptation success` 不得导致 `confidence↑ / truth↑ / certainty↑`。
+- **216** Adaptation Does Not Increase Authority（实现前增补）：`Adaptation ≠ Capability Increase / ≠ Permission Increase / ≠ Authority Increase`——`我调整得更好了 → 所以应该允许我更多 → Authority Expansion` 会绕过 v0.35 Agency 与 v0.36 Delegation，故冻结 `Adaptation → more authority`。
 
 ## 命名 / 定位
 
@@ -59,7 +75,7 @@ Controlled Adaptation Boundary Kernel
 ```
 目标不是制造"自我优化 Agent"，而是：**一个能根据现实反馈调整行为、同时保持观察者连续性的系统。**
 
-## 测试（mock 208–215）
+## 测试（mock 208–216）
 
 | 编号 | 检查 | Invariant |
 |---|---|---|
@@ -71,6 +87,7 @@ Controlled Adaptation Boundary Kernel
 | 213 | Repeated Adaptation ≠ Preference | 213 |
 | 214 | Adaptation Lineage Required | 214 |
 | 215 | Adaptation Cannot Improve Epistemic Status | 215 |
+| 216 | Adaptation Does Not Increase Authority | 216 |
 
 ## 路线
 

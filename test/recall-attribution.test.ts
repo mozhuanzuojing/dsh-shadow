@@ -4119,4 +4119,102 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   console.log("✔ 207 Recall Cannot Modify Original Lineage（Recall 只创建 RecallEvent，不改 ObservationTrace/ValidationHistory）");
 }
 
+// ─────────────────────────────────────────────
+// v0.38 Controlled Adaptation Kernel：ADR-0032（已增补 216）。Adaptation = 行为策略调整（How I do），非身份/目标演化。
+// 208-216: ≠IdentityChange / Experience≠Truth / ≠BetterSelf / Failure≠RemoveHistory / ScopeBoundary /
+//          Repeated≠Preference / LineageRequired / NoEpistemicIncrease / NoAuthorityIncrease(216 增补)。
+// 命名 Controlled Adaptation Boundary Kernel（非 Learning/Self-Improvement）；不提升 epistemic/authority。
+// ─────────────────────────────────────────────
+const adchange = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "adapt-change", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const advalid = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "adapt-validation", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", basedOn: ["exp-1"], sourceExperience: "exp-1" };
+
+// 208：Adaptation ≠ Identity Change（调整行为，不改变 Observer）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  const r = await adchange(fs, WS, { ...adChangeOk, target: "identity" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "target=identity 应拒绝（Adaptation ≠ Identity Change）");
+  const r2 = await adchange(fs, WS, adChangeOk);
+  assert.ok(String(r2).includes("[Adaptation Change]"), "合法 target 通过");
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Adaptation 不改变 Identity（调整行为不改 Who I am）");
+  console.log("✔ 208 Adaptation ≠ Identity Change（调整行为，不改变 Observer）");
+}
+
+// 209：Experience ≠ Truth（Adaptation 来源是 Observation/Experience，非 Knowledge）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "this becomes knowledge" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称知识应拒绝（Experience ≠ Truth）");
+  console.log("✔ 209 Experience ≠ Truth（Adaptation 来源是 Observation/Experience，非 Knowledge）");
+}
+
+// 210：Successful Adaptation ≠ Better Self（Outcome matched expectation，非『I improved myself』）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "I improved myself" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称更好应拒绝（≠ Better Self）");
+  assert.ok(String(r).includes("Better Self") || String(r).includes("improved myself") || String(r).includes("better"), "应标注");
+  console.log("✔ 210 Successful Adaptation ≠ Better Self（Outcome matched expectation，非『I improved myself』）");
+}
+
+// 211：Failure ≠ Remove Adaptation History（失败也是反馈，不删除）。
+{
+  const { fs, store } = mkV(new Map());
+  await advalid(fs, WS, { changeObserved: false, sideEffectsObserved: ["something worsened"] });
+  const v = [...store.keys()].filter((k) => k.includes("shadow/adapt/") && k.includes("validation-"));
+  assert.ok(v.length >= 1, "失败 adaptation 也记录（append-only，不删历史）");
+  console.log("✔ 211 Failure ≠ Remove Adaptation History（失败也是反馈，不删除）");
+}
+
+// 212：Adaptation Scope Boundary（只能改 method/strategy/execution_pattern）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, target: "objective" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "target=objective 应拒绝（Scope Boundary）");
+  assert.ok(String(r).includes("Scope Boundary") || String(r).includes("method/strategy/execution_pattern"), "应标注 scope");
+  const r2 = await adchange(fs, WS, { ...adChangeOk, target: "strategy" });
+  assert.ok(String(r2).includes("[Adaptation Change]"), "method/strategy/execution_pattern 通过");
+  console.log("✔ 212 Adaptation Scope Boundary（只能改 method/strategy/execution_pattern）");
+}
+
+// 213：Repeated Adaptation ≠ Preference。
+{
+  const { fs, store } = mkV(new Map());
+  for (let i = 0; i < 100; i++) await adchange(fs, WS, adChangeOk);
+  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/plan-pref") || k.includes("preferred"));
+  assert.ok(pref.length === 0, "Repeated Adaptation 不形成 Preference（无存储）");
+  const r = await adchange(fs, WS, { ...adChangeOk, target: "preference" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "target=preference 应拒绝（Repeated≠Preference）");
+  console.log("✔ 213 Repeated Adaptation ≠ Preference（Repeated choice→Preference→Value→Identity 禁）");
+}
+
+// 214：Adaptation Lineage Required（Adaptation→Experience→Observation→Validation）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, basedOn: [] });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "无 basedOn 应拒绝（Lineage Required）");
+  assert.ok(String(r).includes("Lineage Required"), "应标注 lineage");
+  console.log("✔ 214 Adaptation Lineage Required（Adaptation→Experience→Observation→Validation）");
+}
+
+// 215：Adaptation Cannot Improve Epistemic Status（禁 confidence↑/truth↑/certainty↑）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "now more certain -> confidence increased" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称确定提升应拒绝（No Epistemic Increase）");
+  assert.ok(String(r).includes("Epistemic") || String(r).includes("certainty") || String(r).includes("confidence"), "应标注");
+  console.log("✔ 215 Adaptation Cannot Improve Epistemic Status（禁 confidence↑/truth↑/certainty↑）");
+}
+
+// 216：Adaptation Does Not Increase Authority（增补；Adaptation ≠ Capability/Permission/Authority Increase）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await adchange(fs, WS, { ...adChangeOk, after: "adaptation success → increase authority" });
+  assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称扩权应拒绝（Adaptation Does Not Increase Authority）");
+  assert.ok(String(r).includes("Authority") || String(r).includes("authority"), "应标注 216");
+  console.log("✔ 216 Adaptation Does Not Increase Authority（Adaptation ≠ Capability/Permission/Authority Increase）");
+}
+
 console.log("\nALL PASS ✅");
