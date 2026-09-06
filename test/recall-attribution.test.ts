@@ -2166,4 +2166,198 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   console.log("✔ 场景60 Identity：两个候选共存（context-dependent，不互相覆盖）");
 }
 
+// ─────────────────────────────────────────────
+// v0.26 Observer Temporal Kernel：时间坐标系（独立于 Dream）。Graph 是派生索引（可重建，保持 Memory ≠ Evidence）。
+const putTemporalTrace = (fs: any, ws: string, opts: { createdAt: string; visible?: string[]; hidden?: string[]; decision?: string; outcome?: string; state?: any }) =>
+  recordObservationTrace(fs, ws, {
+    observerId: opts.state?.observerId || "T", createdAt: opts.createdAt, realityAnchor: "current",
+    intent: { goal: "test", question: "系统" },
+    projection: { visible: opts.visible || [], hidden: opts.hidden || [], distortion: [] },
+    decision: opts.decision ? { action: opts.decision } : undefined,
+    outcome: opts.outcome ? { actual: opts.outcome } : undefined,
+    uncertainty: { level: 0, reasons: [] },
+    metadata: { source: "manual" },
+    state: opts.state,
+  });
+const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
+  store.set(`D:/ws/shadow/identity/${at}-${v}.json`, JSON.stringify({ version: v, at, core: { observerId: "T", values: [] }, learned: [], currentModel: { decisionStyle: [], antiPatterns: [] } }));
+
+// ─────────────────────────────────────────────
+// 场景 61：TemporalGraph builder —— nodes/edges/sourceTraceIds，可重建（graph.json，无新事实）。
+// ─────────────────────────────────────────────
+{
+  const store61 = new Map();
+  const fs61 = mkFs(store61);
+  agentsById.set("T61", { id: "T61", session: { header: { cwd: WS } } });
+  const listeners61 = new Map();
+  const services61 = { fs: fs61, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx61 = { get: (k) => services61[k], on: (e, fn) => listeners61.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services61[k] }) };
+  const P61 = { name, inject, apply };
+  P61.apply(ctx61, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs61, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"], decision: "边界隔离" });
+  await putTemporalTrace(fs61, WS, { createdAt: "2026-01-02 09:00:00", visible: ["架构"], outcome: "维护成本下降" });
+  const r61 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T61") });
+  assert.ok(!String(r61).startsWith("ERR"), "temporal 不应报错");
+  assert.ok(String(r61).includes("[Temporal Graph]"), "应输出 Temporal Graph");
+  assert.ok(String(r61).includes("nodes 2"), "应有 2 节点");
+  assert.ok(String(r61).includes("followed_by"), "应有时间序边");
+  assert.ok(String(r61).includes("timestamp_order"), "边应带 derivation.rule");
+  assert.ok(String(r61).includes("sourceTraces 2"), "应有 sourceTraceIds");
+  const gj = [...store61.keys()].find((k) => k.includes("shadow/temporal/") && k.endsWith("graph.json"));
+  assert.ok(!!gj, "应持久化 graph.json");
+  assert.ok(store61.get(gj!).includes("sourceTraceIds"), "graph.json 应含 sourceTraceIds（可重建）");
+  console.log("✔ 场景61 TemporalGraph：nodes/edges/sourceTraceIds，可重建（无新事实）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 62：TemporalNode perceptionSnapshot（lens/visible/hidden/distortion）。
+// ─────────────────────────────────────────────
+{
+  const store62 = new Map();
+  const fs62 = mkFs(store62);
+  agentsById.set("T62", { id: "T62", session: { header: { cwd: WS } } });
+  const listeners62 = new Map();
+  const services62 = { fs: fs62, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx62 = { get: (k) => services62[k], on: (e, fn) => listeners62.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services62[k] }) };
+  const P62 = { name, inject, apply };
+  P62.apply(ctx62, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs62, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"], hidden: ["体验"] });
+  const r62 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T62") });
+  assert.ok(String(r62).includes("visible=架构"), "perceptionSnapshot.visible 应含架构");
+  assert.ok(String(r62).includes("hidden=体验"), "perceptionSnapshot.hidden 应含体验");
+  console.log("✔ 场景62 TemporalNode：perceptionSnapshot（visible/hidden/distortion）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 63：TemporalEdge relation + derivation{rule, sourceIds}。
+// ─────────────────────────────────────────────
+{
+  const store63 = new Map();
+  const fs63 = mkFs(store63);
+  agentsById.set("T63", { id: "T63", session: { header: { cwd: WS } } });
+  const listeners63 = new Map();
+  const services63 = { fs: fs63, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx63 = { get: (k) => services63[k], on: (e, fn) => listeners63.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services63[k] }) };
+  const P63 = { name, inject, apply };
+  P63.apply(ctx63, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs63, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"] });
+  await putTemporalTrace(fs63, WS, { createdAt: "2026-01-02 09:00:00", visible: ["架构"], decision: "边界隔离" });
+  const r63 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T63") });
+  assert.ok(String(r63).includes("followed_by"), "应有 followed_by 关系");
+  assert.ok(String(r63).includes("possible_causal_link"), "决策节点应产生 possible_causal_link 枚举");
+  assert.ok(String(r63).includes("decision_follows_observation"), "should carry derivation.rule");
+  console.log("✔ 场景63 TemporalEdge：relation + derivation{rule, sourceIds}");
+}
+
+// ─────────────────────────────────────────────
+// 场景 64：timeline resolution —— replay 用该时间点的 identity 版本，不是当前版本。
+// ─────────────────────────────────────────────
+{
+  const store64 = new Map();
+  const fs64 = mkFs(store64);
+  agentsById.set("T64", { id: "T64", session: { header: { cwd: WS } } });
+  const listeners64 = new Map();
+  const services64 = { fs: fs64, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx64 = { get: (k) => services64[k], on: (e, fn) => listeners64.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services64[k] }) };
+  const P64 = { name, inject, apply };
+  P64.apply(ctx64, { summary: { enabled: false }, recall: {} });
+  seedIdentity(store64, "v1", "2026-01-01");
+  seedIdentity(store64, "v2", "2026-09-01");
+  await putTemporalTrace(fs64, WS, { createdAt: "2026-01-05 09:00:00", visible: ["架构"] });
+  await putTemporalTrace(fs64, WS, { createdAt: "2026-09-05 09:00:00", visible: ["架构"] });
+  const r64 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T64") });
+  const m = String(r64).match(/node .*?· (\d{4}-\d{2}-\d{2}).*?· (v\d+)/g);
+  assert.ok(String(r64).includes("2026-01-05 · v1"), "1月观测应解析 identityVersion=v1");
+  assert.ok(String(r64).includes("2026-09-05 · v2"), "9月观测应解析 identityVersion=v2");
+  console.log("✔ 场景64 timeline resolution：replay 用该时间点的 identity 版本（读取解析，非当前版本）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 65：queryTemporal replay —— 那个时间点我是谁、我看到什么、隐去了什么。
+// ─────────────────────────────────────────────
+{
+  const store65 = new Map();
+  const fs65 = mkFs(store65);
+  agentsById.set("T65", { id: "T65", session: { header: { cwd: WS } } });
+  const listeners65 = new Map();
+  const services65 = { fs: fs65, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx65 = { get: (k) => services65[k], on: (e, fn) => listeners65.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services65[k] }) };
+  const P65 = { name, inject, apply };
+  P65.apply(ctx65, { summary: { enabled: false }, recall: {} });
+  seedIdentity(store65, "v1", "2026-01-01");
+  await putTemporalTrace(fs65, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"], hidden: ["体验"] });
+  const r65 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T65") });
+  assert.ok(String(r65).includes("[Replay]"), "应输出 Replay");
+  assert.ok(String(r65).includes("who v1"), "replay 应给出当时的 identity");
+  assert.ok(String(r65).includes("visible 架构"), "replay 应给出可见");
+  assert.ok(String(r65).includes("hidden 体验"), "replay 应给出隐去");
+  console.log("✔ 场景65 queryTemporal replay：who-was-I / what-seen / what-hidden");
+}
+
+// ─────────────────────────────────────────────
+// 场景 66：queryTemporal compare —— 两个时间点 identity / projection 变化。
+// ─────────────────────────────────────────────
+{
+  const store66 = new Map();
+  const fs66 = mkFs(store66);
+  agentsById.set("T66", { id: "T66", session: { header: { cwd: WS } } });
+  const listeners66 = new Map();
+  const services66 = { fs: fs66, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx66 = { get: (k) => services66[k], on: (e, fn) => listeners66.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services66[k] }) };
+  const P66 = { name, inject, apply };
+  P66.apply(ctx66, { summary: { enabled: false }, recall: {} });
+  seedIdentity(store66, "v1", "2026-01-01");
+  seedIdentity(store66, "v3", "2026-09-01");
+  await putTemporalTrace(fs66, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"], hidden: ["体验"] });
+  await putTemporalTrace(fs66, WS, { createdAt: "2026-09-01 09:00:00", visible: ["架构", "体验"], hidden: [] });
+  const r66 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", from: "2026-01-01", to: "2026-09-01", max_tokens: 4096 }, { agent: agentsById.get("T66") });
+  assert.ok(String(r66).includes("[Compare]"), "应输出 Compare");
+  assert.ok(String(r66).includes("v1 → v3"), "应给出 identity 变化");
+  assert.ok(String(r66).includes("架构"), "应给出 visible 变化");
+  console.log("✔ 场景66 queryTemporal compare：identity / projection 变化");
+}
+
+// ─────────────────────────────────────────────
+// 场景 67：过去不可污染（时间单向）—— replay Jan 用 v1，不用后来 v2。
+// ─────────────────────────────────────────────
+{
+  const store67 = new Map();
+  const fs67 = mkFs(store67);
+  agentsById.set("T67", { id: "T67", session: { header: { cwd: WS } } });
+  const listeners67 = new Map();
+  const services67 = { fs: fs67, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx67 = { get: (k) => services67[k], on: (e, fn) => listeners67.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services67[k] }) };
+  const P67 = { name, inject, apply };
+  P67.apply(ctx67, { summary: { enabled: false }, recall: {} });
+  seedIdentity(store67, "v1", "2026-01-01");
+  seedIdentity(store67, "v2", "2026-09-01");
+  await putTemporalTrace(fs67, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"] });
+  const r67 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T67") });
+  assert.ok(String(r67).includes("who v1"), "replay Jan 应用 v1");
+  assert.ok(!String(r67).includes("who v2"), "replay Jan 不应被后来的 v2 污染");
+  console.log("✔ 场景67 过去不可污染：replay Jan 用 v1，不用后来 v2（时间单向）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 68：同一事实、不同观察状态 → visible/hidden/distortion 不同（Observer trajectory，不是 event log）。
+// ─────────────────────────────────────────────
+{
+  const store68 = new Map();
+  const fs68 = mkFs(store68);
+  agentsById.set("T68", { id: "T68", session: { header: { cwd: WS } } });
+  const listeners68 = new Map();
+  const services68 = { fs: fs68, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx68 = { get: (k) => services68[k], on: (e, fn) => listeners68.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services68[k] }) };
+  const P68 = { name, inject, apply };
+  P68.apply(ctx68, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs68, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"], state: { focus: "deep" } });
+  await putTemporalTrace(fs68, WS, { createdAt: "2026-01-02 09:00:00", visible: ["体验"], state: { focus: "broad" } });
+  const r68 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T68") });
+  assert.ok(String(r68).includes("visible=架构"), "观察A应见架构");
+  assert.ok(String(r68).includes("visible=体验"), "观察B应见体验");
+  const gj = [...store68.keys()].find((k) => k.includes("shadow/temporal/") && k.endsWith("graph.json"));
+  assert.ok(!!gj && store68.get(gj!).includes("focus"), "graph.json 应记录不同 observerState（不同观察状态）");
+  console.log("✔ 场景68 同事实不同观察：visible/hidden/distortion 不同（Observer trajectory，非 event log）");
+}
+
 console.log("\nALL PASS ✅");

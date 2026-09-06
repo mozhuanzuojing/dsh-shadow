@@ -49,6 +49,17 @@ v0.26 至少支持：① replay 一个节点（该时刻 身份/intent/projectio
 **做**：TemporalNode / TemporalEdge / TemporalGraph builder / timeline resolution / temporal query / immutable。
 **不做**：Dream、Hypothesis、Prediction、World Model。
 
+## 附录：v0.26 实现说明（6 条 checklist 已落地）
+
+1. **可重建**：`shadow/temporal/<date>/graph.json` 存 `{graphVersion, generatedAt, sourceRange, sourceTraceIds, nodes, edges}`（含 sourceTraceIds）；**无新事实/新知识/新 memory**。`temporal/persistence.ts`。
+2. **TemporalNode 最终形状**：`stateSnapshot{identityVersion, observerState, intent}` + `perceptionSnapshot{lens, visible, hidden, distortion}` + `evidenceLinks` + `sourceTraceIds` + `observerContextHash?`（预留不计算）。`temporal/node.ts`。
+3. **TemporalEdge**：`{from, to, relation(followed_by|learned_from|evolved_into|contradicted_by|possible_causal_link), confidence, derivation{rule, sourceIds}}`。默认 `followed_by`(`timestamp_order`)；决策节点→`possible_causal_link`(`decision_follows_observation`)——高置信枚举，不注入 World Model。`temporal/edge.ts`。
+4. **timeline resolution**：`resolveIdentityAt(versions, timestamp)` 读时解析（`pre-v1` 兜底），**不回写** trace。`temporal/timeline.ts`。
+5. **queryTemporal**：`{replay, at}` / `{compare, from, to}`（replay=who/visible/hidden/distortion；compare=identity v→v + projection 变化）。`temporal/query.ts`。
+6. **buildTemporalGraph**：`readObservationTraces`→按 range 过滤→per-trace resolve identity→nodes→edges。`temporal/builder.ts`。`read_shadow({mode:"temporal"})`（at→replay；from+to→compare；否则渲染 graph）。
+
+mock 61–68 验证：graph builder+可重建 / perceptionSnapshot / edge+derivation / timeline resolution / replay / compare / 过去不可污染(v1 不用 v2) / 同事实不同观察(Observer trajectory 非 event log)。
+
 ## 命名
 
 v0.26 内部名 **Observer Temporal Kernel**；不是"Dream 输入准备"。

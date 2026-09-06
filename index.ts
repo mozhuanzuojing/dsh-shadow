@@ -113,6 +113,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             minRecency: { type: "number", description: "Identity 时间稳定闸门：recency 下限（默认 0.4）。与 mode:identity 配合。" },
             maxContradiction: { type: "number", description: "Identity 反证闸门：contradiction 上限（默认 0.3）。与 mode:identity 配合。" },
             halfLifeDays: { type: "number", description: "Identity 时间衰减半衰期（天，默认 90）。与 mode:identity 配合。" },
+            at: { type: "string", description: "Temporal replay 时间点（YYYY-MM-DD），与 mode:temporal 配合。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },

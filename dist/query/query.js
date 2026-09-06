@@ -22,6 +22,9 @@ import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.
 import { reflectOf, renderReflection } from "../reflection/engine.js";
 import { readCurrentIdentity } from "../identity/timeline.js";
 import { advanceIdentity, renderEvaluator } from "../identity/evaluator.js";
+import { buildTemporalGraph } from "../temporal/builder.js";
+import { writeTemporalGraph } from "../temporal/persistence.js";
+import { queryTemporal, renderTemporalGraph, renderReplay, renderCompare } from "../temporal/query.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
@@ -47,6 +50,16 @@ export async function runReadShadow(deps, args, exec) {
             halfLifeDays: Math.max(1, Number(args?.halfLifeDays) || 90),
         });
         return scrubFinal(RECALL_PREFIX + renderEvaluator(decisions, model) + flushWarn);
+    }
+    // v0.26 Observer Temporal Kernel：建 Temporal Graph（时间坐标系，独立于 Dream）；at→replay / from+to→compare。
+    if (String(args?.mode) === "temporal") {
+        const graph = await buildTemporalGraph(fs, ws, { from: String(args?.from || ""), to: String(args?.to || "") });
+        await writeTemporalGraph(fs, ws, graph);
+        if (args?.at)
+            return scrubFinal(RECALL_PREFIX + renderReplay(queryTemporal(graph, { type: "replay", at: String(args.at) })) + flushWarn);
+        if (args?.from && args?.to)
+            return scrubFinal(RECALL_PREFIX + renderCompare(queryTemporal(graph, { type: "compare", from: String(args.from), to: String(args.to) })) + flushWarn);
+        return scrubFinal(RECALL_PREFIX + renderTemporalGraph(graph) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

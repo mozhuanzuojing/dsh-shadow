@@ -1,0 +1,52 @@
+import type { TemporalGraph, TemporalQuery } from "./types.js";
+export declare const queryTemporal: (graph: TemporalGraph, q: TemporalQuery) => {
+    type: string;
+    found: boolean;
+    at?: undefined;
+    observer?: undefined;
+    intent?: undefined;
+    visible?: undefined;
+    hidden?: undefined;
+    distortion?: undefined;
+    evidence?: undefined;
+    from?: undefined;
+    to?: undefined;
+    identityChange?: undefined;
+    projectionChange?: undefined;
+} | {
+    type: string;
+    found: boolean;
+    at: string;
+    observer: string;
+    intent: import("../core/types.js").Intent;
+    visible: string[];
+    hidden: string[];
+    distortion: string[];
+    evidence: string[];
+    from?: undefined;
+    to?: undefined;
+    identityChange?: undefined;
+    projectionChange?: undefined;
+} | {
+    at?: undefined;
+    observer?: undefined;
+    intent?: undefined;
+    visible?: undefined;
+    hidden?: undefined;
+    distortion?: undefined;
+    evidence?: undefined;
+    type: string;
+    found: boolean;
+    from: string;
+    to: string;
+    identityChange: string;
+    projectionChange: {
+        visibleA: string[];
+        visibleB: string[];
+        distortionA: string[];
+        distortionB: string[];
+    };
+};
+export declare const renderTemporalGraph: (g: TemporalGraph) => string;
+export declare const renderReplay: (r: any) => string;
+export declare const renderCompare: (r: any) => string;
