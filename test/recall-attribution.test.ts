@@ -2360,4 +2360,157 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   console.log("✔ 场景68 同事实不同观察：visible/hidden/distortion 不同（Observer trajectory，非 event log）");
 }
 
+// ─────────────────────────────────────────────
+// v0.27 Observer Sleep Kernel：SleepWindow → Offline Compression → DreamArtifact + Hypothesis(pending)。
+// 只产候选结构，不产 Principle/Knowledge/Identity；无 LLM。
+// ─────────────────────────────────────────────
+// 场景 69：SleepWindow 隔离当前会话（excluded 恒 true，防观察污染）。
+{
+  const store69 = new Map();
+  const fs69 = mkFs(store69);
+  agentsById.set("T69", { id: "T69", session: { header: { cwd: WS } } });
+  const listeners69 = new Map();
+  const services69 = { fs: fs69, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx69 = { get: (k) => services69[k], on: (e, fn) => listeners69.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services69[k] }) };
+  const P69 = { name, inject, apply };
+  P69.apply(ctx69, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs69, WS, { createdAt: "2026-01-01 09:00:00", decision: "边界隔离", outcome: "维护成本下降" });
+  const r69 = await toolRegistry.get("read_shadow").execute({ mode: "offline", trigger: "scheduled", max_tokens: 4096 }, { agent: agentsById.get("T69") });
+  assert.ok(String(r69).includes("[SleepWindow]"), "应输出 SleepWindow");
+  assert.ok(String(r69).includes("trigger scheduled"), "应含 trigger");
+  assert.ok(String(r69).includes("excluded currentConversation=true externalInput=true"), "应隔离当前会话/外部输入");
+  console.log("✔ 场景69 SleepWindow：隔离当前会话/外部输入（excluded 恒 true，防观察污染）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 70：TemporalGraph → DreamArtifact 可重建（provenance：sourceNodeIds/sourceTemporalGraphVersion）。
+// ─────────────────────────────────────────────
+{
+  const store70 = new Map();
+  const fs70 = mkFs(store70);
+  agentsById.set("T70", { id: "T70", session: { header: { cwd: WS } } });
+  const listeners70 = new Map();
+  const services70 = { fs: fs70, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx70 = { get: (k) => services70[k], on: (e, fn) => listeners70.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services70[k] }) };
+  const P70 = { name, inject, apply };
+  P70.apply(ctx70, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 6; i++) await putTemporalTrace(fs70, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "维护成本下降" });
+  await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T70") });
+  const gj = [...store70.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  assert.ok(!!gj, "应持久化 dream.json");
+  const art = store70.get(gj!);
+  assert.ok(art!.includes("sourceTemporalGraphVersion"), "dream 应含 sourceTemporalGraphVersion");
+  assert.ok(art!.includes("sourceNodeIds"), "dream 应含 sourceNodeIds（可重建 provenance）");
+  assert.ok(art!.includes("generatedHypothesisIds"), "dream 应含 generatedHypothesisIds");
+  console.log("✔ 场景70 TemporalGraph→DreamArtifact：provenance 可重建（sourceNodeIds/graphVersion）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 71：Pattern 生成 Hypothesis 但不产生 Principle（Observation，非 Conclusion）。
+// ─────────────────────────────────────────────
+{
+  const store71 = new Map();
+  const fs71 = mkFs(store71);
+  agentsById.set("T71", { id: "T71", session: { header: { cwd: WS } } });
+  const listeners71 = new Map();
+  const services71 = { fs: fs71, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx71 = { get: (k) => services71[k], on: (e, fn) => listeners71.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services71[k] }) };
+  const P71 = { name, inject, apply };
+  P71.apply(ctx71, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 5; i++) await putTemporalTrace(fs71, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
+  const r71 = await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T71") });
+  assert.ok(String(r71).includes("hypothesis"), "应生成 Hypothesis");
+  assert.ok(String(r71).includes("association frequency"), "应是结构性 Observation（含频率），非断言");
+  assert.ok(!String(r71).includes("原则"), "Dream 不应产出 Principle");
+  assert.ok(!String(r71).includes("应该"), "Dream 不应产出规范性结论");
+  const gj = [...store71.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  assert.ok(store71.get(gj!).includes("association frequency"), "pattern observation 应持久化（结构+频率）");
+  assert.ok(store71.get(gj!).includes("generatedHypothesisIds"), "dream 应记录 generatedHypothesisIds");
+  assert.ok(!store71.get(gj!).includes("principle"), "DreamArtifact 不应含 principle 字段");
+  console.log("✔ 场景71 Pattern→Hypothesis：产出 Observation 不产 Principle");
+}
+
+// ─────────────────────────────────────────────
+// 场景 72：AlternativeExplanation 存在（≤3，反确认偏差）。
+// ─────────────────────────────────────────────
+{
+  const store72 = new Map();
+  const fs72 = mkFs(store72);
+  agentsById.set("T72", { id: "T72", session: { header: { cwd: WS } } });
+  const listeners72 = new Map();
+  const services72 = { fs: fs72, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx72 = { get: (k) => services72[k], on: (e, fn) => listeners72.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services72[k] }) };
+  const P72 = { name, inject, apply };
+  P72.apply(ctx72, { summary: { enabled: false }, recall: {} });
+  for (let i = 0; i < 5; i++) await putTemporalTrace(fs72, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
+  await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T72") });
+  const gj = [...store72.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const art = store72.get(gj!);
+  const altCount = (art!.match(/alternativeExplanation/g) || []).length;
+  const alts = (art!.match(/"description"/g) || []).length;
+  assert.ok(altCount >= 1, "Hypothesis 应含 alternativeExplanation");
+  assert.ok(alts <= 3, "alternatives 应 ≤3");
+  assert.ok(art!.includes("falsification"), "Hypothesis 应含 falsification");
+  console.log("✔ 场景72 AlternativeExplanation：≤3 个替代解释 + falsification（反确认偏差）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 73：无 Pattern → no_pattern（empty dream，不强迫产出）。
+// ─────────────────────────────────────────────
+{
+  const store73 = new Map();
+  const fs73 = mkFs(store73);
+  agentsById.set("T73", { id: "T73", session: { header: { cwd: WS } } });
+  const listeners73 = new Map();
+  const services73 = { fs: fs73, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx73 = { get: (k) => services73[k], on: (e, fn) => listeners73.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services73[k] }) };
+  const P73 = { name, inject, apply };
+  P73.apply(ctx73, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs73, WS, { createdAt: "2026-01-01 09:00:00", visible: ["架构"] }); // 无 decision/outcome
+  const r73 = await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T73") });
+  assert.ok(String(r73).includes("no_pattern"), "无结构应返回 no_pattern");
+  assert.ok(String(r73).includes("patterns 0"), "不应产出 pattern");
+  assert.ok(String(r73).includes("hypotheses 0"), "不应产出 hypothesis");
+  console.log("✔ 场景73 无 Pattern→no_pattern（不为了有输出而找规律）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 74：Dream 不修改 Identity。
+// ─────────────────────────────────────────────
+{
+  const store74 = new Map();
+  const fs74 = mkFs(store74);
+  agentsById.set("T74", { id: "T74", session: { header: { cwd: WS } } });
+  const listeners74 = new Map();
+  const services74 = { fs: fs74, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx74 = { get: (k) => services74[k], on: (e, fn) => listeners74.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services74[k] }) };
+  const P74 = { name, inject, apply };
+  P74.apply(ctx74, { summary: { enabled: false }, recall: {} });
+  seedIdentity(store74, "v1", "2026-01-01");
+  for (let i = 0; i < 5; i++) await putTemporalTrace(fs74, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
+  await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T74") });
+  const idFiles = [...store74.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Dream 不应创建/推进 identity 版本");
+  console.log("✔ 场景74 Dream 不修改 Identity（不创建/推进 identity 版本）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 75：Dream 不修改 Memory（不写 memory 文件）。
+// ─────────────────────────────────────────────
+{
+  const store75 = new Map();
+  const fs75 = mkFs(store75);
+  agentsById.set("T75", { id: "T75", session: { header: { cwd: WS } } });
+  const listeners75 = new Map();
+  const services75 = { fs: fs75, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx75 = { get: (k) => services75[k], on: (e, fn) => listeners75.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services75[k] }) };
+  const P75 = { name, inject, apply };
+  P75.apply(ctx75, { summary: { enabled: false }, recall: {} });
+  await putTemporalTrace(fs75, WS, { createdAt: "2026-01-01 09:00:00", decision: "边界隔离", outcome: "返工下降" });
+  await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T75") });
+  const memFiles = [...store75.keys()].filter((k) => /\/(\d{4}-\d{2}-\d{2})\/[^/]+\.md$/.test(k) && !k.includes("shadow/observation/") && !k.includes("shadow/reflection/"));
+  assert.ok(memFiles.length === 0, "Dream 不应写 memory 文件");
+  console.log("✔ 场景75 Dream 不修改 Memory（不写 memory 文件）");
+}
+
 console.log("\nALL PASS ✅");

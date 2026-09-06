@@ -96,3 +96,16 @@ v0.30 World Model
 ## 10. 演进
 
 dsh-shadow 已定位为 **Artificial Observer Runtime**：Identity → Observer → Temporal Continuity → Offline Compression → Hypothesis Formation → Reality Validation。v0.28 决定它是"会自我观察的 Agent"还是"会自我幻想的 Agent"。
+
+---
+
+## 附录：v0.27 实现说明（6 个工程细节已落地）
+
+1. **SleepWindow 不可变输入**：`dream/sleep.ts` `buildSleepWindow({observerId, from, to, trigger})` → `{id, observerId, startTime, endTime, trigger, includedTimelineRange, excluded{currentConversation:true, externalInput:true}}`。
+2. **DreamArtifact 记录 compression provenance**：`{id, observerId, sleepWindowId, sourceTemporalGraphVersion, sourceNodeIds, sourceEdgeIds, compressionMethod, patterns, generatedHypothesisIds, createdAt}`——可回答"这个梦是怎么来的"。
+3. **Pattern 输出是 Observation 非 Conclusion**：`dream/compress.ts` `detectPatterns` 产出"在 N 个 temporal sequence 中，出现 X，随后 Y，association frequency F"（结构+频率+候选解释），**不含"原因/规律"**（causality 归 v0.28）。
+4. **AlternativeExplanation ≤3**：`hypothesize` 生成 3 个模板替代解释（随机共现/未观察变量/样本偏差），`supportingEvidence` 空（待 v0.28 填充）。
+5. **Hypothesis 生命周期冻结**：`verification.status:"pending"`，v0.27 只 generated→pending；**无 confidence 增加**（无未来证据）。
+6. **"无梦结果"**：无 pattern 时返回 `{status:"no_pattern", patterns:[], hypotheses:[]}`——不为了有输出而找规律（最大幻觉来源之一）。
+
+mock 69–75 验证：SleepWindow 隔离会话 / TemporalGraph→DreamArtifact 可重建 / Pattern→Hypothesis 不产 Principle / AlternativeExplanation≤3 / 无 Pattern→no_pattern / Dream 不修改 Identity / Dream 不修改 Memory。无 LLM、无 Identity/Knowledge 写入、Hypothesis pending-only、TemporalGraph-only 输入。

@@ -28,6 +28,9 @@ import { advanceIdentity, renderEvaluator } from "../identity/evaluator.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
 import { writeTemporalGraph } from "../temporal/persistence.js";
 import { queryTemporal, renderTemporalGraph, renderReplay, renderCompare } from "../temporal/query.js";
+import { buildSleepWindow, renderSleepWindow } from "../dream/sleep.js";
+import { offlineCompression, buildDreamArtifact, renderDreamResult } from "../dream/compress.js";
+import { writeDream } from "../dream/persist.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
@@ -62,6 +65,14 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     if (args?.at) return scrubFinal(RECALL_PREFIX + renderReplay(queryTemporal(graph, { type: "replay", at: String(args.at) })) + flushWarn);
     if (args?.from && args?.to) return scrubFinal(RECALL_PREFIX + renderCompare(queryTemporal(graph, { type: "compare", from: String(args.from), to: String(args.to) })) + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderTemporalGraph(graph) + flushWarn);
+  }
+  // v0.27 Observer Sleep Kernel：SleepWindow → Offline Compression → DreamArtifact + Hypothesis(pending)。
+  if (String(args?.mode) === "offline") {
+    const sw = buildSleepWindow({ observerId: agent?.id || "unknown", from: String(args?.from || ""), to: String(args?.to || today()), trigger: (args?.trigger as any) || "scheduled" });
+    const result = await offlineCompression(fs, ws, { observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to });
+    const artifact = await buildDreamArtifact(fs, ws, { id: sw.id, observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to }, result);
+    await writeDream(fs, ws, { artifact, result });
+    return scrubFinal(RECALL_PREFIX + renderSleepWindow(sw) + "\n" + renderDreamResult(result) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
