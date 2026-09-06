@@ -562,6 +562,10 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   assert.equal(done0.scope, "implicit", "resolveShadowScope 返回隐式 scope");
   const done1: any = resolveShadowScope({}, cwdEmpty, { shadowRoot: "C:/snb" });
   assert.equal(done1.scope, "explicit", "resolveShadowScope 返回显式 scope");
+  // 折中兜底：既无显式 shadowRoot/projectRoot、又解析不出 session cwd → 回退 ~/.dsh-shadow（可写，而非 none/不写）。
+  const done2: any = resolveShadowScope({}, cwdEmpty, {});
+  assert.equal(done2.scope, "fallback", "无 cwd 时回退 fallback scope");
+  assert.ok(typeof done2.ws === "string" && done2.ws.length > 0 && done2.ws.includes(".dsh-shadow"), "fallback ws 指向 ~/.dsh-shadow");
 
   // ── 集成：带 shadowRoot 的插件实例，写/读都落在 sandbox ──
   const mkFs = (m: Map<string, string>) => ({

@@ -1,4 +1,4 @@
-export type ShadowScopeKind = "explicit" | "implicit" | "none";
+export type ShadowScopeKind = "explicit" | "implicit" | "fallback" | "none";
 export interface ShadowScope {
     scope: ShadowScopeKind;
     ws: string;

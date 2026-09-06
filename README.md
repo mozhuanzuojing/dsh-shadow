@@ -69,7 +69,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 目录位置
 
-`<工作区>/shadow/<日期>/<时刻>-<主题slug>.md`。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。
+`<工作区>/shadow/<日期>/<时刻>-<主题slug>.md`。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。解析优先级：显式 `shadowRoot`/`projectRoot` → session cwd → **兜底 `~/.dsh-shadow`**（仅当连 cwd 都解析不出时，保证可写而非静默不写）。
 
 ## 投影模式（DSH agent 预设）
 
