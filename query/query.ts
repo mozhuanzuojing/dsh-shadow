@@ -50,6 +50,10 @@ import { writeGraph } from "../world/persistence/persist.js";
 import { createRepresentationFromClaims, renderAdmission } from "../world/guard/claim-admission.js";
 import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../world/guard/relation-guard.js";
 import { explain } from "../world/explain/explain.js";
+import { simulate, applyRule } from "../simulation/engine/simulator.js";
+import { assertAssumptionAndNotFact } from "../simulation/guard/assumption-guard.js";
+import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/guard/reality-boundary.js";
+import { renderOutcome } from "../simulation/explain/explain.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -199,6 +203,19 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const supportedSubject = claims.find((c) => c.status === "supported" && (!subject || c.subjectRef === subject || c.subject === subject));
     const obss = await readObservations(fs, ws, supportedSubject ? (supportedSubject.subjectRef || supportedSubject.subject) : subject);
     return scrubFinal(RECALL_PREFIX + explain(graph, subject, obss, claims) + flushWarn);
+  }
+  // v0.32 Counterfactual Simulation：Simulation 是 Representation 的函数（+显式假设+规则），不产 RealityClaim/不改 Identity。
+  if (String(args?.mode) === "simulate") {
+    const condition = String(args?.condition || "");
+    const a = assertAssumptionAndNotFact(condition);
+    if (!a.ok) return scrubFinal(RECALL_PREFIX + "[Simulation Rejected] " + a.reason + "（Assumption ≠ Fact：须 'Assume X'，禁 'X will cause'）" + flushWarn);
+    const basedOn = (args?.basedOn as string[]) || [String(args?.subject || "")].filter(Boolean);
+    const scenario = { id: `sc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, basedOnRepresentationIds: basedOn, initialState: [], changedConditions: [condition], assumptions: [condition], uncertainty: 0.5 };
+    const outcome = simulate(scenario);
+    const b = assertNoRealityFabrication(outcome);
+    if (!b.ok) return scrubFinal(RECALL_PREFIX + `[Simulation Rejected] ${b.reason}` + flushWarn);
+    if (!outcomeHasLineage(outcome)) return scrubFinal(RECALL_PREFIX + "[Simulation Rejected] 无 derivedFrom（lineage 不完整）" + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderOutcome(outcome) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};

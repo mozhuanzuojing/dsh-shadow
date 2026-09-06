@@ -76,3 +76,15 @@ Reality → Representation → Simulation → Action → Reality Feedback
 ## 一句话
 
 dsh-shadow 已完成"认识自己→认识现实→表示现实"；v0.32 进入"探索可能现实"。这一步是**行动前推演系统**的入口，边界必须先锁。
+
+---
+
+## 附录：v0.32 实现说明（补充 A/B 已落地）
+
+1. **Simulation 是 Representation 的函数（+显式假设+规则），不是 Reality 的函数**：`simulation/engine/simulator.ts`——`SimulationScenario{changedConditions:"Assume X"}` + `SimulationRule{inputPattern, transformation, confidence, source}` → `SimulationOutcome`。`Rule ≠ Reality Relation`（只是模拟器推演规则）。
+2. **Outcome 携带 epistemicStatus**：`SimulationOutcome{status: hypothetical|explored|compared, derivedFrom, assumptions, rules, stateAfter("suggests ... may occur"), uncertainty}`——**禁 predicted/confirmed/expected**。
+3. 守卫（运行时约束）：`simulation/guard/assumption-guard.ts`（`Assume X` 允许、`X will cause` 拒绝——Assumption ≠ Fact）+ `reality-boundary.ts`（outcome 只 hypothetical、必须 `derivedFrom` lineage、禁 RealityClaim 反写）。
+
+结构：`simulation/{types/{scenario,state,rule,outcome}, engine/simulator, guard/{assumption-guard,reality-boundary}, explain/explain}.ts`。`mode:"simulate"`。
+
+mock 131–138 验证：SimulationOutcome 不产 RealityClaim(仅 hypothetical) / 不改 Identity / lineage 完整(derivedFrom) / Assumption≠Fact / 不入 Knowledge / 多结果允许冲突(不 winner) / Rule≠Reality Relation / 不反向污染 Representation。

@@ -3219,4 +3219,89 @@ const repClaim = async (fs: any, ws: string, subject: string, observation: strin
   console.log("✔ 130 Representation 不直接驱动 Decision（属 Planning/Decision Hypothesis 层）");
 }
 
+// ─────────────────────────────────────────────
+// v0.32 Counterfactual Simulation：Simulation 是 Representation 的函数(+假设+规则)，不产 RealityClaim/不改 Identity。
+// ─────────────────────────────────────────────
+const sim = async (fs: any, ws: string, condition: string, basedOn?: string[]) => toolRegistry.get("read_shadow").execute({ mode: "simulate", condition, basedOn, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 131：SimulationOutcome 不产生 RealityClaim/Evidence（status 仅 hypothetical）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await sim(fs, WS, "Assume API latency doubles", ["rep-1"]);
+  assert.ok(String(r).includes("status hypothetical"), "outcome 应 hypothetical");
+  assert.ok(!String(r).includes("RealityClaim") && !String(r).includes("RealityEvidence"), "不产 RealityClaim/Evidence");
+  assert.ok(!String(r).includes("status predicted") && !String(r).includes("status confirmed") && !String(r).includes("status expected"), "无 predicted/confirmed/expected 状态");
+  console.log("✔ 131 SimulationOutcome 不产生 RealityClaim（status 仅 hypothetical）");
+}
+
+// 132：Simulation 不修改 Identity。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await sim(fs, WS, "Assume capacity decreases", ["rep-1"]);
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Simulation 不修改 Identity");
+  console.log("✔ 132 Simulation 不修改 Identity");
+}
+
+// 133：Simulation lineage 完整（derivedFrom 必须保留）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await sim(fs, WS, "Assume latency increases", ["rep-9"]);
+  assert.ok(String(r).includes("derivedFrom rep-9"), "lineage 应保留 derivedFrom");
+  console.log("✔ 133 Simulation lineage 完整（基于什么）");
+}
+
+// 134：Assumption ≠ Fact（Assume X 允许，X will cause 拒绝）。
+{
+  const { fs, store } = mkV(new Map());
+  const rBad = await sim(fs, WS, "API latency will double", ["rep-1"]);
+  assert.ok(String(rBad).includes("Simulation Rejected"), "X will cause 应拒绝");
+  assert.ok(String(rBad).includes("Assumption ≠ Fact"), "应标注 Assumption ≠ Fact");
+  const rGood = await sim(fs, WS, "Assume API latency doubles", ["rep-1"]);
+  assert.ok(String(rGood).includes("[Simulation Outcome]"), "Assume X 应通过");
+  console.log("✔ 134 Assumption ≠ Fact：Assume 允许，will 拒绝");
+}
+
+// 135：Simulation Result 不进入 Knowledge。
+{
+  const { fs, store } = mkV(new Map());
+  await sim(fs, WS, "Assume capacity decreases", ["rep-1"]);
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/fact"));
+  assert.ok(knows.length === 0, "Simulation Result 不进入 knowledge/world");
+  console.log("✔ 135 Simulation Result 不进入 Knowledge");
+}
+
+// 136：多个 Simulation 结果允许冲突（不 winner，保留 uncertainty）。
+{
+  const { fs, store } = mkV(new Map());
+  const r1 = await sim(fs, WS, "Assume latency increases", ["rep-1"]);
+  const r2 = await sim(fs, WS, "Assume capacity fixed", ["rep-1"]);
+  assert.ok(String(r1).includes("[Simulation Outcome]") && String(r2).includes("[Simulation Outcome]"), "两个都可能世界并存");
+  assert.ok(!String(r1).includes("winner") && !String(r2).includes("winner"), "不选 winner");
+  console.log("✔ 136 多 Simulation 结果允许冲突（保留 uncertainty，不 winner）");
+}
+
+// 137：Simulation Rule ≠ Reality Relation（关系作假设→possible impact，非 RealityClaim）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await sim(fs, WS, "Assume B removed", ["rep-A", "rep-B"]);
+  assert.ok(String(r).includes("may occur"), "只作 possible impact（suggests ... may）");
+  assert.ok(!String(r).includes("depends_on") && !String(r).includes("causes"), "不产 RealityClaim depends_on/causes");
+  assert.ok(!String(r).includes("status reality"), "关系不升级 Reality");
+  console.log("✔ 137 Simulation Rule ≠ Reality Relation：simulation supports hypothesis，不产 RealityClaim");
+}
+
+// 138：Simulation 不反向污染 Representation（模拟后 Representation 不变）。
+{
+  const { fs, store } = mkV(new Map());
+  const before = JSON.stringify([...store.keys()].filter((k) => k.includes("shadow/model/")));
+  await repClaim(fs, WS, "svcM", "Service-M exposes /users");
+  await sim(fs, WS, "Assume latency increases", ["rep-1"]);
+  const repKeys = [...store.keys()].filter((k) => k.includes("shadow/model/"));
+  assert.ok(repKeys.length >= 2, "Representation/claim 仍存在（模拟不改模型）");
+  assert.ok(![...store.keys()].some((k) => k.includes("shadow/world") && k.includes("causal")), "模拟不改 RepresentationGraph");
+  console.log("✔ 138 Simulation 不反向污染 Representation（模拟不改观察者现实描述）");
+}
+
 console.log("\nALL PASS ✅");

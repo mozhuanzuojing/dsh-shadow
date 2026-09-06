@@ -144,6 +144,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             claimId: { type: "string", description: "RealityClaim id（与 mode:model 查询配合）。" },
             relation: { type: "string", description: "RelationHypothesis 关系（如 depends_on；与 mode:world-relation 配合）。" },
             evidence: { type: "array", items: { type: "string" }, description: "RelationHypothesis 证据（RealityClaim id，与 mode:world-relation 配合）。" },
+            condition: { type: "string", description: "Simulation 条件（须 'Assume X'，禁 'X will cause'；与 mode:simulate 配合）。" },
+            basedOn: { type: "array", items: { type: "string" }, description: "Simulation basedOn（Representation id，lineage 从属；与 mode:simulate 配合）。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
