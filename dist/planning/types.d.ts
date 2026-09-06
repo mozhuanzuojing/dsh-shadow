@@ -28,3 +28,11 @@ export interface PlanEvaluation {
     tradeoffs: PlanTradeoff[];
     unresolvedQuestions: string[];
 }
+export interface PlanningComparison {
+    candidates: {
+        id: string;
+        satisfiedConstraints: string[];
+        violatedConstraints: string[];
+        uncertainty: number;
+    }[];
+}

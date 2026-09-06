@@ -24,3 +24,7 @@ export interface PlanEvaluation {
   unresolvedQuestions: string[];
   // comparison result，禁 winner/bestPlan/optimal
 }
+// PlanningComparison：非 "谁最好"，而是"哪些约束被满足/违反"。
+export interface PlanningComparison {
+  candidates: { id: string; satisfiedConstraints: string[]; violatedConstraints: string[]; uncertainty: number }[];
+}

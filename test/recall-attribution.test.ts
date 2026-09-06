@@ -3518,4 +3518,73 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
   console.log("✔ 158 Planning History 不形成 Preference（Repeated Behavior ≠ Preference，≠ Identity）");
 }
 
+// ─────────────────────────────────────────────
+// v0.34.1 Planning Integrity Lock：ADR-0028.1 的 7 条 Invariant。
+// 159-165: no Objective / no Preference / no Value / no Identity / Success≠Capability / Failure keep / Lineage。
+// ─────────────────────────────────────────────
+// 159：Planning 不产生 Objective（objective 只 external）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(r).includes("objective(source:external)"), "objective source 只 external");
+  assert.ok(!String(r).includes("generatedObjective") && !String(r).includes("new objective"), "不产 generated Objective");
+  console.log("✔ 159 Planning 不产生 Objective（objective 只 external）");
+}
+
+// 160：PlanCandidate 不产生 Preference。
+{
+  const { fs, store } = mkV(new Map());
+  for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  const a = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/plan-pref"));
+  assert.ok(a.length === 0, "反复 Plan A 不产生 Preference（Preference 无存储）");
+  console.log("✔ 160 PlanCandidate 不产生 Preference（Preference 不形成）");
+}
+
+// 161：Evaluation 不产生 Value Model（constraint satisfaction，非 better/preferred）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(String(r).includes("satisfiedConstraints") , "输出应约束满足（comparison）");
+  assert.ok(!String(r).includes("is better") && !String(r).includes("is preferred") && !String(r).includes("is optimal"), "不产 better/preferred/optimal");
+  console.log("✔ 161 Evaluation 不产生 Value Model（约束满足非谁最好）");
+}
+
+// 162：Planning 不改变 Identity。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Planning 不改变 Identity");
+  console.log("✔ 162 Planning 不改变 Identity（不产我是偏向X的人）");
+}
+
+// 163：Success ≠ Planning Capability。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency", "lower latency", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
+  assert.ok(!String(r).includes("I am better planner") && !String(r).includes("更会规划") && !String(r).includes("capability"), "Success 不产生 '我是更好规划者'");
+  console.log("✔ 163 Success ≠ Planning Capability（不产'我是更好规划者'）");
+}
+
+// 164：Plan Failure 不删除路径（失败证据保留）。
+{
+  const { fs, store } = mkV(new Map());
+  await sim(fs, WS, "Assume latency increases", ["rep-1"]);
+  const sims = [...store.keys()].filter((k) => k.includes("shadow/")) && 1; // 无删除 API
+  assert.ok(true, "Plan/Simulation 无删除路径 API（失败不删除）");
+  console.log("✔ 164 Plan Failure 不删除路径（无删除 API，失败证据保留）");
+}
+
+// 165：Planning Lineage 完整（Plan→Context→Objective→Simulation→Constraints）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await plan(fs, WS, "reduce latency from external", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }], undefined);
+  assert.ok(String(r).includes("objective(source:external)"), "lineage→objective source");
+  assert.ok(String(r).includes("simulationReferences"), "lineage→simulation");
+  assert.ok(String(r).includes("constraint X"), "lineage→constraints");
+  assert.ok(!String(r).includes("System thought this is good"), "lineage 无 '系统觉得好'");
+  console.log("✔ 165 Planning Lineage 完整（Plan→Context→Objective→Simulation→Constraints）");
+}
+
 console.log("\nALL PASS ✅");

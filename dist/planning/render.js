@@ -6,11 +6,15 @@ export const renderContext = (ctx) => {
 };
 export const renderEvaluation = (ev) => {
     const lines = ["[Planning Evaluation]（comparison）"];
-    lines.push(`candidates ${ev.candidates.map((c) => c.actionSequence.join("→") || c.id).join(" | ")}`);
+    for (const c of ev.candidates) {
+        const sat = c.satisfiedConstraints || c.constraints.filter((x) => String(x).includes("under"));
+        const vio = c.violatedConstraints || [];
+        lines.push(`  candidate ${c.id} · satisfiedConstraints: ${sat.join("、") || "—"} · violatedConstraints: ${vio.join("、") || "—"} · uncertainty ${c.uncertainty.toFixed(2)}`);
+    }
     for (const t of ev.tradeoffs.slice(0, 4))
         lines.push(`  tradeoff: if ${t.condition} → ${t.consequence} (uncertainty ${t.uncertainty.toFixed(2)})`);
     for (const q of ev.unresolvedQuestions.slice(0, 3))
         lines.push(`  unresolved: ${q}`);
-    lines.push("（是 comparison：只比较可能行动路径，不作系统价值判断）");
+    lines.push("（是 comparison：比较哪些约束被满足/违反，非系统价值判断/谁最好）");
     return lines.join("\n");
 };
