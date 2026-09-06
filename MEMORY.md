@@ -5,6 +5,35 @@
 
 ## 一、究竟懂了什么才把任务做出来
 
+### ◆ Forget → Recall Continuity Principle（2026-09-07 正式记录，作为后续 ADR 的基础）
+
+> **时间连续性的另一半：遗忘不是终点，遗忘之后必须存在"忆起"机制。** 否则 Memory / Identity / Experience 链缺一个重要闭环。
+
+此前 v0.20–v0.36 隐含假设是 `记住 → 压缩 → 使用`；但真实观察者更接近 `经历 → 记忆 → 遗忘 → 沉寂 → 线索触发 → 忆起 → 重新评估 → 当前现实融合`。观察者不只拥有信息，而是拥有自己的形成历史——没有 Recall，则 Identity/Temporal/Reflection/Long Horizon 都不完整，最终退化成"**知道现在，但无法解释自己如何成为现在**"。
+
+**三个概念区分**：
+- **Forget ≠ Delete**：遗忘是"当前不可直接访问"，不是"信息不存在"。状态流 `active → forgotten → latent → recalled`。
+- **Recall ≠ Restore**：忆起不是简单恢复旧状态；危险路径是 `旧 Memory → Recall → 直接恢复旧信念 → 污染当前 Reality`。正确路径是 `Recall → Historical Evidence → Current Validation → 重新进入 Observer 判断`。**忆起的是"过去曾经发生过的观察"，不是"过去结论自动复活"**。
+- **Recall = Past Observation Reintroduced Into Present Context For Re-evaluation**。
+
+**核心公式**：
+```
+Forget ≠ Delete
+Recall ≠ Restore
+Recall = Past Observation Reintroduced Into Present Context For Re-evaluation
+```
+
+**必须冻结的边界**（否则破坏前面所有设计）：
+- `Recall ≠ Truth`：忆起 = "我曾经认为 X"，不是 "X 现在仍然正确"。
+- `Recall ≠ Identity Rewrite`：不能 `Recall old personality → modify current Identity`。
+- `Forgotten ≠ Lost Evidence`：遗忘后的证据仍可被重新验证。
+- `Recall ≠ Memory Resurrection`：不能 `old memory → restore old world model`。
+- 与既有原则一致：`Evidence ≠ Knowledge / Validated ≠ Truth / Historical ≠ Current`。
+
+**对象模型草案（供后续 ADR-0031 固化）**：`ForgottenTrace{traceId, originalObservation, forgottenAt, reason, retentionBoundary}`（曾经存在但现在不可直接访问）/ `RecallTrigger{triggerContext, matchedTrace, confidence, reason}`（当前上下文+线索+过去痕迹，**不是** `search memory`）/ `RecallEvent{recalledTrace, currentContext, validationRequired:true}`（某过去经验重新进入当前 Observer）。
+
+**架构定位**：横跨 Identity Continuity / Temporal / Memory Compression / Reality Feedback；比 v0.36 Delegation **更底层**。建议作为独立协议层，路线插入为 **v0.37 Recall / Remembrance Boundary**（或拆 v0.27.1 Forgetting / v0.27.2 Recall），先冻结 `v0.27 Offline Compression → v0.28 Validation →【Recall Boundary】→ v0.36 Delegation`。**这条"时间连续性另一半"正是"Observer 只拥有信息 vs 拥有自己的形成历史"的分水岭。**
+
 1. **先定哲学，再定结构。** 这不是"记动作的日志"，而是「思维/上下文/灵魂的投影」，且「一切皆文件」——所以**每条记忆 = 一个文件**，而不是日志里的一行。这个判断直接决定文件树结构，而不是先写代码再起名。
    **核心目的（用户 2026-09-05 强调）**：dsh-shadow 是要**为每个已完成的任务记录「完整线索链」**——它**靠什么背景/材料**、**用户交互中提醒的注意事项/决策**，才得以完成。「完整线索」是最重要的产出（为什么、靠什么、怎么完成的），而不是零散事件。
 2. **五类信号、五档可靠度。** DSH 里"发生了什么"是事件：
