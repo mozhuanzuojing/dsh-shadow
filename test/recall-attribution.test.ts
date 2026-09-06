@@ -2736,4 +2736,80 @@ const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById
   console.log("✔ 场景89 跨 Observer distortion：同一 Reality 不同投影→找 distortion（为 v0.29 铺路）");
 }
 
+// ─────────────────────────────────────────────
+// v0.29 Observer Federation Kernel：Perspective 是单位；Reality Evidence Registry 弱事实；Difference 是核心产物；Stability not upgrade。
+// ─────────────────────────────────────────────
+// 场景 90：Perspective isolation —— 只能传 ObservationClaim/Projection/ValidationRef，拆 confidence。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-perspective", sourceObserverId: "A", obsClaim: "看到服务器 CPU 升高", lens: "risk-first", visible: ["security"], hidden: ["performance"], obsConfidence: 0.9, valConfidence: 0.3, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Federated Perspective]"), "应输出 Federated Perspective");
+  assert.ok(String(r).includes("confidence observation=0.90 validation=0.30"), "confidence 应拆分（观测确信≠解释确信）");
+  assert.ok(String(r).includes("boundary identityExcluded=true memoryExcluded=true dreamExcluded=true"), "boundary 应排除 Identity/Memory/Dream");
+  assert.ok(String(r).includes("perspective OK"), "应放行且不携带 Memory/Identity/Dream/Knowledge");
+  console.log("✔ 场景90 Perspective isolation：只传 ObservationClaim/Projection/ValidationRef，confidence 拆分");
+}
+
+// ─────────────────────────────────────────────
+// 场景 91：Evidence Registry ownership —— A 创建、B 引用（append-only，弱事实不可篡改）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", observedAt: "2026-09-01", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const rk = [...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"));
+  const rid = JSON.parse(store.get(rk!)).id;
+  const before = store.get(rk!);
+  await toolRegistry.get("read_shadow").execute({ mode: "real-refer", realityId: rid, sourceObserverId: "B", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const after = JSON.parse(store.get(rk!));
+  assert.ok(after.referencedBy.includes("B"), "B 应能引用 A 的证据");
+  assert.ok(before.includes("API latency increased") && after.observation.includes("API latency increased"), "observation（弱事实）不可篡改");
+  assert.ok(!after.observation.includes("架构存在缺陷"), "不应把观察升级为世界规律判断（Observation≠Judgment）");
+  console.log("✔ 场景91 Evidence Registry ownership：B 引用不修改 A 证据（append-only 弱事实）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 92：Projection Difference —— 同一 Reality，不同 visible → difference/blindSpot/unresolved，非 winner。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], lensA: "risk-first", targetObserverId: "B", visibleB: ["performance"], lensB: "product", obsClaim: "A看安全", obsClaimB: "B看性能", realityEvidenceRef: "re-1", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Observer Difference]"), "应输出 Observer Difference");
+  assert.ok(String(r).includes("visibleDiff performance"), "应含 difference");
+  assert.ok(String(r).includes("blindSpot security、performance"), "应含 blindSpot（谁漏什么）");
+  assert.ok(String(r).includes("unresolved"), "应含 unresolvedQuestion（发现不知道什么）");
+  assert.ok(!String(r).includes("winner"), "不应输出 winner");
+  console.log("✔ 场景92 Projection Difference：difference/blindSpot/unresolved，非 winner");
+}
+
+// ─────────────────────────────────────────────
+// 场景 93：Stability —— isolated → corroborated → validated（shared != 正确）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "某事件在某时间被观察到", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const rid = JSON.parse(store.get([...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"))!)).id;
+  const s1 = await toolRegistry.get("read_shadow").execute({ mode: "stability", realityId: rid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(s1).includes("state isolated"), "单 Observer 应 isolated");
+  await toolRegistry.get("read_shadow").execute({ mode: "real-refer", realityId: rid, sourceObserverId: "A", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "real-refer", realityId: rid, sourceObserverId: "B", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const s2 = await toolRegistry.get("read_shadow").execute({ mode: "stability", realityId: rid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(s2).includes("state corroborated"), "≥2 Observer 引用→corroborated（shared!=正确）");
+  const s3 = await toolRegistry.get("read_shadow").execute({ mode: "stability", realityId: rid, hasValidation: true, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(s3).includes("state validated"), "shared + future validation→validated");
+  console.log("✔ 场景93 Stability：isolated→corroborated→validated（shared 不等于正确）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 94：No Identity Pollution —— Federation 不改变 identity timeline。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await toolRegistry.get("read_shadow").execute({ mode: "federation-perspective", sourceObserverId: "A", obsClaim: "claim", visible: ["security"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], targetObserverId: "B", visibleB: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Federation 不应改变 identity timeline");
+  console.log("✔ 场景94 No Identity Pollution：Federation 不产生 Identity 变化（镜子非修改器）");
+}
+
 console.log("\nALL PASS ✅");

@@ -106,3 +106,16 @@ World Model 最大风险：把观察者的投影误认为世界本身——所�
 ## 10. 演进
 
 v0.20–v0.28.1 = **一个灵魂如何观察自己**。v0.29 开始 = **多个有限观察者，如何在不失去自身的情况下，共同接近现实**。
+
+---
+
+## 附录：v0.29 实现说明（4 个工程约束已落地）
+
+1. **RealityEvidenceRegistry 弱事实定位**：`federation/reality.ts` `RealityEvidence{id, observedAt, source, observation, linkedHypothesis[], referencedBy[], status}`——只记录"某事件在某时间被观察到"，**不解释世界规律**（Observation→Projection→Judgment 不是 Evidence）；**append-only**（B 引用不改 A 的 observation）。
+2. **FederatedPerspective 不携带推理结果**：`federation/perspective.ts` `confidence{observationConfidence, validationConfidence}` 拆分——"确定看到 X"（高）≠"X 对现实的解释正确"（可低）。`perspectiveIsClean` 拦"validationConfidence 超观察确信"。
+3. **ObserverDifference 是核心产物**：`federation/difference.ts` 输出 `projectionDelta{visibleDifference,hiddenDifference,lensDifference} + possibleBlindSpot + unresolvedQuestion`（科学过程=发现"原来不知道什么"），**非 winner**。
+4. **Perspective Stability 不叫升级**：`federation/stability.ts` `isolated → corroborated(≥2 Observer 引用) → validated(shared + future validation)`——**shared != correct**（两 Observer 可同时错）。
+
+结构：`federation/{types,perspective,reality,difference,stability}.ts`。modes：`federation-perspective` / `reality` / `real-refer` / `federation-diff` / `stability`。不产生 Knowledge/Identity/Principle。
+
+mock 90–94 验证：Perspective isolation（confidence 拆分） / Evidence Registry ownership（B 引用不改 A 弱事实） / Projection Difference（非 winner） / Stability（isolated→corroborated→validated） / No Identity Pollution。

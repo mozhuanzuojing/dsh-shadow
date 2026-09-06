@@ -34,6 +34,10 @@ import { writeValidation } from "../validation/persist.js";
 import { appendValidationEvent, readTimeline, renderTimeline } from "../validation/history.js";
 import { packetOf, renderPacket, assertPacketBarrier } from "../federation/contract.js";
 import { compareProjections, renderDistortion } from "../federation/guard.js";
+import { perspectiveOf, renderPerspective, perspectiveIsClean } from "../federation/perspective.js";
+import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../federation/reality.js";
+import { differenceOf, renderDifference } from "../federation/difference.js";
+import { perspectiveStateOf, renderStability } from "../federation/stability.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -116,6 +120,32 @@ export async function runReadShadow(deps, args, exec) {
     if (String(args?.mode) === "distortion") {
         const d = compareProjections({ observerId: String(args?.sourceObserverId || "A"), visible: args?.visibleA || [], hidden: args?.hiddenA || [] }, { observerId: String(args?.targetObserverId || "B"), visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
         return scrubFinal(RECALL_PREFIX + renderDistortion(d) + flushWarn);
+    }
+    // v0.29 Observer Federation Kernel：Perspective Exchange + Reality Evidence Registry + Difference + Stability。
+    if (String(args?.mode) === "federation-perspective") {
+        const p = perspectiveOf({ observerId: String(args?.sourceObserverId || agent?.id || "unknown"), temporalReference: String(args?.temporalReference || ""), observationClaim: String(args?.obsClaim || ""), lens: args?.lens, visible: args?.visible || [], hidden: args?.hidden || [], observationConfidence: Number(args?.obsConfidence) || 0.5, validationConfidence: Number(args?.valConfidence) || 0.5 });
+        const clean = perspectiveIsClean(p);
+        return scrubFinal(RECALL_PREFIX + renderPerspective(p) + (clean.ok ? "\n（perspective OK：不携带 Memory/Identity/Dream/Knowledge，confidence 已拆分）" : `\n（perspective FAIL: ${clean.reasons.join("、")}）`) + flushWarn);
+    }
+    if (String(args?.mode) === "reality") {
+        const ev = await registerRealityEvidence(fs, ws, { observedAt: String(args?.observedAt || today()), source: String(args?.sourceObserverId || "unknown"), observation: String(args?.observation || ""), linkedHypothesis: args?.linkedHypothesis || [] });
+        return scrubFinal(RECALL_PREFIX + renderRealityEvidence(ev) + flushWarn);
+    }
+    if (String(args?.mode) === "real-refer") {
+        const ev = await referenceEvidence(fs, ws, String(args?.realityId || ""), String(args?.sourceObserverId || "unknown"));
+        return scrubFinal(RECALL_PREFIX + (ev ? renderRealityEvidence(ev) : `（无 reality evidence ${args?.realityId}）`) + flushWarn);
+    }
+    if (String(args?.mode) === "federation-diff") {
+        const pa = perspectiveOf({ observerId: String(args?.sourceObserverId || "A"), observationClaim: String(args?.obsClaim || "claim-A"), lens: args?.lensA, visible: args?.visibleA || [], hidden: args?.hiddenA || [] });
+        const pb = perspectiveOf({ observerId: String(args?.targetObserverId || "B"), observationClaim: String(args?.obsClaimB || "claim-B"), lens: args?.lensB, visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
+        const d = differenceOf(pa, pb, String(args?.realityEvidenceRef || ""));
+        return scrubFinal(RECALL_PREFIX + renderDifference(d) + flushWarn);
+    }
+    if (String(args?.mode) === "stability") {
+        const evs = await readRealityEvidence(fs, ws);
+        const ev = evs.find((e) => e.id === String(args?.realityId || "")) || null;
+        const state = perspectiveStateOf(ev, Boolean(args?.hasValidation));
+        return scrubFinal(RECALL_PREFIX + renderStability(state) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};
