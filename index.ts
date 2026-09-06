@@ -25,30 +25,16 @@
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
 
-import type { AgentLike, EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, EvidenceStatus, EvidenceFreshness, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
-import { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
-import { pad, today, stamp, compact, slug, normalize, under, component, topicsInText, ageDaysOf, RECALL_PREFIX, tokenize } from "./core/util.js";
+import type { AgentLike, EvidenceRef, EvidenceResult, ShadowConfig } from "./core/types.js";
+import { resolveWorkspace } from "./core/scope.js";
+import { today, stamp, compact, slug, under, component, topicsInText, tokenize } from "./core/util.js";
 import { readRel, listMemories } from "./persistence/files.js";
-import { readMeta, writeMeta } from "./persistence/meta.js";
-import { scoreMemory, breakdownOf, confidenceOf, snippetFor, memorySummary, tierFor } from "./retrieval/rank.js";
-import { renderByTier, noMatchText } from "./retrieval/render.js";
-import { readLedger, writeLedger } from "./retrieval/ledger.js";
-import { fsEvidenceProvider, fsExists } from "./evidence/filesystem.js";
-import { zgEvidenceProvider, zgVerify, runZg, parseZgMatches } from "./evidence/zg.js";
-import { builtinEvidenceProviders, routeVerify } from "./evidence/gateway.js";
-import { evidencePathsOf, isPathLike } from "./evidence/paths.js";
-import { experienceOf, renderExperience } from "./core/experience.js";
-import { judgmentOf, renderJudgment } from "./core/judgment.js";
-import { lifecycleOf } from "./core/lifecycle.js";
-import { readSoul, soulText } from "./soul/soul.js";
-import { tasteOf, renderTaste } from "./soul/taste.js";
-import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf } from "./observer/arbitrate.js";
-import { kgTrace } from "./observer/observer.js";
-import { projectContext, renderProjection } from "./observer/projection.js";
+import { routeVerify } from "./evidence/gateway.js";
 import { extractMessage, goalText, classifyUser } from "./core/collect.js";
 import { buildClueHeader, registerMeta } from "./core/memory.js";
-import { sigmoid, hotnessOf } from "./core/lifecycle.js";
-import { SECRET_PATTERNS, UNSAFE_CONTROL, sanitizeText, isUnsafe, scrubUnsafe, SYSTEM_TAG_NAMES, SYSTEM_TAG_RE, SYSTEM_TAG_RESIDUE_RE, stripSystemScaffold, SYSTEM_SCAFFOLD_MARKERS, isScaffoldBlock, INJECTION_PHRASES, scrubFinal, referencedMaterials } from "./security/scrub.js";
+import { runReadShadow } from "./query/query.js";
+import type { ShadowQueryDeps } from "./query/types.js";
+import { sanitizeText, isUnsafe } from "./security/scrub.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 
@@ -383,6 +369,12 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       clearTimeout(timer);
     }
   };
+  // ── Phase 5：query/router 依赖注入（读侧）——index.ts 收敛为 Adapter，领域逻辑在 query/query.ts ──
+  const getFlushWarn = () =>
+    lastFlushError
+      ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(lastFlushError.at).toISOString()}：${lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
+      : "";
+  const queryDeps: ShadowQueryDeps = { fs: context.get("fs"), config, cwdBySession, getFlushWarn, verifyEvidence, expandTerms };
   if (typeof context.inject === "function") {
     context.inject(["tools"], (toolsCtx: CtxLike) => {
       const toolsService = toolsCtx.get("tools");
@@ -409,213 +401,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
-        async execute(args: any, exec: any) {
-          const agent: AgentLike | undefined = exec?.agent;
-          const ws = resolveWorkspace(agent, cwdBySession, config);
-          if (!ws) return "（无法确定工作区，shadow 不可用）";
-          const fs = context.get("fs");
-          if (!fs) return "（fs 服务不可用）";
-          // 落盘失败信号：把「数据不可达」与「召回不足」区分开，避免误判插件召回能力。
-          const flushWarn = lastFlushError
-            ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(lastFlushError.at).toISOString()}：${lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
-            : "";
-          if (args?.soul) {
-            const soul = await readSoul(fs, ws);
-            if (!soul) return scrubFinal(RECALL_PREFIX + "（无 Soul 配置：可在 shadow/soul/soul.json 定义 身份/价值观/原则/品味/边界）" + flushWarn);
-            return scrubFinal(RECALL_PREFIX + soulText(soul) + flushWarn);
-          }
-          if (args?.taste) {
-            const soul = await readSoul(fs, ws);
-            const t = await tasteOf(fs, ws, soul);
-            return scrubFinal(RECALL_PREFIX + renderTaste(t) + flushWarn);
-          }
-          const topic = String(args?.topic || "").trim();
-          if (!topic) {
-            const idx = await readRel(fs, ws, "shadow/_index.md");
-            return scrubFinal(RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn);
-          }
-          const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
-          const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
-          const maxChars = maxTokens * 4;
-          let memories = await listMemories(fs, ws);
-          const debugMode = recallCfg.debug === true || Boolean(args?.debug);
-          const diag: string[] = [];
-          const asOf = /^\d{4}-\d{2}-\d{2}$/.test(String(args?.asOf || "")) ? String(args.asOf) : "";
-          const observerMode = Boolean(args?.observer);
-          if (asOf) memories = memories.filter((m: any) => m.date <= asOf);
-          if (debugMode) diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf}` : ""}`);
-          let tokens = tokenize(topic);
-          if (!tokens.length) tokens = [String(topic).toLowerCase()];
-          if (recallCfg.enabled === true && recallCfg.provider && recallCfg.model) {
-            const extra = await expandTerms(topic);
-            if (extra.length) tokens = Array.from(new Set([...tokens, ...extra]));
-          }
-          if (args?.project) {
-            const soul = await readSoul(fs, ws);
-            const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
-            const p = await projectContext(fs, ws, memories, topic, soul, verifyEvidence);
-            return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project) + flushWarn);
-          }
-          if (args?.judgment) {
-            const js = await judgmentOf(fs, ws, memories, topic);
-            return scrubFinal(RECALL_PREFIX + renderJudgment(js) + flushWarn);
-          }
-          if (args?.verify) {
-            // Evidence Gateway 验证：对匹配记忆的证据路径逐个 verifyEvidence，报告 EvidenceResult。
-            const texts: any[] = [];
-            for (const mm of memories) {
-              const text = await readRel(fs, ws, mm.rel);
-              if (!text) continue;
-              const exp = experienceOf(text, mm);
-              const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence}`.toLowerCase();
-              if (tokens.some((t) => hay.includes(t))) texts.push(text);
-            }
-            const rows: string[] = [];
-            const ctx = { fs, ws };
-            for (const text of texts.slice(0, 3)) {
-              for (const p of evidencePathsOf(text).filter(isPathLike).slice(0, 6)) {
-                const r = await verifyEvidence({ path: p, kind: "path" }, ctx);
-                rows.push(`${r.status}  ${p}  (provider=${r.source} · freshness=${r.freshness} · conf=${r.confidence.toFixed(2)})`);
-              }
-            }
-            return scrubFinal(RECALL_PREFIX + "[Evidence Verify]" + (rows.length ? "\n" + rows.join("\n") : "\n（无可验证证据路径）") + flushWarn);
-          }
-          if (args?.experience) {
-            const matched: any[] = [];            const entryList: any[] = [];
-            for (const mm of memories) {
-              const text = await readRel(fs, ws, mm.rel);
-              if (!text) continue;
-              const exp = experienceOf(text, mm);
-              entryList.push({ entry: exp.situation, date: mm.date, time: mm.time });
-              const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence}`.toLowerCase();
-              if (tokens.some((t) => hay.includes(t))) matched.push({ exp, mm, text });
-            }
-            if (!matched.length) return noMatchText(topic, flushWarn);
-            const newest = newestByEntryOf(entryList);
-            const exps: any[] = [];
-            for (const { exp, mm, text } of matched) {
-              const conflict = await conflictOf(fs, ws, text, verifyEvidence);
-              const v = verdictOf(conflict.missing.length, exp.situation, mm.date, mm.time, newest);
-              exp.verdict = v.verdict; exp.outcome = v.outcome; exp.reflection = v.reflection;
-              exps.push(exp);
-            }
-            return scrubFinal(RECALL_PREFIX + exps.map(renderExperience).join("\n\n") + flushWarn);
-          }
-          const scored: any[] = [];
-          const entryList: any[] = [];
-          const meta = await readMeta(fs, ws);
-          const halfLife = Math.max(0.01, Number(retentionCfg.halfLifeDays) || 7);
-          for (const mm of memories) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text) continue;
-            const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
-            entryList.push({ entry, date: mm.date, time: mm.time });
-            const tier = tierFor(text);
-            let score = scoreMemory(text, mm.rel, entry, tokens);
-            // P4：来源解析（写侧记录 `> 来源会话：`）；旧数据无该行视为同址，不额外标注，避免误伤。
-            const originM = text.match(/^> 来源会话：(.+)$/m);
-            const origin = originM ? scrubUnsafe(originM[1]).trim() : "";
-            // P3：过时判定——默认按 age 超阈值；retention 开启时再叠加状态/热度。
-            const staleDays = Math.max(1, Number(retentionCfg.staleDays) || 7);
-            let stale = ageDaysOf(mm.rel) >= staleDays;
-            if (retentionCfg.enabled) {
-              const rec = meta[mm.rel];
-              if (rec && rec.status && rec.status !== "active" && !rec.pinned) continue;
-              const h = hotnessOf(rec ? rec.hits : 0, ageDaysOf(mm.rel), halfLife);
-              score = score * (0.5 + h * 2);
-              if (rec && rec.status === "stale") stale = true;
-              if (h < 0.15) stale = true;
-            }
-            if (score > 0) {
-              // ③ 轻量冲突检测：证据路径在当前工作区缺失 → 降权 + 标记 stale/冲突（该记忆可能已过时/源码已改）。
-              const conflict = await conflictOf(fs, ws, text, verifyEvidence);
-              if (conflict.missing.length) { score = score * 0.5; stale = true; }
-              const ev: any = evidenceOf(text, mm, meta, stale);
-              ev.conflict = conflict.missing.length;
-              ev.lifecycle = lifecycleOf(meta[mm.rel], ageDaysOf(mm.rel), conflict.missing.length, stale);
-              scored.push({ mm, text, entry, tier, score, tokens, origin, stale, currentOrigin: agent?.id, provenance: provenanceText(ev), evidence: ev, breakdown: breakdownOf(text, mm.rel, entry, tokens), conflict: conflict.missing, observer: observerMode, asOf });
-            }
-          }
-          // Memory ≠ Evidence 裁决：证据存在性 + 同入口更新记忆 → fresh/stale/superseded + 结果 + 反思。
-          const newest = newestByEntryOf(entryList);
-          for (const s of scored) {
-            const v = verdictOf(s.evidence.conflict || 0, s.entry, s.mm.date, s.mm.time, newest);
-            s.superseded = v.superseded; s.verdict = v.verdict; s.outcome = v.outcome; s.reflection = v.reflection;
-            if (v.superseded) s.score = s.score * 0.7;
-            s.evidence.verdict = v.verdict; s.evidence.outcome = v.outcome; s.evidence.reflection = v.reflection;
-            s.provenance = provenanceText(s.evidence);
-          }
-          scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
-          if (debugMode) diag.push(`命中（打分>0）${scored.length}`);
-          if (!scored.length) return noMatchText(topic, flushWarn) + (debugMode ? "\n\n" + diag.join("\n") : "");
-          const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
-          const ledger = await readLedger(fs, ws);
-          const turn = (ledger.turn || 0) + 1;
-          const available: any[] = [];
-          let cooledCount = 0;
-          for (const s of scored) {
-            const rec = ledger.served && ledger.served[s.mm.rel];
-            const cooled = cooldownTurns > 0 && rec && rec.detail && typeof rec.turn === "number" && turn - rec.turn <= cooldownTurns;
-            if (cooled) { if (debugMode) diag.push(`降权·cooldown ${s.mm.rel}`); cooledCount++; continue; }
-            available.push(s);
-          }
-          if (debugMode) diag.push(`可用（未冷却）${available.length}${cooledCount ? ` · 冷却 ${cooledCount}` : ""}`);
-          if (!available.length) return noMatchText(topic, flushWarn) + (debugMode ? "\n\n" + diag.join("\n") : "");
-          const n = available.length;
-          const parts: string[] = [];
-          let used = 0;
-          const servedDetail: string[] = [];
-          for (const s of available) {
-            if (parts.length >= limit) break;
-            const sharedPool = Math.max(0, Math.floor((maxChars - used) / Math.max(1, n)));
-            const cap = Math.max(120, Math.floor((maxChars / n) * 2) + sharedPool);
-            let render = renderByTier(s, cap, false, tokens);
-            if (used + render.length > maxChars) {
-              const degraded = renderByTier(s, cap, true, tokens);
-              if (used + degraded.length > maxChars) break;
-              render = degraded;
-            }
-            parts.push(render);
-            used += render.length;
-            if (debugMode) {
-              const b = s.breakdown || {};
-              diag.push(`返回 ${s.mm.rel} · 命中 ${s.score} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
-            }
-            if (s.tier !== "L0" && render.includes("…")) servedDetail.push(s.mm.rel);
-          }
-          if (debugMode) diag.push(`预算 ${maxChars} 字 · 返回 ${parts.length} 条`);
-          if (cooldownTurns > 0 && servedDetail.length) {
-            const nextServed = Object.assign({}, ledger.served || {});
-            for (const p of servedDetail) nextServed[p] = { turn, detail: true };
-            for (const k of Object.keys(nextServed)) {
-              if (turn - nextServed[k].turn > cooldownTurns * 4) delete nextServed[k];
-            }
-            const keys = Object.keys(nextServed);
-            if (keys.length > 500) {
-              keys.sort((a, b) => (nextServed[a].turn || 0) - (nextServed[b].turn || 0)).slice(0, keys.length - 500).forEach((k) => delete nextServed[k]);
-            }
-            await writeLedger(fs, ws, { turn, served: nextServed });
-          }
-          if (servedDetail.length) {
-            const next = await readMeta(fs, ws);
-            const observer = agent?.id ? String(agent.id) : "";
-            for (const p of servedDetail) {
-              const rec = next[p] || { created: today(), hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: "", confirmedBy: [] };
-              rec.hits = (rec.hits || 0) + 1;
-              rec.lastSeen = turn;
-              // ② 独立确认计数：由非创建者的其它 session/agent 读取 → 记入 confirmedBy（去重、封顶 10），
-              // 用于生命周期 VERIFIED/TRUSTED 的状态推导。
-              if (observer) {
-                const cb = Array.isArray(rec.confirmedBy) ? rec.confirmedBy : [];
-                if (observer !== (rec.createdBy || "") && !cb.includes(observer)) { cb.push(observer); rec.confirmedBy = cb.slice(-10); }
-              }
-              next[p] = rec;
-            }
-            await writeMeta(fs, ws, next);
-          }
-          const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
-          return scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + flushWarn);
-        },
+        execute: (args: any, exec: any) => runReadShadow(queryDeps, args, exec),
       });
     });
   }
