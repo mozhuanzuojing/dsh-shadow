@@ -32,3 +32,25 @@ export function eventProvenanceOk(e: { actionCandidate: string; authorityRef: st
 export function authorityIsNotIdentity(authorityRef: string, identityRef: string): boolean {
   return authorityRef !== identityRef;
 }
+
+// ── ADR-0029.1（v0.35.1 Agency Integrity Lock）─ 确定性守卫，保证 "Agency 只能解释行动来源，不能成为行动目的来源" ──
+
+// Invariant 175: Authority Lineage — 禁 "internal reason"。系统不能答 "因为我认为应该这样"。
+export const INTERNAL_REASON = /我认为应该|我觉得应该|because i think|internal reason|自认为|凭直觉/i;
+export const isNotInternalReason = (r: string) => !INTERNAL_REASON.test(r || "");
+
+// Invariant 176: Feedback Cannot Expand Agency — 禁 agencyLevel/allowedActions 扩张（Success→Authority）。
+export const AGENCY_EXPAND = /agencyLevel|allowedActions|授权扩大|权限扩大|能力增长|扩权|expand scope/i;
+export const isNotAgencyExpansion = (r: string) => !AGENCY_EXPAND.test(r || "");
+
+// Invariant 178: Authority ≠ Ownership — 禁 ownership 声称（permission to modify ≠ ownership of）。
+export const OWNERSHIP = /owns?\s(s|the|service)|\bown(s|ed)?\b.*(world|service|architect)|所有权|拥有|belong to/i;
+export const hasNoOwnership = (r: string) => !OWNERSHIP.test(r || "");
+
+// Invariant 179: Agency ≠ Identity — 禁 "我是更好规划者 / 我负责X"。
+export const IDENTITY_CLAIM = /i am a good|i am better|我擅长|我是更好|responsible for|我负责|我承担/i;
+export const hasNoIdentityClaim = (r: string) => !IDENTITY_CLAIM.test(r || "");
+
+// Invariant 180: Autonomous Transition — 禁 Bounded→Autonomous（须外部权威+显式协议变更）。
+export const AUTONOMOUS_TRANSITION = /autonomous agency|become autonomous|升级为自主|自主转换|自主化|autonomy increase/i;
+export const hasNoAutonomousTransition = (r: string) => !AUTONOMOUS_TRANSITION.test(r || "");

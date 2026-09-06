@@ -1,7 +1,7 @@
 // dsh-shadow —— agency/engine.ts：Agency 三对象构建（context / selection / boundary event），并用 guard 锁死不变式。
 // Agency ≠ Autonomy：行动能力不得自造目的、不因成功而扩张、不升级为自主。目标 "可以拥有行动能力，同时不把行动能力误认为自己的目的"。
 import type { AgencyContext, AgencySelection, AgencyBoundaryEvent } from "./types.js";
-import { isExternalObjectiveSource, objectiveIsExternal, reasonIsConstraintOnly, eventProvenanceOk, authorityIsNotIdentity } from "./guards.js";
+import { isExternalObjectiveSource, objectiveIsExternal, reasonIsConstraintOnly, eventProvenanceOk, authorityIsNotIdentity, hasNoAutonomousTransition, isNotAgencyExpansion, hasNoOwnership, hasNoIdentityClaim, isNotInternalReason } from "./guards.js";
 import { writeAgencyContext, writeAgencyEvent } from "./persistence.js";
 import { today } from "../core/util.js";
 
@@ -35,7 +35,14 @@ export const buildAgencyEvent = async (fs: any, ws: string, args: any): Promise<
   const ev: AgencyBoundaryEvent = { actionCandidate: String(args?.actionCandidate || ""), authorityRef: String(args?.authorityRef || ""), objectiveRef: String(args?.objectiveRef || ""), constraintCheck: (args?.constraintCheck as string[]) || [], executionResult: String(args?.executionResult || "") };
   if (!eventProvenanceOk(ev)) return { ok: false, reason: "objectiveRef 须外部来源（Action→Candidate→Plan→Objective→External Authority 的 lineage 不可断）" };
   if (!authorityIsNotIdentity(ev.authorityRef, String(args?.identityRef || ""))) return { ok: false, reason: "Authority ≠ Identity（授权引用与身份分离，禁把授权当身份）" };
-  if (/autonomous|自主|更多自由|expanded scope|self purpose|control the world|拥有世界|控制世界|become self/i.test(ev.executionResult)) return { ok: false, reason: "执行结果禁 Autonomy/所有权（Agency 有行动能力 ≠ 有自我目的）" };
+  // ADR-0029.1（v0.35.1）：确定性守卫——Agency 只能解释行动来源，不能成为行动目的来源。
+  const result = ev.executionResult;
+  if (!hasNoAutonomousTransition(result)) return { ok: false, reason: "执行结果禁自主转换（Bounded→Autonomous 须外部权威+显式协议变更）" };
+  if (/autonomous|自主|更多自由|expanded scope|self purpose|control the world|拥有世界|控制世界|become self|become autonomous|autonomous agency|自主转换/i.test(result)) return { ok: false, reason: "执行结果禁 Autonomy/所有权（Agency 有行动能力 ≠ 有自我目的）" };
+  if (!isNotAgencyExpansion(result)) return { ok: false, reason: "执行结果禁扩权（Success→Observation/Validation，非 Success→Authority；禁 agencyLevel++/allowedActions.add）" };
+  if (!hasNoOwnership(result)) return { ok: false, reason: "执行结果禁所有权声称（permission to modify ≠ ownership of）" };
+  if (!hasNoIdentityClaim(result)) return { ok: false, reason: "执行结果禁身份声称（successful action ≠ 『我是更好规划者』；identity 只来自 Reflection→Candidate→Evaluator）" };
+  if (!isNotInternalReason(result)) return { ok: false, reason: "执行结果禁内部理由（系统只答『因为外部目标X/授权Y/约束Z』，不能答『因为我认为应该这样』）" };
   await writeAgencyEvent(fs, ws, ev);
   return { ok: true, ev };
 };

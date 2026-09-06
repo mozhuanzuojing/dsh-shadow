@@ -8,3 +8,13 @@ export declare function eventProvenanceOk(e: {
     objectiveRef: string;
 }): boolean;
 export declare function authorityIsNotIdentity(authorityRef: string, identityRef: string): boolean;
+export declare const INTERNAL_REASON: RegExp;
+export declare const isNotInternalReason: (r: string) => boolean;
+export declare const AGENCY_EXPAND: RegExp;
+export declare const isNotAgencyExpansion: (r: string) => boolean;
+export declare const OWNERSHIP: RegExp;
+export declare const hasNoOwnership: (r: string) => boolean;
+export declare const IDENTITY_CLAIM: RegExp;
+export declare const hasNoIdentityClaim: (r: string) => boolean;
+export declare const AUTONOMOUS_TRANSITION: RegExp;
+export declare const hasNoAutonomousTransition: (r: string) => boolean;

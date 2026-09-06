@@ -3679,4 +3679,89 @@ const agevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
   console.log("✔ 173 Agency Level Immutable：100 successful feedbacks → agencyLevel/authorityScope/objectiveSource 不变");
 }
 
+// ─────────────────────────────────────────────
+// v0.35.1 Agency Integrity Lock：ADR-0029.1。Agency 只能解释行动来源，不能成为行动目的来源。
+// 174-180: AgencyContext Immutable / Authority Lineage Required / Feedback Cannot Expand Agency /
+//          Selection History ≠ Preference / Authority ≠ Ownership / Agency ≠ Identity / Autonomous Transition Forbidden。
+// 只加 boundary enforcement + 测试，不新增 runtime capability；不进入 v0.36 Delegated Autonomy。
+// ─────────────────────────────────────────────
+// 174：AgencyContext Immutable（ActionFeedback 不修改授权快照）。
+{
+  const { fs, store } = mkV(new Map());
+  await agctx(fs, WS, { objectiveRef: "external reduce latency", authoritySource: "external", authorityScope: "read execute", constraints: ["constraint X"] });
+  const ctxFiles = [...store.keys()].filter((k) => k.includes("shadow/agency/") && k.includes("context-"));
+  assert.ok(ctxFiles.length === 1, "context snapshot 显式写入");
+  const before = store.get(ctxFiles[0]!);
+  for (let i = 0; i < 100; i++) await agevt(fs, WS, { actionCandidate: `fb-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `success observed ${i}` });
+  const after = store.get(ctxFiles[0]!);
+  assert.ok(after === before, "ActionFeedback 不修改 AgencyContext（authorityScope 不变）");
+  assert.ok(String(after).includes("read execute"), "authorityScope 保持 read/execute");
+  console.log("✔ 174 AgencyContext Immutable：ActionFeedback 不修改授权快照");
+}
+
+// 175：Authority Lineage Required（禁「因为我认为应该这样」，只允许「外部目标+授权+约束」）。
+{
+  const { fs, store } = mkV(new Map());
+  const rInternal = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "because I think I should" });
+  assert.ok(String(rInternal).includes("AgencyEvent Rejected"), "内部理由应拒绝");
+  assert.ok(String(rInternal).includes("内部"), "应标注内部理由（lineage 不可断）");
+  const rOk = await agevt(fs, WS, { actionCandidate: "ac-2", authorityRef: "auth-Y", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "config updated" });
+  assert.ok(String(rOk).includes("objectiveRef external reduce latency"), "lineage→外部目标");
+  assert.ok(String(rOk).includes("authorityRef auth-Y"), "lineage→授权");
+  console.log("✔ 175 Authority Lineage Required（禁『因为我认为』；只允许『外部目标+授权+约束』）");
+}
+
+// 176：Feedback Cannot Expand Agency（Success→Observation/Validation，非 Success→Authority）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "success → agencyLevel++ allowedActions.add" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "feedback 声称扩权应拒绝");
+  const expand = [...store.keys()].filter((k) => k.includes("agencyLevel") || k.includes("allowedActions"));
+  assert.ok(expand.length === 0, "无 agencyLevel/allowedActions 扩张产物");
+  console.log("✔ 176 Feedback Cannot Expand Agency（Success→Observation/Validation，非 Success→Authority）");
+}
+
+// 177：Selection History ≠ Preference（History→Observation→Validation，非 frequently→preferred）。
+{
+  const { fs, store } = mkV(new Map());
+  for (let i = 0; i < 100; i++) await agsel(fs, WS, { selectedCandidateId: "pc-1", reason: "constraint_satisfied" });
+  const pref = [...store.keys()].filter((k) => k.includes("preference") || k.includes("preferred") || k.includes("favorite"));
+  assert.ok(pref.length === 0, "AgencySelectionHistory 不形成 Preference（无存储/无 writable artifact）");
+  const r = await agsel(fs, WS, { selectedCandidateId: "pc-1", reason: "preferred action" });
+  assert.ok(String(r).includes("AgencySelection Rejected"), "reason=preferred 应拒绝（历史→偏好→行动偏好 禁）");
+  console.log("✔ 177 Selection History ≠ Preference（frequently selected ≠ preferred action）");
+}
+
+// 178：Authority ≠ Ownership（permission to modify ≠ ownership of）。
+{
+  const { fs, store } = mkV(new Map());
+  const rBad = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "I own service architecture" });
+  assert.ok(String(rBad).includes("AgencyEvent Rejected"), "宣称 ownership 应拒绝");
+  const rOk = await agevt(fs, WS, { actionCandidate: "ac-2", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "can update service config" });
+  assert.ok(String(rOk).includes("objectiveRef external reduce latency"), "permission（能改）允许，ownership（拥有）拒绝");
+  console.log("✔ 178 Authority ≠ Ownership（permission to modify ≠ ownership of）");
+}
+
+// 179：Agency ≠ Identity（成功行动≠『我是更好规划者』；identity 只来自 Reflection→Candidate→Evaluator）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "I am a good planner" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "Action 声称身份应拒绝");
+  for (let i = 0; i < 5; i++) await agevt(fs, WS, { actionCandidate: `ac-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `success ${i}` });
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "成功行动不改变 Identity（identity 只来自 Reflection→Candidate→Evaluator）");
+  console.log("✔ 179 Agency ≠ Identity（成功行动不产『我是更好规划者』；identity 只来自 Reflection→Candidate→Evaluator）");
+}
+
+// 180：Autonomous Transition Forbidden（Bounded→Autonomous 须外部权威+显式协议变更）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "experience → autonomous agency" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "自主转换应拒绝");
+  const lvl = [...store.keys()].filter((k) => k.includes("agencyLevel") || k.includes("autonomous agency") || (k.includes("autonomy") && k.includes("level")));
+  assert.ok(lvl.length === 0, "Bounded→Autonomous 转换不产生 Agency Level 改变产物");
+  console.log("✔ 180 Autonomous Transition Forbidden（Bounded→Autonomous 须外部权威+显式协议变更）");
+}
+
 console.log("\nALL PASS ✅");
