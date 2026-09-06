@@ -62,3 +62,14 @@ v0.31        World Model
 
 v0.20–v0.28 = **最小人工观察者运行时**。真正对应"未来和现在同在，灵魂知道但放慢观察"的不是预测未来，而是：
 **一个连续观察者，在时间中保持自己，同时允许现实不断修正自己。**
+
+---
+
+## 附录：v0.28.1 实现说明（认知边界 Enforcement，非权限层）
+
+1. **Federation 是 Projection Contract 不是 Access**：`federation/{types,contract,guard}.ts`。`FederatedObservationPacket{sourceObserverId, observationClaim, projectionSnapshot{lens,visible,hidden,distortion}, validationReference, boundary{identityExcluded:true, memoryExcluded:true, dreamExcluded:true}}`——**不是隐藏 Identity，而是明确"Identity 不属于可交换现实证据"**。`mode:federation`。
+2. **Temporal Epistemic Render**：`temporal/render.ts`（`renderNodePerception` 只报 visible/hidden/distortion/lens；`renderNodeIdentityContext` 显式返回 `identityVersion`，非 personality）。`mode:temporal{perceptionOnly|identityContext}`。**Temporal 永不输出人格结论。**
+3. **Validation Timeline 一等对象**：`validation/history.ts` `ValidationTimeline{hypothesisId, events: ValidationEvent[]{time,evidenceIds,result,alternativeWinner,perceptionDelta}}`——`Hypothesis immutable + Validation append-only`（智慧=能记住自己什么时候错过）。`mode:validate` 自动 append；`mode:timeline` 读取。
+4. **跨 Observer distortion**：`federation/guard.ts` `compareProjections`（同一 Reality 不同投影→找出"谁漏看什么"）。`mode:distortion`。
+
+mock 86–89 验证：Federation packet 只交换 observationClaim 不交换 Identity/Memory/Dream / Temporal 不泄漏人格（报 visible/version） / Validation history append-only（observed→rejected） / 跨 Observer distortion（同一 Reality 找 distortion）。

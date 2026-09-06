@@ -2674,4 +2674,66 @@ const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById
   console.log("✔ 场景85 validated 不自动进入 Knowledge/Identity（防退化 RAG）");
 }
 
+// ─────────────────────────────────────────────
+// v0.28.1 Epistemic Kernel：Federation 只交换 ObservationClaim（投影契约非权限）；Temporal 不产人格；Validation 保留历史。
+// ─────────────────────────────────────────────
+// 场景 86：Federation packet isolation —— A 可发 ObservationClaim，不交换 Identity/Memory/Dream。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation", sourceObserverId: "A", obsClaim: "观察到安全边界缺失", lens: "risk-first", visible: ["security"], hidden: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Federation Packet]"), "应输出 Federation Packet");
+  assert.ok(String(r).includes("observationClaim 观察到安全边界缺失"), "应含 ObservationClaim");
+  assert.ok(String(r).includes("boundary identityExcluded=true memoryExcluded=true dreamExcluded=true"), "boundary 应隔离 Identity/Memory/Dream");
+  assert.ok(String(r).includes("boundary OK"), "对可交换类型应放行");
+  assert.ok(!String(r).includes("identityRef") && !String(r).includes("personality"), "不应泄漏 Identity/人格");
+  console.log("✔ 场景86 Federation packet isolation：只交换 ObservationClaim，不交换 Identity/Memory/Dream");
+}
+
+// ─────────────────────────────────────────────
+// 场景 87：Temporal 不泄漏人格（perceptionOnly 报 visible/hidden，identityContext 只报 version）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await putTemporalTrace(fs, WS, { createdAt: "2026-01-05 09:00:00", visible: ["security"], hidden: ["performance impact"] });
+  const rp = await toolRegistry.get("read_shadow").execute({ mode: "temporal", perceptionOnly: true, at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(rp).includes("visible security"), "perceptionOnly 应报可见");
+  assert.ok(String(rp).includes("hidden performance impact"), "perceptionOnly 应报隐藏");
+  assert.ok(!String(rp).includes("谨慎") && !String(rp).includes("personality") && !String(rp).includes("人格"), "Temporal 不应输出人格结论");
+  const ri = await toolRegistry.get("read_shadow").execute({ mode: "temporal", identityContext: true, at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(ri).includes("identityVersion"), "identityContext 应显式返回 version");
+  assert.ok(!String(ri).includes("谨慎"), "不应输出 personality 标签");
+  console.log("✔ 场景87 Temporal 不泄漏人格：报 visible/hidden/version，不报性格");
+}
+
+// ─────────────────────────────────────────────
+// 场景 88：Validation history append-only（observed 后 rejected，历史仍存在）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h88");
+  await ev(fs, WS, "h88", "返工下降");
+  await val(fs, WS, "h88", null);
+  await ev(fs, WS, "h88", "复杂度增加");
+  await ev(fs, WS, "h88", "故障频发");
+  await val(fs, WS, "h88", null);
+  const tl = await toolRegistry.get("read_shadow").execute({ mode: "timeline", hypothesisId: "h88", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(tl).includes("events 2"), "Validation 历史应 append（2 事件）");
+  assert.ok(String(tl).includes("observed") && String(tl).includes("rejected"), "历史应保留 observed+rejected");
+  assert.ok(String(tl).includes("append-only"), "应标注 append-only");
+  console.log("✔ 场景88 Validation history append-only：observed→rejected 历史保留（Hypothesis immutable）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 89：跨 Observer distortion（同一 Reality，不同投影→找 distortion）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "distortion", sourceObserverId: "A", visibleA: ["security"], targetObserverId: "B", visibleB: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Cross Observer Distortion]"), "应输出 distortion 对比");
+  assert.ok(String(r).includes("sameReality visibleUnion=security、performance"), "应给同一 reality 的并集");
+  assert.ok(String(r).includes("observer A · sees security · misses performance"), "A 漏看 performance");
+  assert.ok(String(r).includes("observer B · sees performance · misses security"), "B 漏看 security");
+  console.log("✔ 场景89 跨 Observer distortion：同一 Reality 不同投影→找 distortion（为 v0.29 铺路）");
+}
+
 console.log("\nALL PASS ✅");

@@ -34,6 +34,10 @@ import { writeDream } from "../dream/persist.js";
 import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../validation/evidence.js";
 import { validateHypothesis, toArtifact, renderValidation } from "../validation/validate.js";
 import { writeValidation } from "../validation/persist.js";
+import { appendValidationEvent, readTimeline, renderTimeline } from "../validation/history.js";
+import { packetOf, renderPacket, assertPacketBarrier } from "../federation/contract.js";
+import { compareProjections, renderDistortion } from "../federation/guard.js";
+import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
@@ -65,6 +69,11 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (String(args?.mode) === "temporal") {
     const graph = await buildTemporalGraph(fs, ws, { from: String(args?.from || ""), to: String(args?.to || "") });
     await writeTemporalGraph(fs, ws, graph);
+    if (args?.perceptionOnly || args?.identityContext) {
+      const node = graph.nodes.find((n) => !args?.at || String(n.timestamp).slice(0, 10) === String(args.at).slice(0, 10)) || graph.nodes[0];
+      if (!node) return scrubFinal(RECALL_PREFIX + "（无 Temporal 节点）" + flushWarn);
+      return scrubFinal(RECALL_PREFIX + (args?.identityContext ? renderNodeIdentityContext(node) : renderNodePerception(node)) + flushWarn);
+    }
     if (args?.at) return scrubFinal(RECALL_PREFIX + renderReplay(queryTemporal(graph, { type: "replay", at: String(args.at) })) + flushWarn);
     if (args?.from && args?.to) return scrubFinal(RECALL_PREFIX + renderCompare(queryTemporal(graph, { type: "compare", from: String(args.from), to: String(args.to) })) + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderTemporalGraph(graph) + flushWarn);
@@ -90,7 +99,22 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const evidences = await readFutureEvidence(fs, ws, hid);
     const result = validateHypothesis(h, evidences);
     await writeValidation(fs, ws, toArtifact(h, result, evidences.map((e) => e.id), today()));
+    await appendValidationEvent(fs, ws, hid, { evidenceIds: evidences.map((e) => e.id), result: result.outcome, alternativeWinner: result.alternativeEvaluation.find((a) => a.supported)?.alternative || null, perceptionDelta: `支持${result.applied.support}/反例${result.applied.contradiction}` });
     return scrubFinal(RECALL_PREFIX + renderValidation(result) + flushWarn);
+  }
+  if (String(args?.mode) === "timeline") {
+    const tl = await readTimeline(fs, ws, String(args?.hypothesisId || ""));
+    return scrubFinal(RECALL_PREFIX + renderTimeline(tl) + flushWarn);
+  }
+  // v0.28.1 Epistemic Kernel：Federation 只交换 ObservationClaim（投影契约，非权限）。
+  if (String(args?.mode) === "federation") {
+    const p = packetOf({ sourceObserverId: String(args?.sourceObserverId || agent?.id || "unknown"), observationClaim: String(args?.obsClaim || ""), lens: args?.lens as string, visible: args?.visible || [], hidden: args?.hidden || [], distortion: args?.distortion || [] });
+    const barrier = assertPacketBarrier(p);
+    return scrubFinal(RECALL_PREFIX + renderPacket(p) + (barrier.ok ? "\n（boundary OK：Identity/Memory/Dream 不交换）" : `\n（boundary FAIL: ${barrier.reasons.join("、")}）`) + flushWarn);
+  }
+  if (String(args?.mode) === "distortion") {
+    const d = compareProjections({ observerId: String(args?.sourceObserverId || "A"), visible: args?.visibleA || [], hidden: args?.hiddenA || [] }, { observerId: String(args?.targetObserverId || "B"), visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
+    return scrubFinal(RECALL_PREFIX + renderDistortion(d) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
