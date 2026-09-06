@@ -4084,4 +4084,39 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   console.log("✔ 205 Recall Does Not Increase Certainty（忆起只是访问变化，不是验证）");
 }
 
+// ─────────────────────────────────────────────
+// v0.37.1 Recall Integrity Lock：ADR-0031.1。固化 198–207；补充 206/207。
+// 206 Forgotten Does Not Remove Authority（可访问性变化 ≠ 证据变化）。
+// 207 Recall Cannot Modify Original Lineage（Recall 只创建 RecallEvent，不改 ObservationTrace/ValidationHistory/RealityClaim lineage）。
+// 本轮未发现真实绕过漏洞，故无新增 runtime enforcement，仅固化测试。
+// ─────────────────────────────────────────────
+// 206：Forgotten State Does Not Remove Authority/Validation。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcX", observation: "Service-X exposes /users", perspectives: ["A"] });
+  await mkClaim(fs, WS, "svcX");
+  const claims = [...store.keys()].filter((k) => k.includes("shadow/model/claims/"));
+  assert.ok(claims.length >= 1, "先有 RealityClaim");
+  await rcforget(fs, WS, { id: "fr-1", originalRef: "svcX", reason: "access window closed", validationRefs: ["v1"] });
+  const claimsAfter = [...store.keys()].filter((k) => k.includes("shadow/model/claims/"));
+  assert.ok(claimsAfter.length === claims.length, "Forgotten 不删除 RealityClaim/validation（可访问性变化 ≠ 证据变化）");
+  const rc = await rcvalid(fs, WS, { recalledRef: "fr-1", sourceRef: "ctx-1" });
+  assert.ok(String(rc).includes("epistemicStatusUnchanged true"), "validation 报告 epistemic status 不变");
+  console.log("✔ 206 Forgotten State Does Not Remove Authority（可访问性变化 ≠ 证据变化）");
+}
+
+// 207：Recall Cannot Modify Original Lineage（only creates RecallEvent；Obs/Validation/Claim lineage immutable）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcY", observation: "Service-Y exposes /users", perspectives: ["A"] });
+  const obsFile = [...store.keys()].find((k) => k.includes("shadow/model/observations/"))!;
+  const before = store.get(obsFile);
+  await rcforget(fs, WS, { id: "fr-1", originalRef: "svcY", reason: "access window closed" });
+  await rcevent(fs, WS, { recalledRef: "fr-1", triggerType: "external cue", sourceRef: "ctx-1", originalRecord: "svcY", observationRefs: ["obs-1"] });
+  assert.ok(store.get(obsFile) === before, "Recall 不修改 Original ObservationTrace（Immutable）");
+  const extra = [...store.keys()].filter((k) => k.includes("shadow/model/") || k.includes("shadow/validation/") || k.includes("shadow/observation/"));
+  assert.ok(extra.length === 1, "Recall 只产 RecallEvent，不改 ObservationTrace/ValidationHistory/RealityClaim lineage");
+  console.log("✔ 207 Recall Cannot Modify Original Lineage（Recall 只创建 RecallEvent，不改 ObservationTrace/ValidationHistory）");
+}
+
 console.log("\nALL PASS ✅");
