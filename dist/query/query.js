@@ -42,6 +42,11 @@ import { observationOf, renderObservation } from "../reality/observation.js";
 import { registerObservation, readObservations } from "../reality/registry.js";
 import { claimOf as claimOfReality, renderClaim, isObservablePredicate } from "../reality/claim/engine.js";
 import { writeClaim, readClaims } from "../reality/claim/persist.js";
+import { buildRepresentationGraph } from "../world/builder/representation-builder.js";
+import { writeGraph } from "../world/persistence/persist.js";
+import { createRepresentationFromClaims, renderAdmission } from "../world/guard/claim-admission.js";
+import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../world/guard/relation-guard.js";
+import { explain } from "../world/explain/explain.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -176,6 +181,28 @@ export async function runReadShadow(deps, args, exec) {
             return scrubFinal(RECALL_PREFIX + "（无匹配 RealityClaim）" + flushWarn);
         const obss = await readObservations(fs, ws, claim.subjectRef || claim.subject);
         return scrubFinal(RECALL_PREFIX + renderClaim(claim) + `\n[Lineage] 为什么系统认为它存在：\n` + obss.map((o) => `  - ${o.observation} (perspectives: ${o.sourcePerspectives.join("、") || "—"})`).join("\n") + flushWarn);
+    }
+    // v0.31 World Representation Kernel：RepresentationObject（只接受 supported）+ RelationHypothesis（恒 hypothesis）+ Graph（可重建）。
+    if (String(args?.mode) === "world-represent") {
+        const claims = await readClaims(fs, ws);
+        const subject = String(args?.subject || "");
+        const target = claims.filter((c) => !subject || c.subjectRef === subject || c.subject === subject);
+        const r = createRepresentationFromClaims(target);
+        return scrubFinal(RECALL_PREFIX + renderAdmission(r) + flushWarn);
+    }
+    if (String(args?.mode) === "world-relation") {
+        const rh = relationHypothesisOf({ from: String(args?.from || ""), to: String(args?.to || ""), relation: String(args?.relation || ""), evidence: args?.evidence || [] });
+        return scrubFinal(RECALL_PREFIX + renderRelation(rh) + (isRelationHypothesis(rh) ? "" : "\n（relation guard FAIL）") + flushWarn);
+    }
+    if (String(args?.mode) === "world") {
+        const claims = await readClaims(fs, ws);
+        const validations = claims.flatMap((c) => c.validationHistory.map((id) => ({ id })));
+        const graph = buildRepresentationGraph(claims, validations);
+        await writeGraph(fs, ws, graph);
+        const subject = String(args?.subject || "");
+        const supportedSubject = claims.find((c) => c.status === "supported" && (!subject || c.subjectRef === subject || c.subject === subject));
+        const obss = await readObservations(fs, ws, supportedSubject ? (supportedSubject.subjectRef || supportedSubject.subject) : subject);
+        return scrubFinal(RECALL_PREFIX + explain(graph, subject, obss, claims) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

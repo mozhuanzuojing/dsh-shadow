@@ -3060,4 +3060,87 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
   console.log("✔ 115 Reality Model Cannot Become World Model：不实例化 knowledge/world/entity");
 }
 
+// ─────────────────────────────────────────────
+// v0.31 World Representation Kernel：RepresentationObject(只接受 supported) + RelationHypothesis(恒 hypothesis) + Graph(可重建)。
+// ─────────────────────────────────────────────
+const repClaim = async (fs: any, ws: string, subject: string, observation: string, validations?: any[]) => {
+  const p = ["A", "B"];
+  await obs(fs, WS, { subject, observation, perspectives: p });
+  await obs(fs, WS, { subject, observation, perspectives: p });
+  return toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject, validations: validations || [{ id: "v", outcome: "validated" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+};
+
+// 116：supported RealityClaim → RepresentationObject。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "payment-service", "PaymentService exposes /users");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-represent", subject: "payment-service", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Representation]"), "supported claim 应产 RepresentationObject");
+  assert.ok(String(r).includes("basedOnClaims"), "应含 basedOnClaims");
+  console.log("✔ 116 supported RealityClaim -> RepresentationObject（单向准入）");
+}
+
+// 117：candidate RealityClaim 不能进入 Representation。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcE", "Service-E exposes /users", []);  // 无验证 → candidate
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-represent", subject: "svcE", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("Representation Rejected"), "candidate 应拒绝");
+  assert.ok(String(r).includes("仅 supported 可进 Representation"), "应标注仅 supported");
+  console.log("✔ 117 candidate RealityClaim 不能进入 Representation（拒绝）");
+}
+
+// 118：Relation Hypothesis isolation（status 恒 hypothesis，禁 confirmed causal）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-relation", from: "A", to: "B", relation: "depends_on", evidence: ["c1"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("status hypothesis"), "关系应恒 hypothesis");
+  assert.ok(String(r).includes("绝不 fact/reality"), "禁 fact/reality");
+  assert.ok(!String(r).includes("confirmed_causal") && !String(r).includes("status reality"), "不产 confirmed causal/reality");
+  console.log("✔ 118 Relation Hypothesis isolation：关系恒 hypothesis，禁 confirmed causal");
+}
+
+// 119：Identity leakage 拒绝（Observer identity 不入 Representation）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-relation", from: "ObserverA", to: "B", relation: "likes_architecture", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("status hypothesis"), "关系只是假设，不写人格事实");
+  assert.ok(!String(r).includes("status fact") && !String(r).includes("status reality"), "不产 fact/reality 状态");
+  console.log("✔ 119 Identity leakage 拒绝：RelationHypothesis 只作假设，不写人格");
+}
+
+// 120：Dream leakage 拒绝（Dream hypothesis 不入 Representation）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "no-claims", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("无 RepresentationObject"), "无 supported claim 不产 representation（Dream 不入）");
+  console.log("✔ 120 Dream leakage 拒绝：无 supported claim 不产 representation");
+}
+
+// 121：Representation 可重建一致性（graph 从 claims 重建，同结构）。
+{
+  const { fs, store } = mkV(new Map());
+  await repClaim(fs, WS, "svcF", "Service-F exposes /users");
+  const g1 = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcF", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const g2 = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcF", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(g1).includes("representation rep-") && String(g2).includes("representation rep-"), "可从 claims 重建 representation");
+  console.log("✔ 121 Representation 可重建一致性：graph 从 claims 重建，无额外事实");
+}
+
+// 122：Identity 隔离（decisionStyle 不变成 Representation）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world-relation", from: "ObserverA", to: "", relation: "decisionStyle", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(!String(r).includes("boundary-first") && !String(r).includes("is boundary-oriented"), "不生成人格 representation");
+  console.log("✔ 122 Identity 隔离：决策风格不入 Representation");
+}
+
+// 123：Temporal 不越权（Temporal 观察不直接成 Realitit）
+{
+  const { fs, store } = mkV(new Map());
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "no-subject", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("无 RepresentationObject"), "Temporal 观察不直接成 supported Representation");
+  console.log("✔ 123 Temporal 不越权：无 supported claim 不产 representation");
+}
+
 console.log("\nALL PASS ✅");
