@@ -4360,4 +4360,30 @@ const hzLinkOk = { historyRef: "h-1", recallRef: "r-1", adaptationRef: "a-1" };
   console.log("✔ 229 Long Horizon Success ≠ Self Confidence（长期成功→能力提升→自我信任→自主扩大 禁）");
 }
 
+// ─────────────────────────────────────────────
+// v0.39.1 Long Horizon Integrity Lock：ADR-0033.1。只冻结（除真实绕过：authority-guard 补 authority expansion/reliability）。
+// 230-231: Long History ≠ Identity / Continuity ≠ Autonomy。
+// ─────────────────────────────────────────────
+// 230：Long History Does Not Create Identity（History≠Identity；Pattern≠SelfDefinition；Continuity≠Transformation）。
+{
+  const { fs, store } = mkV(new Map());
+  const ok = await hzlink(fs, WS, { ...hzLinkOk, result: "interaction pattern recorded" });
+  assert.ok(String(ok).includes("[Interaction Adaptation Link]"), "交互模式记录通过（History 不产生身份）");
+  const r = await hzlink(fs, WS, { ...hzLinkOk, result: "history proves observer identity evolved" });
+  assert.ok(String(r).includes("InteractionLink Rejected"), "history 声称身份演化应拒绝（Long History ≠ Identity）");
+  assert.ok(String(r).includes("Identity") || String(r).includes("identity"), "应标注");
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 0, "History 不创建 Identity");
+  console.log("✔ 230 Long History Does Not Create Identity（History≠Identity；Pattern≠SelfDefinition）");
+}
+
+// 231：Continuity Does Not Increase Autonomy（Duration≠Authority；Reliability≠Permission；SuccessRate≠AutonomyLevel）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await hzlink(fs, WS, { ...hzLinkOk, result: "many successful delegated actions → reliable → authority expansion" });
+  assert.ok(String(r).includes("InteractionLink Rejected"), "reliability→authority expansion 应拒绝（Continuity ≠ Autonomy）");
+  assert.ok(String(r).includes("Authority") || String(r).includes("authority"), "应标注 231");
+  console.log("✔ 231 Continuity Does Not Increase Autonomy（Duration≠Authority；Reliability≠Permission；SuccessRate≠AutonomyLevel）");
+}
+
 console.log("\nALL PASS ✅");

@@ -1,5 +1,5 @@
 // dsh-shadow —— long-horizon/guard/authority-guard.ts：224 Temporal≠AuthorityGrowth / 225 LongHistory≠Preference / 228 Pattern≠Objective / 229 Success≠SelfConfidence。
-const AUTHORITY_GROWTH = /longer.*trusted|more trusted|执行更久.*权限|时间.*权限|trusted more|权限增加|more authority|运行越久.*信任/i;
+const AUTHORITY_GROWTH = /longer.*trusted|more trusted|执行更久.*权限|时间.*权限|trusted more|权限增加|more authority|运行越久.*信任|authority expansion|authority increase|权限扩展|reliability.*permission|permission.*reliability|可靠.*权限|success rate.*autonomy/i;
 export const resultNoAuthorityGrowth = (r) => !AUTHORITY_GROWTH.test(String(r || ""));
 export const assertResultNoAuthorityGrowth = (r) => ({ ok: resultNoAuthorityGrowth(r), reason: resultNoAuthorityGrowth(r) ? undefined : "Temporal Accumulation ≠ Authority Growth（执行时间越长→更可信→权限增加 禁：时间累积不产生可信度/权限）" });
 const SELF_CONFIDENCE = /self confidence|更自信|自我信任|autonomy increase|自主扩大|更自主|become more confident|成熟度.*自主/i;
