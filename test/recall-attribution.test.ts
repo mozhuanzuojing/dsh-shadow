@@ -2812,4 +2812,84 @@ const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById
   console.log("✔ 场景94 No Identity Pollution：Federation 不产生 Identity 变化（镜子非修改器）");
 }
 
+// ─────────────────────────────────────────────
+// v0.29.1 Integrity：7 条架构 Invariant 冻结测试（验证各层不越界混层）。
+// 95-101: Observer≠Reality / Projection≠WorldModel / Evidence≠Knowledge / Validation≠Truth /
+//         Federation≠IdentityMerge / Dream≠Insight / Temporal≠RealityGraph。
+// ─────────────────────────────────────────────
+// Invariant-1 Observer≠Reality（95）：RealityEvidence 是弱事实，不声明世界规律。
+{
+  const { fs, store } = mkV(new Map());
+  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const rk = [...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"));
+  const ev = JSON.parse(store.get(rk!));
+  assert.ok(ev.observation.includes("API latency increased"), "弱事实：只记录观察到");
+  assert.ok(!ev.observation.includes("缺陷") && !ev.observation.includes("世界规律") && !ev.observation.includes("truth"), "不声明世界规律（Observer ≠ Reality）");
+  console.log("✔ Invariant-1(95) Observer≠Reality：RealityEvidence 弱事实，不声明世界规律");
+}
+
+// Invariant-2 Projection≠WorldModel（96）：RealityProjection 是观察视角（distortion），非 World Model。
+{
+  const { fs, store } = mkV(new Map());
+  await putTemporalTrace(fs, WS, { createdAt: "2026-01-05 09:00:00", visible: ["security"], hidden: ["performance"] });
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "temporal", perceptionOnly: true, at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Temporal Perception]"), "应是观察视角");
+  assert.ok(!String(r).includes("world model") && !String(r).includes("世界模型"), "不是 World Model");
+  console.log("✔ Invariant-2(96) Projection≠WorldModel：Temporal Perception 是观察视角，非世界模型");
+}
+
+// Invariant-3 Evidence≠Knowledge（97）：Reality Evidence 不进入 knowledge 库。
+{
+  const { fs, store } = mkV(new Map());
+  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "observed fact", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/fact") || k.includes("shadow/world"));
+  assert.ok(knows.length === 0, "Evidence 不进入 knowledge/world 库");
+  console.log("✔ Invariant-3(97) Evidence≠Knowledge：弱事实不进入 knowledge 库");
+}
+
+// Invariant-4 Validation≠Truth（98）：validated=幸存于当前证据，非绝对真理。
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h98");
+  for (let i = 0; i < 8; i++) await ev(fs, WS, "h98", "返工下降");
+  const r = await val(fs, WS, "h98", null);
+  assert.ok(String(r).includes("outcome validated"), "应 validated");
+  assert.ok(!String(r).includes("truth") && !String(r).includes("真相") && !String(r).includes("absolute"), "validated ≠ 绝对真理");
+  console.log("✔ Invariant-4(98) Validation≠Truth：validated=幸存于当前证据，非绝对真理");
+}
+
+// Invariant-5 Federation≠IdentityMerge（99）：Federation 产 Difference/unresolved，不产合并 Identity。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], targetObserverId: "B", visibleB: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("unresolved"), "Federation 应产 unresolvedQuestion");
+  assert.ok(!String(r).includes("identity") && !String(r).includes("merged"), "Federation 不产合并 Identity");
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Identity timeline 不变");
+  console.log("✔ Invariant-5(99) Federation≠IdentityMerge：产 Difference，不产合并 Identity");
+}
+
+// Invariant-6 Dream≠Insight（100）：Dream 产 claimCandidate（观察结构），非 insight。
+{
+  const { fs, store } = mkV(new Map());
+  for (let i = 0; i < 5; i++) await putTemporalTrace(fs, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
+  await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const dj = [...store.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const dream = store.get(dj!);
+  assert.ok(dream!.includes("claimCandidate") || dream!.includes("observation"), "Dream 产 claimCandidate/observation");
+  assert.ok(!dream!.includes("insight"), "Dream 不产 insight（Dream≠Insight）");
+  console.log("✔ Invariant-6(100) Dream≠Insight：产观察候选结构，非洞察标签");
+}
+
+// Invariant-7 Temporal≠RealityGraph（101）：Temporal 记录观察状态，不声明 Reality Graph。
+{
+  const { fs, store } = mkV(new Map());
+  await putTemporalTrace(fs, WS, { createdAt: "2026-01-05 09:00:00", visible: ["security"] });
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "temporal", perceptionOnly: true, at: "2026-01-05", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("visible security"), "记录观察状态");
+  assert.ok(!String(r).includes("reality graph") && !String(r).includes("world"), "Temporal ≠ Reality Graph");
+  console.log("✔ Invariant-7(101) Temporal≠RealityGraph：记录观察状态，非 Reality Graph");
+}
+
 console.log("\nALL PASS ✅");
