@@ -1,5 +1,8 @@
 import { parseTriple } from "../types.js";
 import { scrubUnsafe } from "../../security/scrub.js";
+// ADR-0023.1 Invariant-1：RealityClaim 的 predicate 必须属 observable predicate set（REALITY CLAIM ≠ EVALUATION CLAIM）。
+export const OBSERVABLE_PREDICATES = new Set(["exists", "exposes", "changed", "responds", "responded", "returned", "exposed_api", "located_at", "connected_to"]);
+export const isObservablePredicate = (p) => OBSERVABLE_PREDICATES.has(String(p || "").toLowerCase());
 export const claimOf = (opts) => {
     const obs = opts.observations || [];
     if (!obs.length)

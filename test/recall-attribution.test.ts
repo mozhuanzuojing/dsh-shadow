@@ -2926,8 +2926,8 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["B"] });
   const r = await toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject: "payment-service", validations: [{ id: "v1", outcome: "validated" }, { id: "v2", outcome: "rejected" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(r).includes("status unstable"), "反例存在→unstable（替代解释存活，非 truth）");
   assert.ok(!String(r).includes("truth"), "不标 truth");
@@ -2939,12 +2939,12 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["B"] });
   await mkClaim(fs, WS, "payment-service");
   const r = await toolRegistry.get("read_shadow").execute({ mode: "model", subject: "payment-service", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(r).includes("[Lineage] 为什么系统认为它存在"), `应含 lineage 说明。实际输出：\n${r}\n---store---\n${[...store.entries()].map(([k,v])=>k+"="+v).join("\n")}`);
-  assert.ok(String(r).includes("PaymentService has endpoint"), "lineage 应链回 observation");
+  assert.ok(String(r).includes("PaymentService exposes endpoint"), "lineage 应链回 observation");
   assert.ok(String(r).includes("perspectives: A") && String(r).includes("perspectives: B"), "lineage 应含 perspectives");
   console.log("✔ 106 RealityClaim lineage：能答为什么系统认为它存在（Observation→Validation→Perspectives）");
 }
@@ -2964,8 +2964,8 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await obs(fs, WS, { subject: "api", observation: "API is slow", perspectives: ["A", "C"] });
-  await obs(fs, WS, { subject: "api", observation: "API is stable", perspectives: ["B"] });
+  await obs(fs, WS, { subject: "api", observation: "API responds slowly", perspectives: ["A", "C"] });
+  await obs(fs, WS, { subject: "api", observation: "API responds normally", perspectives: ["B"] });
   const r = await mkClaim(fs, WS, "api");
   assert.ok(String(r).includes("[Reality Claim]"), "应输出 claim");
   assert.ok(String(r).includes("status candidate"), "有分歧→candidate（非 majority 定 reality）");
@@ -2979,8 +2979,8 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
-  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["B"] });
   await toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject: "payment-service", validations: [{ id: "v1", outcome: "validated" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/fact") || k.includes("shadow/world"));
   assert.ok(knows.length === 0, "validated RealityClaim 不产生 knowledge/world 库");
@@ -2999,6 +2999,65 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
   const ids = obsFiles.map((k) => JSON.parse(store.get(k)!).id);
   assert.ok(new Set(ids).size === 2, "observation id 不重复（不可变）");
   console.log("✔ 110 RealityModel immutable history：observation append-only，不可覆盖");
+}
+
+// ─────────────────────────────────────────────
+// v0.30.1 Reality Integrity Lock：ADR-0023.1 的 5 条边界固化为不可回退测试。
+// 111-115: Observable Predicate Only / Epistemic Never Truth / EntityCandidate Boundary /
+//          Relation!=Causality / RealityCannotBecomeWorldModel。
+// ─────────────────────────────────────────────
+// 111：Observable Predicate Only（RealityClaim ≠ EvaluationClaim）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcA", observation: "Service-A is reliable", perspectives: ["A"] });
+  const r1 = await mkClaim(fs, WS, "svcA");
+  assert.ok(String(r1).includes("predicate_not_observable"), "评价性 predicate 应拒绝（predicate_not_observable）");
+  assert.ok(String(r1).includes("RealityClaim ≠ EvaluationClaim"), "应标注 RealityClaim ≠ EvaluationClaim");
+  const { fs: fs2, store: store2 } = mkV(new Map());
+  await obs(fs2, WS, { subject: "svcB", observation: "Service-B exposes /users", perspectives: ["B"] });
+  const r2 = await mkClaim(fs2, WS, "svcB");
+  assert.ok(String(r2).includes("[Reality Claim]") && !String(r2).includes("predicate_not_observable"), "observable predicate 应产 RealityClaim");
+  console.log("✔ 111 Observable Predicate Only：评价性 predicate 拒绝，可观察 predicate 通过");
+}
+
+// 112：Epistemic Status Never Truth（无 true/false/absolute/confidence 1.0）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcB", observation: "Service-B exposes /users", perspectives: ["A", "B"] });
+  const r = await mkClaim(fs, WS, "svcB");
+  assert.ok(String(r).includes("status candidate"), "应 candidate");
+  assert.ok(!String(r).includes("true") && !String(r).includes("absolute") && !String(r).includes("truth"), "无 true/truth/absolute");
+  assert.ok(!String(r).match(/confidence evidence=1\.00|probability.*1\.0/), "无 1.0 归一化真理");
+  console.log("✔ 112 Epistemic Never Truth：无 true/false/absolute 状态");
+}
+
+// 113：ObservedEntityCandidate Boundary（无评估属性 reliable/should）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes API", perspectives: ["ObserverA"] });
+  assert.ok(!String(r).includes("reliable") && !String(r).includes("should") && !String(r).includes("better"), "不写评估属性（ObservedEntityCandidate ≠ RealityEntity）");
+  console.log("✔ 113 ObservedEntityCandidate Boundary：只录观察属性，不写评估");
+}
+
+// 114：Relation Is Not Causality（A connected B，不自动生成 depends_on/causes）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcC", observation: "Service-C connected_to Service-D", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "svcC", observation: "Service-C connected_to Service-D", perspectives: ["B"] });
+  const r = await mkClaim(fs, WS, "svcC");
+  assert.ok(String(r).includes("connected_to"), "应记录结构关系（connected_to）");
+  assert.ok(!String(r).includes("depends_on") && !String(r).includes("causes") && !String(r).includes("因果"), "不自动生成 depends_on/causes（Relation ≠ Causality）");
+  console.log("✔ 114 Relation Is Not Causality：记录结构关系，不推断因果");
+}
+
+// 115：Reality Model Cannot Become World Model（无 knowledge/entity/world 生成）。
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svcD", observation: "Service-D exposes /users", perspectives: ["A", "B"] });
+  await mkClaim(fs, WS, "svcD");
+  const bad = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/entity"));
+  assert.ok(bad.length === 0, "Reality Model 不实例化 Knowledge/World/Entity");
+  console.log("✔ 115 Reality Model Cannot Become World Model：不实例化 knowledge/world/entity");
 }
 
 console.log("\nALL PASS ✅");

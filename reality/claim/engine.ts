@@ -6,6 +6,10 @@ import { parseTriple } from "../types.js";
 import { today } from "../../core/util.js";
 import { scrubUnsafe } from "../../security/scrub.js";
 
+// ADR-0023.1 Invariant-1：RealityClaim 的 predicate 必须属 observable predicate set（REALITY CLAIM ≠ EVALUATION CLAIM）。
+export const OBSERVABLE_PREDICATES = new Set(["exists", "exposes", "changed", "responds", "responded", "returned", "exposed_api", "located_at", "connected_to"]);
+export const isObservablePredicate = (p: string) => OBSERVABLE_PREDICATES.has(String(p || "").toLowerCase());
+
 export const claimOf = (opts: { observations: RealityObservation[]; validations?: { id: string; outcome: string }[]; id?: string }): RealityClaim | null => {
   const obs = opts.observations || [];
   if (!obs.length) return null;                  // 无 observation 不产 claim（Temporal/Federation alone 不行）

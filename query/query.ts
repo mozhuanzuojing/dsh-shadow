@@ -43,7 +43,7 @@ import { differenceOf, renderDifference } from "../federation/difference.js";
 import { perspectiveStateOf, renderStability } from "../federation/stability.js";
 import { observationOf, renderObservation } from "../reality/observation.js";
 import { registerObservation, readObservations } from "../reality/registry.js";
-import { claimOf as claimOfReality, renderClaim } from "../reality/claim/engine.js";
+import { claimOf as claimOfReality, renderClaim, isObservablePredicate } from "../reality/claim/engine.js";
 import { writeClaim, readClaims } from "../reality/claim/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
@@ -161,6 +161,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const validations = (args?.validations as any) || [];
     const c = claimOfReality({ observations: obs, validations });
     if (!c) return scrubFinal(RECALL_PREFIX + "（无 RealityObservation：仅 Temporal/Federation 不足以生成 RealityClaim）" + flushWarn);
+    if (!isObservablePredicate(c.predicate)) return scrubFinal(RECALL_PREFIX + "[Rejected] predicate_not_observable（RealityClaim ≠ EvaluationClaim：predicate 必须属 observable set）" + flushWarn);
     await writeClaim(fs, ws, c);
     return scrubFinal(RECALL_PREFIX + renderClaim(c) + flushWarn);
   }

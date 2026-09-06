@@ -53,3 +53,16 @@ v0.31 ADR-0024 World Representation Boundary → v0.31 implementation
 ## 结论
 
 通过后 v0.31 才有资格。这一层相当于给 World Model 加最后一道"不可僭越边界"。
+
+---
+
+## 附录：v0.30.1 实现说明（Invariant Lock）
+
+- 5 条边界固化为不可回退测试（invariant tests 111–115）：
+  - **111** Observable Predicate Only：`reality/claim/engine.ts` 加 `OBSERVABLE_PREDICATES` + `isObservablePredicate` —— 评价性 predicate（is reliable 等）拒绝 `predicate_not_observable`；可观察 predicate（exposes 等）产 RealityClaim。
+  - **112** Epistemic Never Truth：无 true/false/absolute/1.0。
+  - **113** ObservedEntityCandidate 不写评估属性（reliable/should/better）。
+  - **114** Relation ≠ Causality：记录 `connected_to`，不自动生成 `depends_on/causes`。
+  - **115** Reality Model 不实例化 knowledge/world/entity。
+- **一处最小 runtime 边界 Enforcement**：`model-claim` 分支加 observable-predicate 校验（这是 ADR-0023.1 Invariant-1 的强制落地，非新增推理功能）。
+- 全量 mock 1–115 全绿；tag `v0.30.1 Reality Integrity Lock`。通过后进入 ADR-0024（World Representation Layer 首条 = MUST satisfy Invariant 111–115）。
