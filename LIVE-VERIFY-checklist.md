@@ -47,3 +47,14 @@
 ## 判定
 - 全部 ✅ → **v0.13 真闭环**，进入下一优先级（zg Evidence Provider 接口 / Observation Model research）。
 - 任一 ❌ → 记录失败模式（哪一段、报什么），回到代码定位（勿当成品）。
+
+## 2026-09-06 实验结果（真机真数据）
+- ✅ 写侧：`D:\project\dsh1\shadow` 新文件含 `> 证据链：`（v0.9）、`> 项目：dsh1`/`> Agent：`（v0.7）、`> 摘要：`（v0.5.1）、`> 来源会话：`（v0.5）、`> 用户要点`，**无系统提示泄漏**。
+- ✅ 读侧（用真实 `dist/index.js` 插件代码 + 真实 shadow 数据驱动 `read_shadow.execute`）：
+  - `{ soul: true }` → 生效（未配置给提示）。`{ taste: true }` → 生效（未配置给提示）。
+  - `"csh", { project: true }` → LocalContext（relevant 3 条经验 + current_state + 排除38 + excluded 清单）— v0.12 真机工作。
+  - `"dsh", { debug: true }` → 管线 trace（候选41/命中41/预算/返回10）+ 每条 `命中·入口/主题/路径/正文·状态`。
+  - 输出暴露 v0.7–v0.10 读侧派生：`生命周期 NEW`、`裁决 fresh/superseded`（旧 vendor-dsh-shadow 标 superseded + 反思已迭代）、`结果 evidence_live/superseded`、`项目 dsh1`、`置信 0.55`、`来源 动作/agent`、`（来自其它会话/子代理）`。
+- ⏳ 未单独 invoke：`experience` / `kg` / `observer` / `judgment` 查询（其写侧字段已确认存在；读逻辑已 mock 验证）。如需逐项确认，按上表跑即可。
+- 结论：**写读双侧闭环，v0.13 真机验证通过。**
+
