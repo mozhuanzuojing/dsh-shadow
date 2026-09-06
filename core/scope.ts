@@ -9,8 +9,9 @@ export function firstNonEmpty(...values: unknown[]): string | undefined {
   return values.find((v) => typeof v === "string" && (v as string).trim().length > 0) as string | undefined;
 }
 
-/** 全局兜底 shadow 根：仅当既无显式 shadowRoot/projectRoot、又解析不出 session cwd 时使用（保证"可写"，而非"不写"）。 */
-export const DEFAULT_SHADOW_ROOT = path.join(os.homedir(), ".dsh-shadow");
+/** 全局兜底 shadow 根：仅当既无显式 shadowRoot/projectRoot、又解析不出 session cwd 时使用（保证"可写"，而非"不写"）。
+ *  命名"~/.dsh-observer/shadow"：Global shadow 是 **Observer Continuity Shadow**（observer 层），不是 Workspace Memory。 */
+export const DEFAULT_SHADOW_ROOT = path.join(os.homedir(), ".dsh-observer", "shadow");
 
 /**
  * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
