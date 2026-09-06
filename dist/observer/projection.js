@@ -1,10 +1,11 @@
-// dsh-shadow —— observer/projection.ts：Projection（Observer 透镜 → LocalContext）。从 index.ts 迁出。
+// dsh-shadow —— observer/projection.ts：RealityProjection（v0.20 G3）。Observer 透镜 → 带取舍的局部上下文。
+// RealityProjection 不是"相关排名"，而是"为什么这个视角看到这些/没看到那些"（distortion）。
 import { tokenize } from "../core/util.js";
 import { readRel } from "../persistence/files.js";
 import { experienceOf } from "../core/experience.js";
 import { conflictOf } from "./arbitrate.js";
-// Observer 透镜 = soul.observer 或注入的 lens（v0.20 支持按 Observer 覆盖）；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
-export const projectContext = async (fs, ws, memories, task, soul, verifyEvidence, lens) => {
+// Observer 透镜 = soul.observer 或注入的 lens；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
+export const projectContext = async (fs, ws, memories, task, soul, verifyEvidence, lens, identity, intent) => {
     const ob = lens || ((soul && soul.observer) || { what_matters: [], what_to_ignore: [] });
     const matters = Array.isArray(ob.preferred ?? ob.what_matters) ? (ob.preferred ?? ob.what_matters) : [];
     const ignore = Array.isArray(ob.avoided ?? ob.what_to_ignore) ? (ob.avoided ?? ob.what_to_ignore) : [];
@@ -13,6 +14,7 @@ export const projectContext = async (fs, ws, memories, task, soul, verifyEvidenc
     const excl = [];
     const unc = [];
     const experiences = [];
+    const exclReason = {};
     for (const mm of memories) {
         const text = await readRel(fs, ws, mm.rel);
         if (!text)
@@ -22,13 +24,17 @@ export const projectContext = async (fs, ws, memories, task, soul, verifyEvidenc
         const match = tokens.some((t) => hay.includes(t));
         let salience = match ? 1 : 0;
         if (salience === 0) {
-            excl.push(mm.rel.split("/").pop());
+            const n = mm.rel.split("/").pop();
+            excl.push(n);
+            exclReason[n] = "与任务不匹配";
             continue;
         }
         for (const ig of ignore)
             if (String(exp.situation).toLowerCase().includes(String(ig).toLowerCase())) {
                 salience = 0;
-                excl.push(mm.rel.split("/").pop());
+                const n = mm.rel.split("/").pop();
+                excl.push(n);
+                exclReason[n] = `被观察透镜规避（${ig}）`;
                 break;
             }
         if (salience === 0)
@@ -48,10 +54,24 @@ export const projectContext = async (fs, ws, memories, task, soul, verifyEvidenc
     const principles = (Array.isArray(soul?.principles) ? soul.principles : []).filter((p) => tokens.some((t) => String(p).toLowerCase().includes(t)));
     const visible = rel.slice(0, 8).map((r) => r.exp.situation);
     const hidden = excl;
-    return { rel: rel.slice(0, 8), experiences, principles, taste: soul?.taste || null, unc, excl, visible, hidden };
+    // distortion = "为什么这个视角看到这些/没看到那些"（从透镜偏好 + 决策风格派生，不是 LLM 黑箱）。
+    const prefer = Array.isArray(ob.preferred) ? ob.preferred : [];
+    const avoid = Array.isArray(ob.avoided) ? ob.avoided : [];
+    const distortion = {
+        reason: prefer.length || avoid.length
+            ? `透镜偏重 ${prefer.join("、") || "—"}，规避 ${avoid.join("、") || "—"}`
+            : identity?.decisionStyle?.length
+                ? `决策风格 ${identity.decisionStyle.join("、")}`
+                : "默认全知视角（无显著透镜/决策风格）",
+        byIntent: intent?.goal ? `意图已定：${intent.goal}` : undefined,
+    };
+    return {
+        rel: rel.slice(0, 8), experiences, principles, taste: soul?.taste || null, unc, excl, visible, hidden, distortion, excludedReason: exclReason,
+        reality: { total: memories.length, task },
+    };
 };
 export const renderProjection = (p, task, project, ctx) => {
-    const lines = ["[Projection]"];
+    const lines = ["[RealityProjection]"];
     if (ctx)
         lines.push(`observer ${ctx.observerId} · lens ${ctx.lens || "default"} · intent ${ctx.intent.goal}`);
     lines.push(`scope: project=${project || "?"} · task=${task}`);
@@ -67,11 +87,18 @@ export const renderProjection = (p, task, project, ctx) => {
     lines.push(`current_state: 候选相关 ${p.rel.length} · 不确定 ${p.unc.length} · 排除 ${p.excl.length}`);
     if (p.visible?.length)
         lines.push(`visible: ${p.visible.slice(0, 4).join("、")}`);
+    if (p.distortion?.reason)
+        lines.push(`distortion: ${p.distortion.reason}${p.distortion.byIntent ? ` · ${p.distortion.byIntent}` : ""}`);
     if (p.unc.length)
         lines.push(`uncertainty: ${p.unc.slice(0, 4).join("、")}`);
     if (p.hidden?.length)
         lines.push(`hidden: ${p.hidden.slice(0, 6).join("、")}`);
     if (p.excl.length)
         lines.push(`excluded: ${p.excl.slice(0, 6).join("、")}`);
+    const er = p.excludedReason;
+    if (er && Object.keys(er).length) {
+        const k = Object.keys(er).slice(0, 4);
+        lines.push(`excluded_reason: ${k.map((x) => `${x}=${er[x]}`).join("；")}`);
+    }
     return lines.join("\n");
 };

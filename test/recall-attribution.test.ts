@@ -1578,7 +1578,7 @@ const todayStr = todayLocal();
   store38.set("D:/ws/acshModel/entry.js", "export {}");
   const r38 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", project: true, max_tokens: 4096 }, { agent: agentsById.get("T38") });
   assert.ok(!String(r38).startsWith("ERR"), "Projection 不应报错");
-  assert.ok(r38.includes("[Projection]"), "应输出 Projection");
+  assert.ok(r38.includes("[RealityProjection]"), "应输出 RealityProjection");
   assert.ok(r38.includes("scope: project=ws · task=bundle"), "应含 scope");
   assert.ok(r38.includes("原则 bundle 化优先"), "应含匹配任务的原则");
   assert.ok(r38.includes("经验 acshModel/acshFlow"), "应含相关经验");
@@ -1775,6 +1775,39 @@ const todayStr = todayLocal();
   assert.ok(String(r45a).includes("2026-09-05--090001-ux.md"), "架构师视角应隐藏产品/体验");
   assert.ok(!String(r45a).includes("visible: 产品/体验"), "架构师视角不应看到产品/体验");
   console.log("✔ 场景45 Observer 一致性：同一事实、不同 Observer 透镜 → 不同 projection visible/hidden（不是记忆检索，而是观察投影）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 46：RealityProjection —— projectContext 升级为 RealityProjection，暴露 distortion（为什么这个视角
+//           看到这些/没看到那些）+ excluded_reason（每条排除的原因）+ reality 计数。
+// ─────────────────────────────────────────────
+{
+  const store46 = new Map();
+  const fs46 = mkFs(store46);
+  agentsById.set("T46", { id: "T46", session: { header: { cwd: WS } } });
+  const listeners46 = new Map();
+  const services46 = { fs: fs46, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
+  const ctx46 = { get: (k) => services46[k], on: (e, fn) => listeners46.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services46[k] }) };
+  const P46 = { name, inject, apply };
+  P46.apply(ctx46, { summary: { enabled: false }, recall: {} });
+  store46.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+    identity: { name: "architect" },
+    decision_style: ["architecture_first", "verify_before_modify"],
+  }));
+  store46.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-rel.md",
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store46.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-other.md",
+    "# other/thing\n\n> 完整线索\n> 用户提示/决策：无关条目。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [other/thing] 用户：无关条目。\n");
+  store46.set("D:/ws/arch/x.js", "export {}");
+  const r46 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, goal: "降低 P99" }, { agent: agentsById.get("T46") });
+  assert.ok(!String(r46).startsWith("ERR"), "RealityProjection 不应报错");
+  assert.ok(String(r46).includes("[RealityProjection]"), "应输出 RealityProjection 段");
+  assert.ok(String(r46).includes("distortion:"), "应含 distortion 段");
+  assert.ok(String(r46).includes("决策风格 architecture_first"), "distortion 应从 identity.decision_style 派生（无显式透镜时）");
+  assert.ok(String(r46).includes("excluded_reason:"), "应含 excluded_reason 段");
+  assert.ok(String(r46).includes("2026-09-05--090001-other.md=与任务不匹配"), "应标注排除原因：与任务不匹配");
+  assert.ok(String(r46).includes("intent 降低 P99"), "应含 observer 意图（显式 goal 覆盖模式推断）");
+  console.log("✔ 场景46 RealityProjection：publicContext 输出 distortion + excluded_reason（为什么这个视角看到这些/没看到那些）");
 }
 
 console.log("\nALL PASS ✅");

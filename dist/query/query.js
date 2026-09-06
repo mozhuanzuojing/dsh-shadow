@@ -80,7 +80,7 @@ export async function runReadShadow(deps, args, exec) {
         const ctx = observerContextOf(args, topic, identity, agent?.id);
         const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
         const task = `${ctx.intent.goal} ${ctx.intent.question}`.trim() || topic;
-        const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens);
+        const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens, identity, ctx.intent);
         return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project, ctx) + flushWarn);
     }
     if (args?.judgment) {
