@@ -42,7 +42,9 @@ import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf } fr
 import { kgTrace } from "./observer/observer.js";
 import { projectContext, renderProjection } from "./observer/projection.js";
 import { extractMessage, goalText, classifyUser } from "./core/collect.js";
-import { sanitizeText, isUnsafe, scrubUnsafe, scrubFinal, referencedMaterials } from "./security/scrub.js";
+import { buildClueHeader, registerMeta } from "./core/memory.js";
+import { hotnessOf } from "./core/lifecycle.js";
+import { sanitizeText, isUnsafe, scrubUnsafe, scrubFinal } from "./security/scrub.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 export const name = "dsh-shadow";
 export const inject = [];
@@ -276,82 +278,6 @@ export function apply(ctx, rawConfig = {}) {
         }
     };
     // 安全清洗已迁移至 security/scrub.ts（v0.14 拆内核），此处按需 import 使用。
-    const registerMeta = async (fs, ws, rel, actorId) => {
-        if (!retentionCfg.enabled)
-            return;
-        try {
-            const meta = await readMeta(fs, ws);
-            if (meta[rel])
-                return;
-            meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };
-            await writeMeta(fs, ws, meta);
-        }
-        catch (e) {
-            console.log("[dsh-shadow] meta register failed:", e && e.message);
-        }
-    };
-    const sigmoid = (x) => 1 / (1 + Math.exp(-(x || 0)));
-    const hotnessOf = (hits, ageDays, halfLife) => {
-        const h = Math.max(0, Number(hits) || 0);
-        const a = Math.max(0, Number(ageDays) || 0);
-        const hl = Math.max(0.01, Number(halfLife) || 7);
-        return sigmoid(Math.log(1 + h)) * Math.exp((-Math.LN2 * a) / hl);
-    };
-    // P2：无匹配时不与「可作指令的内容」混在同一语义层——仍带数据非指令前缀，并明确这是"未找到相关记忆"。
-    const buildClueHeader = (entry, arr, srcId, extra) => {
-        const mats = [];
-        const prompts = [];
-        const userPoints = [];
-        const seen = new Set();
-        const addMat = (x) => {
-            const p = scrubUnsafe(String(x || "").trim());
-            if (p && !seen.has(p)) {
-                seen.add(p);
-                mats.push(p);
-            }
-        };
-        for (const e of arr) {
-            if (e.kind === "action" && /^改\/读 /.test(e.text))
-                addMat(e.text.replace(/^改\/读 /, "").trim());
-            if (e.kind === "user") {
-                // 用户文本在 push 时已做密钥打码，但控制/双向字符仍可能残留；此处再 scrub，
-                // 确保线索头（背景/材料、用户提示、用户要点）不含会被终端/模型误当指令的不可见字符。
-                const raw = scrubUnsafe(e.text.replace(/^用户：/, ""));
-                const refs = referencedMaterials(raw);
-                for (const r of refs.slice(0, 6))
-                    addMat(r);
-                if (e.sub)
-                    prompts.push(`「${raw.slice(0, 48)}」〔${e.sub}〕`);
-                userPoints.push(`「${raw.slice(0, 48)}」`);
-            }
-        }
-        const acts = arr.filter((x) => x.kind === "action").length;
-        const usr = arr.filter((x) => x.kind === "user").length;
-        const decs = arr.filter((x) => x.kind === "decision").length;
-        // 证据链（写侧物化）：来源种类 · 日期 · 证据路径。让每条记忆文件"自带为什么/何时/靠什么"，读侧直接暴露。
-        const kindLabel = { action: "动作", user: "用户", assistant: "agent", decision: "决策" };
-        const kindsSeen = Array.from(new Set(arr.map((e) => e.kind).filter(Boolean))).map((k) => kindLabel[k] || k).join("·") || "—";
-        const evPaths = mats.slice(0, 6).join("、") || "—";
-        const lines = ["> 完整线索"];
-        if (mats.length)
-            lines.push(`> 背景/材料：${mats.slice(0, 8).join("、")}`);
-        if (prompts.length)
-            lines.push(`> 用户提示/决策：${prompts.slice(0, 6).join("；")}`);
-        if (userPoints.length)
-            lines.push(`> 用户要点：${userPoints.slice(0, 6).join("；")}`);
-        lines.push(`> 证据链：来源(${kindsSeen}) · 日期(${today()}) · 证据(${evPaths})`);
-        lines.push(`> 概况：${acts} 动作 · ${usr} 用户消息 · ${decs} 决策`);
-        if (srcId)
-            lines.push(`> 来源会话：${scrubUnsafe(String(srcId))}`);
-        // 分层元数据（④ task/goal/session/agent/project）：仅当有值才写，缺省不占行。
-        if (extra?.project)
-            lines.push(`> 项目：${scrubUnsafe(String(extra.project))}`);
-        if (extra?.agent)
-            lines.push(`> Agent：${scrubUnsafe(String(extra.agent))}`);
-        if (extra?.goal)
-            lines.push(`> 目标：${scrubUnsafe(String(extra.goal)).slice(0, 80)}`);
-        return lines.join("\n") + "\n";
-    };
     const flush = async (agent) => {
         const id = agent?.id;
         const arr = pending.get(id || "");
@@ -387,7 +313,7 @@ export function apply(ctx, rawConfig = {}) {
             const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
             await fs.writeText(t, `${head}${clue}${body}\n`);
             await rebuildIndex(fs, ws);
-            await registerMeta(fs, ws, rel, id);
+            await registerMeta(fs, ws, rel, id, retentionCfg.enabled === true);
             void patchSummary(fs, ws, rel, entry, arr);
         }
         catch (e) {
