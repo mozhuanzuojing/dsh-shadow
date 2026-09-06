@@ -1,0 +1,14 @@
+export declare const SECRET_PATTERNS: RegExp[];
+export declare const UNSAFE_CONTROL: RegExp;
+export declare const sanitizeText: (text: unknown) => string;
+export declare const isUnsafe: (line: unknown) => boolean;
+export declare const scrubUnsafe: (s: unknown) => string;
+export declare const SYSTEM_TAG_NAMES: string[];
+export declare const SYSTEM_TAG_RE: RegExp;
+export declare const SYSTEM_TAG_RESIDUE_RE: RegExp;
+export declare const stripSystemScaffold: (s: unknown) => string;
+export declare const SYSTEM_SCAFFOLD_MARKERS: string[];
+export declare const isScaffoldBlock: (t: unknown) => boolean;
+export declare const INJECTION_PHRASES: RegExp;
+export declare const scrubFinal: (x: unknown) => string;
+export declare const referencedMaterials: (text: unknown) => string[];

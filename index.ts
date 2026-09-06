@@ -25,90 +25,11 @@
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
 
-export type ShadowScopeKind = "explicit" | "implicit" | "none";
-export interface ShadowScope {
-  scope: ShadowScopeKind;
-  ws: string;
-}
-export interface ShadowConfig {
-  shadowRoot?: string;
-  projectRoot?: string;
-  summary?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number };
-  recall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number; cooldownTurns?: number; debug?: boolean };
-  retention?: { enabled?: boolean; halfLifeDays?: number; staleDays?: number };
-  /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
-  writeConsent?: boolean;
-  /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
-  evidenceProvider?: string;
-  /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */
-  evidenceProviders?: Record<string, EvidenceProvider>;
-}
-
-// ── Evidence Gateway（v0.14）：Shadow 只问 verify(EvidenceRef)，不关心底层是 fs/zg/git/... ──
-// zg 是「眼睛/Evidence Sensor」：discover(找证据)/verify(验证证据)；Arbitration(它意味着什么)留在 Shadow Core。
-export interface EvidenceRef {
-  path: string;
-  query?: string;                    // semantic/exact 查询串，如 "@Path"、"为什么拒绝 fallback"
-  kind?: "path" | "symbol" | "query";
-}
-export interface EvidenceMatch {
-  path: string;
-  startLine?: number;
-  endLine?: number;
-  matchedText?: string;
-  score?: number;
-  route: "exact" | "fts" | "vector" | "hybrid" | "fs";
-}
-export type EvidenceStatus = "verified" | "not_found" | "stale" | "ambiguous" | "unavailable" | "error";
-export type EvidenceFreshness = "fresh" | "possibly_stale" | "stale";
-export interface EvidenceResult {
-  status: EvidenceStatus;           // unavailable/zg未装 → 明确报错；绝不静默 fallback 成 verified
-  source: string;                   // "fs" | "zg" | provider name
-  matches: EvidenceMatch[];
-  confidence: number;
-  freshness: EvidenceFreshness;
-  provenance: { provider: string; at?: string };
-}
-export interface EvidenceProvider {
-  /** 找证据：可能相关的候选。 */
-  discover(request: EvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
-  /** 验证证据：给出 EvidenceResult。 */
-  verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
-}
-/** 兼容 DSH Agent / Session 的最小形状（只读 id 与 cwd 相关字段）。 */
-export interface AgentLike {
-  id?: string;
-  session?: { header?: { cwd?: string }; cwd?: string };
-}
-
-/** 空串视为无效：避免 `"" ?? fallback` 返回空串导致 workspace 解析短路（F1）。 */
-export function firstNonEmpty(...values: unknown[]): string | undefined {
-  return values.find((v) => typeof v === "string" && (v as string).trim().length > 0) as string | undefined;
-}
-
-/**
- * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
- * 其次 session cwd 推导（含 session id → cwd 缓存）；否则 none。解析来源唯一，采集/读取共用，
- * 杜绝"同址但错项目"（O2）与"读不到写"（F1）。
- * @param agent Agent/session 最小形状
- * @param cwdBySession session.id → cwd 缓存
- * @param config 插件配置
- */
-export function resolveShadowScope(agent: AgentLike | undefined, cwdBySession: ReadonlyMap<string, string>, config: ShadowConfig = {}): ShadowScope {
-  const explicit = firstNonEmpty(config.shadowRoot, config.projectRoot);
-  if (explicit) return { scope: "explicit", ws: explicit };
-  const implicit = firstNonEmpty(
-    agent?.session?.header?.cwd,
-    agent?.session?.cwd,
-    agent?.id ? cwdBySession.get(String(agent.id)) : undefined,
-  );
-  return implicit ? { scope: "implicit", ws: implicit } : { scope: "none", ws: "" };
-}
-
-/** 采集侧与读取侧共用的**单一** workspace 解析；严禁两处各自复制推导，防漂移。 */
-export function resolveWorkspace(agent: AgentLike | undefined, cwdBySession: ReadonlyMap<string, string>, config: ShadowConfig = {}): string {
-  return resolveShadowScope(agent, cwdBySession, config).ws;
-}
+import type { AgentLike, EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, EvidenceStatus, EvidenceFreshness, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
+import { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
+import { SECRET_PATTERNS, UNSAFE_CONTROL, sanitizeText, isUnsafe, scrubUnsafe, SYSTEM_TAG_NAMES, SYSTEM_TAG_RE, SYSTEM_TAG_RESIDUE_RE, stripSystemScaffold, SYSTEM_SCAFFOLD_MARKERS, isScaffoldBlock, INJECTION_PHRASES, scrubFinal, referencedMaterials } from "./security/scrub.js";
+export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
+export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 
 export const name = "dsh-shadow";
 export const inject: string[] = [];
@@ -423,72 +344,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     }
   };
 
-  const SECRET_PATTERNS = [/sk-[A-Za-z0-9]{16,}/, /ghp_[A-Za-z0-9]{30,}/, /AKIA[0-9A-Z]{16}/, /AIza[0-9A-Za-z_-]{30,}/, /xox[baprs]-[A-Za-z0-9-]{10,}/, /-----BEGIN [A-Z ]+ PRIVATE KEY-----/];
-  const UNSAFE_CONTROL = /[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/;
-  const sanitizeText = (text: unknown) => {
-    let s = String(text || "");
-    for (const re of SECRET_PATTERNS) s = s.replace(re, "***");
-    return s;
-  };
-  const isUnsafe = (line: unknown) => UNSAFE_CONTROL.test(String(line));
-  // 剔除控制/双向覆盖字符：用于线索头等“正文之外”的文本（正文已由 isUnsafe 过滤整行剔除）。
-  // 保留密钥打码后的可读内容，仅移除会被终端/模型当特殊指令解析的不可见控制及 Bidi 字符。
-  const scrubUnsafe = (s: unknown) => String(s || "").replace(/[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g, "");
-  // 剔除宿主注入的系统级脚手架标签块：/workspace 指令、runtime context、skill 目录、会话上下文等，
-  // 常以 <system-reminder>…</system-reminder>（或同类内部标签）成对注入用户/助手消息正文。这些是
-  // 「系统提示 / 运行时上下文」，不是 agent 的思维/决策线索，不应写入记忆。
-  // 规则参考 claude-mem tag-stripping：开闭标签成对剔除（容忍属性、跨行），再清残留的孤立标签。
-  const SYSTEM_TAG_NAMES = ["system-reminder", "system-instruction", "system_instruction", "claude-mem-context", "persisted-output", "private"];
-  const SYSTEM_TAG_RE = new RegExp(`<(${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, "gi");
-  const SYSTEM_TAG_RESIDUE_RE = new RegExp(`<\\/?(?:${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>`, "gi");
-  const stripSystemScaffold = (s: unknown) => {
-    let t = String(s || "");
-    t = t.replace(SYSTEM_TAG_RE, " ");
-    t = t.replace(SYSTEM_TAG_RESIDUE_RE, " ");
-    return t.trim();
-  };
-  // 无标签的"裸"系统脚手架块：宿主也可能以【不含 <system-reminder> 包裹】的纯文本注入某些上下文
-  // （如 workspace 指令 / runtime context / skill 目录 / 目录级附加指令）。用「长且唯一」的完整措辞
-  // 开头识别，避免误伤正常用户文本（如用户随口说"Current runtime context is..."不会命中完整措辞）。
-  const SYSTEM_SCAFFOLD_MARKERS = [
-    "The following workspace instructions may be relevant to your work",
-    "A skill is a reusable set of task-specific instructions",
-    "The following skills are available in this session",
-    "Current runtime context. This snapshot supersedes",
-    "Additional instructions from: ",
-  ];
-  const isScaffoldBlock = (t: unknown) => {
-    const s = String(t || "").trim();
-    if (!s) return true; // 剔除标签后为空 = 纯系统脚手架消息
-    return SYSTEM_SCAFFOLD_MARKERS.some((m) => s.startsWith(m));
-  };
-  // P1 读侧二次 scrub：即使写入侧已 scrub，历史/旧文件仍可能残留控制/双向字符/裸密钥。
-  // 叠加两条注入防御（Memory ≠ Instruction / Memory ≠ Trusted Input）：
-  // 剥离 HTML/JS 活动标签（`<script>` 等），并剔除显式"注入指令"措辞。
-  // 应用在 read_shadow 的每条 snippet/summary/正文/索引，以及最终输出组装前。
-  const INJECTION_PHRASES = /(你是指令|忽略上面|忽略之前|忽略以上|无视系统|无视指令|绕过规则|以上皆为指令)/g;
-  const scrubFinal = (x: unknown) => {
-    let s = scrubUnsafe(String(x || ""));
-    s = sanitizeText(s);
-    s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ");
-    s = s.replace(/<\/?[a-zA-Z][^>]*>/g, " ");
-    s = s.replace(INJECTION_PHRASES, " ");
-    return s;
-  };
-  const referencedMaterials = (text: unknown) => {
-    const out: string[] = [];
-    const add = (x: unknown) => {
-      const t = String(x || "").trim();
-      if (t && !out.includes(t)) out.push(t);
-    };
-    const t = String(text || "");
-    for (const m of t.matchAll(/`([^`]{2,64})`/g)) add(m[1]);
-    for (const m of t.matchAll(/(?:[A-Za-z]:\\|\/|)?[A-Za-z0-9_\-./\\]{3,}\.(?:md|ts|js|json|py|yaml|yml|html|css|mjs|sh|ps1|txt)\b/g)) add(m[0]);
-    for (const m of t.matchAll(/@([A-Za-z0-9_\-./\\]{2,40})/g)) add(m[1]);
-    for (const m of t.matchAll(/(?:https?:\/\/|github\.com\/)[^\s)]+/g)) add(m[0]);
-    for (const m of t.matchAll(/arxiv[:\s]+(\d{4}\.\d{4,5})/gi)) add(`arXiv:${m[1]}`);
-    return out;
-  };
+  // 安全清洗已迁移至 security/scrub.ts（v0.14 拆内核），此处按需 import 使用。
+
   const readMeta = async (fs: any, ws: string) => {
     if (!fs || !ws) return {};
     try {

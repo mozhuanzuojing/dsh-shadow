@@ -24,29 +24,9 @@
  * Cordis host plugin entry。经 cordis.patch.yml bundle layer 挂载（dsh-wechat 模式）。
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
-/** 空串视为无效：避免 `"" ?? fallback` 返回空串导致 workspace 解析短路（F1）。 */
-export function firstNonEmpty(...values) {
-    return values.find((v) => typeof v === "string" && v.trim().length > 0);
-}
-/**
- * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
- * 其次 session cwd 推导（含 session id → cwd 缓存）；否则 none。解析来源唯一，采集/读取共用，
- * 杜绝"同址但错项目"（O2）与"读不到写"（F1）。
- * @param agent Agent/session 最小形状
- * @param cwdBySession session.id → cwd 缓存
- * @param config 插件配置
- */
-export function resolveShadowScope(agent, cwdBySession, config = {}) {
-    const explicit = firstNonEmpty(config.shadowRoot, config.projectRoot);
-    if (explicit)
-        return { scope: "explicit", ws: explicit };
-    const implicit = firstNonEmpty(agent?.session?.header?.cwd, agent?.session?.cwd, agent?.id ? cwdBySession.get(String(agent.id)) : undefined);
-    return implicit ? { scope: "implicit", ws: implicit } : { scope: "none", ws: "" };
-}
-/** 采集侧与读取侧共用的**单一** workspace 解析；严禁两处各自复制推导，防漂移。 */
-export function resolveWorkspace(agent, cwdBySession, config = {}) {
-    return resolveShadowScope(agent, cwdBySession, config).ws;
-}
+import { resolveWorkspace } from "./core/scope.js";
+import { sanitizeText, isUnsafe, scrubUnsafe, stripSystemScaffold, isScaffoldBlock, scrubFinal, referencedMaterials } from "./security/scrub.js";
+export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 export const name = "dsh-shadow";
 export const inject = [];
 export function apply(ctx, rawConfig = {}) {
@@ -401,80 +381,7 @@ export function apply(ctx, rawConfig = {}) {
             console.log("[dsh-shadow] summarize patch failed:", e && e.message);
         }
     };
-    const SECRET_PATTERNS = [/sk-[A-Za-z0-9]{16,}/, /ghp_[A-Za-z0-9]{30,}/, /AKIA[0-9A-Z]{16}/, /AIza[0-9A-Za-z_-]{30,}/, /xox[baprs]-[A-Za-z0-9-]{10,}/, /-----BEGIN [A-Z ]+ PRIVATE KEY-----/];
-    const UNSAFE_CONTROL = /[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/;
-    const sanitizeText = (text) => {
-        let s = String(text || "");
-        for (const re of SECRET_PATTERNS)
-            s = s.replace(re, "***");
-        return s;
-    };
-    const isUnsafe = (line) => UNSAFE_CONTROL.test(String(line));
-    // 剔除控制/双向覆盖字符：用于线索头等“正文之外”的文本（正文已由 isUnsafe 过滤整行剔除）。
-    // 保留密钥打码后的可读内容，仅移除会被终端/模型当特殊指令解析的不可见控制及 Bidi 字符。
-    const scrubUnsafe = (s) => String(s || "").replace(/[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g, "");
-    // 剔除宿主注入的系统级脚手架标签块：/workspace 指令、runtime context、skill 目录、会话上下文等，
-    // 常以 <system-reminder>…</system-reminder>（或同类内部标签）成对注入用户/助手消息正文。这些是
-    // 「系统提示 / 运行时上下文」，不是 agent 的思维/决策线索，不应写入记忆。
-    // 规则参考 claude-mem tag-stripping：开闭标签成对剔除（容忍属性、跨行），再清残留的孤立标签。
-    const SYSTEM_TAG_NAMES = ["system-reminder", "system-instruction", "system_instruction", "claude-mem-context", "persisted-output", "private"];
-    const SYSTEM_TAG_RE = new RegExp(`<(${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, "gi");
-    const SYSTEM_TAG_RESIDUE_RE = new RegExp(`<\\/?(?:${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>`, "gi");
-    const stripSystemScaffold = (s) => {
-        let t = String(s || "");
-        t = t.replace(SYSTEM_TAG_RE, " ");
-        t = t.replace(SYSTEM_TAG_RESIDUE_RE, " ");
-        return t.trim();
-    };
-    // 无标签的"裸"系统脚手架块：宿主也可能以【不含 <system-reminder> 包裹】的纯文本注入某些上下文
-    // （如 workspace 指令 / runtime context / skill 目录 / 目录级附加指令）。用「长且唯一」的完整措辞
-    // 开头识别，避免误伤正常用户文本（如用户随口说"Current runtime context is..."不会命中完整措辞）。
-    const SYSTEM_SCAFFOLD_MARKERS = [
-        "The following workspace instructions may be relevant to your work",
-        "A skill is a reusable set of task-specific instructions",
-        "The following skills are available in this session",
-        "Current runtime context. This snapshot supersedes",
-        "Additional instructions from: ",
-    ];
-    const isScaffoldBlock = (t) => {
-        const s = String(t || "").trim();
-        if (!s)
-            return true; // 剔除标签后为空 = 纯系统脚手架消息
-        return SYSTEM_SCAFFOLD_MARKERS.some((m) => s.startsWith(m));
-    };
-    // P1 读侧二次 scrub：即使写入侧已 scrub，历史/旧文件仍可能残留控制/双向字符/裸密钥。
-    // 叠加两条注入防御（Memory ≠ Instruction / Memory ≠ Trusted Input）：
-    // 剥离 HTML/JS 活动标签（`<script>` 等），并剔除显式"注入指令"措辞。
-    // 应用在 read_shadow 的每条 snippet/summary/正文/索引，以及最终输出组装前。
-    const INJECTION_PHRASES = /(你是指令|忽略上面|忽略之前|忽略以上|无视系统|无视指令|绕过规则|以上皆为指令)/g;
-    const scrubFinal = (x) => {
-        let s = scrubUnsafe(String(x || ""));
-        s = sanitizeText(s);
-        s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ");
-        s = s.replace(/<\/?[a-zA-Z][^>]*>/g, " ");
-        s = s.replace(INJECTION_PHRASES, " ");
-        return s;
-    };
-    const referencedMaterials = (text) => {
-        const out = [];
-        const add = (x) => {
-            const t = String(x || "").trim();
-            if (t && !out.includes(t))
-                out.push(t);
-        };
-        const t = String(text || "");
-        for (const m of t.matchAll(/`([^`]{2,64})`/g))
-            add(m[1]);
-        for (const m of t.matchAll(/(?:[A-Za-z]:\\|\/|)?[A-Za-z0-9_\-./\\]{3,}\.(?:md|ts|js|json|py|yaml|yml|html|css|mjs|sh|ps1|txt)\b/g))
-            add(m[0]);
-        for (const m of t.matchAll(/@([A-Za-z0-9_\-./\\]{2,40})/g))
-            add(m[1]);
-        for (const m of t.matchAll(/(?:https?:\/\/|github\.com\/)[^\s)]+/g))
-            add(m[0]);
-        for (const m of t.matchAll(/arxiv[:\s]+(\d{4}\.\d{4,5})/gi))
-            add(`arXiv:${m[1]}`);
-        return out;
-    };
+    // 安全清洗已迁移至 security/scrub.ts（v0.14 拆内核），此处按需 import 使用。
     const readMeta = async (fs, ws) => {
         if (!fs || !ws)
             return {};
