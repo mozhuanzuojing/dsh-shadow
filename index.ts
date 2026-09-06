@@ -42,6 +42,9 @@ import { judgmentOf, renderJudgment } from "./core/judgment.js";
 import { lifecycleOf } from "./core/lifecycle.js";
 import { readSoul, soulText } from "./soul/soul.js";
 import { tasteOf, renderTaste } from "./soul/taste.js";
+import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf } from "./observer/arbitrate.js";
+import { kgTrace } from "./observer/observer.js";
+import { projectContext, renderProjection } from "./observer/projection.js";
 import { SECRET_PATTERNS, UNSAFE_CONTROL, sanitizeText, isUnsafe, scrubUnsafe, SYSTEM_TAG_NAMES, SYSTEM_TAG_RE, SYSTEM_TAG_RESIDUE_RE, stripSystemScaffold, SYSTEM_SCAFFOLD_MARKERS, isScaffoldBlock, INJECTION_PHRASES, scrubFinal, referencedMaterials } from "./security/scrub.js";
 export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
@@ -443,158 +446,11 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   });
 
   // 证据链：从记忆文件自身（> 证据链：行，写侧物化）+ _meta.json 状态/命中，物化出「来源·日期·状态·命中·置信·证据路径」。
-  const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => {
-    const body = String(text || "");
-    const clue = (body.match(/^> 证据链：(.+)$/m) || [])[1] || "";
-    const srcM = clue.match(/来源\(([^)]*)\)/);
-    const dateM = clue.match(/日期\(([^)]*)\)/);
-    const evM = clue.match(/证据\(([^)]*)\)/);
-    const rec = meta && mm?.rel ? (meta[mm.rel] || {}) : {};
-    const status = rec.status || (stale ? "stale" : "active");
-    const hits = Number(rec.hits) || 0;
-    const evidence = evM ? evM[1] : (body.match(/^> 背景\/材料：(.+)$/m) || [])[1] || "";
-    return {
-      kinds: srcM ? srcM[1] : "—",
-      date: dateM ? dateM[1] : (mm?.date || ""),
-      session: (body.match(/^> 来源会话：(.+)$/m) || [])[1] || "",
-      project: (body.match(/^> 项目：(.+)$/m) || [])[1] || "",
-      goal: (body.match(/^> 目标：(.+)$/m) || [])[1] || "",
-      evidence,
-      status,
-      stale,
-      hits,
-      confidence: confidenceOf(hits, ageDaysOf(mm?.rel), status),
-    };
-  };
-  const provenanceText = (ev: any) => {
-    const parts: string[] = [];
-    if (ev.kinds && ev.kinds !== "—") parts.push(`来源 ${ev.kinds}`);
-    if (ev.date) parts.push(ev.date);
-    if (ev.lifecycle) parts.push(`生命周期 ${ev.lifecycle}`);
-    parts.push(`状态 ${ev.status}${ev.stale ? "(过时)" : ""}${Number(ev.conflict) > 0 ? `(⚠证据缺${ev.conflict})` : ""}`);
-    if (ev.verdict) parts.push(`裁决 ${ev.verdict}`);
-    if (ev.outcome) parts.push(`结果 ${ev.outcome}`);
-    if (ev.reflection && ev.reflection !== "无后续修正记录") parts.push(`反思 ${ev.reflection}`);
-    parts.push(`命中 ${ev.hits}`);
-    parts.push(`置信 ${ev.confidence.toFixed(2)}`);
-    if (ev.goal) parts.push(`目标 ${ev.goal.slice(0, 24)}`);
-    if (ev.project) parts.push(`项目 ${ev.project.slice(0, 16)}`);
-    if (ev.evidence && ev.evidence !== "—") parts.push(`证据 ${ev.evidence.slice(0, 60)}`);
-    return `（${parts.join(" · ")}）`;
-  };
-  // Memory ≠ Evidence 裁决：记忆 "记得什么" vs 证据 "当下是否成立"。由 证据路径存在性 + 同入口更新记忆 派生。
-  const newestByEntryOf = (list: any[]) => {
-    const m: Record<string, string> = {};
-    for (const e of list) { const t = `${e.date} ${e.time}`; if (!m[e.entry] || t > m[e.entry]) m[e.entry] = t; }
-    return m;
-  };
-  const verdictOf = (conflictCount: number, entry: string, date: string, time: string, newest: Record<string, string>) => {
-    const t = `${date} ${time}`;
-    const superseded = !!newest[entry] && t < newest[entry];
-    const verdict = superseded ? "superseded" : (conflictCount > 0 ? "stale" : "fresh");
-    const outcome = superseded ? "superseded" : (conflictCount > 0 ? "evidence_stale" : "evidence_live");
-    const reflection = superseded ? "后续已迭代（存在同入口更新记忆）" : (conflictCount > 0 ? "证据缺失，需重新验证" : "无后续修正记录");
-    return { superseded, verdict, outcome, reflection };
-  };
-  const conflictOf = async (fs: any, ws: string, text: string) => {
-    const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 12);
-    if (!paths.length) return { missing: [] as string[] };
-    const missing: string[] = [];
-    for (const p of paths) {
-      const res = await verifyEvidence({ path: p, kind: "path" }, { fs, ws });
-      // zg 未装/unavailable → 不当作"缺失"（避免把"证据不可验证"猜成"证据已失效"）。
-      if (res.status === "not_found") missing.push(p);
-    }
-    return { missing };
-  };
-  // ── Evidence Gateway（v0.14）已迁移至 evidence/{filesystem,zg,gateway}.ts；此处保持薄封装。 ──
+  // ── Evidence Gateway（v0.14）已迁移至 evidence/{filesystem,zg,gateway}.ts 与 observer/arbitrate.ts；此处保持薄封装。 ──
   // zg 是「眼睛/Evidence Sensor」；Arbitration(它意味着什么) 留在 Shadow Core。zg 未装 → 明确 unavailable，绝不静默 fallback。
   const verifyEvidence = (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => routeVerify(ref, ctx, config.evidenceProvider || "fs", config.evidenceProviders);
   // ⑥ 工程知识图谱（起步地基）：从记忆树派生「组件/域 → 依赖 → 相关记忆」的可查询索引，`kg:true` 时输出邻接追踪。
   // 节点：组件（记忆 title = 路径/域）、域（路径首段）；边：组件→域（belongs_to）、组件→证据路径（depends_on/changed_by）、组件↔记忆（related_to）。
-  const kgTrace = async (fs: any, ws: string, memories: any[], topic: string) => {
-    const doms: Record<string, { comps: Set<string>; mems: Set<string> }> = {};
-    const comps: Record<string, { domain: string; evidence: Set<string>; mems: Set<string> }> = {};
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
-      if (!entry) continue;
-      const domain = entry.split("/")[0] || entry;
-      const evP = evidencePathsOf(text).filter(isPathLike);
-      const c = (comps[entry] = comps[entry] || { domain, evidence: new Set<string>(), mems: new Set<string>() });
-      c.mems.add(mm.rel);
-      for (const p of evP) c.evidence.add(p);
-      const d = (doms[domain] = doms[domain] || { comps: new Set<string>(), mems: new Set<string>() });
-      d.comps.add(entry); d.mems.add(mm.rel);
-    }
-    const low = topic.toLowerCase();
-    const matchDom = Object.keys(doms).filter((d) => d.toLowerCase().includes(low));
-    const matchComp = Object.keys(comps).filter((c) => c.toLowerCase().includes(low));
-    const lines = ["[工程知识图谱]"];
-    if (!matchDom.length && !matchComp.length) {
-      lines.push(`（「${topic}」暂无匹配的组件/域）`);
-      return lines.join("\n");
-    }
-    if (matchDom.length) {
-      const dom = matchDom[0];
-      lines.push(`域 ${dom}`);
-      lines.push(`  ├─ 组件 ${[...doms[dom].comps].slice(0, 6).join("、")}`);
-      lines.push(`  ├─ 记忆 ${[...doms[dom].mems].slice(0, 4).map((r) => r.split("/").pop()).join("、")}`);
-      const evs = new Set<string>();
-      for (const c of doms[dom].comps) ((comps[c] || {}).evidence || []).forEach((e: string) => evs.add(e));
-      if (evs.size) lines.push(`  └─ 依赖 ${[...evs].slice(0, 6).join("、")}`);
-    }
-    for (const c of matchComp) {
-      const cc = comps[c];
-      lines.push(`组件 ${c} · 域 ${cc.domain} · 记忆 ${[...cc.mems].slice(0, 3).map((r) => r.split("/").pop()).join("、")} · 依赖 ${[...cc.evidence].slice(0, 4).join("、")}`);
-    }
-    return lines.join("\n");
-  };
-  // ── Soul / Experience（灵魂投影系统，v0.9.0）─────────────────────────────
-  // Soul Kernel：curated 公理层（身份/价值观/原则/品味/边界），非事件流，按需查询。存 shadow/soul/soul.json。
-  // ── v0.12 Projection：用 Observer 透镜把全局模型投影成「此刻相关的局部上下文」（含 excluded）。
-  // Observer 透镜 = soul.observer（curated）或默认；显著 = 任务词命中 × what_matters 加权 − what_to_ignore 排除。
-  const projectContext = async (fs: any, ws: string, memories: any[], task: string, soul: any) => {
-    const ob = (soul && soul.observer) || { what_matters: [], what_to_ignore: [] };
-    const matters = Array.isArray(ob.what_matters) ? ob.what_matters : [];
-    const ignore = Array.isArray(ob.what_to_ignore) ? ob.what_to_ignore : [];
-    const tokens = tokenize(task);
-    const rel: any[] = []; const excl: string[] = []; const unc: string[] = []; const experiences: any[] = [];
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      const exp = experienceOf(text, mm);
-      const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence} ${exp.summary} ${exp.goal}`.toLowerCase();
-      const match = tokens.some((t) => hay.includes(t));
-      // Observer 透镜：what_to_ignore（按情境/域）→ excluded；what_matters → 显著加权。
-      let salience = match ? 1 : 0;
-      if (salience === 0) { excl.push(mm.rel.split("/").pop() as string); continue; }
-      for (const ig of ignore) if (String(exp.situation).toLowerCase().includes(String(ig).toLowerCase())) { salience = 0; excl.push(mm.rel.split("/").pop() as string); break; }
-      if (salience === 0) continue;
-      for (const m of matters) if (hay.includes(String(m).toLowerCase())) salience += 2;
-      const conflict = await conflictOf(fs, ws, text);
-      if (conflict.missing.length) unc.push(mm.rel.split("/").pop() as string);
-      if (salience > 0) { rel.push({ salience, exp }); experiences.push(exp); }
-    }
-    rel.sort((a, b) => b.salience - a.salience);
-    const principles = (Array.isArray(soul?.principles) ? soul.principles : []).filter((p: string) => tokens.some((t) => String(p).toLowerCase().includes(t)));
-    return { rel: rel.slice(0, 8), experiences, principles, taste: soul?.taste || null, unc, excl };
-  };
-  const renderProjection = (p: any, task: string, project: string) => {
-    const lines = ["[Projection]"];
-    lines.push(`scope: project=${project || "?"} · task=${task}`);
-    lines.push("relevant:");
-    if (p.principles.length) lines.push(`  原则 ${p.principles.join("、")}`);
-    if (p.rel.length) {
-      for (const r of p.rel.slice(0, 4)) lines.push(`  经验 ${r.exp.situation} → ${r.exp.decision || "—"}${r.exp.lesson ? ` (教训 ${r.exp.lesson.slice(0, 24)})` : ""}`);
-    }
-    if (p.taste) lines.push(`  偏好 ${JSON.stringify(p.taste)}`);
-    lines.push(`current_state: 候选相关 ${p.rel.length} · 不确定 ${p.unc.length} · 排除 ${p.excl.length}`);
-    if (p.unc.length) lines.push(`uncertainty: ${p.unc.slice(0, 4).join("、")}`);
-    if (p.excl.length) lines.push(`excluded: ${p.excl.slice(0, 6).join("、")}`);
-    return lines.join("\n");
-  };
   // ── v0.13 Judgment / Taste ─────────────────────────────────────────────
   const expandTerms = async (topic: string) => {
     if (recallCfg.enabled !== true) return [];
@@ -696,7 +552,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
           if (args?.project) {
             const soul = await readSoul(fs, ws);
             const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
-            const p = await projectContext(fs, ws, memories, topic, soul);
+            const p = await projectContext(fs, ws, memories, topic, soul, verifyEvidence);
             return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project) + flushWarn);
           }
           if (args?.judgment) {
@@ -737,7 +593,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             const newest = newestByEntryOf(entryList);
             const exps: any[] = [];
             for (const { exp, mm, text } of matched) {
-              const conflict = await conflictOf(fs, ws, text);
+              const conflict = await conflictOf(fs, ws, text, verifyEvidence);
               const v = verdictOf(conflict.missing.length, exp.situation, mm.date, mm.time, newest);
               exp.verdict = v.verdict; exp.outcome = v.outcome; exp.reflection = v.reflection;
               exps.push(exp);
@@ -771,7 +627,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             }
             if (score > 0) {
               // ③ 轻量冲突检测：证据路径在当前工作区缺失 → 降权 + 标记 stale/冲突（该记忆可能已过时/源码已改）。
-              const conflict = await conflictOf(fs, ws, text);
+              const conflict = await conflictOf(fs, ws, text, verifyEvidence);
               if (conflict.missing.length) { score = score * 0.5; stale = true; }
               const ev: any = evidenceOf(text, mm, meta, stale);
               ev.conflict = conflict.missing.length;
