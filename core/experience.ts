@@ -10,8 +10,10 @@ export const experienceOf = (text: string, mm: any) => {
     decision: m(/^> 用户提示\/决策：(.+)$/m),
     implementation: evidence || m(/^> 背景\/材料：(.+)$/m),
     evidence,
-    summary: m(/^> 概况：(.+)$/m),
-    lesson: m(/^> 摘要：(.+)$/m),
+    // Summary ≠ Lesson（ADR-0003 §3-1）：summary = 真正的「摘要」（LLM 一句话回顾）；
+    // overview = 概况（动作/消息/决策计数）；lesson 由裁决层派生，不复用摘要。
+    summary: m(/^> 摘要：(.+)$/m),
+    overview: m(/^> 概况：(.+)$/m),
     session: m(/^> 来源会话：(.+)$/m),
     project: m(/^> 项目：(.+)$/m),
     goal: m(/^> 目标：(.+)$/m),
@@ -27,7 +29,8 @@ export const renderExperience = (e: any) => {
   if (e.evidence) lines.push(`证据 ${e.evidence}`);
   if (e.verdict) lines.push(`裁决 ${e.verdict}`);
   if (e.outcome) lines.push(`结果 ${e.outcome}`);
-  if (e.summary) lines.push(`概况 ${e.summary}`);
+  if (e.overview) lines.push(`概况 ${e.overview}`);
+  if (e.summary) lines.push(`摘要 ${e.summary}`);
   if (e.reflection) lines.push(`反思 ${e.reflection}`);
   if (e.lesson) lines.push(`教训 ${e.lesson}`);
   if (e.project) lines.push(`项目 ${e.project}`);

@@ -15,6 +15,8 @@ export const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => 
   const status = rec.status || (stale ? "stale" : "active");
   const hits = Number(rec.hits) || 0;
   const evidence = evM ? evM[1] : (body.match(/^> 背景\/材料：(.+)$/m) || [])[1] || "";
+  const hasExperience = /^> 摘要：|^> 概况：/m.test(body);
+  const hasDecision = /^> 用户提示\/决策：/.test(body);
   return {
     kinds: srcM ? srcM[1] : "—",
     date: dateM ? dateM[1] : (mm?.date || ""),
@@ -25,7 +27,7 @@ export const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => 
     status,
     stale,
     hits,
-    confidence: confidenceOf(hits, ageDaysOf(mm?.rel), status),
+    confidence: confidenceOf(hits, ageDaysOf(mm?.rel), status, { hasExperience, hasDecision }),
   };
 };
 
@@ -39,7 +41,10 @@ export const provenanceText = (ev: any) => {
   if (ev.outcome) parts.push(`结果 ${ev.outcome}`);
   if (ev.reflection && ev.reflection !== "无后续修正记录") parts.push(`反思 ${ev.reflection}`);
   parts.push(`命中 ${ev.hits}`);
-  parts.push(`置信 ${ev.confidence.toFixed(2)}`);
+  const c = ev.confidence;
+  if (c && typeof c === "object") parts.push(`置信 检索${c.retrieval.toFixed(2)}/证据${c.evidence.toFixed(2)}/经验${c.experience.toFixed(2)}/判断${c.judgment.toFixed(2)}/投影${c.projection.toFixed(2)}（总${c.overall.toFixed(2)}）`);
+  else parts.push(`置信 ${Number(c).toFixed(2)}`);
+  if (ev.lineage && ev.lineage.length > 1) parts.push(`修正链 ${ev.lineage.map((x: any) => x.date.slice(5)).join("→")}`);
   if (ev.goal) parts.push(`目标 ${ev.goal.slice(0, 24)}`);
   if (ev.project) parts.push(`项目 ${ev.project.slice(0, 16)}`);
   if (ev.evidence && ev.evidence !== "—") parts.push(`证据 ${ev.evidence.slice(0, 60)}`);
@@ -60,6 +65,23 @@ export const verdictOf = (conflictCount: number, entry: string, date: string, ti
   const outcome = superseded ? "superseded" : (conflictCount > 0 ? "evidence_stale" : "evidence_live");
   const reflection = superseded ? "后续已迭代（存在同入口更新记忆）" : (conflictCount > 0 ? "证据缺失，需重新验证" : "无后续修正记录");
   return { superseded, verdict, outcome, reflection };
+};
+
+// Lesson（教训）≠ Summary（摘要）：教训由裁决派生，与"发生了什么"的摘要解耦，给出可迁移的提醒。
+export const lessonOf = (v: { superseded: boolean; outcome: string }) =>
+  v.superseded ? "同入口已被更新，引用前先查最新记忆" : (v.outcome === "evidence_stale" ? "证据路径缺失，需重新验证后再引用" : "结论仍有效");
+
+// Decision Lineage（ADR-0003 §3-4）：同一 entry 的记忆按时间排成修正确 A→Correction→B→…，保留"为何变化"。
+export const lineageOf = (list: { date: string; time: string; decision?: string }[]) => {
+  const seen = new Set<string>();
+  const chain: { date: string; time: string; decision: string }[] = [];
+  for (const e of list) {
+    const t = `${e.date} ${e.time}`;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    chain.push({ date: e.date, time: e.time, decision: e.decision || "" });
+  }
+  return chain.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 };
 
 export const conflictOf = async (fs: any, ws: string, text: string, verifyEvidence: (ref: EvidenceRef, ctx: any) => Promise<EvidenceResult>) => {

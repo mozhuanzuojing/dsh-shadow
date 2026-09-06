@@ -1485,7 +1485,9 @@ const todayStr = todayLocal();
   assert.ok(r35.includes("证据 acshObject/projectSelect.js"), "应含证据");
   assert.ok(r35.includes("裁决 fresh"), "应含裁决(证据存在)");
   assert.ok(r35.includes("结果 evidence_live"), "应含结果");
-  assert.ok(r35.includes("教训 对象页选择器改直接选择"), "应含教训(摘要)");
+  assert.ok(r35.includes("摘要 对象页选择器改直接选择"), "应含摘要(非摘要→教训解耦)");
+  assert.ok(r35.includes("教训 结论仍有效"), "应含教训(由裁决派生，不为摘要)");
+  assert.ok(r35.includes("概况 1 动作"), "应含概况(计数)");
   assert.ok(r35.includes("目标 OpenAPI 改造"), "应含目标");
   console.log("✔ 场景35 Experience：experience:true 从完整线索头派生 情境/问题/决策/实现/证据/裁决/结果/反思/教训");
 }
@@ -1512,6 +1514,7 @@ const todayStr = todayLocal();
   assert.ok(r36.includes("裁决 superseded"), `旧记忆应判 superseded：\n${r36}`);
   assert.ok(r36.includes("裁决 fresh"), "新记忆应判 fresh");
   assert.ok(r36.includes("后续已迭代"), "旧记忆反思应提示已迭代");
+  assert.ok(r36.includes("修正链"), "superseded 应带 decision lineage 修正链");
   console.log("✔ 场景36 Memory≠Evidence supersede：同入口更新记忆 → 旧的 superseded+降权+反思，新的 fresh");
 }
 

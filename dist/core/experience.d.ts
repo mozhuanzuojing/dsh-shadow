@@ -5,7 +5,7 @@ export declare const experienceOf: (text: string, mm: any) => {
     implementation: string;
     evidence: string;
     summary: string;
-    lesson: string;
+    overview: string;
     session: string;
     project: string;
     goal: string;

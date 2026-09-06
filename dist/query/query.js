@@ -5,7 +5,7 @@ import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
-import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf } from "../observer/arbitrate.js";
+import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
 import { kgTrace } from "../observer/observer.js";
@@ -116,12 +116,14 @@ export async function runReadShadow(deps, args, exec) {
             exp.verdict = v.verdict;
             exp.outcome = v.outcome;
             exp.reflection = v.reflection;
+            exp.lesson = lessonOf(v);
             exps.push(exp);
         }
         return scrubFinal(RECALL_PREFIX + exps.map(renderExperience).join("\n\n") + flushWarn);
     }
     const scored = [];
     const entryList = [];
+    const entryLineage = new Map();
     const meta = await readMeta(fs, ws);
     const halfLife = Math.max(0.01, Number(retentionCfg.halfLifeDays) || 7);
     for (const mm of memories) {
@@ -130,6 +132,10 @@ export async function runReadShadow(deps, args, exec) {
             continue;
         const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
         entryList.push({ entry, date: mm.date, time: mm.time });
+        const decisionTxt = (text.match(/^> 用户提示\/决策：(.+)$/m) || [])[1] || "";
+        if (!entryLineage.has(entry))
+            entryLineage.set(entry, []);
+        entryLineage.get(entry).push({ date: mm.date, time: mm.time, decision: decisionTxt });
         const tier = tierFor(text);
         let score = scoreMemory(text, mm.rel, entry, tokens);
         const originM = text.match(/^> 来源会话：(.+)$/m);
@@ -171,6 +177,7 @@ export async function runReadShadow(deps, args, exec) {
         s.evidence.verdict = v.verdict;
         s.evidence.outcome = v.outcome;
         s.evidence.reflection = v.reflection;
+        s.evidence.lineage = lineageOf(entryLineage.get(s.entry) || []);
         s.provenance = provenanceText(s.evidence);
     }
     scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));

@@ -42,13 +42,28 @@ export const breakdownOf = (text: string, rel: string, entry: string, tokens: st
   return parts;
 };
 
-// 置信度：从「可验证信号」推导（命中次数 / 状态 / 新鲜度），确定性、非 LLM 玄数。
-export const confidenceOf = (hits: number, ageDays: number, status: string) => {
+// 置信度维度化（ADR-0003 §3-3）：不再给单一玄数，而是拆成 retrieval/evidence/experience/judgment/projection 五维 +
+// overall 合成，供"哪一环可信度低"用（而非一个数字假装全部可信）。确定性、可解释、非 LLM 玄数。
+export interface ConfidenceDims {
+  retrieval: number;
+  evidence: number;
+  experience: number;
+  judgment: number;
+  projection: number;
+  overall: number;
+}
+export const confidenceOf = (hits: number, ageDays: number, status: string, opts?: { hasExperience?: boolean; hasDecision?: boolean }): ConfidenceDims => {
   const h = Math.max(0, Math.min(3, Number(hits) || 0));
   const base = { active: 0.55, stale: 0.3, superseded: 0.15, archived: 0.1 }[status] ?? 0.4;
   const hitBoost = h * 0.12;
   const ageDecay = Math.max(0, Number(ageDays) || 0) * 0.008;
-  return Math.max(0.05, Math.min(0.98, base + hitBoost - ageDecay));
+  const retrieval = Math.max(0.05, Math.min(0.98, base + hitBoost - ageDecay));
+  const evidence = status === "active" ? 0.8 : status === "stale" ? 0.4 : 0.15;
+  const experience = opts?.hasExperience ? 0.75 : 0.45;
+  const judgment = opts?.hasDecision ? 0.7 : 0.4;
+  const projection = 0.6; // Observer Lens 基数（投影总是部分可证伪，不宣称全知）
+  const overall = Math.max(0.05, Math.min(0.98, retrieval * 0.4 + evidence * 0.25 + experience * 0.15 + judgment * 0.1 + projection * 0.1));
+  return { retrieval, evidence, experience, judgment, projection, overall };
 };
 
 export const snippetFor = (text: string, tokens: string[]) => {
