@@ -84,3 +84,16 @@ ADR-0023 Reality Model Kernel → v0.30 Reality Model Kernel → tag v0.30.0 →
 ## 10. 一句话
 
 v0.30 最重要的能力不是让 Reality Model"更聪明"，而是**让系统知道哪些东西它仍然不能称为 Reality**。守住这一层，v0.31 World Model 才不会变成"多个 Observer 幻觉的平均值"。
+
+---
+
+## 附录：v0.30 实现说明（Appendix A–D 已落地）
+
+- **A RealityObservation 命名/语义冻结**：`reality/observation.ts` `RealityObservation{id, observedAt, subjectRef?, sourcePerspectives[], observation, temporalContext, validationRefs[]}`；**无 truth/certainty/fact**；`observation`=弱事实"多个 Observer 指向同一被观察事件"。
+- **B RealityClaim 保留 lineage**：`reality/claim/engine.ts` `RealityClaim{subjectRef?, subject, predicate, object, supportingObservations, validationHistory, perspectiveRefs, temporalContext, confidence, status, lineage{observations, validations, perspectives}}`——无 lineage 拒绝生成（仅 Temporal/Federation 不足以生成）。
+- **C ObservedEntityCandidate（克制）**：只记录 `{entity, observation:{exposedApi, version, changedVersions}}`，不写评估（reliable/should）。
+- **D 生命周期冻结**：`candidate → supported → unstable → rejected`，**永不 truth**（World Model 只消费 supported RealityClaim，非 Truth DB）。
+
+实现：`reality/{types, observation, registry}.ts` + `reality/claim/{engine, persist}.ts`。modes：`model-observation` / `model-claim` / `model`（lineage 查询，能答"为什么系统认为它存在"）。`shadow/model/{observations,claims}/`（append-only，不可变历史）。
+
+mock 102–110 验证：Observation≠Truth / Temporal&Federation alone 不产 claim / Alternative survives（unstable）/ lineage 重建 / identity leakage blocked / majority vote rejected / Validated≠Knowledge / immutable history。

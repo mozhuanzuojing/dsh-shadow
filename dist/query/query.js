@@ -38,6 +38,10 @@ import { perspectiveOf, renderPerspective, perspectiveIsClean } from "../federat
 import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../federation/reality.js";
 import { differenceOf, renderDifference } from "../federation/difference.js";
 import { perspectiveStateOf, renderStability } from "../federation/stability.js";
+import { observationOf, renderObservation } from "../reality/observation.js";
+import { registerObservation, readObservations } from "../reality/registry.js";
+import { claimOf as claimOfReality, renderClaim } from "../reality/claim/engine.js";
+import { writeClaim, readClaims } from "../reality/claim/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
@@ -146,6 +150,30 @@ export async function runReadShadow(deps, args, exec) {
         const ev = evs.find((e) => e.id === String(args?.realityId || "")) || null;
         const state = perspectiveStateOf(ev, Boolean(args?.hasValidation));
         return scrubFinal(RECALL_PREFIX + renderStability(state) + flushWarn);
+    }
+    // v0.30 Reality Model Kernel：RealityObservation（弱事实）→ RealityClaim（必须保留 lineage）→ mode:"model" 查询。
+    if (String(args?.mode) === "model-observation") {
+        const ro = observationOf({ observedAt: String(args?.observedAt || today()), subjectRef: String(args?.subject || ""), sourcePerspectives: args?.sourcePerspectives || [String(args?.sourceObserverId || "unknown")], observation: String(args?.observation || ""), temporalContext: String(args?.temporalContext || today()), validationRefs: args?.validationRefs || [] });
+        await registerObservation(fs, ws, ro);
+        return scrubFinal(RECALL_PREFIX + renderObservation(ro) + flushWarn);
+    }
+    if (String(args?.mode) === "model-claim") {
+        const obs = await readObservations(fs, ws, String(args?.subject || ""));
+        const validations = args?.validations || [];
+        const c = claimOfReality({ observations: obs, validations });
+        if (!c)
+            return scrubFinal(RECALL_PREFIX + "（无 RealityObservation：仅 Temporal/Federation 不足以生成 RealityClaim）" + flushWarn);
+        await writeClaim(fs, ws, c);
+        return scrubFinal(RECALL_PREFIX + renderClaim(c) + flushWarn);
+    }
+    if (String(args?.mode) === "model") {
+        const claims = await readClaims(fs, ws);
+        const subject = String(args?.subject || "");
+        const claim = claims.find((c) => !subject || c.subjectRef === subject || c.subject === subject || c.id === String(args?.claimId || "")) || null;
+        if (!claim)
+            return scrubFinal(RECALL_PREFIX + "（无匹配 RealityClaim）" + flushWarn);
+        const obss = await readObservations(fs, ws, claim.subjectRef || claim.subject);
+        return scrubFinal(RECALL_PREFIX + renderClaim(claim) + `\n[Lineage] 为什么系统认为它存在：\n` + obss.map((o) => `  - ${o.observation} (perspectives: ${o.sourcePerspectives.join("、") || "—"})`).join("\n") + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

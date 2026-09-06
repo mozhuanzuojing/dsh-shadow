@@ -2892,4 +2892,113 @@ const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById
   console.log("✔ Invariant-7(101) Temporal≠RealityGraph：记录观察状态，非 Reality Graph");
 }
 
+// ─────────────────────────────────────────────
+// v0.30 Reality Model Kernel：Observation → Claim(带 lineage) → mode:"reality" 查询。无 truth/知识库/World Model。
+// ─────────────────────────────────────────────
+const obs = async (fs: any, ws: string, opts: { subject: string; observation: string; perspectives: string[] }) => toolRegistry.get("read_shadow").execute({ mode: "model-observation", subject: opts.subject, observation: opts.observation, sourcePerspectives: opts.perspectives, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// ─────────────────────────────────────────────
+// 102：Observation != Truth（RealityObservation 无 truth/certainty/fact，弱事实）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  const r = await obs(fs, WS, { subject: "payment-service", observation: "2026-09-01 暴露 API", perspectives: ["A", "B"] });
+  assert.ok(String(r).includes("[Reality Observation]"), "应输出 Reality Observation");
+  assert.ok(String(r).includes("弱事实"), "应标注弱事实");
+  assert.ok(!String(r).includes("truth") && !String(r).includes("certainty") && !String(r).includes("fact"), "无 truth/certainty/fact");
+  console.log("✔ 102 Observation != Truth：RealityObservation 弱事实，无 truth/certainty/fact");
+}
+
+// ─────────────────────────────────────────────
+// 103：Temporal alone 不能创建 RealityClaim。104：Federation alone 不能。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  const r = await mkClaim(fs, WS, "no-subject");
+  assert.ok(String(r).includes("无 RealityObservation"), "无 Observation 不能生成 RealityClaim");
+  assert.ok(String(r).includes("Temporal/Federation 不足以"), "Temporal/Federation alone 不得生成");
+  console.log("✔ 103/104 Temporal/Federation alone 不能创建 RealityClaim（须有 Observation+Validation）");
+}
+
+// ─────────────────────────────────────────────
+// 105：Alternative explanation survives（validation rejected → unstable，非 truth）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject: "payment-service", validations: [{ id: "v1", outcome: "validated" }, { id: "v2", outcome: "rejected" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("status unstable"), "反例存在→unstable（替代解释存活，非 truth）");
+  assert.ok(!String(r).includes("truth"), "不标 truth");
+  console.log("✔ 105 Alternative explanation survives：反例→unstable，不冒充真理");
+}
+
+// ─────────────────────────────────────────────
+// 106：RealityClaim lineage reconstruction（能答"系统为什么认为它存在"）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  await mkClaim(fs, WS, "payment-service");
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "model", subject: "payment-service", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  assert.ok(String(r).includes("[Lineage] 为什么系统认为它存在"), `应含 lineage 说明。实际输出：\n${r}\n---store---\n${[...store.entries()].map(([k,v])=>k+"="+v).join("\n")}`);
+  assert.ok(String(r).includes("PaymentService has endpoint"), "lineage 应链回 observation");
+  assert.ok(String(r).includes("perspectives: A") && String(r).includes("perspectives: B"), "lineage 应含 perspectives");
+  console.log("✔ 106 RealityClaim lineage：能答为什么系统认为它存在（Observation→Validation→Perspectives）");
+}
+
+// ─────────────────────────────────────────────
+// 107：Observer identity leakage blocked（Observation 不写人格/评估属性）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  const r = await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposed API", perspectives: ["ObserverA"] });
+  assert.ok(!String(r).includes("likes architecture") && !String(r).includes("reliable") && !String(r).includes("personality"), "不描述观察者人格/评估");
+  console.log("✔ 107 Observer identity leakage blocked：只描述世界对象，不写人格/评估");
+}
+
+// ─────────────────────────────────────────────
+// 108：Majority vote rejected（多 Observer 不同投影→claim，非多数定 reality）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "api", observation: "API is slow", perspectives: ["A", "C"] });
+  await obs(fs, WS, { subject: "api", observation: "API is stable", perspectives: ["B"] });
+  const r = await mkClaim(fs, WS, "api");
+  assert.ok(String(r).includes("[Reality Claim]"), "应输出 claim");
+  assert.ok(String(r).includes("status candidate"), "有分歧→candidate（非 majority 定 reality）");
+  assert.ok(String(r).includes("perspectives=A、C、B"), "lineage 含全部 perspectives（A/C/B 不裁决）");
+  assert.ok(!String(r).includes("truth") && !String(r).includes("majority"), "不多数决、不标 truth");
+  console.log("✔ 108 Majority vote rejected：不同投影→claim 候选（不多数决现实）");
+}
+
+// ─────────────────────────────────────────────
+// 109：Validated != Knowledge（supported claim，但不入知识库）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "payment-service", observation: "PaymentService has endpoint", perspectives: ["B"] });
+  await toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject: "payment-service", validations: [{ id: "v1", outcome: "validated" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/fact") || k.includes("shadow/world"));
+  assert.ok(knows.length === 0, "validated RealityClaim 不产生 knowledge/world 库");
+  console.log("✔ 109 Validated != Knowledge：supported claim 不入知识库");
+}
+
+// ─────────────────────────────────────────────
+// 110：RealityModel immutable history（Observation append-only，不覆盖）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  await obs(fs, WS, { subject: "svc", observation: "Svc exposed api", perspectives: ["A"] });
+  await obs(fs, WS, { subject: "svc", observation: "Svc changed version", perspectives: ["B"] });
+  const obsFiles = [...store.keys()].filter((k) => k.includes("shadow/model/observations/") && k.endsWith(".json"));
+  assert.ok(obsFiles.length === 2, "两个 observation 都保留（append-only）");
+  const ids = obsFiles.map((k) => JSON.parse(store.get(k)!).id);
+  assert.ok(new Set(ids).size === 2, "observation id 不重复（不可变）");
+  console.log("✔ 110 RealityModel immutable history：observation append-only，不可覆盖");
+}
+
 console.log("\nALL PASS ✅");
