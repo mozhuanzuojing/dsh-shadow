@@ -96,3 +96,16 @@ Success ≠ Truth
 Failure ≠ Ignore
 ```
 v0.33 是继 v0.28 Reality Feedback 之后**第二个真正的"现实闭环"节点**。
+
+---
+
+## 附录：v0.33 实现说明（Invariant 145 已落地）
+
+1. **ActionCandidate 层**：`action/types.ts` `ActionCandidate{id, basedOnSimulation, assumedConditions, proposedChange, uncertainty}`——**禁 expectedSuccess/confidence**（会把 Simulation Outcome 升级成行动信念）；candidate ≠ approval，需 approval/policy 才 execute。
+2. **ActionExecution 是事件**：`ActionExecution{id, candidateId, executedAt, environmentChange, result}`——"某个行动发生了"（非"我改变了世界"）；`guard.assertExecutionEvent` 禁 result 声称 RealityClaim/RealityEvidence；无 candidateId 拒绝（Simulation 不直接执行）。
+3. **ActionFeedback（一等对象）**：`ActionFeedback{executionId, observedChanges, successIndicator, unexpectedEffects, validationRefs}`——successIndicator 仅"观察到符合某些预期结果"，**禁"我预测正确"**（`feedbackIsNeutral`）；进 `shadow/action/`（Observation/Validation 通道），不入 Knowledge/Identity/RealityClaim。
+4. **Invariant 145 Success≠Capability**：Action success 不改 Identity/Knowledge/Confidence，仅 ActionExecution/ActionFeedback 记录++。
+
+结构：`action/{types, guard, persistence}.ts`。modes：`candidate` / `execute` / `feedback`。
+
+mock 139–145 验证：Simulation 不直接执行 Action / Candidate≠Approval / 不改 Identity / Result 不入 Knowledge / Feedback 进 Observation / 失败也保留作 Evidence / Success≠Capability。

@@ -3304,4 +3304,81 @@ const sim = async (fs: any, ws: string, condition: string, basedOn?: string[]) =
   console.log("✔ 138 Simulation 不反向污染 Representation（模拟不改观察者现实描述）");
 }
 
+// ─────────────────────────────────────────────
+// v0.33 Action Boundary：Simulation≠Action / Action≠Reality / Result≠Knowledge / Success≠Truth / Failure≠Ignore。
+// ─────────────────────────────────────────────
+const cand = async (fs: any, ws: string, proposed: string) => toolRegistry.get("read_shadow").execute({ mode: "candidate", proposedChange: proposed, basedOnSimulation: ["sim-1"], assumptions: ["Assume config X"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const exec2 = async (fs: any, ws: string, candidateId: string, result: string) => toolRegistry.get("read_shadow").execute({ mode: "execute", candidateId, environmentChange: "config changed", result, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const fb = async (fs: any, ws: string, executionId: string, indicator: string) => toolRegistry.get("read_shadow").execute({ mode: "feedback", executionId, observedChanges: ["latency down"], successIndicator: indicator, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 139：Simulation 不直接执行 Action（需 candidate + 批准）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await exec2(fs, WS, "", "impact may increase");
+  assert.ok(String(r).includes("SimulationOutcome 不直接执行 Action"), "无 candidateId 应拒绝（Simulation 不直接执行）");
+  console.log("✔ 139 Simulation 不直接执行 Action（需 candidate+批准）");
+}
+
+// 140：ActionCandidate ≠ ActionApproval（candidate 生成 ≠ 执行；禁 expectedSuccess/confidence）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await cand(fs, WS, "change config X");
+  assert.ok(String(r).includes("[Action Candidate]"), "应生成 candidate");
+  assert.ok(String(r).includes("生成行动建议 ≠ 执行动作"), "candidate ≠ approval");
+  assert.ok(!String(r).includes("expectedSuccess") && !String(r).includes("confidence:"), "candidate 不携带 expectedSuccess/confidence");
+  console.log("✔ 140 ActionCandidate ≠ ActionApproval（candidate 不携 expectedSuccess）");
+}
+
+// 141：Action 不修改 Identity。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await exec2(fs, WS, "ac-1", "event occurred");
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Action 不修改 Identity");
+  console.log("✔ 141 Action 不修改 Identity");
+}
+
+// 142：ActionResult 不自动成为 Knowledge。
+{
+  const { fs, store } = mkV(new Map());
+  await exec2(fs, WS, "ac-1", "event occurred");
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/fact"));
+  assert.ok(knows.length === 0, "ActionResult 不自动成为 Knowledge");
+  console.log("✔ 142 ActionResult 不自动成为 Knowledge");
+}
+
+// 143：Environment Feedback 进入 Observation（非 Memory）。
+{
+  const { fs, store } = mkV(new Map());
+  await fb(fs, WS, "ax-1", "observed latency down");
+  const ok = [...store.keys()].some((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  assert.ok(ok, "feedback 进入 action 记录（Observation 通道）");
+  console.log("✔ 143 Environment Feedback 进入 Observation（非 Memory）");
+}
+
+// 144：失败 Action 也是 Reality Evidence（不 discard）。
+{
+  const { fs, store } = mkV(new Map());
+  await fb(fs, WS, "ax-2", "observed latency up");
+  const ok = [...store.keys()].some((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  assert.ok(ok, "失败 feedback 也保留（ValidationHistory，非 discard）");
+  console.log("✔ 144 失败 Action 也是 Reality Evidence（不 discard）");
+}
+
+// 145：Success ≠ Capability（Action success 不改 Identity/Knowledge/Confidence，仅 Observation/Validation++）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await exec2(fs, WS, "ac-1", "event occurred");
+  await fb(fs, WS, "ax-3", "我预测正确"); // 该 feedback 措辞应被拒（Success≠Capability）
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "identity 不变");
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world"));
+  assert.ok(knows.length === 0, "knowledge/world 不变");
+  const act = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("exec"));
+  assert.ok(act.length >= 1, "仅 ActionExecution 记录++（Observation/Validation）");
+  console.log("✔ 145 Success ≠ Capability：Action success 不改 Identity/Knowledge/Confidence");
+}
+
 console.log("\nALL PASS ✅");

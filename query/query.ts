@@ -54,6 +54,8 @@ import { simulate, applyRule } from "../simulation/engine/simulator.js";
 import { assertAssumptionAndNotFact } from "../simulation/guard/assumption-guard.js";
 import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/guard/reality-boundary.js";
 import { renderOutcome } from "../simulation/explain/explain.js";
+import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean, assertExecutionEvent, feedbackIsNeutral } from "../action/guard.js";
+import { writeExecution, writeFeedback } from "../action/persistence.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -216,6 +218,27 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     if (!b.ok) return scrubFinal(RECALL_PREFIX + `[Simulation Rejected] ${b.reason}` + flushWarn);
     if (!outcomeHasLineage(outcome)) return scrubFinal(RECALL_PREFIX + "[Simulation Rejected] 无 derivedFrom（lineage 不完整）" + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderOutcome(outcome) + flushWarn);
+  }
+  // v0.33 Action Boundary：Simulation≠Action / Action≠Reality / Result≠Knowledge / Success≠Truth / Failure≠Ignore。
+  if (String(args?.mode) === "candidate") {
+    const conds = (args?.assumptions as string[]) || [String(args?.condition || "Assume change")].filter(Boolean);
+    const candidate = { id: `ac-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, basedOnSimulation: (args?.basedOnSimulation as string[]) || [], assumedConditions: conds, proposedChange: String(args?.proposedChange || ""), uncertainty: Number(args?.uncertainty) || 0.5 };
+    const g = assertCandidateClean(candidate as any);
+    return scrubFinal(RECALL_PREFIX + renderCandidate(candidate) + (g.ok ? "" : `\n（${g.reason}）`) + flushWarn);
+  }
+  if (String(args?.mode) === "execute") {
+    const exec = { id: `ax-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, candidateId: String(args?.candidateId || ""), executedAt: today(), environmentChange: String(args?.environmentChange || ""), result: String(args?.result || "") };
+    const g = assertExecutionEvent(exec as any);
+    if (!g.ok) return scrubFinal(RECALL_PREFIX + "[Action Rejected] " + g.reason + flushWarn);
+    if (!exec.candidateId) return scrubFinal(RECALL_PREFIX + "[Action Rejected] 无 candidateId（需先 mode:candidate + 批准，SimulationOutcome 不直接执行 Action）" + flushWarn);
+    await writeExecution(fs, ws, exec);
+    return scrubFinal(RECALL_PREFIX + renderExecution(exec) + flushWarn);
+  }
+  if (String(args?.mode) === "feedback") {
+    const fb = { executionId: String(args?.executionId || ""), observedChanges: args?.observedChanges || [], successIndicator: String(args?.successIndicator || ""), unexpectedEffects: args?.unexpectedEffects || [], validationRefs: args?.validationRefs || [] };
+    if (!feedbackIsNeutral(fb)) return scrubFinal(RECALL_PREFIX + "[Feedback Rejected] Success ≠ Capability/Identity（只记观察结果，断言『我预测正确』禁）" + flushWarn);
+    await writeFeedback(fs, ws, fb);
+    return scrubFinal(RECALL_PREFIX + renderFeedback(fb) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
