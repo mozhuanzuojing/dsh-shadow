@@ -3587,4 +3587,96 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
   console.log("✔ 165 Planning Lineage 完整（Plan→Context→Objective→Simulation→Constraints）");
 }
 
+// ─────────────────────────────────────────────
+// v0.35 Agency Boundary Kernel：ADR-0029。Agency ≠ Autonomy。
+// 166-173: no Objective / Authority≠Identity / History≠Purpose / Success≠AutonomyIncrease /
+//          Agency≠Preference / ActionScope≠WorldOwnership / ExternalObjectiveLineage / AgencyLevelImmutable。
+// 此层刻意不实现 Autonomous Agent：无 Reward/Utility/Preference Model/Self-Improvement/Goal Evolution/
+//  Intrinsic Motivation/Autonomous Objective Creation/RL。
+// ─────────────────────────────────────────────
+const agctx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "agency-context", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const agsel = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "agency-select", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const agevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "agency-event", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 166：Agency 不生成 Objective（objective 只外部来源）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agctx(fs, WS, { objectiveRef: "observer generateObjective", authoritySource: "external", authorityScope: "modify config", constraints: ["constraint X"] });
+  assert.ok(String(r).includes("AgencyContext Rejected"), "objective 自生成应拒绝");
+  assert.ok(String(r).includes("不生成 Objective"), "应标注 Agency 不生成 Objective");
+  console.log("✔ 166 Agency 不生成 Objective（objective 只外部来源）");
+}
+
+// 167：Authority ≠ Identity（授权引用与身份分离）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "agent-id", identityRef: "agent-id", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "event occurred" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "authority=identity 应拒绝");
+  assert.ok(String(r).includes("Authority ≠ Identity"), "应标注 Authority≠Identity");
+  console.log("✔ 167 Authority ≠ Identity（授权与身份分离）");
+}
+
+// 168：History ≠ Purpose（选择候选，不含蓄目的）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agsel(fs, WS, { selectedCandidateId: "pc-2", reason: "constraint_satisfied" });
+  assert.ok(String(r).includes("reason constraint_satisfied"), "理由只 constraint_satisfied");
+  assert.ok(String(r).includes("selectedCandidate pc-2"), "选中候选（具体 id），非抽象目的");
+  assert.ok(!String(r).includes("purpose") && !String(r).includes("self"), "不产 purpose/自主");
+  console.log("✔ 168 History ≠ Purpose（选择候选非选择目的）");
+}
+
+// 169：Success ≠ Autonomy Increase（成功不提升 agency 层级/授权/目标源）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "I became autonomous" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "执行声称自主应拒绝");
+  assert.ok(String(r).includes("Autonomy"), "应标注 Agency≠Autonomy");
+  const ctrl = [...store.keys()].filter((k) => k.includes("autonomy") || k.includes("agencyLevel"));
+  assert.ok(ctrl.length === 0, "无 autonomy/agencyLevel 膨胀产物");
+  console.log("✔ 169 Success ≠ Autonomy Increase（成功不提升 agency 层级/授权/目标源）");
+}
+
+// 170：Agency ≠ Preference（选择≠偏好，禁 more valuable/meaningful/better）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agsel(fs, WS, { selectedCandidateId: "pc-3", reason: "more valuable" });
+  assert.ok(String(r).includes("AgencySelection Rejected"), "reason=more valuable 应拒绝");
+  assert.ok(String(r).includes("valuable"), "应标注选择≠价值判断");
+  console.log("✔ 170 Agency ≠ Preference（选择≠偏好，禁 more valuable/meaningful/better）");
+}
+
+// 171：Action Scope ≠ World Ownership（Agency 能改，不能拥有/控制世界）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "I now control the world" });
+  assert.ok(String(r).includes("AgencyEvent Rejected"), "执行声称所有权应拒绝");
+  console.log("✔ 171 Action Scope ≠ World Ownership（能改，不能拥有/控制世界）");
+}
+
+// 172：External Objective Lineage（Action→Candidate→Plan→Objective→External Authority）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await agevt(fs, WS, { actionCandidate: "ac-success", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "latency reduced" });
+  assert.ok(String(r).includes("objectiveRef external reduce latency"), "lineage→objective 外部来源");
+  const r2 = await agevt(fs, WS, { actionCandidate: "ac-nolineage", authorityRef: "auth-X", objectiveRef: "", constraintCheck: ["constraint X"], executionResult: "event occurred" });
+  assert.ok(String(r2).includes("AgencyEvent Rejected"), "objectiveRef 空（lineage 断）应拒绝");
+  assert.ok(String(r2).toLowerCase().includes("lineage"), "应标注 lineage 断裂");
+  console.log("✔ 172 External Objective Lineage（Action→Candidate→Plan→Objective→External Authority）");
+}
+
+// 173：Agency Level Immutable（100 successful feedbacks → agencyLevel/authorityScope/objectiveSource 不变）。
+{
+  const { fs, store } = mkV(new Map());
+  await agctx(fs, WS, { objectiveRef: "external reduce latency", authoritySource: "external", authorityScope: "modify config", constraints: ["constraint X"] });
+  const ctxFiles = [...store.keys()].filter((k) => k.includes("shadow/agency/") && k.includes("context-"));
+  assert.ok(ctxFiles.length === 1, "context snapshot 写入一次");
+  const before = store.get(ctxFiles[0]!);
+  for (let i = 0; i < 100; i++) await agevt(fs, WS, { actionCandidate: `ac-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `event ${i} occurred` });
+  assert.ok(store.get(ctxFiles[0]!) === before, "100 次成功后 agency 快照不变（Agency Level Immutable）");
+  const lvl = [...store.keys()].filter((k) => k.includes("agencyLevel") || k.includes("autonomy") || (k.includes("authorityScope") && !k.includes("context-")));
+  assert.ok(lvl.length === 0, "无 agencyLevel/autonomy/authorityScope 膨胀产物");
+  console.log("✔ 173 Agency Level Immutable：100 successful feedbacks → agencyLevel/authorityScope/objectiveSource 不变");
+}
+
 console.log("\nALL PASS ✅");

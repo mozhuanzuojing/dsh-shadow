@@ -1,0 +1,43 @@
+import { isExternalObjectiveSource, objectiveIsExternal, reasonIsConstraintOnly, eventProvenanceOk, authorityIsNotIdentity } from "./guards.js";
+import { writeAgencyEvent } from "./persistence.js";
+import { today } from "../core/util.js";
+// 构建 AgencyContext（immutable snapshot）。authoritySource 必须外部；objectiveRef 不得自指。
+export const buildAgencyContext = (args) => {
+    const authoritySource = String(args?.authoritySource || "");
+    if (!isExternalObjectiveSource(authoritySource))
+        return { ok: false, reason: "authoritySource 须 external/human/system/user（禁 observer/self 授权）" };
+    const objectiveRef = String(args?.objectiveRef || "");
+    if (!objectiveIsExternal(objectiveRef))
+        return { ok: false, reason: "objectiveRef 禁自指（Agency 不生成 Objective；objective 只能来自外部）" };
+    return {
+        ok: true,
+        ctx: { id: `agc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, objectiveRef, authoritySource: authoritySource, authorityScope: String(args?.authorityScope || ""), constraints: args?.constraints || [], createdAt: today() },
+    };
+};
+// AgencySelection：选中候选（不是目的），reason 只允许 constraint_satisfied。
+export const pickAgencySelection = (args) => {
+    const reason = String(args?.reason || "");
+    if (reason && !/constraint_satisfied/i.test(reason))
+        return { ok: false, reject: "reason 须为 constraint_satisfied（非 more valuable/meaningful/better）" };
+    if (!reasonIsConstraintOnly(reason))
+        return { ok: false, reject: "reason 禁 valuable/meaningful/better/preferred（选择≠价值判断）" };
+    const candidates = args?.candidates || [];
+    const selectedId = String(args?.selectedCandidateId || "");
+    const chosen = candidates.find((c) => !(c?.violatedConstraints || []).length || ((c?.satisfiedConstraints || []).length >= (c?.violatedConstraints || []).length));
+    const id = selectedId || chosen?.id || candidates[0]?.id || "";
+    if (!id)
+        return { ok: false, reject: "无候选可选中（需候选 + 约束满足）" };
+    return { ok: true, sel: { selectedCandidateId: id, reason: "constraint_satisfied" } };
+};
+// AgencyBoundaryEvent（audit node）。lineage 不可断；Authority ≠ Identity；执行结果禁 Autonomy/所有权。
+export const buildAgencyEvent = async (fs, ws, args) => {
+    const ev = { actionCandidate: String(args?.actionCandidate || ""), authorityRef: String(args?.authorityRef || ""), objectiveRef: String(args?.objectiveRef || ""), constraintCheck: args?.constraintCheck || [], executionResult: String(args?.executionResult || "") };
+    if (!eventProvenanceOk(ev))
+        return { ok: false, reason: "objectiveRef 须外部来源（Action→Candidate→Plan→Objective→External Authority 的 lineage 不可断）" };
+    if (!authorityIsNotIdentity(ev.authorityRef, String(args?.identityRef || "")))
+        return { ok: false, reason: "Authority ≠ Identity（授权引用与身份分离，禁把授权当身份）" };
+    if (/autonomous|自主|更多自由|expanded scope|self purpose|control the world|拥有世界|控制世界|become self/i.test(ev.executionResult))
+        return { ok: false, reason: "执行结果禁 Autonomy/所有权（Agency 有行动能力 ≠ 有自我目的）" };
+    await writeAgencyEvent(fs, ws, ev);
+    return { ok: true, ev };
+};

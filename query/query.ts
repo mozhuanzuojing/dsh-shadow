@@ -58,6 +58,9 @@ import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean,
 import { writeExecution, writeFeedback } from "../action/persistence.js";
 import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../planning/guard.js";
 import { renderContext, renderEvaluation } from "../planning/render.js";
+import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../agency/render.js";
+import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../agency/engine.js";
+import { writeAgencyContext } from "../agency/persistence.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -260,6 +263,24 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const ev: any = { candidates: planCandidates, tradeoffs: String(criteria) ? [{ condition: criteria, consequence: "possible", uncertainty: 0.5 }] : [], unresolvedQuestions: ["只比较路径，非系统价值判断（需外部约束权衡）"] };
     const g3 = assertEvaluationComparison(ev); if (!g3.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g3.reason + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderContext(ctx) + "\n" + renderEvaluation(ev) + flushWarn);
+  }
+  // v0.35 Agency Boundary Kernel：AgencyContext（immutable snapshot）/ AgencySelection（reason=constraint_satisfied）/ AgencyBoundaryEvent（audit + lineage）。
+  // Agency ≠ Autonomy：行动能力不得自造目的、不因成功而扩张、不升级为自主。此层刻意不实现 Autonomous Agent。
+  if (String(args?.mode) === "agency-context") {
+    const c = buildAgencyContext(args);
+    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[AgencyContext Rejected] " + c.reason + flushWarn);
+    await writeAgencyContext(fs, ws, c.ctx);
+    return scrubFinal(RECALL_PREFIX + renderAgencyContext(c.ctx) + flushWarn);
+  }
+  if (String(args?.mode) === "agency-select") {
+    const s = pickAgencySelection(args);
+    if (!s.ok || !s.sel) return scrubFinal(RECALL_PREFIX + "[AgencySelection Rejected] " + (s.reject || "") + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderSelection(s.sel) + flushWarn);
+  }
+  if (String(args?.mode) === "agency-event") {
+    const e = await buildAgencyEvent(fs, ws, args);
+    if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
