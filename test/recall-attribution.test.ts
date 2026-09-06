@@ -3982,4 +3982,106 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   console.log("✔ 197 Delegation Lineage Append-only（事件只追加，不重写；lineage 完整）");
 }
 
+// ─────────────────────────────────────────────
+// v0.37 Recall Continuity Kernel：ADR-0031。Recall = Access Transition，不是 Reality Reconstruction；非 Memory Kernel。
+// 198-205: Recall≠Observation / Forgotten≠Deleted / Recall≠KnowledgeCreation / Recall≠IdentityUpdate /
+//          Recall Lineage Required / Confabulation Boundary / Forgetting Does Not Erase Validation /
+//          Recall Does Not Increase Certainty(205，用户补充，禁 self-generated truth)。
+// ─────────────────────────────────────────────
+const rcforget = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "recall-forget", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const rcevent = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "recall-event", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const rcvalid = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "recall-validation", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const rcForgetOk = { id: "fr-1", originalRef: "obs-1", reason: "access window closed" };
+const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef: "ctx-1", originalRecord: "obs-1", observationRefs: ["obs-1"] };
+
+// 198：Recall ≠ Observation（忆起不产生新观察/新 RealityClaim）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, rcForgetOk);
+  const r = await rcevent(fs, WS, rcRecallOk);
+  assert.ok(String(r).includes("[Recall Event]"), "忆起记录为 event（非新观察）");
+  const obs = [...store.keys()].filter((k) => k.includes("shadow/model/observations/") || k.includes("shadow/model/claims/") || k.includes("shadow/reality/"));
+  assert.ok(obs.length === 0, "Recall 不产生新 RealityObservation/RealityClaim");
+  const rBad = await rcevent(fs, WS, { ...rcRecallOk, observationRefs: ["new observation X"] });
+  assert.ok(String(rBad).includes("RecallEvent Rejected"), "lineage 含 new observation 应拒绝");
+  console.log("✔ 198 Recall ≠ Observation（不产生新观察/新 RealityClaim）");
+}
+
+// 199：Forgotten ≠ Deleted（遗忘=访问状态变化，非删除/否定）。
+{
+  const { fs, store } = mkV(new Map());
+  const r = await rcforget(fs, WS, { id: "fr-1", originalRef: "obs-1", reason: "deleted record" });
+  assert.ok(String(r).includes("Recall Rejected"), "reason 声称 deleted 应拒绝（Forget ≠ Delete）");
+  assert.ok(String(r).includes("deleted/false/invalid"), "应标注遗忘≠删除");
+  const ok = await rcforget(fs, WS, rcForgetOk);
+  assert.ok(String(ok).includes("[Forgotten Record]"), "非删除 reason 通过");
+  console.log("✔ 199 Forgotten ≠ Deleted（遗忘=访问状态变化，非删除/否定）");
+}
+
+// 200：Recall ≠ Knowledge Creation（想起来不是学习）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, rcForgetOk);
+  await rcevent(fs, WS, rcRecallOk);
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/model/"));
+  assert.ok(knows.length === 0, "Recall 不产生 Knowledge/World/RealityModel（Recall ≠ Knowledge Creation）");
+  console.log("✔ 200 Recall ≠ Knowledge Creation（想起来不是学习）");
+}
+
+// 201：Recall ≠ Identity Update（记起过去不改变 Who I am）。
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  await rcforget(fs, WS, rcForgetOk);
+  await rcevent(fs, WS, rcRecallOk);
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Recall 不修改 Identity（Recall ≠ Identity Update）");
+  console.log("✔ 201 Recall ≠ Identity Update（记起过去不改变 Who I am）");
+}
+
+// 202：Recall Lineage Required（Recall→Original Memory Trace→Observation/Experience；sourceRef 必须存在）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, rcForgetOk);
+  const rNo = await rcevent(fs, WS, { ...rcRecallOk, sourceRef: "" });
+  assert.ok(String(rNo).includes("RecallEvent Rejected"), "无 sourceRef 应拒绝（Lineage Required）");
+  assert.ok(String(rNo).includes("sourceRef 必须存在"), "应标注 lineage");
+  const rOk = await rcevent(fs, WS, rcRecallOk);
+  assert.ok(String(rOk).includes("[Recall Event]"), "有 lineage 通过");
+  console.log("✔ 202 Recall Lineage Required（sourceRef 必须存在；Recall→Original Memory Trace）");
+}
+
+// 203：Confabulation Boundary（Recall without external trigger/source lineage = rejected）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, rcForgetOk);
+  const r = await rcevent(fs, WS, { ...rcRecallOk, triggerType: "internal certainty", sourceRef: "my intuition" });
+  assert.ok(String(r).includes("RecallEvent Rejected"), "self-generated truth 应拒绝（Confabulation）");
+  assert.ok(String(r).includes("Confabulation") || String(r).includes("internal"), "应标注 trigger 禁 internal");
+  console.log("✔ 203 Confabulation Boundary（Recall without external trigger/source lineage = rejected）");
+}
+
+// 204：Forgetting Does Not Erase Validation（原验证链仍存在，不变成新 hypothesis）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, { ...rcForgetOk, validationRefs: ["val-1"] });
+  const r = await rcevent(fs, WS, rcRecallOk);
+  assert.ok(String(r).includes("validations val-1"), "遗忘不抹除验证链（validationRefs 保留）");
+  const hyp = [...store.keys()].filter((k) => k.includes("shadow/hypothesis"));
+  assert.ok(hyp.length === 0, "Recall 不把原验证链变成 new hypothesis（Forgetting Does Not Erase Validation）");
+  console.log("✔ 204 Forgetting Does Not Erase Validation（原验证链仍存在，不变成新 hypothesis）");
+}
+
+// 205：Recall Does Not Increase Certainty（忆起只是访问变化，不是验证）。
+{
+  const { fs, store } = mkV(new Map());
+  await rcforget(fs, WS, rcForgetOk);
+  const r = await rcevent(fs, WS, { ...rcRecallOk, status: "supported" });
+  assert.ok(String(r).includes("RecallEvent Rejected"), "claim supported 应拒绝（Recall 不提升 epistemic status）");
+  assert.ok(String(r).toLowerCase().includes("certainty"), "应标注 Recall Does Not Increase Certainty");
+  const rc = await rcvalid(fs, WS, { recalledRef: "fr-1", sourceRef: "ctx-1" });
+  assert.ok(String(rc).includes("epistemicStatusUnchanged true"), "validation 报告 epistemic status 不变");
+  console.log("✔ 205 Recall Does Not Increase Certainty（忆起只是访问变化，不是验证）");
+}
+
 console.log("\nALL PASS ✅");

@@ -64,6 +64,9 @@ import { writeAgencyContext } from "../agency/persistence.js";
 import { renderContext as renderDelegationContext, renderCheck, renderEvent as renderDelegationEvent } from "../delegation/render/render.js";
 import { buildDelegationContext, checkDelegation, recordDelegationEvent } from "../delegation/engine/delegated-execution.js";
 import { writeDelegationContext } from "../delegation/persistence/persist.js";
+import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../recall/render/render.js";
+import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../recall/engine/recall-continuity.js";
+import { writeForgottenRecord } from "../recall/persistence/persist.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -303,6 +306,24 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const e = await recordDelegationEvent(fs, ws, args);
     if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[DelegationEvent Rejected] " + e.reason + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderDelegationEvent(e.ev) + flushWarn);
+  }
+  // v0.37 Recall Continuity Kernel：ForgottenRecord / RecallEvent / RecallValidation。
+  // Recall = Access Transition（恢复访问路径），不是 Reality Reconstruction；不为 Memory Kernel。
+  if (String(args?.mode) === "recall-forget") {
+    const r = buildForgottenRecord(args);
+    if (!r.ok || !r.record) return scrubFinal(RECALL_PREFIX + "[Recall Rejected] " + r.reason + flushWarn);
+    await writeForgottenRecord(fs, ws, r.record);
+    return scrubFinal(RECALL_PREFIX + renderRecord(r.record) + flushWarn);
+  }
+  if (String(args?.mode) === "recall-event") {
+    const e = await buildRecallEvent(fs, ws, args);
+    if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[RecallEvent Rejected] " + e.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderRecallEvent(e.ev) + flushWarn);
+  }
+  if (String(args?.mode) === "recall-validation") {
+    const v = await validateRecall(fs, ws, args);
+    if (!v.ok || !v.result) return scrubFinal(RECALL_PREFIX + "[RecallValidation Rejected] " + v.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderRecallValidation(v.result) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
