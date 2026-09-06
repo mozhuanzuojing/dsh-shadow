@@ -15,6 +15,20 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
+// Observer v2（ADR-0003 §3-9）：asOf 支持 `{ timestamp, timezone }` 对象，或 YYYY-MM-DD 日期串。
+// 记忆按日期归档，故主过滤按 date；timestamp/timezone 供窗口展示与语义锚定。
+const parseAsOf = (v) => {
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v))
+        return { date: v };
+    if (v && typeof v === "object") {
+        const ts = String(v.timestamp || "");
+        const date = ts.slice(0, 10) || String(v.date || v.timestamp || "").slice(0, 10);
+        if (!date)
+            return null;
+        return { date, timestamp: ts || undefined, timezone: v.timezone ? String(v.timezone) : undefined };
+    }
+    return null;
+};
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
     const ws = resolveWorkspace(agent, deps.cwdBySession, deps.config);
@@ -48,12 +62,12 @@ export async function runReadShadow(deps, args, exec) {
     let memories = await listMemories(fs, ws);
     const debugMode = recallCfg.debug === true || Boolean(args?.debug);
     const diag = [];
-    const asOf = /^\d{4}-\d{2}-\d{2}$/.test(String(args?.asOf || "")) ? String(args.asOf) : "";
+    const asOf = parseAsOf(args?.asOf);
     const observerMode = Boolean(args?.observer);
     if (asOf)
-        memories = memories.filter((m) => m.date <= asOf);
+        memories = memories.filter((m) => m.date <= asOf.date);
     if (debugMode)
-        diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf}` : ""}`);
+        diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf.date}` : ""}`);
     let tokens = tokenize(topic);
     if (!tokens.length)
         tokens = [String(topic).toLowerCase()];

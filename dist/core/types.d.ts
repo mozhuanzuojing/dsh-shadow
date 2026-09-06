@@ -76,3 +76,14 @@ export interface AgentLike {
         cwd?: string;
     };
 }
+export type TraceKind = "action" | "user" | "assistant" | "decision";
+export interface Trace {
+    seq: number;
+    at: string;
+    kind: TraceKind;
+    actor: string;
+    comp: string;
+    text: string;
+    sub?: string;
+    source: string;
+}

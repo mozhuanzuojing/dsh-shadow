@@ -16,7 +16,7 @@ export const renderByTier = (s, budgetChars, forceL0 = false, tokens = []) => {
     if (observer) {
         // Observation Window：只呈现「当时可知」，后验知识标 [后验]——不让全局/后验答案假装成当下已知。
         out = `[Observation Window] ${mm.rel}`;
-        out += `\nas-of ${mm.date}${asOf ? `（窗口 ≤ ${asOf}）` : ""}`;
+        out += `\nas-of ${mm.date}${asOf ? `（窗口 ≤ ${asOf.date || asOf}）` : ""}`;
         const known = [
             (String(text).match(/^# (.+)$/m) || [])[1] || "",
             (String(text).match(/^> 背景\/材料：(.+)$/m) || [])[1] || "",

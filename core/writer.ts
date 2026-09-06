@@ -7,6 +7,7 @@ import { today, stamp, compact, slug, under, component, topicsInText, tokenize }
 import { readRel, listMemories } from "../persistence/files.js";
 import { extractMessage, goalText, classifyUser } from "./collect.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
+import { traceOf } from "./trace.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
 
 export interface ShadowCollectorOpts {
@@ -246,7 +247,9 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
       const extra = { project, agent: id ? String(id) : undefined, goal: goalByAgent.get(String(id || "")) };
       const clue = buildClueHeader(entry, arr, id, extra);
-      const bodyLines = arr.map((e) => `- [${e.time}] [${e.comp || entry}] ${sanitizeText(e.text)}`).filter((l) => !isUnsafe(l));
+      // 事件 → Trace → Memory：正常化采集源为有序 Trace，再据此塑形正文（输出保持一致）。
+      const traces = traceOf(arr, id);
+      const bodyLines = traces.map((t) => `- [${t.at}] [${t.comp || entry}] ${sanitizeText(t.text)}`).filter((l) => !isUnsafe(l));
       const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
       await fs.writeText(t, `${head}${clue}${body}\n`);
       await rebuildIndex(fs, ws);

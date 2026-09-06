@@ -11,6 +11,7 @@ export const readSoul = async (fs, ws) => {
 };
 export const soulText = (soul) => {
     const lines = ["[Soul Kernel]"];
+    lines.push("（curated 工程化投影：把 agent 当前取舍投影成可读约定，不是灵魂数据库；可证伪、不宣称全知。）");
     if (soul?.identity)
         lines.push(`身份 ${typeof soul.identity === "string" ? soul.identity : (soul.identity.name || soul.identity.role || JSON.stringify(soul.identity))}`);
     if (Array.isArray(soul?.values) && soul.values.length)
@@ -21,5 +22,8 @@ export const soulText = (soul) => {
         lines.push(`品味 ${JSON.stringify(soul.taste)}`);
     if (Array.isArray(soul?.boundaries) && soul.boundaries.length)
         lines.push(`边界 ${soul.boundaries.join("、")}`);
+    // Observer Lens：Soul 的工程化投影——只呈现"这一侧可见"的四维 + 边界，明确它是视角而非真理。
+    const lens = soul?.observerLens || { identity: true, values: true, principles: true, taste: true, boundaries: true };
+    lines.push(`Observer Lens ${JSON.stringify(lens)}`);
     return lines.join("\n");
 };

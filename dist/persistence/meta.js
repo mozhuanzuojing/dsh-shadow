@@ -1,4 +1,7 @@
-// dsh-shadow —— persistence/meta.ts：_meta.json 派生状态读写（Derived Artifact）。从 index.ts 迁出。
+// dsh-shadow —— persistence/meta.ts：_meta.json 派生状态读写（Derived Artifact）。
+// 派生约定（ADR-0003 §3-7）：Memory 文件（shadow/<date>/<time>-<entry>.md）是 source of truth；
+// _meta.json / _recall_log.json / _index.md 都是可从 Memory 重建的派生物，坏了用 rebuild-index 重建。
+// 从 index.ts 迁出。
 export const readMeta = async (fs, ws) => {
     if (!fs || !ws)
         return {};

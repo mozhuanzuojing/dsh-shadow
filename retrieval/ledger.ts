@@ -1,4 +1,5 @@
-// dsh-shadow —— retrieval/ledger.ts：_recall_log.json 读写（Recall ledger / cooldown）。从 index.ts 迁出。
+// dsh-shadow —— retrieval/ledger.ts：_recall_log.json 读写（Recall ledger / cooldown）。
+// 派生物（Derived Artifact）：可由 Memory 重建；Memory 文件是 source of truth（ADR-0003 §3-7）。从 index.ts 迁出。
 export const readLedger = async (fs: any, ws: string) => {
   if (!fs || !ws) return { turn: 0, served: {} };
   try {

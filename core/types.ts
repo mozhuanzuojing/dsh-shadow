@@ -58,3 +58,17 @@ export interface AgentLike {
   id?: string;
   session?: { header?: { cwd?: string }; cwd?: string };
 }
+
+// ── Trace（ADR-0003 §3-5）：World/DSH Events → Trace → Memory → Experience 的中间层。 ──
+// 每一条 Trace = 归一化后的单个事件（归一化采集源，Memory 从其塑形）。无副作用、纯数据。
+export type TraceKind = "action" | "user" | "assistant" | "decision";
+export interface Trace {
+  seq: number;          // 回合内序号
+  at: string;           // stamp()，写侧时间戳
+  kind: TraceKind;      // 事件类别
+  actor: string;        // agent id（归属）
+  comp: string;         // 语义组件 / 工具名（入口候选）
+  text: string;         // 已清洗正文（sanitizeText 前原始文本交由 flush 处理）
+  sub?: string;         // 用户消息分类（classifyUser）
+  source: string;       // 采集源（fs/tool/goal/session/user）
+}
