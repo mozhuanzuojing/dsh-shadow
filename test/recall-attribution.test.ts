@@ -2513,4 +2513,165 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   console.log("✔ 场景75 Dream 不修改 Memory（不写 memory 文件）");
 }
 
+// ─────────────────────────────────────────────
+// v0.28 Hypothesis Validation：Future Evidence 单向 → 与替代解释竞争 → ValidationArtifact（不覆盖 Hypothesis）。
+// Memory ≠ Evidence；不修改 Identity；不产生 Knowledge。
+const seedHypothesis = (store87, id, opts = {}) => store87.set(`D:/ws/shadow/hypothesis/${id}.json`, JSON.stringify({
+  id, observerId: "T",
+  claimCandidate: "在多个场景观察到提前建边界后返工下降的候选模式",
+  supportingPatterns: ["p1"],
+  alternativeExplanation: [{ hypothesisId: id, alternatives: [
+    { description: "随机共现（样本偶然）", supportingEvidence: [] }, { description: "存在未观察变量", supportingEvidence: [] }, { description: "样本偏差", supportingEvidence: [] } ] }],
+  falsification: { whatWouldDisprove: "反例出现则推翻" },
+  verification: { required: true, status: "pending" },
+  createdAt: opts.createdAt || "2026-09-05",
+}));
+const ev = async (fs: any, ws: string, hid: string, outcome: string) => toolRegistry.get("read_shadow").execute({ mode: "evidence", hypothesisId: hid, actualOutcome: outcome, observedAt: "2026-09-06", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const val = async (fs: any, ws: string, hid: string, ctx: any) => toolRegistry.get("read_shadow").execute({ mode: "validate", hypothesisId: hid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const mkV = (store: Map<string, string>) => { const fs = mkFs(store); agentsById.set("T-val", { id: "T-val", session: { header: { cwd: WS } } }); const l = new Map(); const s = { fs, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined }; const c = { get: (k) => s[k], on: (e, fn) => l.set(e, fn), inject: (deps, cb) => cb({ get: (k) => s[k] }) }; const P = { name, inject, apply }; P.apply(c, { summary: { enabled: false }, recall: {} }); return { fs, store }; };
+
+// ─────────────────────────────────────────────
+// 场景 76：pending hypothesis 接收 future evidence。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h76");
+  await ev(fs, WS, "h76", "返工下降");
+  const r = await val(fs, WS, "h76", null);
+  assert.ok(String(r).includes("outcome observed"), "支持事件应→observed");
+  assert.ok(String(r).includes("hypothesis h76"), "应验证 h76");
+  console.log("✔ 场景76 pending hypothesis：接收 future evidence（→observed）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 77：support evidence → observed（单条支持≠validated）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h77");
+  await ev(fs, WS, "h77", "返工下降");
+  const r = await val(fs, WS, "h77", null);
+  assert.ok(String(r).includes("outcome observed"), "单条支持应→observed（非 validated）");
+  assert.ok(!String(r).includes("outcome validated"), "不应跳过多重验证");
+  console.log("✔ 场景77 support→observed：单条支持≠validated");
+}
+
+// ─────────────────────────────────────────────
+// 场景 78：多轮验证 → validated（多次支持+低反例+替代存活）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h78");
+  for (let i = 0; i < 8; i++) await ev(fs, WS, "h78", "返工下降");
+  await ev(fs, WS, "h78", "复杂度增加"); // 1 反例
+  const r = await val(fs, WS, "h78", null);
+  assert.ok(String(r).includes("outcome validated"), "多轮支持+低反例应→validated");
+  assert.ok(String(r).includes("alternativeSurvival=0.81") || String(r).includes("alternativeSurvival=0."), "应含替代存活度");
+  console.log("✔ 场景78 多轮验证→validated（8支持/1反例，alternativeSurvival 高）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 79：contradiction → rejected。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h79");
+  await ev(fs, WS, "h79", "返工下降");
+  await ev(fs, WS, "h79", "复杂度增加");
+  await ev(fs, WS, "h79", "故障频发");
+  const r = await val(fs, WS, "h79", null);
+  assert.ok(String(r).includes("outcome rejected"), "2+ 反例应→rejected");
+  assert.ok(String(r).includes("反例过多"), "应给反例过多的结论");
+  console.log("✔ 场景79 contradiction→rejected（2+ 反例）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 80：alternative explanation 胜出（主假设被削弱，替代解释 supported）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h80");
+  await ev(fs, WS, "h80", "返工下降");
+  await ev(fs, WS, "h80", "复杂度增加");
+  await ev(fs, WS, "h80", "故障频发");
+  await ev(fs, WS, "h80", "需求变化");
+  await ev(fs, WS, "h80", "模糊需求");
+  const r = await val(fs, WS, "h80", null);
+  assert.ok(String(r).includes("outcome rejected"), "反例占总多数应→rejected");
+  assert.ok(String(r).includes("(supported)"), "替代解释应胜出");
+  console.log("✔ 场景80 alternative 胜出：主假设被现实削弱，替代解释 supported");
+}
+
+// ─────────────────────────────────────────────
+// 场景 81：expired（无新证据且超期，非失败）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h81", { createdAt: "2022-01-01" });
+  const r = await val(fs, WS, "h81", null);
+  assert.ok(String(r).includes("outcome expired"), "超期且无新证据应→expired");
+  assert.ok(!String(r).includes("outcome rejected"), "expired 非 rejected（可重新激活）");
+  console.log("✔ 场景81 expired：无新证据且超期（知识状态，非失败）");
+}
+
+// ─────────────────────────────────────────────
+// 场景 82：validation 不修改 Identity。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedIdentity(store, "v1", "2026-01-01");
+  seedHypothesis(store, "h82");
+  await ev(fs, WS, "h82", "返工下降");
+  await val(fs, WS, "h82", null);
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Validation 不应创建/推进 identity");
+  console.log("✔ 场景82 validation 不修改 Identity");
+}
+
+// ─────────────────────────────────────────────
+// 场景 83：validation 保留历史 perception snapshot（hypothesisProjectionSnapshot）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h83");
+  await ev(fs, WS, "h83", "返工下降");
+  await val(fs, WS, "h83", null);
+  const vk = [...store.keys()].find((k) => k.includes("shadow/validation/") && k.endsWith(".json"));
+  const va = store.get(vk!);
+  assert.ok(va!.includes("hypothesisProjectionSnapshot"), "ValidationArtifact 应保留历史 projection snapshot");
+  assert.ok(va!.includes("perceptionDelta"), "应含 perceptionDelta");
+  console.log("✔ 场景83 validation 保留历史 perception snapshot");
+}
+
+// ─────────────────────────────────────────────
+// 场景 84：同一 Hypothesis 多次 Validation 保留历史（多个 artifact）。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h84");
+  await ev(fs, WS, "h84", "返工下降");
+  await val(fs, WS, "h84", null);
+  await ev(fs, WS, "h84", "复杂度增加");
+  await val(fs, WS, "h84", null);
+  const vFiles = [...store.keys()].filter((k) => k.includes("shadow/validation/") && k.endsWith(".json"));
+  assert.ok(vFiles.length >= 2, "多次 Validation 应保留多个 artifact");
+  console.log("✔ 场景84 同一 Hypothesis 多次 Validation 保留历史");
+}
+
+// ─────────────────────────────────────────────
+// 场景 85：validated 不自动进入 Knowledge/Identity。
+// ─────────────────────────────────────────────
+{
+  const { fs, store } = mkV(new Map());
+  seedHypothesis(store, "h85");
+  for (let i = 0; i < 8; i++) await ev(fs, WS, "h85", "返工下降");
+  await val(fs, WS, "h85", null);
+  // 无 knowledge 存储；identity 无变化
+  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  assert.ok(idFiles.length === 0, "validated 不自动进入 Identity");
+  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge/") || k.includes("shadow/fact"));
+  assert.ok(knows.length === 0, "validated 不产生 Knowledge Base");
+  console.log("✔ 场景85 validated 不自动进入 Knowledge/Identity（防退化 RAG）");
+}
+
 console.log("\nALL PASS ✅");

@@ -28,6 +28,9 @@ import { queryTemporal, renderTemporalGraph, renderReplay, renderCompare } from 
 import { buildSleepWindow, renderSleepWindow } from "../dream/sleep.js";
 import { offlineCompression, buildDreamArtifact, renderDreamResult } from "../dream/compress.js";
 import { writeDream } from "../dream/persist.js";
+import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../validation/evidence.js";
+import { validateHypothesis, toArtifact, renderValidation } from "../validation/validate.js";
+import { writeValidation } from "../validation/persist.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 export async function runReadShadow(deps, args, exec) {
     const agent = exec?.agent;
@@ -70,7 +73,24 @@ export async function runReadShadow(deps, args, exec) {
         const result = await offlineCompression(fs, ws, { observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to });
         const artifact = await buildDreamArtifact(fs, ws, { id: sw.id, observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to }, result);
         await writeDream(fs, ws, { artifact, result });
+        for (const h of result.hypotheses)
+            await writeHypothesis(fs, ws, h);
         return scrubFinal(RECALL_PREFIX + renderSleepWindow(sw) + "\n" + renderDreamResult(result) + flushWarn);
+    }
+    // v0.28 Hypothesis Validation：注册 FutureEvidence（未来事实，单向）；validate 与替代解释竞争 → Artifact（不覆盖 Hypothesis）。
+    if (String(args?.mode) === "evidence") {
+        const ev = await registerFutureEvidence(fs, ws, { hypothesisId: String(args?.hypothesisId || ""), observedAt: String(args?.observedAt || today()), actualOutcome: String(args?.actualOutcome || ""), observationType: String(args?.observationType || "observation") });
+        return scrubFinal(RECALL_PREFIX + `[Evidence] registered ${ev.id} · hypothesis ${ev.hypothesisId} · outcome ${ev.actualOutcome}` + flushWarn);
+    }
+    if (String(args?.mode) === "validate") {
+        const hid = String(args?.hypothesisId || "");
+        const h = await readHypothesis(fs, ws, hid);
+        if (!h)
+            return scrubFinal(RECALL_PREFIX + `（无 hypothesis ${hid}：请先 mode:offline 生成假设）` + flushWarn);
+        const evidences = await readFutureEvidence(fs, ws, hid);
+        const result = validateHypothesis(h, evidences);
+        await writeValidation(fs, ws, toArtifact(h, result, evidences.map((e) => e.id), today()));
+        return scrubFinal(RECALL_PREFIX + renderValidation(result) + flushWarn);
     }
     const recallCfg = deps.config.recall ?? {};
     const retentionCfg = deps.config.retention ?? {};

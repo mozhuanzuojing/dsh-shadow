@@ -100,3 +100,17 @@ ValidationContext {
 
 v0.20–v0.27 = **Observer Formation**（我是谁/我怎么看/经历了什么/如何反思/如何产假设）。
 v0.28–v0.30 = **Reality Coupling**（观察 → 现实反馈 → 模型修正 → 世界理解）。
+
+---
+
+## 附录：v0.28 实现说明（5 个 checklist 已落地）
+
+1. **FutureEvidence 独立存储**：`shadow/future-evidence/<id>.json`；`shadow/hypothesis/<id>.json`（dream 产出）；`shadow/validation/<id>.json`（artifact）。保持 Memory ≠ Evidence、Hypothesis ≠ Evidence。
+2. **Validation 生成 Artifact，不覆盖 Hypothesis**：`validation/validate.ts` `validateHypothesis` → `ValidationArtifact`（同一假设可多次 validated/observed/rejected，保留历史）。
+3. **observed vs validated 严格**：observed = ≥1 未来支持；validated = applied≥3 且 supportRate≥0.7 且 contradiction≤1 且 alternativeSurvival≥0.4（例 8支持/1反例）。
+4. **expired 不自动删除**：无新证据且 `createdAt ≥365 天` → expired（知识状态，可重新激活，非 false）。
+5. **Validation 不产生 Knowledge / 不修改 Identity**：validated 只入 `Reflection → CandidateIdentityChange → Evaluator → Identity`；无 knowledge 存储。
+
+4 维 confidence：`{evidenceStrength, repetition, contradiction, alternativeSurvival（反例削弱→替代解释存活度下降）}`。`mode:evidence`（注册 FutureEvidence）+ `mode:validate`（假设 vs 替代解释竞争 → ValidationArtifact）。
+
+mock 76–85 验证：pending 接收未来证据 / support→observed / 多轮→validated / contradiction→rejected / alternative 胜出 / expired / 不改 Identity / 保留 perception snapshot / 多次 validation 保留历史 / validated 不入 Knowledge/Identity。
