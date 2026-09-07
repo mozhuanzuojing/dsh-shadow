@@ -2,7 +2,7 @@
 export const tasteOf = async (fs, ws, soul) => {
     let extra = null;
     try {
-        const t = await fs.resolve(`${ws}/shadow/taste/taste.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/.shadow/taste/taste.json`, { cwd: ws });
         const txt = await fs.readText(t);
         if (txt)
             extra = JSON.parse(txt);
@@ -24,6 +24,6 @@ export const renderTaste = (t) => {
             lines.push(`偏好 ${JSON.stringify(pref)}`);
     }
     if (!t.soul && !t.extra)
-        lines.push("（暂无品味配置：可在 soul.json.taste 或 shadow/taste/taste.json 定义）");
+        lines.push("（暂无品味配置：可在 soul.json.taste 或 .shadow/taste/taste.json 定义）");
     return lines.join("\n");
 };

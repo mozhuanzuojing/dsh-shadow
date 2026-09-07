@@ -480,7 +480,7 @@ export async function runReadShadow(deps, args, exec) {
     if (args?.soul) {
         const soul = await readSoul(fs, ws);
         if (!soul)
-            return scrubFinal(RECALL_PREFIX + "（无 Soul 配置：可在 shadow/soul/soul.json 定义 身份/价值观/原则/品味/边界）" + flushWarn);
+            return scrubFinal(RECALL_PREFIX + "（无 Soul 配置：可在 .shadow/soul/soul.json 定义 身份/价值观/原则/品味/边界）" + flushWarn);
         return scrubFinal(RECALL_PREFIX + soulText(soul) + flushWarn);
     }
     if (args?.taste) {
@@ -502,7 +502,7 @@ export async function runReadShadow(deps, args, exec) {
     }
     const topic = String(args?.topic || "").trim();
     if (!topic) {
-        const idx = await readRel(fs, ws, "shadow/_index.md");
+        const idx = await readRel(fs, ws, ".shadow/_index.md");
         return scrubFinal(RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn);
     }
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));

@@ -10,7 +10,7 @@ export const registerRealityEvidence = async (fs, ws, ev) => {
         status: "observed",
     };
     try {
-        const rel = `shadow/reality/${full.id}.json`;
+        const rel = `.shadow/reality/${full.id}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(full));
     }
@@ -21,7 +21,7 @@ export const registerRealityEvidence = async (fs, ws, ev) => {
 };
 export const referenceEvidence = async (fs, ws, id, observerId) => {
     try {
-        const t = await fs.resolve(`${ws}/shadow/reality/${id}.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/.shadow/reality/${id}.json`, { cwd: ws });
         const ev = JSON.parse(await fs.readText(t));
         // append-only：只追加 referencedBy，不改 observation/observedAt（弱事实不可篡改）
         if (!ev.referencedBy.includes(observerId))
@@ -36,12 +36,12 @@ export const referenceEvidence = async (fs, ws, id, observerId) => {
 export const readRealityEvidence = async (fs, ws) => {
     const out = [];
     try {
-        const root = await fs.resolve(`${ws}/shadow/reality`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/.shadow/reality`, { cwd: ws });
         const files = (await fs.listDir(root).catch(() => [])) || [];
         for (const f of files) {
             if (!f?.name || !f.name.endsWith(".json"))
                 continue;
-            const p = await fs.resolve(`${ws}/shadow/reality/${f.name}`, { cwd: ws });
+            const p = await fs.resolve(`${ws}/.shadow/reality/${f.name}`, { cwd: ws });
             out.push(JSON.parse(await fs.readText(p)));
         }
     }

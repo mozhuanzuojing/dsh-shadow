@@ -19,7 +19,7 @@ export const appendValidationEvent = async (fs: any, ws: string, hypothesisId: s
   const existing = await readTimeline(fs, ws, hypothesisId);
   existing.events.push({ time: event.time || today(), evidenceIds: event.evidenceIds || [], result: event.result, alternativeWinner: event.alternativeWinner || null, perceptionDelta: event.perceptionDelta || "" });
   try {
-    const rel = `shadow/validation/${hypothesisId}.timeline.json`;
+    const rel = `.shadow/validation/${hypothesisId}.timeline.json`;
     const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
     await fs.writeText(t, JSON.stringify(existing));
   } catch (e: any) { console.log("[dsh-shadow] validation timeline write failed:", e && e.message); }
@@ -28,7 +28,7 @@ export const appendValidationEvent = async (fs: any, ws: string, hypothesisId: s
 
 export const readTimeline = async (fs: any, ws: string, hypothesisId: string): Promise<ValidationTimeline> => {
   try {
-    const t = await fs.resolve(`${ws}/shadow/validation/${hypothesisId}.timeline.json`, { cwd: ws });
+    const t = await fs.resolve(`${ws}/.shadow/validation/${hypothesisId}.timeline.json`, { cwd: ws });
     return JSON.parse(await fs.readText(t));
   } catch {
     return { hypothesisId, events: [] };

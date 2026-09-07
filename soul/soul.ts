@@ -1,7 +1,7 @@
 // dsh-shadow —— soul/soul.ts：Soul Kernel（curated 身份/价值观/原则/品味/边界）。从 index.ts 迁出。
 export const readSoul = async (fs: any, ws: string) => {
   try {
-    const t = await fs.resolve(`${ws}/shadow/soul/soul.json`, { cwd: ws });
+    const t = await fs.resolve(`${ws}/.shadow/soul/soul.json`, { cwd: ws });
     const txt = await fs.readText(t);
     return txt ? (JSON.parse(txt) || null) : null;
   } catch {

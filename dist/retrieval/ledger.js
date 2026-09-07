@@ -4,7 +4,7 @@ export const readLedger = async (fs, ws) => {
     if (!fs || !ws)
         return { turn: 0, served: {} };
     try {
-        const t = await fs.resolve(`${ws}/shadow/_recall_log.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/.shadow/_recall_log.json`, { cwd: ws });
         const txt = await fs.readText(t);
         return txt ? (JSON.parse(txt) || { turn: 0, served: {} }) : { turn: 0, served: {} };
     }
@@ -16,7 +16,7 @@ export const writeLedger = async (fs, ws, data) => {
     if (!fs || !ws)
         return;
     try {
-        const t = await fs.resolve(`${ws}/shadow/_recall_log.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/.shadow/_recall_log.json`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(data));
     }
     catch (e) {

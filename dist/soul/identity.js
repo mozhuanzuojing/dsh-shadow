@@ -33,7 +33,7 @@ export const renderIdentity = (i) => {
     if (i.observerLens)
         lines.push(`Observer Lens ${JSON.stringify(i.observerLens)}`);
     if (!i.values?.length && !i.principles.length && !i.antiPatterns?.length && !i.decisionStyle?.length && !i.boundaries?.length) {
-        lines.push("（无 Identity 配置：可在 shadow/soul/soul.json 定义 identity/principles/anti_patterns/decision_style）");
+        lines.push("（无 Identity 配置：可在 .shadow/soul/soul.json 定义 identity/principles/anti_patterns/decision_style）");
     }
     return lines.join("\n");
 };

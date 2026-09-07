@@ -3,7 +3,7 @@ export const appendValidationEvent = async (fs, ws, hypothesisId, event) => {
     const existing = await readTimeline(fs, ws, hypothesisId);
     existing.events.push({ time: event.time || today(), evidenceIds: event.evidenceIds || [], result: event.result, alternativeWinner: event.alternativeWinner || null, perceptionDelta: event.perceptionDelta || "" });
     try {
-        const rel = `shadow/validation/${hypothesisId}.timeline.json`;
+        const rel = `.shadow/validation/${hypothesisId}.timeline.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(existing));
     }
@@ -14,7 +14,7 @@ export const appendValidationEvent = async (fs, ws, hypothesisId, event) => {
 };
 export const readTimeline = async (fs, ws, hypothesisId) => {
     try {
-        const t = await fs.resolve(`${ws}/shadow/validation/${hypothesisId}.timeline.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/.shadow/validation/${hypothesisId}.timeline.json`, { cwd: ws });
         return JSON.parse(await fs.readText(t));
     }
     catch {

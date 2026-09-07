@@ -50,12 +50,12 @@ export const reflectTraces = (traces: Partial<ObservationTrace>[], opts: Reflect
   };
 };
 
-// 读轨迹 → 反思 → 写 shadow/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
+// 读轨迹 → 反思 → 写 .shadow/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
 export const reflectOf = async (fs: any, ws: string, opts: ReflectOpts): Promise<Reflection> => {
   const traces = await readObservationTraces(fs, ws);
   const r = reflectTraces(traces, opts);
   try {
-    const rel = `shadow/reflection/${today()}/${r.id}.md`;
+    const rel = `.shadow/reflection/${today()}/${r.id}.md`;
     const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
     await fs.writeText(t, renderReflection(r));
   } catch { /* 旁支降级 */ }
@@ -106,19 +106,19 @@ export const parseReflection = (text: string): Reflection | null => {
   };
 };
 
-// 读取 shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
+// 读取 .shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
 export const readReflections = async (fs: any, ws: string): Promise<Reflection[]> => {
   const out: Reflection[] = [];
   try {
-    const root = await fs.resolve(`${ws}/shadow/reflection`, { cwd: ws });
+    const root = await fs.resolve(`${ws}/.shadow/reflection`, { cwd: ws });
     const dates = (await fs.listDir(root).catch(() => [])) || [];
     for (const d of dates) {
       if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name)) continue;
-      const dt = await fs.resolve(`${ws}/shadow/reflection/${d.name}`, { cwd: ws });
+      const dt = await fs.resolve(`${ws}/.shadow/reflection/${d.name}`, { cwd: ws });
       const files = (await fs.listDir(dt).catch(() => [])) || [];
       for (const f of files) {
         if (!f?.name || !f.name.endsWith(".md")) continue;
-        const p = await fs.resolve(`${ws}/shadow/reflection/${d.name}/${f.name}`, { cwd: ws });
+        const p = await fs.resolve(`${ws}/.shadow/reflection/${d.name}/${f.name}`, { cwd: ws });
         const r = parseReflection(await fs.readText(p));
         if (r) { r.id = f.name.replace(/\.md$/, ""); out.push(r); }
       }

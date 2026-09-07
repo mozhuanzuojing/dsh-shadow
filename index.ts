@@ -9,8 +9,8 @@
  *
  * 哲学：一切皆文件，这只是思维/上下文/灵魂的投影。
  * 记忆以「入口点 + 时间」为纲、思维/决策为正文、动作为背景。
- *   - 每条记忆 = 一个文件：shadow/<日期>/<时刻>-<入口slug>.md
- *   - shadow/_index.md = 说明文档 + 近期记忆 + 主题索引 + 意识轨迹
+ *   - 每条记忆 = 一个文件：.shadow/<日期>/<时刻>-<入口slug>.md
+ *   - .shadow/_index.md = 说明文档 + 近期记忆 + 主题索引 + 意识轨迹
  *   - read_shadow：无参读索引；带 topic/entry 穿透到具体记忆文件
  *
  * 采集来源（按可靠度）：
@@ -98,7 +98,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             project: { type: "boolean", description: "Projection：把 topic 视为当前任务，返回 LocalContext（relevant 原则/经验/偏好 + current_state + uncertainty + excluded），用 Observer 透镜算显著、显式排除。默认关。" },
             judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
             claim: { type: "boolean", description: "返回 claim→Evidence→Judgment：对每条匹配记忆的断言验证证据，由 Observer 决定结论/置信/理由（Evidence 是输入，Observer 下判断）。默认关。" },
-            taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
+            taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + .shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
             verify: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。" },
             identity: { type: "boolean", description: "返回 Identity 主体锚（id/价值观/原则/反模式/决策风格/边界/Observer Lens），长期实体。默认关。" },
             context: { type: "boolean", description: "返回 ObserverContext（observerId/identityRef/intent/asOf/lens/realityAnchor）——一次观察事件。默认关。" },
@@ -227,7 +227,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
         text: () =>
           "你的思维、上下文与决策沉淀在 shadow 记忆树中。如果发现当前上下文不足、需要回忆最近想过/决定过什么，" +
           "或要回顾用户最近在往哪个方向走，请先调用 read_shadow（无参读目录索引，带 topic 可按入口穿透）再补充回答。" +
-          "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
+          "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
       });
     });
   }

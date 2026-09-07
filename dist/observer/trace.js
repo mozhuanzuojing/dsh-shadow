@@ -3,7 +3,7 @@ import { scrubUnsafe } from "../security/scrub.js";
 export const recordObservationTrace = async (fs, ws, trace) => {
     try {
         const id = trace.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const rel = `shadow/observation/${today()}/${id}.md`;
+        const rel = `.shadow/observation/${today()}/${id}.md`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, renderObservationTrace({ ...trace, id }));
     }
@@ -68,21 +68,21 @@ export const parseObservationTrace = (text) => {
         state,
     };
 };
-// 读取 shadow/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
+// 读取 .shadow/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
 export const readObservationTraces = async (fs, ws) => {
     const out = [];
     try {
-        const root = await fs.resolve(`${ws}/shadow/observation`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/.shadow/observation`, { cwd: ws });
         const dates = (await fs.listDir(root).catch(() => [])) || [];
         for (const d of dates) {
             if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name))
                 continue;
-            const dt = await fs.resolve(`${ws}/shadow/observation/${d.name}`, { cwd: ws });
+            const dt = await fs.resolve(`${ws}/.shadow/observation/${d.name}`, { cwd: ws });
             const files = (await fs.listDir(dt).catch(() => [])) || [];
             for (const f of files) {
                 if (!f?.name || !f.name.endsWith(".md"))
                     continue;
-                const p = await fs.resolve(`${ws}/shadow/observation/${d.name}/${f.name}`, { cwd: ws });
+                const p = await fs.resolve(`${ws}/.shadow/observation/${d.name}/${f.name}`, { cwd: ws });
                 const t = parseObservationTrace(await fs.readText(p));
                 if (t) {
                     t.id = f.name.replace(/\.md$/, "");

@@ -129,7 +129,7 @@ const flushAgent = async (sid) =>
   fire("agent/turn-stopping", { agent: agentsById.get(sid), turn: 1, signal: undefined });
 
 const listMemoryPaths = () =>
-  [...files.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && !k.endsWith("_index.md"));
+  [...files.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
 
 // ─────────────────────────────────────────────
 // 场景 1：归属 —— 先让"全局 initiator"指向 PARENT，再触发 CHILD 的会话事件。
@@ -258,7 +258,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   await listeners5.get("agent/turn-stopping")({ agent: agentsById.get("SUMMARY_AGENT"), turn: 1, signal: undefined });
   // patchSummary 是 detached（void），给一 tick 让它回填。
   await new Promise((r) => setTimeout(r, 30));
-  const sumPath = [...files.keys()].find((k) => k.includes("shadow/") && files.get(k)?.includes("总结一下这轮"));
+  const sumPath = [...files.keys()].find((k) => k.includes(".shadow/") && files.get(k)?.includes("总结一下这轮"));
   assert.ok(sumPath, "SUMMARY_AGENT 的记忆应已落盘");
   const sumText = files.get(sumPath);
   assert.ok(sumText.includes("> 摘要：这是测试摘要"), `应有摘要回填：\n${sumText.slice(0, 120)}`);
@@ -281,7 +281,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   );
   await listeners6.get("agent/turn-stopping")({ agent: agentsById.get("NO_LLM_AGENT"), turn: 1, signal: undefined });
   await new Promise((r) => setTimeout(r, 10));
-  const noLlmPath = [...files.keys()].find((k) => k.includes("shadow/") && files.get(k)?.includes("无模型也要能落盘"));
+  const noLlmPath = [...files.keys()].find((k) => k.includes(".shadow/") && files.get(k)?.includes("无模型也要能落盘"));
   assert.ok(noLlmPath, "无 llm 时记忆仍应落盘");
   console.log("✔ 场景6 无模型降级：无 llm 时落盘不抛错、无摘要但不影响正文");
 }
@@ -386,7 +386,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   fire8("session/event", { id: "T8", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-8", role: "user", content: [{ type: "text", text: "就这么定了，按这个方案做。" }], source: { kind: "user" } } });
   fire8("goal/changed", { agent: { id: "T8" }, change: { action: "complete", objective: "测试完整线索头" } });
   await fire8("agent/turn-stopping", { agent: agentsById.get("T8"), turn: 1, signal: undefined });
-  const mem8 = [...files8.keys()].find((k) => k.includes("shadow/") && files8.get(k)?.includes("就这么定了"));
+  const mem8 = [...files8.keys()].find((k) => k.includes(".shadow/") && files8.get(k)?.includes("就这么定了"));
   assert.ok(mem8, "T8 记忆应落盘");
   const t8 = files8.get(mem8);
   assert.ok(t8.includes("> 完整线索"), `应有完整线索头：\n${t8}`);
@@ -428,7 +428,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   fire9("session/event", { id: "T9", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-9", role: "user", content: [{ type: "text", text: "参考 `docs/ref.md` 的方案，密钥 sk-abcdef1234567890 别入库。" }], source: { kind: "user" } } });
   await fire9("agent/turn-stopping", { agent: agentsById.get("T9"), turn: 1, signal: undefined });
   await new Promise((r) => setTimeout(r, 10));
-  const mem9 = [...files9.keys()].find((k) => k.includes("shadow/") && files9.get(k)?.includes("参考"));
+  const mem9 = [...files9.keys()].find((k) => k.includes(".shadow/") && files9.get(k)?.includes("参考"));
   assert.ok(mem9, "T9 记忆应落盘");
   const t9 = files9.get(mem9);
   assert.ok(t9.includes("> 背景/材料：docs/ref.md"), `应从用户消息抽出背景/材料：\n${t9}`);
@@ -462,11 +462,11 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
       return [...names].map((n) => ({ name: n }));
     },
   };
-  files10.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-aaa.md", "# aaa\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [aaa] 用户：热点话题\n");
-  files10.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-bbb.md", "# bbb\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [bbb] 用户：冷门话题\n");
-  files10.set("D:/ws/shadow/_meta.json", JSON.stringify({
-    "shadow/2026-09-05/2026-09-05--100000-aaa.md": { created: "2026-09-05", hits: 0, status: "active", confidence: 0.5, pinned: false },
-    "shadow/2026-09-05/2026-09-05--090000-bbb.md": { created: "2026-09-05", hits: 0, status: "stale", confidence: 0.4, pinned: false },
+  files10.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-aaa.md", "# aaa\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [aaa] 用户：热点话题\n");
+  files10.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-bbb.md", "# bbb\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [bbb] 用户：冷门话题\n");
+  files10.set("D:/ws/.shadow/_meta.json", JSON.stringify({
+    ".shadow/2026-09-05/2026-09-05--100000-aaa.md": { created: "2026-09-05", hits: 0, status: "active", confidence: 0.5, pinned: false },
+    ".shadow/2026-09-05/2026-09-05--090000-bbb.md": { created: "2026-09-05", hits: 0, status: "stale", confidence: 0.4, pinned: false },
   }));
   agentsById.set("T10", { id: "T10", session: { header: { cwd: WS } } });
   const services10 = { fs: fs10, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
@@ -527,7 +527,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const raA = await rs11.execute({}, { agent: agentFA });
   assert.ok(String(raA).includes("shadow 目录说明与索引"), `①write A/read A 应见索引：\n${String(raA).slice(0, 80)}`);
   // 索引只列记忆文件名，正文放在主题召回里验证
-  assert.ok([...files11.keys()].some((k) => k.includes("C:/wsA/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "①A 工作区应已落盘记忆文件");
+  assert.ok([...files11.keys()].some((k) => k.includes("C:/wsA/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "①A 工作区应已落盘记忆文件");
   const raTopic = await rs11.execute({ topic: "工作区" }, { agent: agentFA });
   assert.ok(String(raTopic).includes("A 工作区的记录"), `①A 主题召回应命中：\n${String(raTopic).slice(0, 120)}`);
   console.log("✔ 场景11-① 正：write A / read A 同索引可见 + 主题召回");
@@ -597,7 +597,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
     await fire("agent/turn-stopping", { agent: ag, turn: 1, signal: undefined });
     const r = await toolRegistry.get("read_shadow").execute({ topic: "沙箱" }, { agent: ag });
     assert.ok(String(r).includes("沙箱项目记忆"), `④a 显式 shadowRoot 应落 sandbox：\n${String(r).slice(0, 120)}`);
-    assert.ok([...store.keys()].some((k) => k.includes("C:/sandbox/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "④a 记忆落在 sandbox/shadow");
+    assert.ok([...store.keys()].some((k) => k.includes("C:/sandbox/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "④a 记忆落在 sandbox/shadow");
     console.log("✔ 场景12-④a 显式 shadowRoot 落 sandbox，覆盖 session cwd");
   }
   {
@@ -676,7 +676,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   f14("fs/observed", { targetKey: "C:/sandbox14/a.txt", displayPath: "C:/sandbox14/a.txt" }, { kind: "present", version: "v1" }, { agent: { id: "F14" } });
   // 关键：不触发 turn-stopping，仅靠 session/flush 兜底落盘
   await f14("session/flush", { id: "F14" });
-  assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
+  assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
   console.log("✔ 场景14 session/flush 兜底：无 turn-stopping 也落盘（防采集积压）");
 }
 
@@ -713,7 +713,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   // 一个语义文件改动（应作为 entry）
   f15("fs/observed", { targetKey: "C:/ws15/proj/file.txt", displayPath: "C:/ws15/proj/file.txt" }, { kind: "present", version: "v1" }, { agent: { id: "T15" } });
   await f15("session/flush", { id: "T15" });
-  const keys15 = [...store15.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const keys15 = [...store15.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(keys15.length === 1, `应生成 1 条记忆：${keys15.join(",")}`);
   const fname15 = keys15[0].replace(/\\/g, "/");
   assert.ok(!fname15.includes("pwsh") && !fname15.includes("edit"), `entry 不应是工具名（防串线）：${fname15}`);
@@ -757,7 +757,7 @@ const todayStr = todayLocal();
   // 直接种 220 条记忆（不经事件，模拟已存在的记忆树）；日期用今天，便于今日摘要统计
   for (let i = 0; i < N; i++) {
     const base = `2026-01-01--${String(i).padStart(6, "0")}-ent${i}.md`;
-    store16.set(`D:/ws16/shadow/${todayStr}/${base}`,
+    store16.set(`D:/ws16/.shadow/${todayStr}/${base}`,
       `# ent${i}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [widget-${i}] 记忆条目 ${i}\n`);
   }
   const listeners16 = new Map<string, Function>();
@@ -769,7 +769,7 @@ const todayStr = todayLocal();
   agentsById.set("T16", { id: "T16", session: { header: { cwd: "D:/ws16" } } });
   f16("session/event", { id: "T16", header: { cwd: "D:/ws16" } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m16", role: "user", content: [{ type: "text", text: "触发一次索引重建" }], source: { kind: "user" } } });
   await f16("agent/turn-stopping", { agent: agentsById.get("T16"), turn: 1, signal: undefined });
-  const idx16 = store16.get("D:/ws16/shadow/_index.md");
+  const idx16 = store16.get("D:/ws16/.shadow/_index.md");
   assert.ok(idx16 && idx16.includes("shadow 目录说明与索引"), "索引应生成且含目录说明");
   // 完整性：每条记忆的文件名都出现在索引里
   for (let i = 0; i < N; i++) {
@@ -797,9 +797,9 @@ const todayStr = todayLocal();
   agentsById.set("T17", { id: "T17", session: { header: { cwd: WS } } });
   for (let i = 0; i < 4; i++) {
     const base = `2026-09-05--${String(i + 1).padStart(6, "0")}-alpha${i}.md`;
-    store17.set(`D:/ws/shadow/2026-09-05/${base}`, `# alpha${i}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [alpha] alpha 条目 ${i}\n`);
+    store17.set(`D:/ws/.shadow/2026-09-05/${base}`, `# alpha${i}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [alpha] alpha 条目 ${i}\n`);
   }
-  store17.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-beta.md", `# beta\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [beta] beta 条目\n`);
+  store17.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-beta.md", `# beta\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [beta] beta 条目\n`);
   const listeners17 = new Map<string, Function>();
   const services17 = { fs: fs17, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
   const ctx17: any = { get: (k: string) => services17[k], on: (e: string, fn: Function) => listeners17.set(e, fn), inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services17[k] }) };
@@ -846,10 +846,10 @@ const todayStr = todayLocal();
   const fs18 = mkFs(store18);
   agentsById.set("T18", { id: "T18", session: { header: { cwd: WS } } });
   // L2：含用户消息（决策）→ 应出片段+骨架
-  store18.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-decision.md",
+  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-decision.md",
     `# plugin-entry\n\n> 完整线索\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [plugin-entry] 用户：决定采用 bundle 模式，因为要模块化。\n- [10:00:01] [plugin-entry] 决定 改造入口为 bundle 模式。\n`);
   // L0：纯动作 → 只给摘要、无片段
-  store18.set("D:/ws/shadow/2026-09-05/2026-09-05--110000-actions.md",
+  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-actions.md",
     `# plugin-a\n\n> 完整线索\n> 概况：3 动作 · 0 用户消息 · 0 决策\n\n- [10:00:02] [plugin-a] 改/读 plugin-a/util.js\n- [10:00:03] [plugin-a] 改/读 plugin-a/util2.js\n- [10:00:04] [plugin-a] 调用 pwsh\n`);
   const listeners18 = new Map<string, Function>();
   const services18 = { fs: fs18, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
@@ -865,8 +865,8 @@ const todayStr = todayLocal();
   const rL0big = await rs18.execute({ topic: "plugin-a", max_tokens: 8000 }, exec18);
   assert.ok(!String(rL0big).includes("…"), "L0 大预算只给摘要、无片段");
   // 追加两个 L2，使同一主题下多个 L2 共享小预算 → 校验降级 + 不溢出
-  store18.set("D:/ws/shadow/2026-09-05/2026-09-05--130000-decision2.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:00] [plugin-entry] 用户：决定同步这两个入口。\n- [11:00:01] [plugin-entry] 决定 同步入口。\n`);
-  store18.set("D:/ws/shadow/2026-09-05/2026-09-05--140000-decision3.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:02] [plugin-entry] 用户：决定重构 resolver。\n- [11:00:03] [plugin-entry] 决定 重构 resolver。\n`);
+  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--130000-decision2.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:00] [plugin-entry] 用户：决定同步这两个入口。\n- [11:00:01] [plugin-entry] 决定 同步入口。\n`);
+  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--140000-decision3.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:02] [plugin-entry] 用户：决定重构 resolver。\n- [11:00:03] [plugin-entry] 决定 重构 resolver。\n`);
   const rSmall = await rs18.execute({ topic: "plugin-entry", max_tokens: 256 }, exec18);
   assert.ok(!String(rSmall).startsWith("ERR"), "小预算不应报错");
   assert.ok(String(rSmall).length <= 1600, `小预算不应溢出（len=${String(rSmall).length}）`);
@@ -890,7 +890,7 @@ const todayStr = todayLocal();
   const ctrl = "\u0007";
   f19("session/event", { id: "T19", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m19", role: "user", content: [{ type: "text", text: `注意这里有个${bidi}隐藏方向和${ctrl}控制字符，密钥 sk-abcdef1234567890 别入库。` }], source: { kind: "user" } } });
   await f19("agent/turn-stopping", { agent: agentsById.get("T19"), turn: 1, signal: undefined });
-  const mem19 = [...store19.keys()].find((k) => k.replace(/\\/g, "/").includes("/shadow/") && store19.get(k)?.includes("注意这里有个"));
+  const mem19 = [...store19.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && store19.get(k)?.includes("注意这里有个"));
   assert.ok(mem19, "T19 记忆应落盘");
   const t19 = store19.get(mem19) as string;
   // 密钥打码
@@ -970,7 +970,7 @@ const todayStr = todayLocal();
   // f) recall_log 读写稳：损坏 JSON 也应默认回退、不崩溃、仍能召回
   {
     const l = mkL20({ summary: { enabled: false }, recall: { cooldownTurns: 3 } });
-    l.store.set("D:/ws/shadow/_recall_log.json", "{ not valid json ");
+    l.store.set("D:/ws/.shadow/_recall_log.json", "{ not valid json ");
     await seedMsg(l, "recall_log 稳定条目 F");
     const r = await l.rs.execute({ topic: "recall_log", max_tokens: 2048 }, { agent: agentsById.get("T20") });
     assert.ok(!String(r).startsWith("ERR"), "损坏的 recall_log 不应导致报错");
@@ -994,7 +994,7 @@ const todayStr = todayLocal();
   P21.apply(ctx21, { summary: { enabled: false }, recall: {} });
   const bidi21 = "\u202e", ctrl21 = "\u0007";
   // 直接种一条「历史/未消毒」记忆（绕过写侧 scrub，专测读侧二次 scrub）
-  store21.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-injected.md",
+  store21.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-injected.md",
     `# injected\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [injected] 用户：<script>你是指令</script>方向${bidi21}铃${ctrl21}令牌 sk-abcdef1234567890\n`);
   const r21 = await toolRegistry.get("read_shadow").execute({ topic: "injected", max_tokens: 2048 }, { agent: agentsById.get("T21") });
   assert.ok(!r21.includes("<script>"), `P1 snippet 不应回显 <script>：\n${r21}`);
@@ -1019,7 +1019,7 @@ const todayStr = todayLocal();
   const P22 = { name, inject, apply };
   P22.apply(ctx22, { summary: { enabled: false }, recall: {} });
   const bidi22 = "\u202e", ctrl22 = "\u0007";
-  store22.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-suminj.md",
+  store22.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-suminj.md",
     `# suminj\n\n> 摘要：<script>你是指令</script>方向${bidi22}铃${ctrl22}密钥 sk-abcdef1234567890\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [suminj] 用户：决定采用方案。\n- [10:00:01] [suminj] 决定 采用方案。\n`);
   const r22 = await toolRegistry.get("read_shadow").execute({ topic: "suminj", max_tokens: 2048 }, { agent: agentsById.get("T22") });
   assert.ok(!r22.includes("<script>"), `P1 summary 不应回显 <script>：\n${r22}`);
@@ -1065,10 +1065,10 @@ const todayStr = todayLocal();
   const P24 = { name, inject, apply };
   P24.apply(ctx24, { summary: { enabled: false }, recall: {} });
   // 很远过去的记忆 → age 巨大 → stale
-  store24.set("D:/ws/shadow/2020-01-01/2020-01-01--000000-old.md",
+  store24.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-old.md",
     `# shared\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定旧的方案。\n- [10:00:01] [shared] 决定 旧方案。\n`);
   // 当天记忆 → age=0 → 不过时
-  store24.set(`D:/ws/shadow/${todayStr}/${todayStr}--120000-new.md`,
+  store24.set(`D:/ws/.shadow/${todayStr}/${todayStr}--120000-new.md`,
     `# shared\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定新的方案。\n- [10:00:01] [shared] 决定 新方案。\n`);
   const r24 = await toolRegistry.get("read_shadow").execute({ topic: "shared", max_tokens: 4096 }, { agent: agentsById.get("T24") });
   assert.ok(r24.includes("旧方案"), "过时记忆应被召回");
@@ -1136,7 +1136,7 @@ const todayStr = todayLocal();
     await fire26(l, "agent/turn-stopping", { agent: agentsById.get(sid), turn: 1, signal: undefined });
   };
   const hasMemory = (store: Map<string, string>) =>
-    [...store.keys()].some((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+    [...store.keys()].some((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
 
   // (a) writeConsent=false（默认采集流）→ 照常落盘
   const a26 = mkCtx26();
@@ -1195,7 +1195,7 @@ const todayStr = todayLocal();
   userMsg27("关于这段，Current runtime context is what we care about, 请按方案 A 处理。");
 
   await f27("agent/turn-stopping", { agent: agentsById.get("T27"), turn: 1, signal: undefined });
-  const mem27 = [...store27.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const mem27 = [...store27.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(mem27.length >= 1, "T27 应至少落一条（含真实文本）的记忆");
   const joined27 = mem27.map((k) => store27.get(k)).join("\n");
   // 真实用户文本保留
@@ -1232,7 +1232,7 @@ const todayStr = todayLocal();
   f28("fs/observed", { targetKey: `${WS}/src/vxeTableDragFix.js`, displayPath: `${WS}/src/vxeTableDragFix.js` }, { kind: "present", version: "v1" }, { agent: { id: "T28" } });
   f28("session/event", { id: "T28", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m28", role: "user", content: [{ type: "text", text: "C9：vxe-table 拖选与行点击竞争，改用全局 capture 拦截。" }], source: { kind: "user" } } });
   await f28("agent/turn-stopping", { agent: agentsById.get("T28"), turn: 1, signal: undefined });
-  const mem28 = [...store28.keys()].filter((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const mem28 = [...store28.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(mem28.length >= 1, "T28 应落盘一条记忆");
   const t28 = store28.get(mem28[0]);
   // 写侧：记忆文件自带 `> 证据链：`（来源种类·日期·证据路径）
@@ -1263,11 +1263,11 @@ const todayStr = todayLocal();
   const P29 = { name, inject, apply };
   P29.apply(ctx29, { summary: { enabled: false }, recall: {} });
   // 种 3 条候选记忆：alpha/gamma 含 bundle（命中），beta 不含（打分0）
-  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-alpha.md",
+  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-alpha.md",
     `# plugin-alpha\n\n> 完整线索\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(alpha.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [plugin-alpha] 用户：决定把 alpha 入口 bundle 化。\n`);
-  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--100000-beta.md",
+  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-beta.md",
     `# plugin-beta\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(beta.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [plugin-beta] 改/读 plugin-beta/beta.js\n`);
-  store29.set("D:/ws/shadow/2026-09-05/2026-09-05--110000-gamma.md",
+  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-gamma.md",
     `# plugin-gamma\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(gamma.js)\n> 概况：1 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [plugin-gamma] 用户：gamma 也要 bundle 化。\n`);
   const r29 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", debug: true, max_tokens: 4096 }, { agent: agentsById.get("T29") });
   assert.ok(!String(r29).startsWith("ERR"), "debug 模式不应报错");
@@ -1296,21 +1296,21 @@ const todayStr = todayLocal();
   const P30 = { name, inject, apply };
   P30.apply(ctx30, { summary: { enabled: false }, recall: {} });
   const body30 = (entry: string, note: string) => `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] 生命周期：${note}\n`;
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-lc-new.md", body30("lc-new", "新记忆"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-lc-obs.md", body30("lc-obs", "被观察"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090002-lc-ver.md", body30("lc-ver", "单源确认"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090003-lc-tru.md", body30("lc-tru", "多源确认"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090004-lc-sup.md", body30("lc-sup", "被取代"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090005-lc-arc.md", body30("lc-arc", "已归档"));
-  store30.set("D:/ws/shadow/2026-09-05/2026-09-05--090006-lc-pin.md", body30("lc-pin", "固定"));
-  store30.set("D:/ws/shadow/2020-01-01/2020-01-01--000000-lc-dec.md", body30("lc-dec", "衰减"));
-  store30.set("D:/ws/shadow/_meta.json", JSON.stringify({
-    "shadow/2026-09-05/2026-09-05--090001-lc-obs.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: [] },
-    "shadow/2026-09-05/2026-09-05--090002-lc-ver.md": { created: "2026-09-05", hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
-    "shadow/2026-09-05/2026-09-05--090003-lc-tru.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
-    "shadow/2026-09-05/2026-09-05--090004-lc-sup.md": { created: "2026-09-05", hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
-    "shadow/2026-09-05/2026-09-05--090005-lc-arc.md": { created: "2026-09-05", hits: 1, status: "archived", pinned: false, confirmedBy: [] },
-    "shadow/2026-09-05/2026-09-05--090006-lc-pin.md": { created: "2026-09-05", hits: 1, status: "active", pinned: true, confirmedBy: [] },
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-lc-new.md", body30("lc-new", "新记忆"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-lc-obs.md", body30("lc-obs", "被观察"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090002-lc-ver.md", body30("lc-ver", "单源确认"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090003-lc-tru.md", body30("lc-tru", "多源确认"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090004-lc-sup.md", body30("lc-sup", "被取代"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090005-lc-arc.md", body30("lc-arc", "已归档"));
+  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090006-lc-pin.md", body30("lc-pin", "固定"));
+  store30.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-lc-dec.md", body30("lc-dec", "衰减"));
+  store30.set("D:/ws/.shadow/_meta.json", JSON.stringify({
+    ".shadow/2026-09-05/2026-09-05--090001-lc-obs.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: [] },
+    ".shadow/2026-09-05/2026-09-05--090002-lc-ver.md": { created: "2026-09-05", hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
+    ".shadow/2026-09-05/2026-09-05--090003-lc-tru.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
+    ".shadow/2026-09-05/2026-09-05--090004-lc-sup.md": { created: "2026-09-05", hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
+    ".shadow/2026-09-05/2026-09-05--090005-lc-arc.md": { created: "2026-09-05", hits: 1, status: "archived", pinned: false, confirmedBy: [] },
+    ".shadow/2026-09-05/2026-09-05--090006-lc-pin.md": { created: "2026-09-05", hits: 1, status: "active", pinned: true, confirmedBy: [] },
   }));
   const r30 = await toolRegistry.get("read_shadow").execute({ topic: "生命周期", max_tokens: 8000 }, { agent: agentsById.get("T30") });
   assert.ok(!String(r30).startsWith("ERR"), "生命周期召回不应报错");
@@ -1352,9 +1352,9 @@ const todayStr = todayLocal();
   const P31 = { name, inject, apply };
   P31.apply(ctx31, { summary: { enabled: false }, recall: {} });
   // src/gone.js 缺失（不放进 map）→ 冲突；src/exists.js 存在（放进 map）→ 无冲突。
-  store31.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-conflict.md",
+  store31.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-conflict.md",
     `# conflict-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [conflict-entry] 改/读 src/gone.js\n`);
-  store31.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-good.md",
+  store31.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-good.md",
     `# good-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/exists.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [good-entry] 改/读 src/exists.js\n`);
   store31.set("D:/ws/src/exists.js", "export {}");
   const r31 = await toolRegistry.get("read_shadow").execute({ topic: "src", max_tokens: 4096 }, { agent: agentsById.get("T31") });
@@ -1386,7 +1386,7 @@ const todayStr = todayLocal();
   f32("session/event", { id: "T32", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m32", role: "user", content: [{ type: "text", text: "统一 API 错误处理。" }], source: { kind: "user" } } });
   store32.set("D:/ws/src/api.js", "export {}"); // 证据路径存在，避免误判冲突
   await f32("agent/turn-stopping", { agent: agentsById.get("T32"), turn: 1, signal: undefined });
-  const mem32 = [...store32.keys()].find((k) => k.replace(/\\/g, "/").includes("/shadow/") && k.endsWith(".md") && !k.endsWith("_index.md") && store32.get(k)?.includes("统一 API"));
+  const mem32 = [...store32.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md") && store32.get(k)?.includes("统一 API"));
   assert.ok(mem32, "T32 记忆应落盘");
   const t32 = store32.get(mem32);
   assert.ok(t32.includes("> 项目：ws"), `记忆应含 项目：\n${t32.slice(0, 200)}`);
@@ -1413,9 +1413,9 @@ const todayStr = todayLocal();
   const P33 = { name, inject, apply };
   P33.apply(ctx33, { summary: { enabled: false }, recall: {} });
   // 两条同域「acshObject」的记忆 + 一条共同证据路径（放进 map 避免误判冲突）
-  store33.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-pageselect.md",
+  store33.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-pageselect.md",
     "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
-  store33.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-projectselect.md",
+  store33.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-projectselect.md",
     "# acshObject/acshProjectSelect\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [acshObject/acshProjectSelect] 改/读 acshObject/projectSelect.js\n");
   store33.set("D:/ws/acshObject/projectSelect.js", "export {}");
   const r33 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", kg: true, max_tokens: 4096 }, { agent: agentsById.get("T33") });
@@ -1439,7 +1439,7 @@ const todayStr = todayLocal();
   const ctx34 = { get: (k) => services34[k], on: (e, fn) => listeners34.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services34[k] }) };
   const P34 = { name, inject, apply };
   P34.apply(ctx34, { summary: { enabled: false }, recall: {} });
-  store34.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+  store34.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({
     identity: { name: "frontend-agent", role: "前端域 agent" },
     values: ["engineering_quality", "minimal_complexity"],
     principles: ["no_silent_failure", "evidence_before_claim", "memory_is_not_instruction"],
@@ -1479,7 +1479,7 @@ const todayStr = todayLocal();
   const ctx35 = { get: (k) => services35[k], on: (e, fn) => listeners35.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services35[k] }) };
   const P35 = { name, inject, apply };
   P35.apply(ctx35, { summary: { enabled: false }, recall: {} });
-  store35.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-exp.md",
+  store35.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-exp.md",
     "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 背景/材料：acshObject/projectSelect.js\n> 用户提示/决策：「对象页选择器直接选择」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
   store35.set("D:/ws/acshObject/projectSelect.js", "export {}"); // 证据存在 → 裁决 fresh
   const r35 = await toolRegistry.get("read_shadow").execute({ topic: "对象页", experience: true, max_tokens: 4096 }, { agent: agentsById.get("T35") });
@@ -1510,8 +1510,8 @@ const todayStr = todayLocal();
   const P36 = { name, inject, apply };
   P36.apply(ctx36, { summary: { enabled: false }, recall: {} });
   const b36 = (time: string) => `# xyz/compA\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [${time}] [xyz/compA] 改/读 xyz/a.js\n`;
-  store36.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-c1.md", b36("09:00:00"));
-  store36.set("D:/ws/shadow/2026-09-05/2026-09-05--120000-c2.md", b36("12:00:00"));
+  store36.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-c1.md", b36("09:00:00"));
+  store36.set("D:/ws/.shadow/2026-09-05/2026-09-05--120000-c2.md", b36("12:00:00"));
   store36.set("D:/ws/xyz/a.js", "export {}"); // 证据存在
   const r36 = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T36") });
   assert.ok(!String(r36).startsWith("ERR"), "supersede 裁决不应报错");
@@ -1536,9 +1536,9 @@ const todayStr = todayLocal();
   const ctx37 = { get: (k) => services37[k], on: (e, fn) => listeners37.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services37[k] }) };
   const P37 = { name, inject, apply };
   P37.apply(ctx37, { summary: { enabled: false }, recall: {} });
-  store37.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-c1.md",
+  store37.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-c1.md",
     "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：「先确认调用方再判断兼容成本」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
-  store37.set("D:/ws/shadow/2026-09-06/2026-09-06--090000-c2.md",
+  store37.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-c2.md",
     "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：兼容层已被移除。\n> 证据链：来源(动作·用户) · 日期(2026-09-06) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：兼容层已移除。\n");
   store37.set("D:/ws/xyz/a.js", "export {}");
   // 默认（非 observer）会看到新记忆（2026-09-06）
@@ -1569,15 +1569,15 @@ const todayStr = todayLocal();
   const ctx38 = { get: (k) => services38[k], on: (e, fn) => listeners38.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services38[k] }) };
   const P38 = { name, inject, apply };
   P38.apply(ctx38, { summary: { enabled: false }, recall: {} });
-  store38.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+  store38.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({
     principles: ["bundle 化优先", "no_compatibility_shell"],
     taste: { frontend: { density: 1 } },
     observer: { what_matters: ["bundle"], what_to_ignore: ["遗留"] },
   }));
   // M1：匹配任务 + what_matters 命中 → relevant（显著加权）
-  store38.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-flow.md",
+  store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-flow.md",
     "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
-  store38.set("D:/ws/shadow/2026-09-05/2026-09-05--090002-compat.md",
+  store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090002-compat.md",
     "# 遗留/bundle兼容\n\n> 完整线索\n> 背景/材料：legacy/compat.js\n> 用户提示/决策：遗留 bundle 兼容层。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:01:00] [遗留/bundle兼容] 用户：遗留 bundle 兼容层。\n");
   store38.set("D:/ws/acshModel/entry.js", "export {}");
   const r38 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", project: true, max_tokens: 4096 }, { agent: agentsById.get("T38") });
@@ -1603,7 +1603,7 @@ const todayStr = todayLocal();
   const ctx39 = { get: (k) => services39[k], on: (e, fn) => listeners39.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services39[k] }) };
   const P39 = { name, inject, apply };
   P39.apply(ctx39, { summary: { enabled: false }, recall: {} });
-  store39.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-j.md",
+  store39.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-j.md",
     "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 用户提示/决策：先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
   const r39 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", judgment: true, max_tokens: 4096 }, { agent: agentsById.get("T39") });
   assert.ok(!String(r39).startsWith("ERR"), "Judgment 不应报错");
@@ -1613,7 +1613,7 @@ const todayStr = todayLocal();
 }
 
 // ─────────────────────────────────────────────
-// 场景 40：Taste —— read_shadow({taste:true}) 读 curated 偏好（灵魂 taste + shadow/taste/taste.json）。
+// 场景 40：Taste —— read_shadow({taste:true}) 读 curated 偏好（灵魂 taste + .shadow/taste/taste.json）。
 // ─────────────────────────────────────────────
 {
   const store40 = new Map();
@@ -1624,8 +1624,8 @@ const todayStr = todayLocal();
   const ctx40 = { get: (k) => services40[k], on: (e, fn) => listeners40.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services40[k] }) };
   const P40 = { name, inject, apply };
   P40.apply(ctx40, { summary: { enabled: false }, recall: {} });
-  store40.set("D:/ws/shadow/soul/soul.json", JSON.stringify({ taste: { frontend: { density: 1 } } }));
-  store40.set("D:/ws/shadow/taste/taste.json", JSON.stringify({ likes: ["简洁", "高信息密度"], dislikes: ["无意义渐变", "过度 wrapper"] }));
+  store40.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({ taste: { frontend: { density: 1 } } }));
+  store40.set("D:/ws/.shadow/taste/taste.json", JSON.stringify({ likes: ["简洁", "高信息密度"], dislikes: ["无意义渐变", "过度 wrapper"] }));
   const r40 = await toolRegistry.get("read_shadow").execute({ taste: true }, { agent: agentsById.get("T40") });
   assert.ok(String(r40).includes("[Taste]"), "应输出 Taste 段");
   assert.ok(r40.includes("喜欢 简洁、高信息密度"), "应含喜欢");
@@ -1659,7 +1659,7 @@ const todayStr = todayLocal();
   const ctx41 = { get: (k) => services41[k], on: (e, fn) => listeners41.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services41[k] }) };
   const P41 = { name, inject, apply };
   P41.apply(ctx41, { summary: { enabled: false }, recall: {} });
-  store41.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-verify.md",
+  store41.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-verify.md",
     "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js、acshModel/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store41.set("D:/ws/acshModel/entry.js", "export {}"); // 现存
   // acshModel/gone.js 缺失 → not_found
@@ -1685,7 +1685,7 @@ const todayStr = todayLocal();
   const ctx42 = { get: (k) => services42[k], on: (e, fn) => listeners42.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services42[k] }) };
   const P42 = { name, inject, apply };
   P42.apply(ctx42, { summary: { enabled: false }, recall: {}, evidenceProvider: "zg" }); // 强制走 zg
-  store42.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-zg.md",
+  store42.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-zg.md",
     "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store42.set("D:/ws/acshModel/entry.js", "export {}"); // 磁盘存在，但 zg provider 不查 fs
   const r42 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verify: true, max_tokens: 4096 }, { agent: agentsById.get("T42") });
@@ -1709,7 +1709,7 @@ const todayStr = todayLocal();
   const ctx43 = { get: (k) => services43[k], on: (e, fn) => listeners43.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services43[k] }) };
   const P43 = { name, inject, apply };
   P43.apply(ctx43, { summary: { enabled: false }, recall: {} });
-  store43.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+  store43.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({
     identity: { name: "architect", role: "域 agent" },
     values: ["engineering_quality", "minimal_complexity"],
     principles: ["evidence_before_claim", "no_silent_failure"],
@@ -1741,7 +1741,7 @@ const todayStr = todayLocal();
   const ctx44 = { get: (k) => services44[k], on: (e, fn) => listeners44.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services44[k] }) };
   const P44 = { name, inject, apply };
   P44.apply(ctx44, { summary: { enabled: false }, recall: {} });
-  store44.set("D:/ws/shadow/soul/soul.json", JSON.stringify({ identity: { name: "architect" } }));
+  store44.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({ identity: { name: "architect" } }));
   const r44 = await toolRegistry.get("read_shadow").execute({ context: true, topic: "数据库慢", goal: "降低 P99", realityAnchor: "known-at-time", asOf: "2026-09-05" }, { agent: agentsById.get("T44") });
   assert.ok(String(r44).includes("[Observer]"), "应输出 Observer 段");
   assert.ok(String(r44).includes("observerId T44"), "应含 observerId");
@@ -1765,9 +1765,9 @@ const todayStr = todayLocal();
   const ctx45 = { get: (k) => services45[k], on: (e, fn) => listeners45.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services45[k] }) };
   const P45 = { name, inject, apply };
   P45.apply(ctx45, { summary: { enabled: false }, recall: {} });
-  store45.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+  store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
     "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store45.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-ux.md",
+  store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
     "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store45.set("D:/ws/arch/x.js", "export {}");
   store45.set("D:/ws/product/ux.js", "export {}");
@@ -1794,13 +1794,13 @@ const todayStr = todayLocal();
   const ctx46 = { get: (k) => services46[k], on: (e, fn) => listeners46.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services46[k] }) };
   const P46 = { name, inject, apply };
   P46.apply(ctx46, { summary: { enabled: false }, recall: {} });
-  store46.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+  store46.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({
     identity: { name: "architect" },
     decision_style: ["architecture_first", "verify_before_modify"],
   }));
-  store46.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-rel.md",
+  store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-rel.md",
     "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store46.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-other.md",
+  store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-other.md",
     "# other/thing\n\n> 完整线索\n> 用户提示/决策：无关条目。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [other/thing] 用户：无关条目。\n");
   store46.set("D:/ws/arch/x.js", "export {}");
   const r46 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, goal: "降低 P99" }, { agent: agentsById.get("T46") });
@@ -1827,11 +1827,11 @@ const todayStr = todayLocal();
   const ctx47 = { get: (k) => services47[k], on: (e, fn) => listeners47.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services47[k] }) };
   const P47 = { name, inject, apply };
   P47.apply(ctx47, { summary: { enabled: false }, recall: {} });
-  store47.set("D:/ws/shadow/soul/soul.json", JSON.stringify({
+  store47.set("D:/ws/.shadow/soul/soul.json", JSON.stringify({
     identity: { name: "architect" },
     decision_style: ["architecture_first", "verify_before_modify"],
   }));
-  store47.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-claim.md",
+  store47.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-claim.md",
     "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：重构系统入口。\n");
   store47.set("D:/ws/acshModel/entry.js", "export {}"); // 证据存在 → evidence_live
   const r47 = await toolRegistry.get("read_shadow").execute({ topic: "系统", claim: true, max_tokens: 4096 }, { agent: agentsById.get("T47") });
@@ -1848,9 +1848,9 @@ const todayStr = todayLocal();
 
 // ─────────────────────────────────────────────
 // v0.23 Observation Trace：旁路记录"我当时怎么看见"，不影响 recall/排序/答案。
-// 存储 shadow/observation/<date>/<id>.md（listMemories 跳过非日期目录，不会当记忆采集）。
+// 存储 .shadow/observation/<date>/<id>.md（listMemories 跳过非日期目录，不会当记忆采集）。
 const obsTexts = (store: Map<string, string>) =>
-  [...store.entries()].filter(([k]) => k.includes("/shadow/observation/")).map(([, v]) => v).join("\n---\n");
+  [...store.entries()].filter(([k]) => k.includes("/.shadow/observation/")).map(([, v]) => v).join("\n---\n");
 
 // ─────────────────────────────────────────────
 // 场景 48：同一事实、不同 Observer 透镜 → 不同 trace visible（不是 Memory 命中，而是 Observer Projection）。
@@ -1864,9 +1864,9 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx48 = { get: (k) => services48[k], on: (e, fn) => listeners48.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services48[k] }) };
   const P48 = { name, inject, apply };
   P48.apply(ctx48, { summary: { enabled: false }, recall: {} });
-  store48.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+  store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
     "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store48.set("D:/ws/shadow/2026-09-05/2026-09-05--090001-ux.md",
+  store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
     "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store48.set("D:/ws/arch/x.js", "export {}");
   store48.set("D:/ws/product/ux.js", "export {}");
@@ -1891,9 +1891,9 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx49 = { get: (k) => services49[k], on: (e, fn) => listeners49.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services49[k] }) };
   const P49 = { name, inject, apply };
   P49.apply(ctx49, { summary: { enabled: false }, recall: {} });
-  store49.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-past.md",
+  store49.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-past.md",
     "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store49.set("D:/ws/shadow/2026-09-06/2026-09-06--090000-future.md",
+  store49.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-future.md",
     "# 架构/新方案\n\n> 完整线索\n> 用户提示/决策：最终方案已确定。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/新方案] 用户：最终方案已确定。\n");
   store49.set("D:/ws/arch/x.js", "export {}");
   const r49 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, asOf: "2026-09-05" }, { agent: agentsById.get("T49") });
@@ -1916,7 +1916,7 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx50 = { get: (k) => services50[k], on: (e, fn) => listeners50.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services50[k] }) };
   const P50 = { name, inject, apply };
   P50.apply(ctx50, { summary: { enabled: false }, recall: {} });
-  store50.set("D:/ws/shadow/2026-09-05/2026-09-05--090000-refactor.md",
+  store50.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
     "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store50.set("D:/ws/arch/x.js", "export {}");
   const r50 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, state: { focus: "deep", goalStage: "exploration" } }, { agent: agentsById.get("T50") });
@@ -1965,7 +1965,7 @@ const putTrace = async (fs: any, ws: string, opts: { decision?: string; outcome?
   assert.ok(String(r51).includes("成功率 100%"), "应含成功率");
   assert.ok(String(r51).includes("status: candidate"), "v0.24 只产 candidate");
   const obs = [...store51.entries()].map(([k, v]) => v).join("\n");
-  assert.ok(obs.includes("# Reflection"), "Reflection 应写入 shadow/reflection/");
+  assert.ok(obs.includes("# Reflection"), "Reflection 应写入 .shadow/reflection/");
   console.log("✔ 场景51 Reflection：重复成功模式 → candidate principle（decision→outcome 统计 + 成功率）");
 }
 
@@ -2034,7 +2034,7 @@ const putTrace = async (fs: any, ws: string, opts: { decision?: string; outcome?
 // helper：往 store 写一条 Reflection（供 identity 消费）。
 const reflType = "principle";
 const putReflection = (store: Map<string, string>, id: string, opts: { type?: string; statement: string; evidenceCount: number; corr?: any[]; deviations?: string[]; periodTo?: string }) => {
-  store.set(`D:/ws/shadow/reflection/2026-09-05/${id}.md`, renderReflection({
+  store.set(`D:/ws/.shadow/reflection/2026-09-05/${id}.md`, renderReflection({
     id, observerId: "T", sourceTraces: [],
     period: { from: "2026-01-01", to: opts.periodTo || "2026-09-05" },
     observation: { repeatedDecisions: [], repeatedOutcomes: [], deviationPatterns: opts.deviations || [] },
@@ -2125,7 +2125,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   assert.ok(String(r58).includes("accepted"), "应标记 accepted");
   assert.ok(String(r58).includes("在大型系统设计前优先建立验证闭环"), "learned 应含新原则");
   assert.ok(String(r58).includes("learned 1"), "learned 应 +1");
-  const tl = [...store58.keys()].find((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const tl = [...store58.keys()].find((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(!!tl, "应写入 identity 时间切片 json");
   console.log("✔ 场景58 Identity：规则确认后进 timeline（accepted→v2，learned+1）");
 }
@@ -2184,7 +2184,7 @@ const putTemporalTrace = (fs: any, ws: string, opts: { createdAt: string; visibl
     state: opts.state,
   });
 const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
-  store.set(`D:/ws/shadow/identity/${at}-${v}.json`, JSON.stringify({ version: v, at, core: { observerId: "T", values: [] }, learned: [], currentModel: { decisionStyle: [], antiPatterns: [] } }));
+  store.set(`D:/ws/.shadow/identity/${at}-${v}.json`, JSON.stringify({ version: v, at, core: { observerId: "T", values: [] }, learned: [], currentModel: { decisionStyle: [], antiPatterns: [] } }));
 
 // ─────────────────────────────────────────────
 // 场景 61：TemporalGraph builder —— nodes/edges/sourceTraceIds，可重建（graph.json，无新事实）。
@@ -2207,7 +2207,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   assert.ok(String(r61).includes("followed_by"), "应有时间序边");
   assert.ok(String(r61).includes("timestamp_order"), "边应带 derivation.rule");
   assert.ok(String(r61).includes("sourceTraces 2"), "应有 sourceTraceIds");
-  const gj = [...store61.keys()].find((k) => k.includes("shadow/temporal/") && k.endsWith("graph.json"));
+  const gj = [...store61.keys()].find((k) => k.includes(".shadow/temporal/") && k.endsWith("graph.json"));
   assert.ok(!!gj, "应持久化 graph.json");
   assert.ok(store61.get(gj!).includes("sourceTraceIds"), "graph.json 应含 sourceTraceIds（可重建）");
   console.log("✔ 场景61 TemporalGraph：nodes/edges/sourceTraceIds，可重建（无新事实）");
@@ -2359,7 +2359,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   const r68 = await toolRegistry.get("read_shadow").execute({ mode: "temporal", max_tokens: 4096 }, { agent: agentsById.get("T68") });
   assert.ok(String(r68).includes("visible=架构"), "观察A应见架构");
   assert.ok(String(r68).includes("visible=体验"), "观察B应见体验");
-  const gj = [...store68.keys()].find((k) => k.includes("shadow/temporal/") && k.endsWith("graph.json"));
+  const gj = [...store68.keys()].find((k) => k.includes(".shadow/temporal/") && k.endsWith("graph.json"));
   assert.ok(!!gj && store68.get(gj!).includes("focus"), "graph.json 应记录不同 observerState（不同观察状态）");
   console.log("✔ 场景68 同事实不同观察：visible/hidden/distortion 不同（Observer trajectory，非 event log）");
 }
@@ -2400,7 +2400,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   P70.apply(ctx70, { summary: { enabled: false }, recall: {} });
   for (let i = 0; i < 6; i++) await putTemporalTrace(fs70, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "维护成本下降" });
   await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T70") });
-  const gj = [...store70.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const gj = [...store70.keys()].find((k) => k.includes(".shadow/dream/") && k.endsWith("dream.json"));
   assert.ok(!!gj, "应持久化 dream.json");
   const art = store70.get(gj!);
   assert.ok(art!.includes("sourceTemporalGraphVersion"), "dream 应含 sourceTemporalGraphVersion");
@@ -2427,7 +2427,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   assert.ok(String(r71).includes("association frequency"), "应是结构性 Observation（含频率），非断言");
   assert.ok(!String(r71).includes("原则"), "Dream 不应产出 Principle");
   assert.ok(!String(r71).includes("应该"), "Dream 不应产出规范性结论");
-  const gj = [...store71.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const gj = [...store71.keys()].find((k) => k.includes(".shadow/dream/") && k.endsWith("dream.json"));
   assert.ok(store71.get(gj!).includes("association frequency"), "pattern observation 应持久化（结构+频率）");
   assert.ok(store71.get(gj!).includes("generatedHypothesisIds"), "dream 应记录 generatedHypothesisIds");
   assert.ok(!store71.get(gj!).includes("principle"), "DreamArtifact 不应含 principle 字段");
@@ -2448,7 +2448,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   P72.apply(ctx72, { summary: { enabled: false }, recall: {} });
   for (let i = 0; i < 5; i++) await putTemporalTrace(fs72, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
   await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T72") });
-  const gj = [...store72.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const gj = [...store72.keys()].find((k) => k.includes(".shadow/dream/") && k.endsWith("dream.json"));
   const art = store72.get(gj!);
   const altCount = (art!.match(/alternativeExplanation/g) || []).length;
   const alts = (art!.match(/"description"/g) || []).length;
@@ -2493,7 +2493,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   seedIdentity(store74, "v1", "2026-01-01");
   for (let i = 0; i < 5; i++) await putTemporalTrace(fs74, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
   await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T74") });
-  const idFiles = [...store74.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store74.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Dream 不应创建/推进 identity 版本");
   console.log("✔ 场景74 Dream 不修改 Identity（不创建/推进 identity 版本）");
 }
@@ -2512,7 +2512,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
   P75.apply(ctx75, { summary: { enabled: false }, recall: {} });
   await putTemporalTrace(fs75, WS, { createdAt: "2026-01-01 09:00:00", decision: "边界隔离", outcome: "返工下降" });
   await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T75") });
-  const memFiles = [...store75.keys()].filter((k) => /\/(\d{4}-\d{2}-\d{2})\/[^/]+\.md$/.test(k) && !k.includes("shadow/observation/") && !k.includes("shadow/reflection/"));
+  const memFiles = [...store75.keys()].filter((k) => /\/(\d{4}-\d{2}-\d{2})\/[^/]+\.md$/.test(k) && !k.includes(".shadow/observation/") && !k.includes(".shadow/reflection/"));
   assert.ok(memFiles.length === 0, "Dream 不应写 memory 文件");
   console.log("✔ 场景75 Dream 不修改 Memory（不写 memory 文件）");
 }
@@ -2520,7 +2520,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
 // ─────────────────────────────────────────────
 // v0.28 Hypothesis Validation：Future Evidence 单向 → 与替代解释竞争 → ValidationArtifact（不覆盖 Hypothesis）。
 // Memory ≠ Evidence；不修改 Identity；不产生 Knowledge。
-const seedHypothesis = (store87, id, opts = {}) => store87.set(`D:/ws/shadow/hypothesis/${id}.json`, JSON.stringify({
+const seedHypothesis = (store87, id, opts = {}) => store87.set(`D:/ws/.shadow/hypothesis/${id}.json`, JSON.stringify({
   id, observerId: "T",
   claimCandidate: "在多个场景观察到提前建边界后返工下降的候选模式",
   supportingPatterns: ["p1"],
@@ -2627,7 +2627,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   seedHypothesis(store, "h82");
   await ev(fs, WS, "h82", "返工下降");
   await val(fs, WS, "h82", null);
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Validation 不应创建/推进 identity");
   console.log("✔ 场景82 validation 不修改 Identity");
 }
@@ -2640,7 +2640,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   seedHypothesis(store, "h83");
   await ev(fs, WS, "h83", "返工下降");
   await val(fs, WS, "h83", null);
-  const vk = [...store.keys()].find((k) => k.includes("shadow/validation/") && k.endsWith(".json"));
+  const vk = [...store.keys()].find((k) => k.includes(".shadow/validation/") && k.endsWith(".json"));
   const va = store.get(vk!);
   assert.ok(va!.includes("hypothesisProjectionSnapshot"), "ValidationArtifact 应保留历史 projection snapshot");
   assert.ok(va!.includes("perceptionDelta"), "应含 perceptionDelta");
@@ -2657,7 +2657,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   await val(fs, WS, "h84", null);
   await ev(fs, WS, "h84", "复杂度增加");
   await val(fs, WS, "h84", null);
-  const vFiles = [...store.keys()].filter((k) => k.includes("shadow/validation/") && k.endsWith(".json"));
+  const vFiles = [...store.keys()].filter((k) => k.includes(".shadow/validation/") && k.endsWith(".json"));
   assert.ok(vFiles.length >= 2, "多次 Validation 应保留多个 artifact");
   console.log("✔ 场景84 同一 Hypothesis 多次 Validation 保留历史");
 }
@@ -2671,9 +2671,9 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   for (let i = 0; i < 8; i++) await ev(fs, WS, "h85", "返工下降");
   await val(fs, WS, "h85", null);
   // 无 knowledge 存储；identity 无变化
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 0, "validated 不自动进入 Identity");
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge/") || k.includes("shadow/fact"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge/") || k.includes(".shadow/fact"));
   assert.ok(knows.length === 0, "validated 不产生 Knowledge Base");
   console.log("✔ 场景85 validated 不自动进入 Knowledge/Identity（防退化 RAG）");
 }
@@ -2760,7 +2760,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 {
   const { fs, store } = mkV(new Map());
   await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", observedAt: "2026-09-01", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const rk = [...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"));
+  const rk = [...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"));
   const rid = JSON.parse(store.get(rk!)).id;
   const before = store.get(rk!);
   await toolRegistry.get("read_shadow").execute({ mode: "real-refer", realityId: rid, sourceObserverId: "B", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
@@ -2791,7 +2791,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 {
   const { fs, store } = mkV(new Map());
   await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "某事件在某时间被观察到", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const rid = JSON.parse(store.get([...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"))!)).id;
+  const rid = JSON.parse(store.get([...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"))!)).id;
   const s1 = await toolRegistry.get("read_shadow").execute({ mode: "stability", realityId: rid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(s1).includes("state isolated"), "单 Observer 应 isolated");
   await toolRegistry.get("read_shadow").execute({ mode: "real-refer", realityId: rid, sourceObserverId: "A", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
@@ -2811,7 +2811,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   seedIdentity(store, "v1", "2026-01-01");
   await toolRegistry.get("read_shadow").execute({ mode: "federation-perspective", sourceObserverId: "A", obsClaim: "claim", visible: ["security"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], targetObserverId: "B", visibleB: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Federation 不应改变 identity timeline");
   console.log("✔ 场景94 No Identity Pollution：Federation 不产生 Identity 变化（镜子非修改器）");
 }
@@ -2825,7 +2825,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 {
   const { fs, store } = mkV(new Map());
   await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const rk = [...store.keys()].find((k) => k.includes("shadow/reality/") && k.endsWith(".json"));
+  const rk = [...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"));
   const ev = JSON.parse(store.get(rk!));
   assert.ok(ev.observation.includes("API latency increased"), "弱事实：只记录观察到");
   assert.ok(!ev.observation.includes("缺陷") && !ev.observation.includes("世界规律") && !ev.observation.includes("truth"), "不声明世界规律（Observer ≠ Reality）");
@@ -2846,7 +2846,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 {
   const { fs, store } = mkV(new Map());
   await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "observed fact", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/fact") || k.includes("shadow/world"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/fact") || k.includes(".shadow/world"));
   assert.ok(knows.length === 0, "Evidence 不进入 knowledge/world 库");
   console.log("✔ Invariant-3(97) Evidence≠Knowledge：弱事实不进入 knowledge 库");
 }
@@ -2869,7 +2869,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], targetObserverId: "B", visibleB: ["performance"], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(r).includes("unresolved"), "Federation 应产 unresolvedQuestion");
   assert.ok(!String(r).includes("identity") && !String(r).includes("merged"), "Federation 不产合并 Identity");
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Identity timeline 不变");
   console.log("✔ Invariant-5(99) Federation≠IdentityMerge：产 Difference，不产合并 Identity");
 }
@@ -2879,7 +2879,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
   const { fs, store } = mkV(new Map());
   for (let i = 0; i < 5; i++) await putTemporalTrace(fs, WS, { createdAt: `2026-01-01 09:0${i}:00`, decision: "边界隔离", outcome: "返工下降" });
   await toolRegistry.get("read_shadow").execute({ mode: "offline", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const dj = [...store.keys()].find((k) => k.includes("shadow/dream/") && k.endsWith("dream.json"));
+  const dj = [...store.keys()].find((k) => k.includes(".shadow/dream/") && k.endsWith("dream.json"));
   const dream = store.get(dj!);
   assert.ok(dream!.includes("claimCandidate") || dream!.includes("observation"), "Dream 产 claimCandidate/observation");
   assert.ok(!dream!.includes("insight"), "Dream 不产 insight（Dream≠Insight）");
@@ -2986,7 +2986,7 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
   await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["A"] });
   await obs(fs, WS, { subject: "payment-service", observation: "PaymentService exposes endpoint", perspectives: ["B"] });
   await toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject: "payment-service", validations: [{ id: "v1", outcome: "validated" }], max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/fact") || k.includes("shadow/world"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/fact") || k.includes(".shadow/world"));
   assert.ok(knows.length === 0, "validated RealityClaim 不产生 knowledge/world 库");
   console.log("✔ 109 Validated != Knowledge：supported claim 不入知识库");
 }
@@ -2998,7 +2998,7 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svc", observation: "Svc exposed api", perspectives: ["A"] });
   await obs(fs, WS, { subject: "svc", observation: "Svc changed version", perspectives: ["B"] });
-  const obsFiles = [...store.keys()].filter((k) => k.includes("shadow/model/observations/") && k.endsWith(".json"));
+  const obsFiles = [...store.keys()].filter((k) => k.includes(".shadow/model/observations/") && k.endsWith(".json"));
   assert.ok(obsFiles.length === 2, "两个 observation 都保留（append-only）");
   const ids = obsFiles.map((k) => JSON.parse(store.get(k)!).id);
   assert.ok(new Set(ids).size === 2, "observation id 不重复（不可变）");
@@ -3059,7 +3059,7 @@ const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svcD", observation: "Service-D exposes /users", perspectives: ["A", "B"] });
   await mkClaim(fs, WS, "svcD");
-  const bad = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/entity"));
+  const bad = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world") || k.includes(".shadow/entity"));
   assert.ok(bad.length === 0, "Reality Model 不实例化 Knowledge/World/Entity");
   console.log("✔ 115 Reality Model Cannot Become World Model：不实例化 knowledge/world/entity");
 }
@@ -3176,7 +3176,7 @@ const repClaim = async (fs: any, ws: string, subject: string, observation: strin
   const { fs, store } = mkV(new Map());
   await repClaim(fs, WS, "svcI", "Service-I exposes /users");
   await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcI", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const gk = [...store.keys()].find((k) => k.includes("shadow/world/") && k.endsWith("graph.json"));
+  const gk = [...store.keys()].find((k) => k.includes(".shadow/world/") && k.endsWith("graph.json"));
   const g = store.get(gk!);
   assert.ok(!g!.includes("causalGraph") && !g!.includes("entityGraph") && !g!.includes("worldGraph") && !g!.includes("realityGraph"), "Graph 无 causalGraph/entityGraph/worldGraph/realityGraph");
   console.log("✔ 126 Graph 不产生 Reality Entity（命名保持 RepresentationGraph）");
@@ -3209,7 +3209,7 @@ const repClaim = async (fs: any, ws: string, subject: string, observation: strin
   seedIdentity(store, "v1", "2026-01-01");
   await repClaim(fs, WS, "svcK", "Service-K exposes /users");
   await toolRegistry.get("read_shadow").execute({ mode: "world", subject: "svcK", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Representation 不进入 Identity");
   console.log("✔ 129 Representation 不进入 Identity");
 }
@@ -3243,7 +3243,7 @@ const sim = async (fs: any, ws: string, condition: string, basedOn?: string[]) =
   const { fs, store } = mkV(new Map());
   seedIdentity(store, "v1", "2026-01-01");
   await sim(fs, WS, "Assume capacity decreases", ["rep-1"]);
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Simulation 不修改 Identity");
   console.log("✔ 132 Simulation 不修改 Identity");
 }
@@ -3271,7 +3271,7 @@ const sim = async (fs: any, ws: string, condition: string, basedOn?: string[]) =
 {
   const { fs, store } = mkV(new Map());
   await sim(fs, WS, "Assume capacity decreases", ["rep-1"]);
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/fact"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world") || k.includes(".shadow/fact"));
   assert.ok(knows.length === 0, "Simulation Result 不进入 knowledge/world");
   console.log("✔ 135 Simulation Result 不进入 Knowledge");
 }
@@ -3299,12 +3299,12 @@ const sim = async (fs: any, ws: string, condition: string, basedOn?: string[]) =
 // 138：Simulation 不反向污染 Representation（模拟后 Representation 不变）。
 {
   const { fs, store } = mkV(new Map());
-  const before = JSON.stringify([...store.keys()].filter((k) => k.includes("shadow/model/")));
+  const before = JSON.stringify([...store.keys()].filter((k) => k.includes(".shadow/model/")));
   await repClaim(fs, WS, "svcM", "Service-M exposes /users");
   await sim(fs, WS, "Assume latency increases", ["rep-1"]);
-  const repKeys = [...store.keys()].filter((k) => k.includes("shadow/model/"));
+  const repKeys = [...store.keys()].filter((k) => k.includes(".shadow/model/"));
   assert.ok(repKeys.length >= 2, "Representation/claim 仍存在（模拟不改模型）");
-  assert.ok(![...store.keys()].some((k) => k.includes("shadow/world") && k.includes("causal")), "模拟不改 RepresentationGraph");
+  assert.ok(![...store.keys()].some((k) => k.includes(".shadow/world") && k.includes("causal")), "模拟不改 RepresentationGraph");
   console.log("✔ 138 Simulation 不反向污染 Representation（模拟不改观察者现实描述）");
 }
 
@@ -3338,7 +3338,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   const { fs, store } = mkV(new Map());
   seedIdentity(store, "v1", "2026-01-01");
   await exec2(fs, WS, "ac-1", "event occurred");
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Action 不修改 Identity");
   console.log("✔ 141 Action 不修改 Identity");
 }
@@ -3347,7 +3347,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
 {
   const { fs, store } = mkV(new Map());
   await exec2(fs, WS, "ac-1", "event occurred");
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/fact"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world") || k.includes(".shadow/fact"));
   assert.ok(knows.length === 0, "ActionResult 不自动成为 Knowledge");
   console.log("✔ 142 ActionResult 不自动成为 Knowledge");
 }
@@ -3356,7 +3356,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
 {
   const { fs, store } = mkV(new Map());
   await fb(fs, WS, "ax-1", "observed latency down");
-  const ok = [...store.keys()].some((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  const ok = [...store.keys()].some((k) => k.includes(".shadow/action/") && k.includes("feedback"));
   assert.ok(ok, "feedback 进入 action 记录（Observation 通道）");
   console.log("✔ 143 Environment Feedback 进入 Observation（非 Memory）");
 }
@@ -3365,7 +3365,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
 {
   const { fs, store } = mkV(new Map());
   await fb(fs, WS, "ax-2", "observed latency up");
-  const ok = [...store.keys()].some((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  const ok = [...store.keys()].some((k) => k.includes(".shadow/action/") && k.includes("feedback"));
   assert.ok(ok, "失败 feedback 也保留（ValidationHistory，非 discard）");
   console.log("✔ 144 失败 Action 也是 Reality Evidence（不 discard）");
 }
@@ -3376,11 +3376,11 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   seedIdentity(store, "v1", "2026-01-01");
   await exec2(fs, WS, "ac-1", "event occurred");
   await fb(fs, WS, "ax-3", "我预测正确"); // 该 feedback 措辞应被拒（Success≠Capability）
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "identity 不变");
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world"));
   assert.ok(knows.length === 0, "knowledge/world 不变");
-  const act = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("exec"));
+  const act = [...store.keys()].filter((k) => k.includes(".shadow/action/") && k.includes("exec"));
   assert.ok(act.length >= 1, "仅 ActionExecution 记录++（Observation/Validation）");
   console.log("✔ 145 Success ≠ Capability：Action success 不改 Identity/Knowledge/Confidence");
 }
@@ -3412,7 +3412,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
 {
   const { fs, store } = mkV(new Map());
   await fb(fs, WS, "ax-2", "observed latency up");
-  const f = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("feedback"));
+  const f = [...store.keys()].filter((k) => k.includes(".shadow/action/") && k.includes("feedback"));
   assert.ok(f.length >= 1, "失败 feedback 也保留（ValidationHistory）");
   console.log("✔ 148 Failure 保留（append-only，非 discard）");
 }
@@ -3421,7 +3421,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
 {
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svcN", observation: "Service-N exposes /users", perspectives: ["A"] });
-  const obk = [...store.keys()].find((k) => k.includes("shadow/model/observations/") && k.endsWith(".json"));
+  const obk = [...store.keys()].find((k) => k.includes(".shadow/model/observations/") && k.endsWith(".json"));
   const before = store.get(obk!);
   await sim(fs, WS, "Assume latency increases", ["rep-1"]);
   assert.ok(store.get(obk!) === before, "Action/Simulation 不改历史 Observation（append-only）");
@@ -3434,7 +3434,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   seedIdentity(store, "v1", "2026-01-01");
   await exec2(fs, WS, "ac-1", "event occurred");
   await fb(fs, WS, "ax-3", "observed latency down");
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Success 不改 Identity");
   console.log("✔ 150 Success 不改 Identity（走 v0.25 人格闸门）");
 }
@@ -3444,7 +3444,7 @@ const fb = async (fs: any, ws: string, executionId: string, indicator: string) =
   const { fs, store } = mkV(new Map());
   const r = await exec2(fs, WS, "ac-1", "this architecture is correct");
   assert.ok(String(r).includes("[Action Rejected]"), "执行结果声称架构正确应拒绝");
-  const execs = [...store.keys()].filter((k) => k.includes("shadow/action/") && k.includes("exec-"));
+  const execs = [...store.keys()].filter((k) => k.includes(".shadow/action/") && k.includes("exec-"));
   assert.ok(execs.length === 0, "被拒的 RealityOwnership 不持久化（Action 不产 should_exist/correct）");
   console.log("✔ 151 Action Scope ≠ Reality Ownership（Action 只产生 changed_at，不产生 should_exist/correct）");
 }
@@ -3515,9 +3515,9 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
   const { fs, store } = mkV(new Map());
   seedIdentity(store, "v1", "2026-01-01");
   for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "反复 Planning 不形成 Preference/Identity");
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/knowledge"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/preference") || k.includes(".shadow/knowledge"));
   assert.ok(knows.length === 0, "无 Preference/Knowledge 生成");
   console.log("✔ 158 Planning History 不形成 Preference（Repeated Behavior ≠ Preference，≠ Identity）");
 }
@@ -3539,7 +3539,7 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
 {
   const { fs, store } = mkV(new Map());
   for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
-  const a = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/plan-pref"));
+  const a = [...store.keys()].filter((k) => k.includes(".shadow/preference") || k.includes(".shadow/plan-pref"));
   assert.ok(a.length === 0, "反复 Plan A 不产生 Preference（Preference 无存储）");
   console.log("✔ 160 PlanCandidate 不产生 Preference（Preference 不形成）");
 }
@@ -3558,7 +3558,7 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
   const { fs, store } = mkV(new Map());
   seedIdentity(store, "v1", "2026-01-01");
   for (let i = 0; i < 3; i++) await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Planning 不改变 Identity");
   console.log("✔ 162 Planning 不改变 Identity（不产我是偏向X的人）");
 }
@@ -3575,7 +3575,7 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
 {
   const { fs, store } = mkV(new Map());
   await sim(fs, WS, "Assume latency increases", ["rep-1"]);
-  const sims = [...store.keys()].filter((k) => k.includes("shadow/")) && 1; // 无删除 API
+  const sims = [...store.keys()].filter((k) => k.includes(".shadow/")) && 1; // 无删除 API
   assert.ok(true, "Plan/Simulation 无删除路径 API（失败不删除）");
   console.log("✔ 164 Plan Failure 不删除路径（无删除 API，失败证据保留）");
 }
@@ -3673,7 +3673,7 @@ const agevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
 {
   const { fs, store } = mkV(new Map());
   await agctx(fs, WS, { objectiveRef: "external reduce latency", authoritySource: "external", authorityScope: "modify config", constraints: ["constraint X"] });
-  const ctxFiles = [...store.keys()].filter((k) => k.includes("shadow/agency/") && k.includes("context-"));
+  const ctxFiles = [...store.keys()].filter((k) => k.includes(".shadow/agency/") && k.includes("context-"));
   assert.ok(ctxFiles.length === 1, "context snapshot 写入一次");
   const before = store.get(ctxFiles[0]!);
   for (let i = 0; i < 100; i++) await agevt(fs, WS, { actionCandidate: `ac-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `event ${i} occurred` });
@@ -3693,7 +3693,7 @@ const agevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
 {
   const { fs, store } = mkV(new Map());
   await agctx(fs, WS, { objectiveRef: "external reduce latency", authoritySource: "external", authorityScope: "read execute", constraints: ["constraint X"] });
-  const ctxFiles = [...store.keys()].filter((k) => k.includes("shadow/agency/") && k.includes("context-"));
+  const ctxFiles = [...store.keys()].filter((k) => k.includes(".shadow/agency/") && k.includes("context-"));
   assert.ok(ctxFiles.length === 1, "context snapshot 显式写入");
   const before = store.get(ctxFiles[0]!);
   for (let i = 0; i < 100; i++) await agevt(fs, WS, { actionCandidate: `fb-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `success observed ${i}` });
@@ -3753,7 +3753,7 @@ const agevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
   const r = await agevt(fs, WS, { actionCandidate: "ac-1", authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: "I am a good planner" });
   assert.ok(String(r).includes("AgencyEvent Rejected"), "Action 声称身份应拒绝");
   for (let i = 0; i < 5; i++) await agevt(fs, WS, { actionCandidate: `ac-${i}`, authorityRef: "auth-X", objectiveRef: "external reduce latency", constraintCheck: ["constraint X"], executionResult: `success ${i}` });
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "成功行动不改变 Identity（identity 只来自 Reflection→Candidate→Evaluator）");
   console.log("✔ 179 Agency ≠ Identity（成功行动不产『我是更好规划者』；identity 只来自 Reflection→Candidate→Evaluator）");
 }
@@ -3841,7 +3841,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   assert.ok(String(r).includes("DelegationEvent Rejected"), "身份声称应拒绝");
   assert.ok(String(r).toLowerCase().includes("identity"), "应标注 Action≠Identity");
   for (let i = 0; i < 5; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `exec ${i}`, satisfiedConstraints: [] });
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Delegated Action 不修改 Identity（identity 只来自 Reflection→Candidate→Evaluator）");
   console.log("✔ 186 Delegated Action 不修改 Identity（identity 只来自 Reflection→Candidate→Evaluator）");
 }
@@ -3905,10 +3905,10 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   const { fs, store } = mkV(new Map());
   await dlgctx(fs, WS, { delegationId: "dlg-ok", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
   for (let i = 0; i < 100; i++) await dlgevt(fs, WS, { delegationId: "dlg-ok", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
-  const evBefore = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-")).length;
+  const evBefore = [...store.keys()].filter((k) => k.includes(".shadow/delegation/") && k.includes("event-")).length;
   await dlgctx(fs, WS, { delegationId: "dlg-rev", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01", revocation: true });
   for (let i = 0; i < 5; i++) { const r = await dlgevt(fs, WS, { delegationId: "dlg-rev", candidateAction: "update_service_config", executionResult: `resume ${i}`, satisfiedConstraints: [] }); assert.ok(String(r).includes("Revocation First"), "revoked 不可 resume（每次执行都拒绝）"); }
-  const evAfter = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-")).length;
+  const evAfter = [...store.keys()].filter((k) => k.includes(".shadow/delegation/") && k.includes("event-")).length;
   assert.ok(evAfter === evBefore, "revoked delegation 无新事件记录（cannot resume）");
   console.log("✔ 191 Revoked Delegation Cannot Resume（revoke→new execution→same delegation 禁）");
 }
@@ -3917,7 +3917,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
 {
   const { fs, store } = mkV(new Map());
   await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
-  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const delegFile = [...store.keys()].find((k) => k.includes(".shadow/delegation/") && k.includes("delegation-dlg-1"))!;
   const before = store.get(delegFile);
   for (let i = 0; i < 100; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
   assert.ok(store.get(delegFile) === before, "历史成功不修改/恢复权限（context 不变）");
@@ -3930,7 +3930,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
 {
   const { fs, store } = mkV(new Map());
   await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
-  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const delegFile = [...store.keys()].find((k) => k.includes(".shadow/delegation/") && k.includes("delegation-dlg-1"))!;
   const before = store.get(delegFile);
   const r = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "redesign_architecture" });
   assert.ok(String(r).includes("scope 越界"), "旧委派不可扩大 scope");
@@ -3945,7 +3945,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
 {
   const { fs, store } = mkV(new Map());
   await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config", "optimize_config"], constraints: [], expiration: "2099-01-01" });
-  const delegFile = [...store.keys()].find((k) => k.includes("shadow/delegation/") && k.includes("delegation-dlg-1"))!;
+  const delegFile = [...store.keys()].find((k) => k.includes(".shadow/delegation/") && k.includes("delegation-dlg-1"))!;
   const before = store.get(delegFile);
   const same = await dlgcheck(fs, WS, { delegationId: "dlg-1", action: "optimize_config" });
   assert.ok(String(same).includes("ALLOWED"), "同权限不同执行策略允许");
@@ -3958,7 +3958,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   const { fs, store } = mkV(new Map());
   await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
   for (let i = 0; i < 50; i++) await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: `success ${i}`, satisfiedConstraints: [] });
-  const deps = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("delegation-"));
+  const deps = [...store.keys()].filter((k) => k.includes(".shadow/delegation/") && k.includes("delegation-"));
   assert.ok(deps.length === 1, "事件不自动产生新委派（Delegation 数不变）");
   console.log("✔ 195 Delegation Event Cannot Become Authority Source（successful event → new delegation 禁）");
 }
@@ -3979,7 +3979,7 @@ const dlgevt = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_
   await dlgctx(fs, WS, { delegationId: "dlg-1", authoritySource: "human", objectiveRef: "external reduce latency", allowedScope: ["update_service_config"], constraints: [], expiration: "2099-01-01" });
   await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev1", satisfiedConstraints: [] });
   await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev2", satisfiedConstraints: [] });
-  const evs = [...store.keys()].filter((k) => k.includes("shadow/delegation/") && k.includes("event-"));
+  const evs = [...store.keys()].filter((k) => k.includes(".shadow/delegation/") && k.includes("event-"));
   assert.ok(evs.length === 2, "事件 append-only（每条一文件，不覆盖）");
   const r = await dlgevt(fs, WS, { delegationId: "dlg-1", candidateAction: "update_service_config", executionResult: "ev3", satisfiedConstraints: [] });
   assert.ok(String(r).includes("delegation") && String(r).includes("authority"), "event 带 lineage（Action→Delegation→Authority）");
@@ -4004,7 +4004,7 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   await rcforget(fs, WS, rcForgetOk);
   const r = await rcevent(fs, WS, rcRecallOk);
   assert.ok(String(r).includes("[Recall Event]"), "忆起记录为 event（非新观察）");
-  const obs = [...store.keys()].filter((k) => k.includes("shadow/model/observations/") || k.includes("shadow/model/claims/") || k.includes("shadow/reality/"));
+  const obs = [...store.keys()].filter((k) => k.includes(".shadow/model/observations/") || k.includes(".shadow/model/claims/") || k.includes(".shadow/reality/"));
   assert.ok(obs.length === 0, "Recall 不产生新 RealityObservation/RealityClaim");
   const rBad = await rcevent(fs, WS, { ...rcRecallOk, observationRefs: ["new observation X"] });
   assert.ok(String(rBad).includes("RecallEvent Rejected"), "lineage 含 new observation 应拒绝");
@@ -4027,7 +4027,7 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   const { fs, store } = mkV(new Map());
   await rcforget(fs, WS, rcForgetOk);
   await rcevent(fs, WS, rcRecallOk);
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world") || k.includes("shadow/model/"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world") || k.includes(".shadow/model/"));
   assert.ok(knows.length === 0, "Recall 不产生 Knowledge/World/RealityModel（Recall ≠ Knowledge Creation）");
   console.log("✔ 200 Recall ≠ Knowledge Creation（想起来不是学习）");
 }
@@ -4038,7 +4038,7 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   seedIdentity(store, "v1", "2026-01-01");
   await rcforget(fs, WS, rcForgetOk);
   await rcevent(fs, WS, rcRecallOk);
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Recall 不修改 Identity（Recall ≠ Identity Update）");
   console.log("✔ 201 Recall ≠ Identity Update（记起过去不改变 Who I am）");
 }
@@ -4071,7 +4071,7 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   await rcforget(fs, WS, { ...rcForgetOk, validationRefs: ["val-1"] });
   const r = await rcevent(fs, WS, rcRecallOk);
   assert.ok(String(r).includes("validations val-1"), "遗忘不抹除验证链（validationRefs 保留）");
-  const hyp = [...store.keys()].filter((k) => k.includes("shadow/hypothesis"));
+  const hyp = [...store.keys()].filter((k) => k.includes(".shadow/hypothesis"));
   assert.ok(hyp.length === 0, "Recall 不把原验证链变成 new hypothesis（Forgetting Does Not Erase Validation）");
   console.log("✔ 204 Forgetting Does Not Erase Validation（原验证链仍存在，不变成新 hypothesis）");
 }
@@ -4099,10 +4099,10 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svcX", observation: "Service-X exposes /users", perspectives: ["A"] });
   await mkClaim(fs, WS, "svcX");
-  const claims = [...store.keys()].filter((k) => k.includes("shadow/model/claims/"));
+  const claims = [...store.keys()].filter((k) => k.includes(".shadow/model/claims/"));
   assert.ok(claims.length >= 1, "先有 RealityClaim");
   await rcforget(fs, WS, { id: "fr-1", originalRef: "svcX", reason: "access window closed", validationRefs: ["v1"] });
-  const claimsAfter = [...store.keys()].filter((k) => k.includes("shadow/model/claims/"));
+  const claimsAfter = [...store.keys()].filter((k) => k.includes(".shadow/model/claims/"));
   assert.ok(claimsAfter.length === claims.length, "Forgotten 不删除 RealityClaim/validation（可访问性变化 ≠ 证据变化）");
   const rc = await rcvalid(fs, WS, { recalledRef: "fr-1", sourceRef: "ctx-1" });
   assert.ok(String(rc).includes("epistemicStatusUnchanged true"), "validation 报告 epistemic status 不变");
@@ -4113,12 +4113,12 @@ const rcRecallOk = { recalledRef: "fr-1", triggerType: "external cue", sourceRef
 {
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svcY", observation: "Service-Y exposes /users", perspectives: ["A"] });
-  const obsFile = [...store.keys()].find((k) => k.includes("shadow/model/observations/"))!;
+  const obsFile = [...store.keys()].find((k) => k.includes(".shadow/model/observations/"))!;
   const before = store.get(obsFile);
   await rcforget(fs, WS, { id: "fr-1", originalRef: "svcY", reason: "access window closed" });
   await rcevent(fs, WS, { recalledRef: "fr-1", triggerType: "external cue", sourceRef: "ctx-1", originalRecord: "svcY", observationRefs: ["obs-1"] });
   assert.ok(store.get(obsFile) === before, "Recall 不修改 Original ObservationTrace（Immutable）");
-  const extra = [...store.keys()].filter((k) => k.includes("shadow/model/") || k.includes("shadow/validation/") || k.includes("shadow/observation/"));
+  const extra = [...store.keys()].filter((k) => k.includes(".shadow/model/") || k.includes(".shadow/validation/") || k.includes(".shadow/observation/"));
   assert.ok(extra.length === 1, "Recall 只产 RecallEvent，不改 ObservationTrace/ValidationHistory/RealityClaim lineage");
   console.log("✔ 207 Recall Cannot Modify Original Lineage（Recall 只创建 RecallEvent，不改 ObservationTrace/ValidationHistory）");
 }
@@ -4141,7 +4141,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
   assert.ok(String(r).includes("AdaptationChange Rejected"), "target=identity 应拒绝（Adaptation ≠ Identity Change）");
   const r2 = await adchange(fs, WS, adChangeOk);
   assert.ok(String(r2).includes("[Adaptation Change]"), "合法 target 通过");
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 1 && idFiles[0].includes("v1"), "Adaptation 不改变 Identity（调整行为不改 Who I am）");
   console.log("✔ 208 Adaptation ≠ Identity Change（调整行为，不改变 Observer）");
 }
@@ -4167,7 +4167,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
 {
   const { fs, store } = mkV(new Map());
   await advalid(fs, WS, { changeObserved: false, sideEffectsObserved: ["something worsened"] });
-  const v = [...store.keys()].filter((k) => k.includes("shadow/adapt/") && k.includes("validation-"));
+  const v = [...store.keys()].filter((k) => k.includes(".shadow/adapt/") && k.includes("validation-"));
   assert.ok(v.length >= 1, "失败 adaptation 也记录（append-only，不删历史）");
   console.log("✔ 211 Failure ≠ Remove Adaptation History（失败也是反馈，不删除）");
 }
@@ -4187,7 +4187,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
 {
   const { fs, store } = mkV(new Map());
   for (let i = 0; i < 100; i++) await adchange(fs, WS, adChangeOk);
-  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference") || k.includes("shadow/plan-pref") || k.includes("preferred"));
+  const pref = [...store.keys()].filter((k) => k.includes(".shadow/preference") || k.includes(".shadow/plan-pref") || k.includes("preferred"));
   assert.ok(pref.length === 0, "Repeated Adaptation 不形成 Preference（无存储）");
   const r = await adchange(fs, WS, { ...adChangeOk, target: "preference" });
   assert.ok(String(r).includes("AdaptationChange Rejected"), "target=preference 应拒绝（Repeated≠Preference）");
@@ -4231,7 +4231,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
   const { fs, store } = mkV(new Map());
   await adchange(fs, WS, adChangeOk);
   await advalid(fs, WS, { changeObserved: true, validationReferences: ["v1"], sideEffectsObserved: ["latency down"] });
-  const knows = [...store.keys()].filter((k) => k.includes("shadow/knowledge") || k.includes("shadow/world/") || k.includes("shadow/model/"));
+  const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/world/") || k.includes(".shadow/model/"));
   assert.ok(knows.length === 0, "Adaptation 不产生 Knowledge（AdaptationValidation→Knowledge 禁）");
   console.log("✔ 217 Adaptation Does Not Create Knowledge");
 }
@@ -4240,7 +4240,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
 {
   const { fs, store } = mkV(new Map());
   await obs(fs, WS, { subject: "svcZ", observation: "Service-Z exposes /users", perspectives: ["A"] });
-  const obsFile = [...store.keys()].find((k) => k.includes("shadow/model/observations/"))!;
+  const obsFile = [...store.keys()].find((k) => k.includes(".shadow/model/observations/"))!;
   const before = store.get(obsFile);
   await adchange(fs, WS, { ...adChangeOk, sourceExperience: "svcZ" });
   assert.ok(store.get(obsFile) === before, "Adaptation 不修改过去 Experience/Observation（append-only）");
@@ -4262,7 +4262,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
   const r = await adchange(fs, WS, { ...adChangeOk, after: "I prefer this strategy" });
   assert.ok(String(r).includes("AdaptationChange Rejected"), "after 声称偏好应拒绝（≠ Create Preference）");
   assert.ok(String(r).includes("Preference") || String(r).includes("偏好"), "应标注");
-  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference"));
+  const pref = [...store.keys()].filter((k) => k.includes(".shadow/preference"));
   assert.ok(pref.length === 0, "无 preference 产物");
   console.log("✔ 220 Adaptation Does Not Create Preference（Repeated success →『I prefer this』禁）");
 }
@@ -4271,7 +4271,7 @@ const adChangeOk = { target: "method", before: "retry=3", after: "retry=5", base
 {
   const { fs, store } = mkV(new Map());
   await advalid(fs, WS, { changeObserved: false, validationReferences: ["v1"], sideEffectsObserved: ["latency up"] });
-  const v = [...store.keys()].filter((k) => k.includes("shadow/adapt/") && k.includes("validation-"));
+  const v = [...store.keys()].filter((k) => k.includes(".shadow/adapt/") && k.includes("validation-"));
   assert.ok(v.length >= 1, "失败 adaptation 也保留（Failure ≠ Ignore；不删除历史）");
   console.log("✔ 221 Adaptation Failure Remains Evidence（Failure ≠ Ignore）");
 }
@@ -4321,7 +4321,7 @@ const hzLinkOk = { historyRef: "h-1", recallRef: "r-1", adaptationRef: "a-1" };
   const r = await hzlink(fs, WS, { ...hzLinkOk, result: "long history → I prefer A" });
   assert.ok(String(r).includes("InteractionLink Rejected"), "长期偏好应拒绝（Long History ≠ Preference）");
   assert.ok(String(r).includes("Preference") || String(r).includes("偏好"), "应标注");
-  const pref = [...store.keys()].filter((k) => k.includes("shadow/preference"));
+  const pref = [...store.keys()].filter((k) => k.includes(".shadow/preference"));
   assert.ok(pref.length === 0, "无 preference 产物");
   console.log("✔ 225 Long History ≠ Preference（长期选择 A → 偏好 A 禁）");
 }
@@ -4376,7 +4376,7 @@ const hzLinkOk = { historyRef: "h-1", recallRef: "r-1", adaptationRef: "a-1" };
   const r = await hzlink(fs, WS, { ...hzLinkOk, result: "history proves observer identity evolved" });
   assert.ok(String(r).includes("InteractionLink Rejected"), "history 声称身份演化应拒绝（Long History ≠ Identity）");
   assert.ok(String(r).includes("Identity") || String(r).includes("identity"), "应标注");
-  const idFiles = [...store.keys()].filter((k) => k.includes("shadow/identity/") && k.endsWith(".json"));
+  const idFiles = [...store.keys()].filter((k) => k.includes(".shadow/identity/") && k.endsWith(".json"));
   assert.ok(idFiles.length === 0, "History 不创建 Identity");
   console.log("✔ 230 Long History Does Not Create Identity（History≠Identity；Pattern≠SelfDefinition）");
 }

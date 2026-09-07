@@ -19,12 +19,12 @@ export const nextVersion = (v) => `v${(parseInt(String(v || "v0").replace(/\D/g,
 export const readIdentityVersions = async (fs, ws) => {
     const out = [];
     try {
-        const root = await fs.resolve(`${ws}/shadow/identity`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/.shadow/identity`, { cwd: ws });
         const files = (await fs.listDir(root).catch(() => [])) || [];
         for (const f of files) {
             if (!f?.name || !f.name.endsWith(".json"))
                 continue;
-            const p = await fs.resolve(`${ws}/shadow/identity/${f.name}`, { cwd: ws });
+            const p = await fs.resolve(`${ws}/.shadow/identity/${f.name}`, { cwd: ws });
             const m = JSON.parse(await fs.readText(p));
             if (m && m.version)
                 out.push(m);
@@ -40,12 +40,12 @@ export const readCurrentIdentity = async (fs, ws, agentId) => {
 // 写一个不可变版本切片 + 重建 timeline.md 索引（推进 self-model，干净、可回放）。
 export const writeIdentityVersion = async (fs, ws, model) => {
     try {
-        const rel = `shadow/identity/${model.at}-${model.version}.json`;
+        const rel = `.shadow/identity/${model.at}-${model.version}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(model, null, 2));
         const versions = await readIdentityVersions(fs, ws);
         const idx = ["# Identity Timeline", ""].concat(versions.map((v) => `- \`${v.version}\` ${v.at} · observer ${v.core.observerId} · learned ${v.learned.length} · core.values ${v.core.values.length}`));
-        const ti = await fs.resolve(`${ws}/shadow/identity/timeline.md`, { cwd: ws });
+        const ti = await fs.resolve(`${ws}/.shadow/identity/timeline.md`, { cwd: ws });
         await fs.writeText(ti, idx.join("\n"));
     }
     catch (e) {
