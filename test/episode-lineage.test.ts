@@ -186,4 +186,38 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ 扩展 classifyUser：范围/聚焦 + 锚点/定位 捕获为 Decision；请求理解不算");
 }
 
+// ─────────────────────────────────────────────
+// 场景 6（L2 增量索引 + 遗忘）：forget.enabled 时，低价值/旧/已归档记忆从「活跃索引」与
+//           召回集剔除（文件保留，Forget≠Delete）；索引仍正确、含新增、不含被遗忘。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  // 种子：活跃(act, hits5) / 已归档(old, archived) / 旧低命中(low, 2020, hits0)
+  store.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-act.md", "# act\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [act] 用户：活跃记忆 A\n");
+  store.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-old.md", "# old\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [old] 用户：已归档记忆 OLD\n");
+  store.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-low.md", "# low\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [00:00:00] [low] 用户：旧低命中记忆 LOW\n");
+  store.set("D:/ws/.shadow/_meta.json", JSON.stringify({
+    ".shadow/2026-09-05/2026-09-05--100000-act.md": { created: "2026-09-05", hits: 5, status: "active", pinned: false },
+    ".shadow/2026-09-05/2026-09-05--110000-old.md": { created: "2026-09-05", hits: 0, status: "archived", pinned: false },
+    ".shadow/2020-01-01/2020-01-01--000000-low.md": { created: "2020-01-01", hits: 0, status: "active", pinned: false },
+  }));
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: true, staleDays: 14, minHits: 1 } });
+  const T = agent("T6");
+  const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  fire("session/event", { id: "T6", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m6", role: "user", content: [{ type: "text", text: "触发一次索引重建" }], source: { kind: "user" } } });
+  await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
+  const idx = store.get("D:/ws/.shadow/_index.md");
+  assert.ok(idx && idx.includes("2026-09-05--100000-act.md"), "活跃记忆应保留在索引");
+  assert.ok(!idx.includes("2026-09-05--110000-old.md"), "已归档(old)遗忘：不应出现在索引");
+  assert.ok(!idx.includes("2020-01-01--000000-low.md"), "旧低命中(low)遗忘：不应出现在索引");
+  const rs = toolRegistry.get("read_shadow");
+  const ex = { agent: T };
+  assert.ok(String(await rs.execute({ topic: "act" }, ex)).includes("活跃记忆 A"), "活跃记忆可召回");
+  assert.ok(String(await rs.execute({ topic: "OLD" }, ex)).includes("无匹配"), "已归档(old)应被遗忘不出现在召回");
+  assert.ok(String(await rs.execute({ topic: "LOW" }, ex)).includes("无匹配"), "旧低命中(low)应被遗忘");
+  console.log("✔ L2 增量索引 + 遗忘：低价值/旧/已归档从活跃索引与召回剔除（文件保留）");
+}
+
 console.log("ALL PASS ✅");

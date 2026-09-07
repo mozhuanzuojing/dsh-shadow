@@ -9,6 +9,7 @@ import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
+import { isForgettable } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
@@ -100,7 +101,10 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   // Episode/Decision Lineage（派生关系层）：把 Event/Turn 级记忆原子串成连续任务（Episode），
   // 并把「决策」提升为可追踪血缘。只读记忆树派生，不写回记忆文件（与 Experience/Judgment 同模式）。
   if (String(args?.mode) === "episode" || String(args?.mode) === "decision") {
-    const memories = await listMemories(fs, ws);
+    let memories = await listMemories(fs, ws);
+    const metaQ = await readMeta(fs, ws);
+    const forgetQ = deps.config.forget ?? {};
+    if (forgetQ.enabled === true) memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ));
     const parsed: any[] = [];
     for (const mm of memories) {
       const text = await readRel(fs, ws, mm.rel);
@@ -584,6 +588,11 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const entryList: any[] = [];
   const entryLineage = new Map<string, { date: string; time: string; decision: string }[]>();
   const meta = await readMeta(fs, ws);
+  // 遗忘：forget.enabled 时，已遗忘记忆从活跃召回集剔除（文件保留，仅不再被扫描；Forget≠Delete）。
+  const forgetCfgQ = deps.config.forget ?? {};
+  if (forgetCfgQ.enabled === true && Array.isArray(memories)) {
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, meta, forgetCfgQ));
+  }
   const halfLife = Math.max(0.01, Number(retentionCfg.halfLifeDays) || 7);
   for (const mm of memories) {
     const text = await readRel(fs, ws, mm.rel);

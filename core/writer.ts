@@ -6,10 +6,12 @@ import type { AgentLike, ShadowConfig } from "./types.js";
 import { resolveWorkspace } from "./scope.js";
 import { today, stamp, compact, slug, under, component, topicsInText, tokenize } from "./util.js";
 import { readRel, listMemories } from "../persistence/files.js";
+import { readMeta, writeMeta } from "../persistence/meta.js";
 import { extractMessage, goalText, classifyUser, extractDecisionStatement, extractReason } from "./collect.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
+import { isForgettable, oldestBeyond } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
 
 export interface ShadowCollectorOpts {
@@ -63,6 +65,28 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const comps = new Map<string, string[]>();
   const cwdBySession = new Map<string, string>();
   const goalByAgent = new Map<string, string>();
+  // L2 增量索引缓存：rel -> {date,time,name,entry,topics,parsed}。F5 性能热路径。
+  // 避免每次 flush 都全量重读所有记忆文件（seq 读全量 O(N)），改为冷启动读一次、之后只读新增。
+  const indexCache = new Map<string, any>();
+  const indexCacheWarm = new Set<string>();
+  const forgetCfg = config.forget ?? {};
+
+  const recOf = (mm: any, text: string) => {
+    const entry = (String(text || "").match(/^# (.+)$/m) || [])[1]?.trim() || "";
+    let parsed: any = undefined;
+    try { parsed = parseMemory(text, mm.rel, mm.name); } catch { /* 解析失败仅缺 episode/decision */ }
+    return { date: mm.date, time: mm.time, name: mm.name, rel: mm.rel, entry, topics: topicsInText(text, slug(mm.name)), parsed };
+  };
+  const ensureIndexCache = async (fs: any, ws: string, skipForgotten: (rel: string) => boolean) => {
+    if (indexCacheWarm.has(ws)) return;
+    indexCacheWarm.add(ws); // 每个 workspace 只做一次全量读；之后靠 flush 增量增补。
+    const memories = await listMemories(fs, ws);
+    for (const mm of memories) {
+      if (skipForgotten(mm.rel)) continue;
+      const text = await readRel(fs, ws, mm.rel);
+      if (text) indexCache.set(mm.rel, recOf(mm, text));
+    }
+  };
   const push = (agentId: string | undefined, rec: any) => {
     if (!agentId) return;
     const arr = pending.get(agentId) || [];
@@ -189,22 +213,31 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const rebuildIndex = async (fs: any, ws: string) => {
     if (!fs || !ws) return;
     try {
-      const memories = await listMemories(fs, ws);
+      // L2：增量索引 —— 优先用进程内缓存（冷启动才读一次全部，之后只靠 flush 增量增补），
+      // 避免每回合全量顺序重读所有记忆文件（性能热路径根因）。
+      const meta = await readMeta(fs, ws);
+      const skipForgotten = (rel: string) => isForgettable(rel, meta, forgetCfg);
+      await ensureIndexCache(fs, ws, skipForgotten);
+      // 遗忘：把低价值/旧条目移出活跃热集（文件保留，仅不再被索引/召回扫描；Forget≠Delete）。
+      for (const rel of [...indexCache.keys()]) if (isForgettable(rel, meta, forgetCfg)) indexCache.delete(rel);
+      // 硬上限：活跃记忆超过 maxActive 时，遗忘最旧的（封顶热集大小）。
+      const maxActive = Math.max(0, Number(forgetCfg.maxActive) || 0);
+      if (forgetCfg.enabled === true && maxActive > 0 && indexCache.size > maxActive) {
+        const recsAll = [...indexCache.values()];
+        const drop = oldestBeyond(recsAll.map((r) => ({ rel: r.rel, date: r.date, time: r.time })), maxActive);
+        for (const rel of drop) indexCache.delete(rel);
+      }
+      const recs = [...indexCache.values()];
+      const memories = recs.map((r) => ({ date: r.date, time: r.time, name: r.name, rel: r.rel }));
       const topicFiles: Record<string, string[]> = {};
       const parsed: any[] = [];
       const todayStr = today();
       const todayTopics = new Set<string>();
       let todayCount = 0;
-      for (const mm of memories) {
-        const text = await readRel(fs, ws, mm.rel);
-        const tops = topicsInText(text, slug(mm.name));
-        for (const t of tops) (topicFiles[t] = topicFiles[t] || []).push(mm.rel);
-        if (mm.date === todayStr) {
-          todayCount++;
-          for (const t of tops) todayTopics.add(t);
-        }
-        // Episode/Decision Lineage（派生关系层）：读取一次文本，同时留给 Episode 派生。
-        try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 单条解析失败不影响索引 */ }
+      for (const r of recs) {
+        for (const t of r.topics) (topicFiles[t] = topicFiles[t] || []).push(r.rel);
+        if (r.date === todayStr) { todayCount++; for (const t of r.topics) todayTopics.add(t); }
+        if (r.parsed) parsed.push(r.parsed);
       }
       let idx = buildIndexText(ws, memories, topicFiles, { count: todayCount, topics: [...todayTopics] });
       // 把碎片串成"任务回溯（Episodes）"：一次连续任务 = 一个 Episode（派生式，不写回记忆文件）。
@@ -269,6 +302,8 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       const bodyLines = traces.map((t) => `- [${t.at}] [${t.comp || entry}] ${sanitizeText(t.text)}`).filter((l) => !isUnsafe(l));
       const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
       await fs.writeText(t, `${head}${clue}${body}\n`);
+      // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
+      indexCache.set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
       await rebuildIndex(fs, ws);
       await registerMeta(fs, ws, rel, id, retentionCfg.enabled === true);
       void patchSummary(fs, ws, rel, entry, arr);

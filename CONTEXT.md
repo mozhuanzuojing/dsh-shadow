@@ -33,6 +33,8 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Confirmation（v1.1.1） | 纯确认（好/可以/行/ok/嗯），**不是 Decision**——`classifyUser` 单独归类，避免"好/可以"误判为拍板 |
 | DecisionClass（v1.1.2） | 明确决策细分为三类：`selection`（选择/删除/保留/采用 X）、`scope`（范围/聚焦，如"资产同步"）、`anchor`（锚点/定位，如"…这是 openapi 的 U8 工作区"）——真实用户"关键决策"常为短促的范围/锚点声明，旧判定（只认选择动词）会漏 |
 | Memory Atom | 最小不可变事件投影（即每条记忆文件，200–1000 bytes）；Episode/Decision 在其上派生，不改写它 |
+| 遗忘（v1.2.0） | 把低价值/旧/已归档记忆**移出「活跃」扫描集**（索引+召回），文件保留（**Forget≠Delete**，ADR-0031）。`forget:{enabled,staleDays,minHits,maxActive}`；默认关。目的是封顶热集大小（性能），不破坏可追溯性 |
+| 增量索引（v1.2.0） | 进程内 `indexCache` 缓存已 parse 的记忆（entry/topics/parsed），冷启动读一次、之后 flush 只增量增补并**由缓存生成 `_index.md`**，避免每回合全量顺序重读所有文件（性能热路径根因） |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
 | 召回 | `read_shadow(topic)` 按命题找出相关记忆的过程：A 档=加权关键词+标签+路径+时间衰减；B 档=先 `llm.stream` 扩词再打分（`rawConfig.recall.enabled` 开启） |

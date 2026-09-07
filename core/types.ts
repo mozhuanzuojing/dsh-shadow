@@ -17,6 +17,8 @@ export interface ShadowConfig {
   retention?: { enabled?: boolean; halfLifeDays?: number; staleDays?: number };
   /** Episode/Decision Lineage（派生关系层）：控制聚合时间间隔；纯派生不改写侧采集。 */
   episodes?: { gapMinutes?: number; showInIndex?: number };
+  /** 遗忘（GC/归档）：把低价值记忆移出「活跃索引/召回」热扫描集（文件保留，Forget≠Delete）。默认关。 */
+  forget?: { enabled?: boolean; staleDays?: number; minHits?: number; maxActive?: number };
   /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
   writeConsent?: boolean;
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
