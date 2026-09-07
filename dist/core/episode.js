@@ -13,7 +13,7 @@
 import { scrubUnsafe } from "../security/scrub.js";
 // ── 解析一条记忆 ──
 const fieldOf = (text, key) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
-const stripPrompt = (s) => scrubUnsafe(String(s || "").replace(/^「|」$/g, "").replace(/〔decision〕/g, "").replace(/〔reminder〕/g, "")).trim();
+const stripPrompt = (s) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
 export const parseMemory = (text, rel, name) => {
     const body = String(text || "");
     const date = (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || "";

@@ -19,6 +19,8 @@ export interface ShadowConfig {
   episodes?: { gapMinutes?: number; showInIndex?: number };
   /** 遗忘（GC/归档）：把低价值记忆移出「活跃索引/召回」热扫描集（文件保留，Forget≠Delete）。默认关。 */
   forget?: { enabled?: boolean; staleDays?: number; minHits?: number; maxActive?: number };
+  /** Episode 收口归档：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件并归档个体（File 少；原子保留可回放）。默认关。 */
+  compact?: { enabled?: boolean; gapMinutes?: number };
   /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
   writeConsent?: boolean;
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */

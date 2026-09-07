@@ -224,4 +224,45 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ L2 增量索引 + 遗忘：低价值/旧/已归档从活跃索引与召回剔除（文件保留）");
 }
 
+// ─────────────────────────────────────────────
+// 场景 7（Episode 收口归档 / compact）：关闭的 episode 原子被合并成一个 consolidated 文件，
+//           个体原子 mark compacted 移出活跃索引/召回（文件保留可回放）；活跃热集文件数大降。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  // Episode A（关闭）：09:00/09:01/09:05 三个原子（entry pkg-a，含决策"采用 bundle 模式"）
+  const seedA = (rel: string, decision: string, path: string) =>
+    store.set(`D:/ws/.shadow/${rel}`,
+      `# pkg-a\n\n> 完整线索\n> 背景/材料：${path}\n> 用户提示/决策：「${decision}」〔decision〕\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [pkg-a] 改/读 ${path}\n`);
+  seedA("2026-09-07/2026-09-07--090000-pkg-a.md", "采用 bundle 模式", "pkg-a/x.js");
+  seedA("2026-09-07/2026-09-07--090100-pkg-a.md", "拆分模块", "pkg-a/x2.js");
+  seedA("2026-09-07/2026-09-07--090500-pkg-a.md", "重构 resolver", "pkg-a/x3.js");
+  // Episode B（当前/打开）：12:00
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--120000-pkg-b.md", "# pkg-b\n\n> 完整线索\n> 背景/材料：pkg-b/y.js\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T7\n\n- [12:00:00] [pkg-b] 改/读 pkg-b/y.js\n");
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: true, gapMinutes: 60 } });
+  const T = agent("T7");
+  const rs = toolRegistry.get("read_shadow");
+  // 读索引 → ensureIndex → rebuildIndex → runCompact 收口 Episode A
+  const r0 = await rs.execute({}, { agent: T });
+  assert.ok(!String(r0).startsWith("ERR"), "compaction 下 read_shadow 不应报错");
+  const consolidatedKey = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.includes("-consolidated.md"));
+  assert.ok(consolidatedKey, "应生成 consolidated 文件");
+  const ctext = store.get(consolidatedKey);
+  assert.ok(ctext.includes("采用 bundle 模式"), "consolidated 文件保留决策");
+  assert.ok(ctext.includes("改/读 pkg-a/x.js"), "consolidated 文件保留动作");
+  // 索引只含 consolidated + 当前 episode，不再列 3 个 pkg-a 原子
+  const idx = store.get("D:/ws/.shadow/_index.md");
+  assert.ok(idx && idx.includes("consolidated.md") && idx.includes("120000-pkg-b.md"), "索引应含 consolidated+当前episode");
+  assert.ok(!idx.includes("090000-pkg-a.md") && !idx.includes("090500-pkg-a.md"), "已收口原子不应出现在索引");
+  // 原子已标记 compacted（meta 持久化），文件保留（Forget≠Delete）
+  const meta = JSON.parse(store.get("D:/ws/.shadow/_meta.json") || "{}");
+  assert.equal(meta[".shadow/2026-09-07/2026-09-07--090000-pkg-a.md"]?.status, "compacted", "原子应标记 compacted");
+  assert.ok(store.has("D:/ws/.shadow/2026-09-07/2026-09-07--090000-pkg-a.md"), "原子文件应保留（未删除）");
+  // 召回：bundle 由 consolidated 提供
+  assert.ok(String(await rs.execute({ topic: "bundle" }, { agent: T })).includes("采用 bundle 模式"), "收口后决策可召回");
+  console.log("✔ Episode 收口归档：关闭 episode → consolidated 文件 + 原子压缩归档（文件数大降、可回放）");
+}
+
 console.log("ALL PASS ✅");

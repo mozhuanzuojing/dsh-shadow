@@ -21,3 +21,6 @@ export const oldestBeyond = (records, maxActive) => records
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
     .slice(0, Math.max(0, records.length - maxActive))
     .map((r) => r.rel);
+// Episode 收口归档标记：原子被合并进 consolidated 文件后置 status="compacted"，
+// 永久移出活跃索引/召回（文件保留可回放），与 forget.enabled 无关。
+export const isCompacted = (meta, rel) => meta?.[rel]?.status === "compacted";

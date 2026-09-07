@@ -9,7 +9,7 @@ import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
-import { isForgettable } from "../core/forget.js";
+import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
@@ -104,7 +104,8 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     let memories = await listMemories(fs, ws);
     const metaQ = await readMeta(fs, ws);
     const forgetQ = deps.config.forget ?? {};
-    if (forgetQ.enabled === true) memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ));
+    // compacted（收口归档）原子始终移出活跃召回；forgettable 仅在 forget.enabled 时剔除。
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
     const parsed: any[] = [];
     for (const mm of memories) {
       const text = await readRel(fs, ws, mm.rel);
@@ -589,10 +590,10 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const entryList: any[] = [];
   const entryLineage = new Map<string, { date: string; time: string; decision: string }[]>();
   const meta = await readMeta(fs, ws);
-  // 遗忘：forget.enabled 时，已遗忘记忆从活跃召回集剔除（文件保留，仅不再被扫描；Forget≠Delete）。
+  // 遗忘/收口：forget.enabled 时剔除可遗忘；compacted（收口归档）原子始终移出活跃召回集。
   const forgetCfgQ = deps.config.forget ?? {};
-  if (forgetCfgQ.enabled === true && Array.isArray(memories)) {
-    memories = memories.filter((mm: any) => !isForgettable(mm.rel, meta, forgetCfgQ));
+  if (Array.isArray(memories)) {
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, meta, forgetCfgQ) && !isCompacted(meta, mm.rel));
   }
   const halfLife = Math.max(0.01, Number(retentionCfg.halfLifeDays) || 7);
   for (const mm of memories) {

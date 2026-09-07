@@ -11,7 +11,7 @@ import { extractMessage, goalText, classifyUser, extractDecisionStatement, extra
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
-import { isForgettable, oldestBeyond } from "./forget.js";
+import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
 
 export interface ShadowCollectorOpts {
@@ -74,6 +74,7 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const indexCacheWarm = new Set<string>();
   const indexDirty = new Set<string>(); // 索引为懒构建（derived artifact）：flush 仅置 dirty，读索引时才 ensureIndex。
   const forgetCfg = config.forget ?? {};
+  const compactCfg = config.compact ?? {};
   const cacheFor = (ws: string) => { let c = indexCache.get(ws); if (!c) { c = new Map(); indexCache.set(ws, c); } return c; };
 
   const recOf = (mm: any, text: string) => {
@@ -216,17 +217,71 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     return lines.join("\n");
   };
 
+  // ── Episode 收口归档（B）：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件，
+  //    个体原子 mark status=compacted 并移出活跃热集（文件保留、可回放；Forget≠Delete）。默认关。
+  const compactSlug = (id: string) => String(id || "ep").replace(/[^a-z0-9_-]+/gi, "-").slice(0, 32) || "ep";
+  const consolidateText = (ep: any, atoms: any[]) => {
+    const entry = (ep.entries && ep.entries[0]) || ep.title || "episode";
+    const project = (atoms[0] && atoms[0].project) || ep.project || "";
+    const agent = (atoms[0] && atoms[0].agent) || ep.agent || "";
+    const date = (ep.startedAt || "").slice(0, 10);
+    const materials = Array.from(new Set(atoms.flatMap((a: any) => a.materials || [])));
+    const decisions = Array.from(new Set(atoms.flatMap((a: any) => a.decisions || [])));
+    const actions = Array.from(new Set(atoms.flatMap((a: any) => a.actions || [])));
+    const userMsgs = atoms.flatMap((a: any) => (a.thinkLines || []).filter((l: string) => /^用户：/.test(l)));
+    const lines = [`# ${entry}`, "", "> 完整线索"];
+    if (materials.length) lines.push(`> 背景/材料：${materials.slice(0, 8).join("、")}`);
+    if (decisions.length) lines.push(`> 决策：${decisions.slice(0, 8).map((d: string) => `〔episode〕${d}`).join("；")}`);
+    lines.push(`> 证据链：来源(决策·动作·用户) · 日期(${date}) · 证据(${materials.slice(0, 6).join("、") || "—"})`);
+    lines.push(`> 概况：${actions.length} 动作 · ${userMsgs.length} 用户消息 · ${decisions.length} 决策`);
+    if (project) lines.push(`> 项目：${project}`);
+    if (agent) lines.push(`> Agent：${agent}`);
+    lines.push(`> 汇总：由 ${atoms.length} 个原子记忆在 Episode 收口时合并（原始原子已归档移出活跃热集）`, "");
+    const at = String(ep.startedAt || "").slice(11, 16) || "--:--";
+    for (const d of decisions.slice(0, 20)) lines.push(`- [${at}] [${entry}] 决定 ${d}`);
+    for (const a of actions.slice(0, 40)) lines.push(`- [${at}] [${entry}] ${a}`);
+    for (const u of userMsgs.slice(0, 20)) lines.push(`- [${at}] [${entry}] ${u}`);
+    return lines.join("\n") + "\n";
+  };
+  const runCompact = async (fs: any, ws: string, cache: Map<string, any>, meta: any) => {
+    if (compactCfg.enabled !== true) return;
+    const parsed = [...cache.values()].map((r) => r.parsed).filter(Boolean);
+    if (!parsed.length) return;
+    const gap = Math.max(0, Number(compactCfg.gapMinutes) || episodeGap);
+    const eps = deriveEpisodes(parsed, { gapMinutes: gap });
+    if (eps.length <= 1) return; // 只有当前打开的 episode，无已完成收口的
+    let changed = false;
+    const dateOf = (rel: string) => (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || today();
+    for (const ep of eps.slice(0, -1)) {
+      const atoms = (ep.memoryRefs || []).map((rel: string) => cache.get(rel)?.parsed).filter(Boolean);
+      if (!atoms.length) continue;
+      const name = `ep-${compactSlug(ep.id)}-consolidated.md`;
+      const rdate = dateOf((ep.memoryRefs || [])[0]);
+      const rel = `${SHADOW_ROOT}/${rdate}/${name}`;
+      const text = consolidateText(ep, atoms);
+      const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
+      await fs.writeText(t, text);
+      for (const a of atoms) {
+        if (meta) { meta[a.rel] = meta[a.rel] || { hits: 0, status: "active", pinned: false }; meta[a.rel].status = "compacted"; }
+        cache.delete(a.rel);
+      }
+      cache.set(rel, recOf({ date: rdate, time: (ep.startedAt || "").slice(11, 17).replace(/:/g, ""), name, rel }, text));
+      changed = true;
+    }
+    if (changed) await writeMeta(fs, ws, meta);
+  };
+
   const rebuildIndex = async (fs: any, ws: string) => {
     if (!fs || !ws) return;
     try {
       // L2：增量索引 —— 优先用进程内缓存（冷启动才读一次全部，之后只靠 flush 增量增补），
       // 避免每回合全量顺序重读所有记忆文件（性能热路径根因）。
       const meta = await readMeta(fs, ws);
-      const skipForgotten = (rel: string) => isForgettable(rel, meta, forgetCfg);
+      const skipForgotten = (rel: string) => isForgettable(rel, meta, forgetCfg) || isCompacted(meta, rel);
       await ensureIndexCache(fs, ws, skipForgotten);
       const cache = cacheFor(ws);
       // 遗忘：把低价值/旧条目移出活跃热集（文件保留，仅不再被索引/召回扫描；Forget≠Delete）。
-      for (const rel of [...cache.keys()]) if (isForgettable(rel, meta, forgetCfg)) cache.delete(rel);
+      for (const rel of [...cache.keys()]) if (isForgettable(rel, meta, forgetCfg) || isCompacted(meta, rel)) cache.delete(rel);
       // 硬上限：活跃记忆超过 maxActive 时，遗忘最旧的（封顶热集大小）。
       const maxActive = Math.max(0, Number(forgetCfg.maxActive) || 0);
       if (forgetCfg.enabled === true && maxActive > 0 && cache.size > maxActive) {
@@ -234,6 +289,8 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
         const drop = oldestBeyond(recsAll.map((r) => ({ rel: r.rel, date: r.date, time: r.time })), maxActive);
         for (const rel of drop) cache.delete(rel);
       }
+      // Episode 收口归档：关闭的 episode → 合并成一个 consolidated 文件 + 原子归档（文件变少）。
+      await runCompact(fs, ws, cache, meta);
       const recs = [...cache.values()];
       const memories = recs.map((r) => ({ date: r.date, time: r.time, name: r.name, rel: r.rel }));
       const topicFiles: Record<string, string[]> = {};

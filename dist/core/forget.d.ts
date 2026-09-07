@@ -10,3 +10,4 @@ export declare const oldestBeyond: (records: {
     date: string;
     time: string;
 }[], maxActive: number) => string[];
+export declare const isCompacted: (meta: any, rel: string) => boolean;

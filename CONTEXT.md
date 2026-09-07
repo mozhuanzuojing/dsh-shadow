@@ -35,6 +35,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Memory Atom | 最小不可变事件投影（即每条记忆文件，200–1000 bytes）；Episode/Decision 在其上派生，不改写它 |
 | 遗忘（v1.2.0） | 把低价值/旧/已归档记忆**移出「活跃」扫描集**（索引+召回），文件保留（**Forget≠Delete**，ADR-0031）。`forget:{enabled,staleDays,minHits,maxActive}`；默认关。目的是封顶热集大小（性能），不破坏可追溯性 |
 | 增量索引（v1.2.0） | 进程内 `indexCache` 缓存已 parse 的记忆（entry/topics/parsed），冷启动读一次、之后 flush 只增量增补并**由缓存生成 `_index.md`**，避免每回合全量顺序重读所有文件（性能热路径根因） |
+| 收口归档（v1.2.2，compact） | 对齐参考"会话级聚合+只留摘要+原始归档"：一个 episode 结束时把其 turn 原子**合并成 1 个 consolidated 文件**（保留决策/动作/材料/结果），个体原子 mark `compacted` 并移出活跃热集（文件保留可回放，Forget≠Delete）。活跃树"每 turn 一文件"→"每 episode 一 consolidated 文件"，热集文件数大降 |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
 | 召回 | `read_shadow(topic)` 按命题找出相关记忆的过程：A 档=加权关键词+标签+路径+时间衰减；B 档=先 `llm.stream` 扩词再打分（`rawConfig.recall.enabled` 开启） |

@@ -62,7 +62,7 @@ interface Meta {
 // ── 解析一条记忆 ──
 const fieldOf = (text: string, key: string) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
 
-const stripPrompt = (s: string) => scrubUnsafe(String(s || "").replace(/^「|」$/g, "").replace(/〔decision〕/g, "").replace(/〔reminder〕/g, "")).trim();
+const stripPrompt = (s: string) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
 
 export const parseMemory = (text: string, rel: string, name: string): ParsedMemory => {
   const body = String(text || "");

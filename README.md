@@ -86,6 +86,8 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 版本 / 变更
 
+> **v1.2.2 · Episode 收口归档（对齐参考：会话级聚合+只留摘要+原始归档）**：参考 claude-mem 按**会话聚合**（非一事件一文件），dsh-shadow 补上"**收口**"——`compact:{enabled,gapMinutes}`（默认关）：当一个 episode 结束（出现下一个 episode）时，把该 episode 的所有 turn 原子**合并成 1 个 consolidated 文件**（保留 决策/动作/材料/结果/用户消息），个体原子 mark `status=compacted` 并**移出活跃索引/召回**（文件保留、可回放，Forget≠Delete）。活跃树由"每 turn 一文件"→"每 episode 一 consolidated 文件 + 当前 open episode 原子"，**热集文件数大降**。读侧召回/索引/Episode/Decision 均跳过 `compacted` 原子。**验证**：场景 7（收口生成 consolidated、原子压缩归档、决策可回放）+ 全量回归 ALL PASS。
+
 > **v1.2.1 · 索引懒构建 + 缓存隔离（v1.2.0 修正）**：①**索引改懒构建**——flush 只写文件+增补缓存+置 dirty，**不再同步 rebuildIndex**；`read_shadow` 无参读索引时才触发 `ensureIndex` 构建/落盘（索引=派生产物，不应每次写都全量重建）。②**修复 L2 缓存跨 workspace 隔离 bug**（v1.2.0 的单 Map 缓存会把 A 工作区记忆混进 B 的索引）——改为**按 ws 嵌套**，dirty 也按 ws。③冷启动全量读只在首次读索引时发生一次。**验证**：场景 11 隔离回归 + 场景 16/2/6 懒索引各自 ALL PASS。
 
 > **v1.2.0 · 增量索引 + 遗忘（性能热路径根因）**：解决"小文件太多影响性能"。根因＝每次 flush 都 `rebuildIndex` 全量**顺序**重读所有记忆文件（O(N) 次 fs 读，WSL 网络 FS 下更慢）。①**L2 增量索引**：进程内 `indexCache`（rel→{entry,topics,parsed}），冷启动读一次、之后 flush 只增量增补并**由缓存生成 `_index.md`，不再全量重读**；②**遗忘（Forget≠Delete，ADR-0031）**：`forget:{enabled,staleDays,minHits,maxActive}` 把低价值/旧/已归档记忆**移出活跃索引与召回扫描**（文件保留，仅不再被当作活跃知识），封顶热集大小；读侧 `read_shadow` 召回同样跳过已遗忘。**默认关**（`forget.enabled=false` 行为不变）。**验证**：场景 6（遗忘从活跃索引/召回剔除、文件保留）+ 全量回归 ALL PASS。**边界**：无 LLM、不改 Memory Atom 格式、Memory 仍是 source of truth（遗忘只影响"活跃"视角）。
