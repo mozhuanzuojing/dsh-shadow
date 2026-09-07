@@ -26,6 +26,9 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | 说明文档 | `shadow/_index.md`：讲清格式、列出近期记忆，带主题索引 + 意识轨迹 |
 | 目录 | `_index.md` 中「近期记忆 + 主题索引 + 意识轨迹」的概览层 |
 | 关键入口 | agent 补上下文的切入点，即提示词指针 + `read_shadow` 工具 |
+| Episode | 把 Event/Turn 级记忆原子按「项目/会话 + 时间间隔」串成的**连续任务关系层**（`{background, objectiveRef, memoryRefs[], decisionRefs[], actionRefs[], resultRefs[], startedAt, endedAt}`）；**派生式、纯读**，`mode:"episode"` 展开 |
+| Decision Lineage | 把「决策」从 `概况：N 决策` 统计字段提升为**可追踪血缘**（goal 事件 + 用户拍板，按入口聚合）；`mode:"decision"` 展开。`决策 ≠ 目标`：目标（goal）是任务客观对象，不算决策 |
+| Memory Atom | 最小不可变事件投影（即每条记忆文件，200–1000 bytes）；Episode/Decision 在其上派生，不改写它 |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
 | 召回 | `read_shadow(topic)` 按命题找出相关记忆的过程：A 档=加权关键词+标签+路径+时间衰减；B 档=先 `llm.stream` 扩词再打分（`rawConfig.recall.enabled` 开启） |

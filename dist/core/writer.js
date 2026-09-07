@@ -8,6 +8,7 @@ import { readRel, listMemories } from "../persistence/files.js";
 import { extractMessage, goalText, classifyUser } from "./collect.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
+import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
 export function createShadowCollector(opts) {
     const { context, config, getAgentById } = opts;
@@ -66,7 +67,10 @@ export function createShadowCollector(opts) {
     const summaryCfg = config.summary ?? {};
     const recallCfg = config.recall ?? {};
     const retentionCfg = config.retention ?? {};
+    const episodeCfg = config.episodes ?? {};
     const writeConsent = config.writeConsent === true;
+    const episodeGap = Math.max(0, Number(episodeCfg.gapMinutes) || 60);
+    const episodeShow = Math.max(0, Number(episodeCfg.showInIndex) || 8);
     const routeFor = (cfg = summaryCfg) => {
         const explicit = cfg.provider && cfg.model ? { provider: cfg.provider, model: cfg.model } : undefined;
         if (explicit)
@@ -180,6 +184,7 @@ export function createShadowCollector(opts) {
         try {
             const memories = await listMemories(fs, ws);
             const topicFiles = {};
+            const parsed = [];
             const todayStr = today();
             const todayTopics = new Set();
             let todayCount = 0;
@@ -193,8 +198,23 @@ export function createShadowCollector(opts) {
                     for (const t of tops)
                         todayTopics.add(t);
                 }
+                // Episode/Decision Lineage（派生关系层）：读取一次文本，同时留给 Episode 派生。
+                try {
+                    parsed.push(parseMemory(text, mm.rel, mm.name));
+                }
+                catch { /* 单条解析失败不影响索引 */ }
             }
-            const idx = buildIndexText(ws, memories, topicFiles, { count: todayCount, topics: [...todayTopics] });
+            let idx = buildIndexText(ws, memories, topicFiles, { count: todayCount, topics: [...todayTopics] });
+            // 把碎片串成"任务回溯（Episodes）"：一次连续任务 = 一个 Episode（派生式，不写回记忆文件）。
+            if (episodeShow > 0) {
+                try {
+                    const eps = deriveEpisodes(parsed, { gapMinutes: episodeGap });
+                    idx += "\n" + episodesIndexText(eps, episodeShow);
+                }
+                catch (e) {
+                    console.log("[dsh-shadow] episodes derive failed:", e && e.message);
+                }
+            }
             const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/_index.md`, { cwd: ws });
             await fs.writeText(t, idx);
         }

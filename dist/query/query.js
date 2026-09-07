@@ -7,6 +7,7 @@ import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
+import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
@@ -93,6 +94,27 @@ export async function runReadShadow(deps, args, exec) {
     if (String(args?.mode) === "reflection") {
         const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
         return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
+    }
+    // Episode/Decision Lineage（派生关系层）：把 Event/Turn 级记忆原子串成连续任务（Episode），
+    // 并把「决策」提升为可追踪血缘。只读记忆树派生，不写回记忆文件（与 Experience/Judgment 同模式）。
+    if (String(args?.mode) === "episode" || String(args?.mode) === "decision") {
+        const memories = await listMemories(fs, ws);
+        const parsed = [];
+        for (const mm of memories) {
+            const text = await readRel(fs, ws, mm.rel);
+            if (!text)
+                continue;
+            try {
+                parsed.push(parseMemory(text, mm.rel, mm.name));
+            }
+            catch { /* 单条解析失败跳过 */ }
+        }
+        if (String(args?.mode) === "episode") {
+            const eps = deriveEpisodes(parsed, { gapMinutes: Math.max(0, Number(deps.config.episodes?.gapMinutes) || 60) });
+            return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
+        }
+        const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
+        return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + flushWarn);
     }
     // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
     if (String(args?.mode) === "identity") {
