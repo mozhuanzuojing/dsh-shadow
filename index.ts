@@ -69,7 +69,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   const verifyEvidence = (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => routeVerify(ref, ctx, config.evidenceProvider || "fs", config.evidenceProviders);
   // 读侧查询依赖注入（闭包型依赖在此构造；领域逻辑在 query/query.ts）。
   const queryDeps: ShadowQueryDeps = {
-    fs: context.get("fs"),
+    // 懒解析 fs：与写侧 collector（core/writer.ts:242）一致，在每次 runReadShadow 执行时才取。
+    // 避免在 apply() 时急切快照得到 undefined 并永久固化进 queryDeps.fs，
+    // 导致 read_shadow 恒命中 query/query.ts 的「（fs 服务不可用）」守卫（读写不对称 bug）。
+    get fs() { return context.get("fs"); },
     config,
     cwdBySession: collector.cwdBySession,
     getFlushWarn: collector.getFlushWarn,
