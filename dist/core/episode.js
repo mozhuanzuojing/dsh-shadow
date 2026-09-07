@@ -37,6 +37,7 @@ export const parseMemory = (text, rel, name) => {
     };
     // ① `> 决策：`（〔source〕statement；...）—— 新决策事实（一等事件，v1.1.1）
     const decLine = fieldOf(body, "决策");
+    const hasDecBlock = decLine.trim().length > 0;
     for (const seg of decLine.split(/；|;/)) {
         const s0 = seg.trim();
         if (!s0)
@@ -58,13 +59,16 @@ export const parseMemory = (text, rel, name) => {
         if (reason && reason !== "未明确" && reason !== "无" && !reasonsBySource[src])
             reasonsBySource[src] = reason;
     }
-    // ③ Legacy `> 用户提示/决策：`〔decision〕—— 兼容旧数据
+    // ③ Legacy `> 用户提示/决策：`〔decision〕—— 仅当无 `> 决策：` 块时兼容旧数据；
+    //    否则会与①对同一决策重复计数（①是全量 statement，③是 buildClueHeader 截断到 48 字版）。
     const userPrompt = fieldOf(body, "用户提示/决策");
-    for (const seg of userPrompt.split(/；|;/)) {
-        if (/〔decision〕/.test(seg)) {
-            const d = stripPrompt(seg);
-            if (d)
-                addDecision(d, "user");
+    if (!hasDecBlock) {
+        for (const seg of userPrompt.split(/；|;/)) {
+            if (/〔decision〕/.test(seg)) {
+                const d = stripPrompt(seg);
+                if (d)
+                    addDecision(d, "user");
+            }
         }
     }
     // ④ 正文逐行：goal 事件（决定 …）+ 动作行 + 思维行
