@@ -207,6 +207,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             continuityRef: { type: "string", description: "ContinuityRecord continuityRef（与 mode:observer-lineage 配合）。" },
             kind: { type: "string", description: "WorkspaceRecord kind（observation/representation/simulation/planning/action/interaction；与 mode:workspace-record 配合）。" },
             content: { type: "string", description: "WorkspaceRecord content（world 层项目内容；与 mode:workspace-record 配合）。" },
+            evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verify 配合）。" },
+            runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verify 配合）。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },

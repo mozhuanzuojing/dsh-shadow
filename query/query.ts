@@ -76,6 +76,8 @@ import { writeInteractionContext, writeHistorySummary } from "../long-horizon/pe
 import { buildObserverConfig, buildObserverBoundary, buildRecallIndex, buildLineage, buildWorkspaceRecord, readObserverContext, readWorkspaceContext, readContinuityIndex } from "../continuity/engine.js";
 import { DEFAULT_OBSERVER_ROOT, writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord } from "../continuity/persist.js";
 import { renderObserverContext as renderContinuityObserverContext, renderWorkspaceContext, renderContinuityIndex } from "../continuity/render.js";
+import { runVerification } from "../verification/engine.js";
+import { renderRun, renderReport } from "../verification/render.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -420,6 +422,13 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (String(args?.mode) === "continuity-index") {
     const ri = await readContinuityIndex(fs, obsRoot);
     return scrubFinal(RECALL_PREFIX + renderContinuityIndex(ri) + flushWarn);
+  }
+  // v1.0.2 Observer Runtime Verification Foundation：VerificationRun / InvariantCheck / DriftReport。
+  // 验证只读只报；Verification≠Optimization（237）/不可改authority(238)/不可改identity(239)/DriftReport≠RealityClaim(240)。
+  if (String(args?.mode) === "verify") {
+    const v = await runVerification(fs, obsRoot, args);
+    if (!v.ok || !v.run || !v.report) return scrubFinal(RECALL_PREFIX + "[Verification Rejected] " + v.reason + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderRun(v.run) + "\n" + renderReport(v.report) + flushWarn);
   }
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};

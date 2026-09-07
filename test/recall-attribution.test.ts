@@ -4453,4 +4453,48 @@ const wsctx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
   console.log("✔ 236 Global State Cannot Become Preference Model（interaction history→pattern→preference→identity 禁）");
 }
 
+// ─────────────────────────────────────────────
+// v1.0.2 Observer Runtime Verification Foundation：ADR-0035/0035.1。验证只读只报；验证器自身不越界。
+// 237-240: Verification≠Optimization / Cannot Change Authority / Cannot Change Identity / DriftReport≠RealityClaim。
+// ─────────────────────────────────────────────
+const ver = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "verify", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+
+// 237：Verification Cannot Optimize Self（Verification→Adaptation 禁）。
+{
+  const { fs, store } = mkV(new Map(), { observerGlobalRoot: "C:/obs" });
+  const ok = await ver(fs, WS, { evidenceRefs: ["observed latency", "observed log rotation"] });
+  assert.ok(String(ok).includes("[Verification Run]"), "合规验证通过（只读只报）");
+  const bad = await ver(fs, WS, { evidenceRefs: ["identified failure → self optimize"] });
+  assert.ok(String(bad).includes("Verification Rejected"), "验证声称自我优化应拒绝（Verification ≠ Optimization）");
+  assert.ok(String(bad).includes("Optimization") || String(bad).includes("optimization"), "应标注 237");
+  console.log("✔ 237 Verification Cannot Optimize Self（Verification→Adaptation 禁）");
+}
+
+// 238：Verification Cannot Change Authority（Verification→Permission Change 禁）。
+{
+  const { fs, store } = mkV(new Map(), { observerGlobalRoot: "C:/obs" });
+  const r = await ver(fs, WS, { evidenceRefs: ["verified → permission change"] });
+  assert.ok(String(r).includes("Verification Rejected"), "验证声称改权限应拒绝（Verification Cannot Change Authority）");
+  assert.ok(String(r).toLowerCase().includes("permission") || String(r).toLowerCase().includes("authority"), "应标注 238");
+  console.log("✔ 238 Verification Cannot Change Authority（Verification→Permission Change 禁）");
+}
+
+// 239：Verification Cannot Change Identity（Verification→Identity Change 禁）。
+{
+  const { fs, store } = mkV(new Map(), { observerGlobalRoot: "C:/obs" });
+  const r = await ver(fs, WS, { evidenceRefs: ["verified → identity change"] });
+  assert.ok(String(r).includes("Verification Rejected"), "验证声称改身份应拒绝（Verification Cannot Change Identity）");
+  assert.ok(String(r).includes("Identity") || String(r).includes("identity"), "应标注 239");
+  console.log("✔ 239 Verification Cannot Change Identity（Verification→Identity Change 禁）");
+}
+
+// 240：Drift Report Does Not Become Reality Claim（验证报告不得成为事实断言）。
+{
+  const { fs, store } = mkV(new Map(), { observerGlobalRoot: "C:/obs" });
+  const r = await ver(fs, WS, { evidenceRefs: ["drift report proves the service is real"] });
+  assert.ok(String(r).includes("Verification Rejected"), "drift report 声称事实应拒绝（Drift Report ≠ Reality Claim）");
+  assert.ok(String(r).includes("Reality") || String(r).includes("事实"), "应标注 240");
+  console.log("✔ 240 Drift Report Does Not Become Reality Claim（验证报告不得成为事实断言）");
+}
+
 console.log("\nALL PASS ✅");
