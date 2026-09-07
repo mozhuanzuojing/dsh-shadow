@@ -1,5 +1,6 @@
 import { assertObserverLayerClean, assertObserverLayerNoWorkspaceFact, assertConfigNotPreference, assertRecallIndexNav, assertWorkspaceIsolated, argsHasForbiddenContent } from "./guard.js";
 import { readObserverBoundary, readRecallIndex, readLineage } from "./persist.js";
+import { WORKSPACE_SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
 const cleanGuard = (obj) => {
     const a = assertObserverLayerClean(obj);
@@ -69,7 +70,7 @@ export const readObserverContext = async (fs, root) => {
 export const readWorkspaceContext = async (fs, ws) => {
     const rows = [];
     try {
-        const base = `${ws}/.dsh-shadow`;
+        const base = `${ws}/${WORKSPACE_SHADOW_ROOT}`;
         const dirs = (await fs.listDir({ targetKey: base, displayPath: base })) || [];
         for (const d of dirs) {
             const kindBase = `${base}/${d.name}`;

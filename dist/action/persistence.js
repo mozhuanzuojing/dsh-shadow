@@ -1,7 +1,9 @@
+// dsh-shadow —— action/persistence.ts：Action 记录持久化（ActionExecution/Feedback 是事件，进 .shadow/action/）。
+import { SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
 export const writeExecution = async (fs, ws, e) => {
     try {
-        const rel = `.shadow/action/${today()}/exec-${e.id}.json`;
+        const rel = `${SHADOW_ROOT}/action/${today()}/exec-${e.id}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(e));
     }
@@ -11,7 +13,7 @@ export const writeExecution = async (fs, ws, e) => {
 };
 export const writeFeedback = async (fs, ws, f) => {
     try {
-        const rel = `.shadow/action/${today()}/feedback-${f.executionId}.json`;
+        const rel = `${SHADOW_ROOT}/action/${today()}/feedback-${f.executionId}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(f));
     }

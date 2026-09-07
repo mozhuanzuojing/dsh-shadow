@@ -1,7 +1,9 @@
 // dsh-shadow —— continuity/engine.ts：Observer Continuity Storage Boundary 构建/读取（守卫 232–236）。
 import type { ObserverConfig, ObserverBoundary, RecallIndex, ContinuityRecord, WorkspaceRecord } from "./types.js";
 import { assertObserverLayerClean, assertObserverLayerNoWorkspaceFact, assertConfigNotPreference, assertRecallIndexNav, assertWorkspaceIsolated, argsHasForbiddenContent } from "./guard.js";
-import { writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord, readObserverBoundary, readRecallIndex, readLineage } from "./persist.js";import { today } from "../core/util.js";
+import { writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord, readObserverBoundary, readRecallIndex, readLineage } from "./persist.js";
+import { WORKSPACE_SHADOW_ROOT } from "../core/paths.js";
+import { today } from "../core/util.js";
 
 const cleanGuard = (obj: any): { ok: boolean; reason?: string } => {
   const a = assertObserverLayerClean(obj); if (!a.ok) return { ok: false, reason: a.reason };
@@ -54,7 +56,7 @@ export const readObserverContext = async (fs: any, root: string) => {
 export const readWorkspaceContext = async (fs: any, ws: string): Promise<any[]> => {
   const rows: any[] = [];
   try {
-    const base = `${ws}/.dsh-shadow`;
+    const base = `${ws}/${WORKSPACE_SHADOW_ROOT}`;
     const dirs = (await fs.listDir({ targetKey: base, displayPath: base })) || [];
     for (const d of dirs) {
       const kindBase = `${base}/${d.name}`;

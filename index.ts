@@ -25,6 +25,7 @@
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
 
+import { SHADOW_ROOT } from "./core/paths.js";
 import type { EvidenceRef, EvidenceResult, ShadowConfig } from "./core/types.js";
 import { createShadowCollector } from "./core/writer.js";
 import { routeVerify } from "./evidence/gateway.js";

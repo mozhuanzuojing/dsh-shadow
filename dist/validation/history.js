@@ -1,9 +1,12 @@
+// dsh-shadow —— validation/history.ts：ValidationTimeline（append-only；Hypothesis immutable）。
+// 智慧不是"永远正确"而是"能记住自己什么时候错过"——ValidationEvent[] 支撑 Decision Style / Anti Pattern / Wisdom。
+import { SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
 export const appendValidationEvent = async (fs, ws, hypothesisId, event) => {
     const existing = await readTimeline(fs, ws, hypothesisId);
     existing.events.push({ time: event.time || today(), evidenceIds: event.evidenceIds || [], result: event.result, alternativeWinner: event.alternativeWinner || null, perceptionDelta: event.perceptionDelta || "" });
     try {
-        const rel = `.shadow/validation/${hypothesisId}.timeline.json`;
+        const rel = `${SHADOW_ROOT}/validation/${hypothesisId}.timeline.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(existing));
     }
@@ -14,7 +17,7 @@ export const appendValidationEvent = async (fs, ws, hypothesisId, event) => {
 };
 export const readTimeline = async (fs, ws, hypothesisId) => {
     try {
-        const t = await fs.resolve(`${ws}/.shadow/validation/${hypothesisId}.timeline.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/validation/${hypothesisId}.timeline.json`, { cwd: ws });
         return JSON.parse(await fs.readText(t));
     }
     catch {

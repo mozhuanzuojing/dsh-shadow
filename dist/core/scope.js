@@ -2,13 +2,14 @@
 // 从 index.ts 迁移；类型见 core/types.ts。
 import os from "node:os";
 import path from "node:path";
+import { OBSERVER_GLOBAL_ROOT } from "./paths.js";
 /** 空串视为无效：避免 `"" ?? fallback` 返回空串导致 workspace 解析短路（F1）。 */
 export function firstNonEmpty(...values) {
     return values.find((v) => typeof v === "string" && v.trim().length > 0);
 }
 /** 全局兜底 shadow 根：仅当既无显式 shadowRoot/projectRoot、又解析不出 session cwd 时使用（保证"可写"，而非"不写"）。
  *  命名"~/.dsh-observer/shadow"：Global shadow 是 **Observer Continuity Shadow**（observer 层），不是 Workspace Memory。 */
-export const DEFAULT_SHADOW_ROOT = path.join(os.homedir(), ".dsh-observer", "shadow");
+export const DEFAULT_SHADOW_ROOT = path.join(os.homedir(), OBSERVER_GLOBAL_ROOT, "shadow");
 /**
  * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
  * 其次 session cwd 推导（含 session id → cwd 缓存）；都无 → **fallback 到 ~/.dsh-shadow**（兜底可写，不再 none/不写）。

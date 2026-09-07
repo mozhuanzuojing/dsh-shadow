@@ -1,6 +1,8 @@
+// dsh-shadow —— world/persistence/persist.ts：RepresentationGraph 持久化（可重建索引，存 sourceClaims/sourceValidations）。
+import { SHADOW_ROOT } from "../../core/paths.js";
 export const writeGraph = async (fs, ws, g) => {
     try {
-        const rel = `.shadow/world/${g.generatedAt}/graph.json`;
+        const rel = `${SHADOW_ROOT}/world/${g.generatedAt}/graph.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(g));
     }
@@ -10,16 +12,16 @@ export const writeGraph = async (fs, ws, g) => {
 };
 export const readGraph = async (fs, ws) => {
     try {
-        const root = await fs.resolve(`${ws}/.shadow/world`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/world`, { cwd: ws });
         const dates = (await fs.listDir(root).catch(() => [])) || [];
         for (const d of dates) {
             if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name))
                 continue;
-            const dt = await fs.resolve(`${ws}/.shadow/world/${d.name}`, { cwd: ws });
+            const dt = await fs.resolve(`${ws}/${SHADOW_ROOT}/world/${d.name}`, { cwd: ws });
             const files = (await fs.listDir(dt).catch(() => [])) || [];
             const gf = files.find((f) => f?.name === "graph.json");
             if (gf) {
-                const p = await fs.resolve(`${ws}/.shadow/world/${d.name}/graph.json`, { cwd: ws });
+                const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/world/${d.name}/graph.json`, { cwd: ws });
                 return JSON.parse(await fs.readText(p));
             }
         }

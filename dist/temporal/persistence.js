@@ -1,7 +1,9 @@
+// dsh-shadow —— temporal/persistence.ts：TemporalGraph 持久化（派生索引，可重建）。
+import { SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
 export const writeTemporalGraph = async (fs, ws, graph) => {
     try {
-        const rel = `.shadow/temporal/${today()}/graph.json`;
+        const rel = `${SHADOW_ROOT}/temporal/${today()}/graph.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(graph, null, 2));
     }
@@ -11,16 +13,16 @@ export const writeTemporalGraph = async (fs, ws, graph) => {
 };
 export const readTemporalGraph = async (fs, ws) => {
     try {
-        const root = await fs.resolve(`${ws}/.shadow/temporal`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/temporal`, { cwd: ws });
         const dates = (await fs.listDir(root).catch(() => [])) || [];
         for (const d of dates) {
             if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name))
                 continue;
-            const dt = await fs.resolve(`${ws}/.shadow/temporal/${d.name}`, { cwd: ws });
+            const dt = await fs.resolve(`${ws}/${SHADOW_ROOT}/temporal/${d.name}`, { cwd: ws });
             const files = (await fs.listDir(dt).catch(() => [])) || [];
             const gf = files.find((f) => f?.name === "graph.json");
             if (gf) {
-                const p = await fs.resolve(`${ws}/.shadow/temporal/${d.name}/graph.json`, { cwd: ws });
+                const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/temporal/${d.name}/graph.json`, { cwd: ws });
                 return JSON.parse(await fs.readText(p));
             }
         }

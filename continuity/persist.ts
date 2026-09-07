@@ -3,9 +3,10 @@
 // Workspace ~/.dsh-shadow（world 层）：<ws>/.dsh-shadow/<kind>/<id>.json。
 import path from "node:path";
 import os from "node:os";
+import { WORKSPACE_SHADOW_ROOT, OBSERVER_GLOBAL_ROOT } from "../core/paths.js";
 import type { ObserverConfig, ObserverBoundary, RecallIndex, ContinuityRecord, WorkspaceRecord } from "./types.js";
 
-export const DEFAULT_OBSERVER_ROOT = path.join(os.homedir(), ".dsh-observer");
+export const DEFAULT_OBSERVER_ROOT = path.join(os.homedir(), OBSERVER_GLOBAL_ROOT);
 
 export const writeObserverConfig = async (fs: any, root: string, c: ObserverConfig) => {
   try { const t = await fs.resolve(`${root}/observer/config.json`, { cwd: root }); await fs.writeText(t, JSON.stringify(c)); } catch (err: any) { console.log("[dsh-shadow] observer config write failed:", err && err.message); }
@@ -20,7 +21,7 @@ export const writeLineage = async (fs: any, root: string, lr: ContinuityRecord) 
   try { const t = await fs.resolve(`${root}/lineage/continuity.json`, { cwd: root }); await fs.writeText(t, JSON.stringify(lr)); } catch (err: any) { console.log("[dsh-shadow] lineage write failed:", err && err.message); }
 };
 export const writeWorkspaceRecord = async (fs: any, ws: string, r: WorkspaceRecord) => {
-  try { const base = `${r.workspace}/.dsh-shadow`; const t = await fs.resolve(`${base}/${r.kind}/${Date.now()}.json`, { cwd: ws }); await fs.writeText(t, JSON.stringify(r)); } catch (err: any) { console.log("[dsh-shadow] workspace record write failed:", err && err.message); }
+  try { const base = `${r.workspace}/${WORKSPACE_SHADOW_ROOT}`; const t = await fs.resolve(`${base}/${r.kind}/${Date.now()}.json`, { cwd: ws }); await fs.writeText(t, JSON.stringify(r)); } catch (err: any) { console.log("[dsh-shadow] workspace record write failed:", err && err.message); }
 };
 
 export const readObserverBoundary = async (fs: any, root: string): Promise<ObserverBoundary | null> => {

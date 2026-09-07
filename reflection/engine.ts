@@ -1,6 +1,7 @@
 // dsh-shadow —— reflection/engine.ts：v0.24 Reflection Engine（Candidate Generator）。
 // 输入 ObservationTrace[] → Pattern Extraction → Candidate Reflection（status:"candidate"），等确认；不写回 Identity。
 // 旁支不是主干：Reflection ≠ Memory 查询。v0.24 只产 candidate，confirmed 留 v0.25；不生成 Candidate Identity Change。
+import { SHADOW_ROOT } from "../core/paths.js";
 import type { ObservationTrace } from "../core/types.js";
 import { completenessOf, type Reflection, type ReflectionLearningType, type ReflectionStatus } from "./types.js";
 import { repeatedDecisions, repeatedOutcomes } from "./patterns/decision-outcome.js";
@@ -50,12 +51,12 @@ export const reflectTraces = (traces: Partial<ObservationTrace>[], opts: Reflect
   };
 };
 
-// 读轨迹 → 反思 → 写 .shadow/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
+// 读轨迹 → 反思 → 写 ${SHADOW_ROOT}/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
 export const reflectOf = async (fs: any, ws: string, opts: ReflectOpts): Promise<Reflection> => {
   const traces = await readObservationTraces(fs, ws);
   const r = reflectTraces(traces, opts);
   try {
-    const rel = `.shadow/reflection/${today()}/${r.id}.md`;
+    const rel = `${SHADOW_ROOT}/reflection/${today()}/${r.id}.md`;
     const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
     await fs.writeText(t, renderReflection(r));
   } catch { /* 旁支降级 */ }
@@ -106,19 +107,19 @@ export const parseReflection = (text: string): Reflection | null => {
   };
 };
 
-// 读取 .shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
+// 读取 ${SHADOW_ROOT}/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
 export const readReflections = async (fs: any, ws: string): Promise<Reflection[]> => {
   const out: Reflection[] = [];
   try {
-    const root = await fs.resolve(`${ws}/.shadow/reflection`, { cwd: ws });
+    const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/reflection`, { cwd: ws });
     const dates = (await fs.listDir(root).catch(() => [])) || [];
     for (const d of dates) {
       if (!d?.name || !/^\d{4}-\d{2}-\d{2}$/.test(d.name)) continue;
-      const dt = await fs.resolve(`${ws}/.shadow/reflection/${d.name}`, { cwd: ws });
+      const dt = await fs.resolve(`${ws}/${SHADOW_ROOT}/reflection/${d.name}`, { cwd: ws });
       const files = (await fs.listDir(dt).catch(() => [])) || [];
       for (const f of files) {
         if (!f?.name || !f.name.endsWith(".md")) continue;
-        const p = await fs.resolve(`${ws}/.shadow/reflection/${d.name}/${f.name}`, { cwd: ws });
+        const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/reflection/${d.name}/${f.name}`, { cwd: ws });
         const r = parseReflection(await fs.readText(p));
         if (r) { r.id = f.name.replace(/\.md$/, ""); out.push(r); }
       }

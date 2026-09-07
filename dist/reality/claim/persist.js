@@ -1,6 +1,8 @@
+// dsh-shadow —— reality/claim/persist.ts：RealityClaim 持久化（append-only，RealityModel immutable history）。
+import { SHADOW_ROOT } from "../../core/paths.js";
 export const writeClaim = async (fs, ws, c) => {
     try {
-        const rel = `.shadow/model/claims/${c.id}.json`;
+        const rel = `${SHADOW_ROOT}/model/claims/${c.id}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(c));
     }
@@ -11,12 +13,12 @@ export const writeClaim = async (fs, ws, c) => {
 export const readClaims = async (fs, ws) => {
     const out = [];
     try {
-        const root = await fs.resolve(`${ws}/.shadow/model/claims`, { cwd: ws });
+        const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/claims`, { cwd: ws });
         const files = (await fs.listDir(root).catch(() => [])) || [];
         for (const f of files) {
             if (!f?.name || !f.name.endsWith(".json"))
                 continue;
-            const p = await fs.resolve(`${ws}/.shadow/model/claims/${f.name}`, { cwd: ws });
+            const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/claims/${f.name}`, { cwd: ws });
             out.push(JSON.parse(await fs.readText(p)));
         }
     }

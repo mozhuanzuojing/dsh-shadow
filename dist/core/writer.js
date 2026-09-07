@@ -1,3 +1,7 @@
+// dsh-shadow —— core/writer.ts：写侧采集内核（v0.14 Phase 5b）。
+// 采集「一切皆文件」记忆树的写侧状态机：事件 → pending 累积 → flush 落盘 → 索引/摘要/meta 物化。
+// index.ts 只做 Cordis Adapter 接线（事件 wire + 工具注册 + config），本模块封装领域逻辑。
+import { SHADOW_ROOT } from "./paths.js";
 import { resolveWorkspace } from "./scope.js";
 import { today, stamp, compact, slug, under, component, topicsInText, tokenize } from "./util.js";
 import { readRel, listMemories } from "../persistence/files.js";
@@ -191,7 +195,7 @@ export function createShadowCollector(opts) {
                 }
             }
             const idx = buildIndexText(ws, memories, topicFiles, { count: todayCount, topics: [...todayTopics] });
-            const t = await fs.resolve(`${ws}/.shadow/_index.md`, { cwd: ws });
+            const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/_index.md`, { cwd: ws });
             await fs.writeText(t, idx);
         }
         catch (e) {
@@ -240,7 +244,7 @@ export function createShadowCollector(opts) {
         if (!ws || !fs)
             return;
         try {
-            const rel = `.shadow/${today()}/${compact()}-${slug(entry)}.md`;
+            const rel = `${SHADOW_ROOT}/${today()}/${compact()}-${slug(entry)}.md`;
             const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
             const head = `# ${entry}\n\n`;
             const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;

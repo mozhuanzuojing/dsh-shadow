@@ -1,8 +1,9 @@
+import { SHADOW_ROOT } from "../core/paths.js";
 // dsh-shadow —— soul/taste.ts：Taste（curated 偏好）。从 index.ts 迁出。
 export const tasteOf = async (fs, ws, soul) => {
     let extra = null;
     try {
-        const t = await fs.resolve(`${ws}/.shadow/taste/taste.json`, { cwd: ws });
+        const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/taste/taste.json`, { cwd: ws });
         const txt = await fs.readText(t);
         if (txt)
             extra = JSON.parse(txt);

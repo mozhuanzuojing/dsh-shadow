@@ -10,7 +10,7 @@ agent「思维/上下文/灵魂」的投影——**一切皆文件**，每条记
 
 ## 它做什么
 
-- **采集**：一个回合里采集四类——**入口点**（真实改/读的组件，`fs/observed`，客观锚）、**决策/意向**（`goal/changed`）、**动作**（`tools/result`，背景）、**交互与思维落点**（`session/event` 的用户消息与 agent 结论，尽力而为）。回合结束（`agent/turn-stopping`）压成**一条记忆 = 一个文件**：`shadow/<日期>/<时刻>-<入口slug>.md`。
+- **采集**：一个回合里采集四类——**入口点**（真实改/读的组件，`fs/observed`，客观锚）、**决策/意向**（`goal/changed`）、**动作**（`tools/result`，背景）、**交互与思维落点**（`session/event` 的用户消息与 agent 结论，尽力而为）。回合结束（`agent/turn-stopping`）压成**一条记忆 = 一个文件**：`<工作区>/.shadow/<日期>/<时刻>-<入口slug>.md`。
 - **完整线索头（核心）**：每条记忆文件顶部带一个 `> 完整线索` 头，把「**背景/材料**」（本回合改/读过的路径 + 用户消息里引用的背景/材料，两路合并去重）+「**用户提示/决策**」（被分类为用户提醒/拍板的用户消息，标 `decision`/`reminder`）+「**用户要点**」（全部用户消息兜底，防漏记）+「**概况**」（动作/用户消息/决策计数）结构化列出——让一条记忆一眼能还原「这个任务靠什么材料、用户怎么提醒/拍板、概况如何」的完整线索链。
 - **说明文档 + 索引 + 意识轨迹**：`shadow/_index.md` 讲清格式、列出近期记忆、给出「入口/主题 → 记忆文件」索引，并生成**按时间的意识轨迹**（可反推用户/自己的思考方向）。
 - **读(可穿透)**：`read_shadow` 无参数返回 `_index.md`（目录）；带 `topic` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签→路径→正文 + 时间衰减」打分排序，再在**token 预算内按深度返回**——高分记忆给「摘要+命中片段+正文骨架」，低分只给「路径+摘要」；用 `max_tokens` 控制预算（默认 1600）。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
@@ -69,7 +69,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 目录位置
 
-`<工作区>/shadow/<日期>/<时刻>-<主题slug>.md`。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。解析优先级：显式 `shadowRoot`/`projectRoot` → session cwd → **兜底 `~/.dsh-observer/shadow`**（全球 Observer Continuity Shadow 根；仅当连 cwd 都解析不出时，保证可写而非静默不写；**不与 Workspace Memory 混合**，见 ADR-0036）。
+`<工作区>/.shadow/<日期>/<时刻>-<主题slug>.md`。Observer Projection 存储根 = **`<工作区>/.shadow/`**（点开头，`SHADOW_ROOT` 常量）。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。解析优先级：显式 `shadowRoot`/`projectRoot` → session cwd → **兜底 `~/.dsh-observer/shadow`**（全球 Observer Continuity Shadow 根；仅当连 cwd 都解析不出时，保证可写而非静默不写；**不与 Workspace Memory 混合**，见 ADR-0036）。三者分层：`.shadow/`=Observer Projection、`.dsh-shadow/`=Workspace World Shadow、`~/.dsh-observer/`=Global Observer Continuity。
 
 ## 投影模式（DSH agent 预设，生产包构成）
 

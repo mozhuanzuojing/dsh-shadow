@@ -3,7 +3,8 @@
 // Workspace ~/.dsh-shadow（world 层）：<ws>/.dsh-shadow/<kind>/<id>.json。
 import path from "node:path";
 import os from "node:os";
-export const DEFAULT_OBSERVER_ROOT = path.join(os.homedir(), ".dsh-observer");
+import { WORKSPACE_SHADOW_ROOT, OBSERVER_GLOBAL_ROOT } from "../core/paths.js";
+export const DEFAULT_OBSERVER_ROOT = path.join(os.homedir(), OBSERVER_GLOBAL_ROOT);
 export const writeObserverConfig = async (fs, root, c) => {
     try {
         const t = await fs.resolve(`${root}/observer/config.json`, { cwd: root });
@@ -42,7 +43,7 @@ export const writeLineage = async (fs, root, lr) => {
 };
 export const writeWorkspaceRecord = async (fs, ws, r) => {
     try {
-        const base = `${r.workspace}/.dsh-shadow`;
+        const base = `${r.workspace}/${WORKSPACE_SHADOW_ROOT}`;
         const t = await fs.resolve(`${base}/${r.kind}/${Date.now()}.json`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(r));
     }

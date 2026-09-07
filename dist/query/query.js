@@ -1,3 +1,6 @@
+// dsh-shadow —— query/query.ts：read_shadow 执行主体（多模式分派 + 召回管线）。从 index.ts 迁出。
+// 依赖经 ShadowQueryDeps 注入（闭包型 verifyEvidence/expandTerms + 服务/配置/状态）；领域模块函数直接 import。
+import { SHADOW_ROOT } from "../core/paths.js";
 import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, writeMeta } from "../persistence/meta.js";
@@ -502,7 +505,7 @@ export async function runReadShadow(deps, args, exec) {
     }
     const topic = String(args?.topic || "").trim();
     if (!topic) {
-        const idx = await readRel(fs, ws, ".shadow/_index.md");
+        const idx = await readRel(fs, ws, `${SHADOW_ROOT}/_index.md`);
         return scrubFinal(RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn);
     }
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));

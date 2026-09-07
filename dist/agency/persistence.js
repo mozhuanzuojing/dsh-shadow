@@ -1,7 +1,9 @@
+// dsh-shadow —— agency/persistence.ts：Agency 记录持久化（context 快照 + boundary event 进 .shadow/agency/）。
+import { SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
 export const writeAgencyContext = async (fs, ws, ctx) => {
     try {
-        const rel = `.shadow/agency/${today()}/context-${ctx.id}.json`;
+        const rel = `${SHADOW_ROOT}/agency/${today()}/context-${ctx.id}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(ctx));
     }
@@ -11,7 +13,7 @@ export const writeAgencyContext = async (fs, ws, ctx) => {
 };
 export const writeAgencyEvent = async (fs, ws, e) => {
     try {
-        const rel = `.shadow/agency/${today()}/event-${e.actionCandidate}.json`;
+        const rel = `${SHADOW_ROOT}/agency/${today()}/event-${e.actionCandidate}.json`;
         const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         await fs.writeText(t, JSON.stringify(e));
     }
