@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "cordis.patch.yml",
+    "agent-presets",
     "README.md",
     "LICENSE",
     "package.json"

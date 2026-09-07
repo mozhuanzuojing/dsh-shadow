@@ -71,15 +71,16 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 `<工作区>/shadow/<日期>/<时刻>-<主题slug>.md`。工作区取 `agent.session.header.cwd`（配置 `shadowRoot` 可覆盖）。解析优先级：显式 `shadowRoot`/`projectRoot` → session cwd → **兜底 `~/.dsh-observer/shadow`**（全球 Observer Continuity Shadow 根；仅当连 cwd 都解析不出时，保证可写而非静默不写；**不与 Workspace Memory 混合**，见 ADR-0036）。
 
-## 投影模式（DSH agent 预设）
+## 投影模式（DSH agent 预设，生产包构成）
 
-`dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`，用户预设）：
+`dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`agent-presets/projection/`）：
 
-- 位置：`~/.dsh/.agent-presets/projection/`（`agent.cordis.yml` + `preset.yml`）。
+- 包内位置：`agent-presets/projection/`（`agent.cordis.yml` + `preset.yml`），是**生产包构成**，随包发布。
 - 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、一切皆文件、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow`。
+- **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（`agent.cordis.yml` + `preset.yml`），或在 DSH 部署脚本中引用包内该目录。
 - 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过。
+- 注意：预设引用 DSH 标准内置插件（`@deepseek-ai/dsh-*`）与 `{{model}}/{{cwd}}` 模板变量，不依赖用户机器专属配置；`dsh-shadow` 本身在 host 常开，预设只在 persona 里指引 agent 使用 `read_shadow`。
 
-该预设是**用户本地预设**（`~/.dsh/`），不随本包入库。
 
 ## 版本 / 变更
 
