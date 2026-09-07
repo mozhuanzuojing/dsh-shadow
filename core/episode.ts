@@ -22,11 +22,19 @@ export interface ParsedMemory {
   project: string;      // > 项目：
   agent: string;        // > Agent：
   goal: string;         // > 目标：
-  decisions: string[];  // 这条记忆里的决策（goal 事件 + 用户拍板）
+  decisions: string[];  // 这条记忆里的决策语句（goal 事件 + 用户拍板 + assistant 明确决策）
+  decisionEvents: DecisionEvent[]; // 富化决策事件（statement + source + reason；reason 只在原文明确时非空）
   materials: string[];  // 背景/材料
   actions: string[];    // 动作行（改/读 + 调用）
   thinkLines: string[]; // 非动作正文行（思维/结论，供"为什么"）
   body: string;         // 完整正文（含线索头），供标题/摘要兜底
+}
+
+/** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
+export interface DecisionEvent {
+  statement: string;    // 决策事实（"保留了 RetryWorker"）
+  source: string;       // goal | user | assistant | ""
+  reason: string;       // 明确表达的理由；无则 ""（绝不生成）
 }
 
 /** Episode：一组属于同一次连续经历的记忆原子。 */
@@ -66,15 +74,40 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
   const goal = fieldOf(body, "目标");
   const materials = fieldOf(body, "背景/材料").split(/、/).map((s) => s.trim()).filter(Boolean).slice(0, 12);
   const decisions: string[] = [];
-  // 用户拍板（classifyUser == decision）→ 决策
+  const decisionEvents: DecisionEvent[] = [];
+  const addDecision = (stmt: unknown, source: string, reason?: unknown) => {
+    const s = scrubUnsafe(String(stmt || "")).trim();
+    if (!s) return;
+    const st = s.slice(0, 80);
+    if (!decisions.includes(st)) decisions.push(st);
+    if (!decisionEvents.some((e) => e.statement === st)) decisionEvents.push({ statement: st, source, reason: scrubUnsafe(String(reason || "")).trim().slice(0, 120) });
+  };
+  // ① `> 决策：`（〔source〕statement；...）—— 新决策事实（一等事件，v1.1.1）
+  const decLine = fieldOf(body, "决策");
+  for (const seg of decLine.split(/；|;/)) {
+    const s0 = seg.trim(); if (!s0) continue;
+    const src = (s0.match(/^〔([^\]]+)〕/) || [])[1] || "goal";
+    const stmt = s0.replace(/^〔[^\]]+〕/, "").trim();
+    if (stmt) addDecision(stmt, src);
+  }
+  // ② `> 决策理由：`（〔source〕reason；...）—— 理由按 source 回填（仅明确存在者，不补写）
+  const reasonLine = fieldOf(body, "决策理由");
+  const reasonsBySource: Record<string, string> = {};
+  for (const seg of reasonLine.split(/；|;/)) {
+    const s0 = seg.trim(); if (!s0) continue;
+    const src = (s0.match(/^〔([^\]]+)〕/) || [])[1] || "goal";
+    const reason = s0.replace(/^〔[^\]]+〕/, "").trim();
+    if (reason && reason !== "未明确" && reason !== "无" && !reasonsBySource[src]) reasonsBySource[src] = reason;
+  }
+  // ③ Legacy `> 用户提示/决策：`〔decision〕—— 兼容旧数据
   const userPrompt = fieldOf(body, "用户提示/决策");
   for (const seg of userPrompt.split(/；|;/)) {
     if (/〔decision〕/.test(seg)) {
       const d = stripPrompt(seg);
-      if (d) decisions.push(d.slice(0, 80));
+      if (d) addDecision(d, "user");
     }
   }
-  // 正文逐行：goal 事件（决定 …）+ 动作行 + 思维行
+  // ④ 正文逐行：goal 事件（决定 …）+ 动作行 + 思维行
   const actions: string[] = [];
   const thinkLines: string[] = [];
   const bodyLines = body.split("\n").map((s) => s.trim()).filter((l) => /^-\s*\[/.test(l));
@@ -82,17 +115,16 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
     const m = l.match(/^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/);
     const txt = m ? m[1] : l;
     if (/^决定 /.test(txt)) {
-      const d = scrubUnsafe(txt.replace(/^决定 /, "")).trim();
-      if (d) decisions.push(d.slice(0, 80));
+      addDecision(scrubUnsafe(txt.replace(/^决定 /, "")).trim(), "assistant");
     } else if (/改\/读 |调用 /.test(txt)) {
       actions.push(scrubUnsafe(txt).trim());
     } else if (txt && !/^用户：/.test(txt)) {
       thinkLines.push(scrubUnsafe(txt).trim());
     }
   }
-  // 去重、保序
+  for (const ev of decisionEvents) if (!ev.reason && reasonsBySource[ev.source]) ev.reason = reasonsBySource[ev.source];
   const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
-  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
+  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
 };
 
 // ── 时间辅助 ──
@@ -164,21 +196,33 @@ export const deriveEpisodes = (parsed: ParsedMemory[], opts: DeriveEpisodesOpts 
 };
 
 // ── 决策血缘（Decision Lineage）──
+export interface DecisionLineageEntry {
+  text: string;       // 决策事实（statement）
+  statement: string;  // 决策事实
+  reason: string;     // 明确理由（无则 ""，绝不补写）
+  source: string;     // goal | user | assistant | ""
+  rel: string;
+  at: string;
+}
 export interface DecisionLineage {
-  byEntry: Record<string, { text: string; rel: string; at: string }[]>;
+  byEntry: Record<string, DecisionLineageEntry[]>;
   count: number;
 }
 export const deriveDecisions = (parsed: ParsedMemory[], opts: { topic?: string; entry?: string } = {}) => {
-  const byEntry: Record<string, { text: string; rel: string; at: string }[]> = {};
+  const byEntry: Record<string, DecisionLineageEntry[]> = {};
   let count = 0;
   const needle = String(opts?.topic || opts?.entry || "").toLowerCase();
   for (const p of parsed) {
     const el = needle ? (p.entry.toLowerCase().includes(needle) || (opts?.entry ? p.entry === opts.entry : true)) : true;
     if (needle && !el) continue;
-    for (const d of p.decisions) {
+    // 优先用富化 decisionEvents（带 reason/source）；旧数据无 events 时回退到 decisions（reason 未知）。
+    const events: DecisionEvent[] = p.decisionEvents.length ? p.decisionEvents : p.decisions.map((d) => ({ statement: d, source: "", reason: "" }));
+    for (const ev of events) {
+      const text = ev.statement;
       const at = `${p.date} ${fmt(p.time)}`;
-      if (needle && !`${d} ${p.entry}`.toLowerCase().includes(needle)) continue;
-      (byEntry[p.entry || "(无入口)"] = byEntry[p.entry || "(无入口)"] || []).push({ text: d, rel: p.rel, at });
+      if (needle && !`${text} ${p.entry}`.toLowerCase().includes(needle)) continue;
+      const key = p.entry || "(无入口)";
+      (byEntry[key] = byEntry[key] || []).push({ text, statement: text, reason: ev.reason || "", source: ev.source || "", rel: p.rel, at });
       count++;
     }
   }
@@ -231,12 +275,20 @@ export const renderEpisodes = (eps: Episode[], topic?: string) => {
 
 /** read mode:"decision" 的渲染。 */
 export const renderDecisions = (dl: DecisionLineage) => {
-  if (!dl.count) return "（无决策血缘：当前记忆树未采集到决策 —— 决策来自 goal/changed 与用户拍板）";
-  const parts: string[] = [`# Decision Lineage · 共 ${dl.count} 条决策`, ""];
+  if (!dl.count) return "（无决策血缘：当前记忆树未采集到决策 —— 决策来自 goal/changed、用户拍板、assistant 明确决策；Confirmation 不算决策，Reason 不补写）";
+  const parts: string[] = [
+    `# Decision Lineage · 共 ${dl.count} 条决策`,
+    "> Evidence ≠ Interpretation：Reason 只来自原文明确表达；无则显示「未明确」，绝不补写。",
+    "",
+  ];
   const entries = Object.keys(dl.byEntry).sort();
   for (const entry of entries) {
     parts.push(`## ${entry}`);
-    for (const d of dl.byEntry[entry]) parts.push(`- ${d.at.slice(5)} ${D(d.text)}  ·  ${d.rel.split("/").slice(-2).join("/")}`);
+    for (const d of dl.byEntry[entry]) {
+      const reason = d.reason ? `因：${D(d.reason)}` : "因：未明确";
+      const src = d.source ? `〔${d.source}〕` : "";
+      parts.push(`- ${d.at.slice(5)} ${src}${D(d.text)}  ·  ${reason}  ·  ${d.rel.split("/").slice(-2).join("/")}`);
+    }
     parts.push("");
   }
   return scrubUnsafe(parts.join("\n").trim());

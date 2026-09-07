@@ -8,10 +8,17 @@ export interface ParsedMemory {
     agent: string;
     goal: string;
     decisions: string[];
+    decisionEvents: DecisionEvent[];
     materials: string[];
     actions: string[];
     thinkLines: string[];
     body: string;
+}
+/** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
+export interface DecisionEvent {
+    statement: string;
+    source: string;
+    reason: string;
 }
 /** Episode：一组属于同一次连续经历的记忆原子。 */
 export interface Episode {
@@ -42,23 +49,23 @@ export interface DeriveEpisodesOpts {
     gapMinutes?: number;
 }
 export declare const deriveEpisodes: (parsed: ParsedMemory[], opts?: DeriveEpisodesOpts) => Episode[];
+export interface DecisionLineageEntry {
+    text: string;
+    statement: string;
+    reason: string;
+    source: string;
+    rel: string;
+    at: string;
+}
 export interface DecisionLineage {
-    byEntry: Record<string, {
-        text: string;
-        rel: string;
-        at: string;
-    }[]>;
+    byEntry: Record<string, DecisionLineageEntry[]>;
     count: number;
 }
 export declare const deriveDecisions: (parsed: ParsedMemory[], opts?: {
     topic?: string;
     entry?: string;
 }) => {
-    byEntry: Record<string, {
-        text: string;
-        rel: string;
-        at: string;
-    }[]>;
+    byEntry: Record<string, DecisionLineageEntry[]>;
     count: number;
 };
 /** _index.md 里的「任务回溯（Episodes）」段（保守：不引号包裹入口名，避免与主题索引撞名）。 */

@@ -121,4 +121,39 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ 读侧 Decision Lineage：把「决策」提升为可追踪血缘，按入口聚合");
 }
 
+// ─────────────────────────────────────────────
+// 场景 4（Decision Capture Boundary）：assistant 明确理由被捕获；「好/可以」不误判为决策；
+//           Reason 只在原文明确时挂，无则「未明确」，绝不补写。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const T = agent("T4");
+  const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  // assistant 明确决策 + 明确理由（应捕获为 DecisionEvent 带 reason）
+  fire("session/event", { id: "T4", header: { cwd: WS } },
+    { type: "assistant/message", seq: 1, time: Date.now(), data: { message: { id: "am1", role: "assistant", content: [{ type: "text", text: "我决定：保留 RetryWorker，因为它仍然承担失败重试职责。" }] } } });
+  // 用户纯确认（「好。」→ Confirmation，不应成为 Decision）
+  fire("session/event", { id: "T4", header: { cwd: WS } },
+    { type: "user/message", seq: 1, time: Date.now(), data: { id: "m4", role: "user", content: [{ type: "text", text: "好。" }], source: { kind: "user" } } });
+  await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
+  const mem4 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+  assert.ok(mem4, "T4 记忆应落盘");
+  const txt4 = store.get(mem4);
+  // assistant 决策 + 明确理由入头
+  assert.ok(txt4.includes("> 决策：〔assistant〕保留 RetryWorker"), `assistant 明确决策应入 决策：行：\n${txt4}`);
+  assert.ok(txt4.includes("> 决策理由：〔assistant〕它仍然承担失败重试职责"), `明确理由应入 决策理由：行：\n${txt4}`);
+  // 「好。」是 Confirmation，不是 Decision —— 决策数只算 assistant 那 1 条
+  assert.ok(/概况：\d+ 动作 · \d+ 用户消息 · 1 决策/.test(txt4), `Confirmation 不应计为决策，决策数=1：\n${txt4}`);
+  assert.ok(txt4.includes("〔confirmation〕"), "「好。」应归类为 confirmation 而非 decision");
+  // 读侧：Decision Lineage 展示 Reason（可追溯 Why），且 Reason=原文明确内容
+  const dl4 = await toolRegistry.get("read_shadow").execute({ mode: "decision" }, { agent: T });
+  assert.ok(String(dl4).includes("共 1 条决策"), "Decision Capture 只捕获明确决策（1 条）");
+  assert.ok(String(dl4).includes("因：它仍然承担失败重试职责"), "Reason 应来自原文明确表达");
+  assert.ok(!String(dl4).includes("好。"), "「好。」不应混入 Decision Lineage");
+  console.log("✔ Decision Capture：assistant 明确理由捕获 / Confirmation 不误判为决策 / Reason 不补写");
+}
+
 console.log("ALL PASS ✅");

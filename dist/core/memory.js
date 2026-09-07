@@ -29,23 +29,30 @@ export const buildClueHeader = (entry, arr, srcId, extra) => {
     }
     const acts = arr.filter((x) => x.kind === "action").length;
     const usr = arr.filter((x) => x.kind === "user").length;
-    // 决策计数：goal 事件（kind===decision）+ 用户拍板（classifyUser===decision）。二者都是真实决策，
-    // 旧实现只数 goal 事件 → 大量真实决策在「概况：0 决策」中丢失（这是"为什么做了很多判断却显示 0 决策"的根因）。
-    const decs = arr.filter((x) => x.kind === "decision" || (x.kind === "user" && x.sub === "decision")).length;
-    // 决策血缘（可追踪）：把决策从统计字段提升为「决策文本列表」，供后续 Episode/Decision Lineage 派生。
-    const decisions = [];
+    // ── Decision Capture（v1.1.1）：决策作为一等事件进入 Memory。 ──
+    // 只捕获「明确存在的决策表达」：goal 事件 / 用户拍板（classifyUser==decision）/ assistant 明确决策。
+    // 决策事实（statement）与决策理由（reason）分离：reason 只在原文明确表达时才挂，绝不推测
+    // （Evidence≠Interpretation；有 Decision ≠ 一定有 Reason，缺则不补）。
+    const decs = [];
+    const stmtSeen = new Set();
     for (const e of arr) {
+        let statement = "", source = "", reason = "";
         if (e.kind === "decision") {
-            const d = scrubUnsafe(String(e.text || "").replace(/^决定 /, "")).trim();
-            if (d && !decisions.includes(d))
-                decisions.push(d.slice(0, 120));
+            statement = scrubUnsafe(String(e.statement || e.text || "").replace(/^决定 /, "")).trim();
+            source = String(e.source === "assistant" ? "assistant" : (e.source || "goal"));
+            reason = scrubUnsafe(String(e.reason || "")).trim();
         }
         else if (e.kind === "user" && e.sub === "decision") {
-            const d = scrubUnsafe(String(e.text || "").replace(/^用户：/, "")).trim();
-            if (d && !decisions.includes(d))
-                decisions.push(d.slice(0, 120));
+            statement = scrubUnsafe(String(e.statement || e.text || "").replace(/^用户：/, "")).trim();
+            source = "user";
+            reason = scrubUnsafe(String(e.reason || "")).trim();
+        }
+        if (statement && !stmtSeen.has(statement)) {
+            stmtSeen.add(statement);
+            decs.push({ text: statement.slice(0, 120), source, reason: reason ? reason.slice(0, 120) : "" });
         }
     }
+    const decCount = decs.length;
     const kindLabel = { action: "动作", user: "用户", assistant: "agent", decision: "决策" };
     const kindsSeen = Array.from(new Set(arr.map((e) => e.kind).filter(Boolean))).map((k) => kindLabel[k] || k).join("·") || "—";
     const evPaths = mats.slice(0, 6).join("、") || "—";
@@ -54,12 +61,15 @@ export const buildClueHeader = (entry, arr, srcId, extra) => {
         lines.push(`> 背景/材料：${mats.slice(0, 8).join("、")}`);
     if (prompts.length)
         lines.push(`> 用户提示/决策：${prompts.slice(0, 6).join("；")}`);
-    if (decisions.length)
-        lines.push(`> 决策：${decisions.slice(0, 6).join("；")}`);
+    if (decs.length)
+        lines.push(`> 决策：${decs.slice(0, 8).map((d) => `〔${d.source}〕${d.text}`).join("；")}`);
+    const reasons = decs.filter((d) => d.reason);
+    if (reasons.length)
+        lines.push(`> 决策理由：${reasons.slice(0, 6).map((d) => `〔${d.source}〕${d.reason}`).join("；")}`);
     if (userPoints.length)
         lines.push(`> 用户要点：${userPoints.slice(0, 6).join("；")}`);
     lines.push(`> 证据链：来源(${kindsSeen}) · 日期(${today()}) · 证据(${evPaths})`);
-    lines.push(`> 概况：${acts} 动作 · ${usr} 用户消息 · ${decs} 决策`);
+    lines.push(`> 概况：${acts} 动作 · ${usr} 用户消息 · ${decCount} 决策`);
     if (srcId)
         lines.push(`> 来源会话：${scrubUnsafe(String(srcId))}`);
     if (extra?.project)

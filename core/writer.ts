@@ -6,7 +6,7 @@ import type { AgentLike, ShadowConfig } from "./types.js";
 import { resolveWorkspace } from "./scope.js";
 import { today, stamp, compact, slug, under, component, topicsInText, tokenize } from "./util.js";
 import { readRel, listMemories } from "../persistence/files.js";
-import { extractMessage, goalText, classifyUser } from "./collect.js";
+import { extractMessage, goalText, classifyUser, extractDecisionStatement, extractReason } from "./collect.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
@@ -299,7 +299,8 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     const gid = payload?.agent?.id;
     const obj = payload?.change?.objective || payload?.change?.goal?.objective || "";
     if (gid && obj) goalByAgent.set(String(gid), String(obj).slice(0, 120));
-    push(gid, { kind: "decision", text: `决定 ${goalText(payload?.change)}`, comp: "", source: "goal" });
+    // Decision Capture：goal 事件 = 明确决策（一等事件），statement 与 source 入内供血缘派生。
+    push(gid, { kind: "decision", text: `决定 ${goalText(payload?.change)}`, statement: goalText(payload?.change), source: "goal" });
     return undefined;
   };
 
@@ -311,8 +312,20 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     if (!m) return undefined;
     const id = getAgentById(sid)?.id || (sid ? String(sid) : undefined) || initiatorId();
     const tag = m.kind === "user" ? "用户" : "我";
-    const sub = m.kind === "user" ? classifyUser(m.text) : "";
-    push(id, { kind: m.kind, text: `${tag}：${sanitizeText(m.text)}`, comp: "", sub, source: m.kind });
+    if (m.kind === "assistant") {
+      push(id, { kind: "assistant", text: `${tag}：${sanitizeText(m.text)}`, comp: "", sub: "", source: "assistant" });
+      // Decision Capture：assistant 明确表达的决策（选择类动词+宾语），reasons 只在原文明确时挂，
+      // 不 LLM 补写（Evidence≠Interpretation）。也计入「决策」正文（trace 供 deriveDecisions 派生）。
+      for (const st of extractDecisionStatement(m.text)) {
+        push(id, { kind: "decision", text: `决定 ${st}`, statement: st, reason: extractReason(m.text), source: "assistant" });
+      }
+      return undefined;
+    }
+    const sub = classifyUser(m.text);
+    const rec: any = { kind: "user", text: `${tag}：${sanitizeText(m.text)}`, comp: "", sub, source: "user" };
+    // Decision Capture：用户拍板 = 明确决策；理由仅当原文含「因为/由于/理由是…」时挂。
+    if (sub === "decision") { rec.statement = m.text; rec.reason = extractReason(m.text); }
+    push(id, rec);
     return undefined;
   };
 
