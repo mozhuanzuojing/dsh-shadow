@@ -1,11 +1,12 @@
 // dsh-shadow —— Shadow Replay + Episode/Decision Lineage 真实数据回放。
-// 读 WSL 的 OpenAPI-Gateway 真实 .shadow，用 dist/core/episode.js 的派生逻辑做回放。
-import { readFileSync, readdirSync, statSync } from "node:fs";
+// 读真实 .shadow（默认 OpenAPI-Gateway 的 WSL 路径，可用 SHADOW_REPLAY_ROOT 覆盖），
+// 用 dist/core/episode.js 的派生逻辑做回放。
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions, episodesIndexText } from "../dist/core/episode.js";
+import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../dist/core/episode.js";
 
-const ROOT = "//wsl.localhost/debian-u8-1/home/g/project/OpenAPI-Gateway/.shadow";
-const DATE = "2026-09-07";
+const ROOT = process.env.SHADOW_REPLAY_ROOT || "//wsl.localhost/debian-u8-1/home/g/project/OpenAPI-Gateway/.shadow";
+const DATE = process.env.SHADOW_REPLAY_DATE || "2026-09-07";
 
 const dir = join(ROOT, DATE);
 const names = readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "_index.md");
