@@ -31,6 +31,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | DecisionEvent（v1.1.1） | **发生了"一个决定"**：`{actor, statement, source, at, lineage{contextRefs, evidenceRefs, reasonRefs}}`——决策作为一等事件进入 Memory（`> 决策：〔source〕statement`） |
 | DecisionReason（v1.1.1） | **决定时明确表达的理由**（`> 决策理由：〔source〕reason`）；只在原文明确存在时挂，**绝不 LLM 补写**（Evidence≠Interpretation）。有 Decision ≠ 一定有 Reason，缺则显示「未明确」 |
 | Confirmation（v1.1.1） | 纯确认（好/可以/行/ok/嗯），**不是 Decision**——`classifyUser` 单独归类，避免"好/可以"误判为拍板 |
+| DecisionClass（v1.1.2） | 明确决策细分为三类：`selection`（选择/删除/保留/采用 X）、`scope`（范围/聚焦，如"资产同步"）、`anchor`（锚点/定位，如"…这是 openapi 的 U8 工作区"）——真实用户"关键决策"常为短促的范围/锚点声明，旧判定（只认选择动词）会漏 |
 | Memory Atom | 最小不可变事件投影（即每条记忆文件，200–1000 bytes）；Episode/Decision 在其上派生，不改写它 |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
@@ -42,4 +43,4 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 - `read_shadow` 无参数 = 读「目录」；带 `topic`/`entry` = 按入口点/主题加权召回命中记忆（返回摘要行+命中片段+相关度，非整篇全文）。
 - 「说明文档」「主题索引」「意识轨迹」落在同一个 `_index.md`。
 - 记忆以**入口点 + 时间**为纲，动作为背景，思维落点为正文。
-- **记忆文件顶部带 `> 完整线索` 头**（2026-09-05）：`> 背景/材料`（改/读过的路径，去重）+ `> 用户提示/决策`（被分类为用户提醒/拍板的消息）+ `> 概况`（动作/用户消息/决策计数）——一眼还原「靠什么材料、用户怎么提醒/拍板、概况」。用户消息分类为 `decision`/`reminder`（`classifyUser` 启发式；`CONTEXT.md` 术语「用户提示/决策」）。
+- **记忆文件顶部带 `> 完整线索` 头**（2026-09-05）：`> 背景/材料`（改/读过的路径，去重）+ `> 用户提示/决策`（被分类为用户提醒/拍板的消息）+ `> 概况`（动作/用户消息/决策计数）——一眼还原「靠什么材料、用户怎么提醒/拍板、概况」。用户消息分类为 `decision`/`confirmation`/`reminder`（`classifyUser` 启发式；v1.1.2 起 `decision` 细分为 `selection`/`scope`/`anchor` 三类，见「DecisionClass」）。

@@ -40,11 +40,32 @@ export const goalText = (change) => {
         parts.push(`〔${act}〕`);
     return parts.join(" ") || "（决策）";
 };
+const SELECTION_RE = /删除|删掉|移除|去掉|保留|采用|选用|沿用|改用|放弃|弃用|排除|剔除|重构|定为|就按|就依|就这么|就这|按这个|按你说的|拍板|批准|同意|否决|不行|不要.*(做|用|删|改|留)|停止|先做|选[^。]{0,8}$|定[^。]{0,8}$|方案.*(选|用|定)|最终.*(定|选)|决定/;
+// 锚点：X 是 …「工作区/目录/路径/环境/位置/仓库/分支/版本/模块/服务/接口/根/库」（事实基准/身份定位）
+const ANCHOR_RE = /是.{0,30}(工作区|目录|路径|环境|位置|仓库|分支|版本|模块|服务|接口|根|库)/;
+// 非聚焦的"请求/疑问/普通陈述"开头动词：表示"想了解/想看"，不是"决定聚焦 X"
+const NON_FOCUS = /^(了解|读|看|查看|查|帮|请|能否|能不能|为什么|怎么|如何|什么|哪里|建议|麻烦|需要|要做|给我|先看|看看|介绍一下|讲解|说说|解释|说明|当|我|我们|你|如果|然后|以及|还有|要不|顺便|想|让我|请问|报错|报的|发生了|遇到|出现|为什么|是不是)/;
+// 纯确认/收到类：不是范围决策
+const NO_FOCUS = /^(收到|嗯|好的?|好|行|可以|没问题|[oO][kK]|知道|明白|了解|对|是|回|继续|嗯嗯|好嘞|行吧|可以的?)[，。！!,、\s]*$/;
+export const decisionClass = (text) => {
+    const t = String(text || "").trim();
+    if (!t)
+        return "";
+    if (SELECTION_RE.test(t))
+        return "selection";
+    if (ANCHOR_RE.test(t))
+        return "anchor";
+    // 范围/聚焦：短促、名词性、无请求/疑问/确认语义；对"聚焦/重点/集中/接下来/继续"引导词优先。
+    const short = t.length <= 12 && /[\u4e00-\u9fff]/.test(t) && !/[？?]/.test(t) && !NON_FOCUS.test(t) && !NO_FOCUS.test(t);
+    const focusLead = /^(聚焦|重点|集中|接下来|继续|主攻|主做|着手|专注)/.test(t);
+    if ((short && !/\s/.test(t)) || (short && focusLead))
+        return "scope";
+    return "";
+};
 export const classifyUser = (text) => {
     const t = String(text || "").trim();
-    // Decision：只有「明确决策语义」才算决策（删除/保留/采用/就按/就这么/不要删 等）。
-    // 纯确认（好/可以/行/ok）不再误判为 Decision —— 归入 confirmation。
-    if (/(删除|删掉|移除|去掉|保留|采用|选用|沿用|改用|放弃|弃用|排除|剔除|重构|定为|就按|就依|就这么|就这|按这个|按你说的|拍板|批准|同意|否决|不行|不要.*(做|用|删|改|留)|停止|先做|选[^。]{0,8}$|定[^。]{0,8}$|方案.*(选|用|定)|最终.*(定|选)|决定)/.test(t))
+    // Decision：明确决策语义（选择/范围聚焦/锚点定位）→ 决策。纯确认（好/可以/行/ok）不误判为决策。
+    if (decisionClass(t))
         return "decision";
     // Confirmation：纯确认（好/可以/行/ok/嗯），不是 Decision，也不是 Reminder。
     if (/^(好的?|可以(的)?|行(吧)?|嗯|没问题|[oO][kK])([,，。!\s]*)$/.test(t))

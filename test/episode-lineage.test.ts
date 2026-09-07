@@ -156,4 +156,34 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ Decision Capture：assistant 明确理由捕获 / Confirmation 不误判为决策 / Reason 不补写");
 }
 
+// ─────────────────────────────────────────────
+// 场景 5（扩展 classifyUser）：范围/聚焦 + 锚点/定位 也捕获为 Decision；
+//           "了解 当前 IO"（请求理解）不算决策，纯确认不算。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const T = agent("T5");
+  const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
+  const userMsg5 = (text: string) =>
+    fire("session/event", { id: "T5", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m5", role: "user", content: [{ type: "text", text }], source: { kind: "user" } } });
+  // 范围/聚焦（scope）→ 决策
+  userMsg5("资产同步");
+  // 锚点/定位（anchor）→ 决策
+  userMsg5("/home/g/project/u8-workspace/u8cloud 这是 openapi 的 U8 工作区");
+  // 请求理解（不是决策）
+  userMsg5("了解 当前 IO");
+  await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
+  const mem5 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+  assert.ok(mem5, "T5 记忆应落盘");
+  const txt5 = store.get(mem5);
+  assert.ok(txt5.includes("> 决策：〔user〕资产同步"), `范围/聚焦应捕获为决策：\n${txt5}`);
+  assert.ok(txt5.includes("这是 openapi 的 U8 工作区"), `锚点/定位应捕获为决策：\n${txt5}`);
+  assert.ok(/概况：\d+ 动作 · 3 用户消息 · 2 决策/.test(txt5), `决策数应为 2（资产同步+U8工作区；「了解当前IO」不算）：\n${txt5}`);
+  assert.ok(!txt5.includes("〔decision〕了解"), "「了解 当前 IO」不应被判为决策");
+  console.log("✔ 扩展 classifyUser：范围/聚焦 + 锚点/定位 捕获为 Decision；请求理解不算");
+}
+
 console.log("ALL PASS ✅");
