@@ -42,7 +42,7 @@ export const reflectTraces = (traces, opts) => {
         status: "candidate",
     };
 };
-// 读轨迹 → 反思 → 写 ${SHADOW_ROOT}/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
+// 读轨迹 → 反思 → 写 .shadow/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
 export const reflectOf = async (fs, ws, opts) => {
     const traces = await readObservationTraces(fs, ws);
     const r = reflectTraces(traces, opts);
@@ -100,7 +100,7 @@ export const parseReflection = (text) => {
         status: (m(/^> status: (.+)$/m) || "candidate"),
     };
 };
-// 读取 ${SHADOW_ROOT}/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
+// 读取 .shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
 export const readReflections = async (fs, ws) => {
     const out = [];
     try {

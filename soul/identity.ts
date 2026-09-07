@@ -1,7 +1,6 @@
 // dsh-shadow —— soul/identity.ts：Identity（主体锚，v0.20）。长期实体：你是谁、看重什么、怎么决策。
 // 从 soul.json 读出主体（identity/principles/boundaries + 新增 anti_patterns/decision_style/observerLens）。
 // Identity 是实体，`ObserverContext.identityRef` 指向它，不嵌套进一次观察事件。
-import { SHADOW_ROOT } from "../core/paths.js";
 import type { Identity } from "../core/types.js";
 import { readSoul } from "./soul.js";
 

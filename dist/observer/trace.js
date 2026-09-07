@@ -72,7 +72,7 @@ export const parseObservationTrace = (text) => {
         state,
     };
 };
-// 读取 ${SHADOW_ROOT}/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
+// 读取 .shadow/observation/<date>/<id>.md 全部轨迹（v0.24 Reflection 输入）。
 export const readObservationTraces = async (fs, ws) => {
     const out = [];
     try {

@@ -51,7 +51,7 @@ export const reflectTraces = (traces: Partial<ObservationTrace>[], opts: Reflect
   };
 };
 
-// 读轨迹 → 反思 → 写 ${SHADOW_ROOT}/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
+// 读轨迹 → 反思 → 写 .shadow/reflection/<date>/<id>.md（Reflection ≠ Memory，旁支）。
 export const reflectOf = async (fs: any, ws: string, opts: ReflectOpts): Promise<Reflection> => {
   const traces = await readObservationTraces(fs, ws);
   const r = reflectTraces(traces, opts);
@@ -107,7 +107,7 @@ export const parseReflection = (text: string): Reflection | null => {
   };
 };
 
-// 读取 ${SHADOW_ROOT}/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
+// 读取 .shadow/reflection/<date>/<id>.md 全部反思（v0.25 Candidate 输入）。
 export const readReflections = async (fs: any, ws: string): Promise<Reflection[]> => {
   const out: Reflection[] = [];
   try {
