@@ -1,0 +1,49 @@
+# 投影模式 (projection) — package-owned agent preset
+
+This preset is **package-owned**. It is the **single source of truth** shipped with
+`dsh-shadow`. Local installs are deployment artifacts, not development sources.
+
+- **Source of truth**: `agent-presets/projection/` in the `dsh-shadow` repository.
+- **Runtime copy**: `~/.dsh/.agent-presets/projection/` is a **deployment artifact**.
+
+> **Do not edit the installed copy directly.**
+> Modify the source preset here and republish / re-install.
+
+## Install (deploy from package)
+
+```bash
+cp -r agent-presets/projection ~/.dsh/.agent-presets/projection
+```
+
+The DSH roster mounts it via `agentPresets.standingKeyFor('projection')` and
+validates the mount. If you only use the runtime copy, re-copy from the package
+after each upgrade — never hand-edit it.
+
+## What it configures
+
+`standard` preset + a projection persona: the agent is treated as an independent
+thinking agent, everything is a file, and its thinking/context/decisions are
+auto-persisted into the shadow memory tree by the `dsh-shadow` plugin, and it
+should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
+a host bundle and is always on; this preset only steers how the agent uses it.
+
+## Boundaries (mirrors Observer Runtime)
+
+```
+Configuration ≠ Identity
+Persona ≠ Purpose
+Preset ≠ Agent Evolution
+```
+
+The preset only configures how an agent uses `read_shadow` / shadow memory. It does
+**not** redefine the Observer's boundaries (see ADR-0029 … ADR-0034). It references
+DSH built-in plugins (`@deepseek-ai/dsh-*`) and `{{model}}` / `{{cwd}}`; it carries
+no user-machine-specific paths or keys, so it is portable.
+
+## Note on DSH preset management
+
+`dsh` currently exposes **no** `dsh preset install/doctor` subcommand (verified:
+`dsh preset --help` treats the args as profile boot args). Agent presets are loaded
+from `~/.dsh/.agent-presets/<id>/` and validated by `agentPresets.standingKeyFor`.
+This package does **not** reinvent that mechanism — it documents the package-owned
+install flow instead.
