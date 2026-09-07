@@ -9,4 +9,6 @@ export interface ShadowQueryDeps {
     verifyEvidence: (ref: EvidenceRef, ctx: any) => Promise<EvidenceResult>;
     /** 召回扩词（闭包：recallCfg + llm + routeFor）。 */
     expandTerms: (topic: string) => Promise<string[]>;
+    /** 懒构建索引：read_shadow 无参读索引前调用（flush 只置 dirty，不重建）。 */
+    ensureIndex: (ws: string) => Promise<void>;
 }

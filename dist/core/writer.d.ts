@@ -11,6 +11,8 @@ export interface ShadowCollector {
     push: (agentId: string | undefined, rec: any) => void;
     getFlushWarn: () => string;
     expandTerms: (topic: string) => Promise<string[]>;
+    /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
+    ensureIndex: (ws: string) => Promise<void>;
     /** 事件 handler（index.ts 用 context.on 绑定）。 */
     onFsObserved: (target: any, observation: any, actor: any) => undefined;
     onToolsResult: (exec: any) => undefined;

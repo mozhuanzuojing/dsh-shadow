@@ -532,6 +532,7 @@ export async function runReadShadow(deps, args, exec) {
     }
     const topic = String(args?.topic || "").trim();
     if (!topic) {
+        await deps.ensureIndex(ws); // 索引懒构建：flush 只置 dirty，这里真正读索引时才构建/落盘。
         const idx = await readRel(fs, ws, `${SHADOW_ROOT}/_index.md`);
         return scrubFinal(RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn);
     }

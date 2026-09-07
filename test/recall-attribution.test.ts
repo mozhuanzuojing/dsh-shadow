@@ -769,6 +769,8 @@ const todayStr = todayLocal();
   agentsById.set("T16", { id: "T16", session: { header: { cwd: "D:/ws16" } } });
   f16("session/event", { id: "T16", header: { cwd: "D:/ws16" } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m16", role: "user", content: [{ type: "text", text: "触发一次索引重建" }], source: { kind: "user" } } });
   await f16("agent/turn-stopping", { agent: agentsById.get("T16"), turn: 1, signal: undefined });
+  // 索引懒构建：read_shadow 无参时才会真正构建/落盘 _index.md。
+  await toolRegistry.get("read_shadow").execute({}, { agent: agentsById.get("T16") });
   const idx16 = store16.get("D:/ws16/.shadow/_index.md");
   assert.ok(idx16 && idx16.includes("shadow 目录说明与索引"), "索引应生成且含目录说明");
   // 完整性：每条记忆的文件名都出现在索引里

@@ -87,6 +87,8 @@ const toolRegistry = new Map<string, any>();
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   fire("session/event", { id: "T2", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m2", role: "user", content: [{ type: "text", text: "触发一次索引重建" }], source: { kind: "user" } } });
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
+  // 索引懒构建：read_shadow 无参才构建/落盘 _index.md
+  await rd({});
   // 索引应含「任务回溯（Episodes）」段
   const idx = store.get("D:/ws/.shadow/_index.md");
   assert.ok(idx && idx.includes("## 任务回溯（Episodes）"), `索引应含任务回溯段：\n${(idx || "").slice(-400)}`);
@@ -208,6 +210,8 @@ const toolRegistry = new Map<string, any>();
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   fire("session/event", { id: "T6", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m6", role: "user", content: [{ type: "text", text: "触发一次索引重建" }], source: { kind: "user" } } });
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
+  // 索引懒构建：read_shadow 无参才构建/落盘 _index.md（同时验证遗忘在该路径生效）
+  await toolRegistry.get("read_shadow").execute({}, { agent: T });
   const idx = store.get("D:/ws/.shadow/_index.md");
   assert.ok(idx && idx.includes("2026-09-05--100000-act.md"), "活跃记忆应保留在索引");
   assert.ok(!idx.includes("2026-09-05--110000-old.md"), "已归档(old)遗忘：不应出现在索引");

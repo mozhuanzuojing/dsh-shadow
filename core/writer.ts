@@ -27,6 +27,8 @@ export interface ShadowCollector {
   push: (agentId: string | undefined, rec: any) => void;
   getFlushWarn: () => string;
   expandTerms: (topic: string) => Promise<string[]>;
+  /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
+  ensureIndex: (ws: string) => Promise<void>;
   /** 事件 handler（index.ts 用 context.on 绑定）。 */
   onFsObserved: (target: any, observation: any, actor: any) => undefined;
   onToolsResult: (exec: any) => undefined;
@@ -67,9 +69,12 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const goalByAgent = new Map<string, string>();
   // L2 增量索引缓存：rel -> {date,time,name,entry,topics,parsed}。F5 性能热路径。
   // 避免每次 flush 都全量重读所有记忆文件（seq 读全量 O(N)），改为冷启动读一次、之后只读新增。
-  const indexCache = new Map<string, any>();
+  // L2 增量索引缓存（按 workspace 隔离！）：ws -> Map<rel -> {entry,topics,parsed}>。
+  const indexCache = new Map<string, Map<string, any>>();
   const indexCacheWarm = new Set<string>();
+  const indexDirty = new Set<string>(); // 索引为懒构建（derived artifact）：flush 仅置 dirty，读索引时才 ensureIndex。
   const forgetCfg = config.forget ?? {};
+  const cacheFor = (ws: string) => { let c = indexCache.get(ws); if (!c) { c = new Map(); indexCache.set(ws, c); } return c; };
 
   const recOf = (mm: any, text: string) => {
     const entry = (String(text || "").match(/^# (.+)$/m) || [])[1]?.trim() || "";
@@ -80,11 +85,12 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const ensureIndexCache = async (fs: any, ws: string, skipForgotten: (rel: string) => boolean) => {
     if (indexCacheWarm.has(ws)) return;
     indexCacheWarm.add(ws); // 每个 workspace 只做一次全量读；之后靠 flush 增量增补。
+    const cache = cacheFor(ws);
     const memories = await listMemories(fs, ws);
     for (const mm of memories) {
       if (skipForgotten(mm.rel)) continue;
       const text = await readRel(fs, ws, mm.rel);
-      if (text) indexCache.set(mm.rel, recOf(mm, text));
+      if (text) cache.set(mm.rel, recOf(mm, text));
     }
   };
   const push = (agentId: string | undefined, rec: any) => {
@@ -218,16 +224,17 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       const meta = await readMeta(fs, ws);
       const skipForgotten = (rel: string) => isForgettable(rel, meta, forgetCfg);
       await ensureIndexCache(fs, ws, skipForgotten);
+      const cache = cacheFor(ws);
       // 遗忘：把低价值/旧条目移出活跃热集（文件保留，仅不再被索引/召回扫描；Forget≠Delete）。
-      for (const rel of [...indexCache.keys()]) if (isForgettable(rel, meta, forgetCfg)) indexCache.delete(rel);
+      for (const rel of [...cache.keys()]) if (isForgettable(rel, meta, forgetCfg)) cache.delete(rel);
       // 硬上限：活跃记忆超过 maxActive 时，遗忘最旧的（封顶热集大小）。
       const maxActive = Math.max(0, Number(forgetCfg.maxActive) || 0);
-      if (forgetCfg.enabled === true && maxActive > 0 && indexCache.size > maxActive) {
-        const recsAll = [...indexCache.values()];
+      if (forgetCfg.enabled === true && maxActive > 0 && cache.size > maxActive) {
+        const recsAll = [...cache.values()];
         const drop = oldestBeyond(recsAll.map((r) => ({ rel: r.rel, date: r.date, time: r.time })), maxActive);
-        for (const rel of drop) indexCache.delete(rel);
+        for (const rel of drop) cache.delete(rel);
       }
-      const recs = [...indexCache.values()];
+      const recs = [...cache.values()];
       const memories = recs.map((r) => ({ date: r.date, time: r.time, name: r.name, rel: r.rel }));
       const topicFiles: Record<string, string[]> = {};
       const parsed: any[] = [];
@@ -265,7 +272,7 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       const patched = existing.replace(/^(# .+\n\n)/, `$1> 摘要：${summary}\n\n`);
       if (patched !== existing) {
         await fs.writeText(t, patched);
-        await rebuildIndex(fs, ws);
+        indexDirty.add(ws); // 摘要回填 → 索引懒标记，待读时再重建。
       }
     } catch (e: any) {
       console.log("[dsh-shadow] summarize patch failed:", e && e.message);
@@ -303,8 +310,9 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
       await fs.writeText(t, `${head}${clue}${body}\n`);
       // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
-      indexCache.set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
-      await rebuildIndex(fs, ws);
+      // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
+      cacheFor(ws).set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
+      indexDirty.add(ws); // 索引懒构建：不在此处重建，待 read_shadow 读索引时再 ensureIndex。
       await registerMeta(fs, ws, rel, id, retentionCfg.enabled === true);
       void patchSummary(fs, ws, rel, entry, arr);
     } catch (e: any) {
@@ -413,9 +421,20 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
       ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(lastFlushError.at).toISOString()}：${lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
       : "";
 
+  // 懒构建索引：flush 只置 dirty（不重建）；这里才在「确实要读索引」时构建/落盘。
+  const ensureIndex = async (ws: string) => {
+    if (!ws) return;
+    if (!indexDirty.has(ws) && indexCacheWarm.has(ws)) return; // 已最新且已预热 → 跳过重建
+    const fsI = context.get("fs");
+    if (!fsI) return;
+    await rebuildIndex(fsI, ws);
+    indexDirty.delete(ws);
+  };
+
   const cleanup = () => {
     pending.clear();
     comps.clear();
+    indexDirty.clear();
   };
 
   return {
@@ -423,6 +442,7 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     push,
     getFlushWarn,
     expandTerms,
+    ensureIndex,
     onFsObserved,
     onToolsResult,
     onGoalChanged,
