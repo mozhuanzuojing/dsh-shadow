@@ -15,6 +15,8 @@ import { runValidation } from "./validation.js";
 import { runFederation } from "./federation.js";
 import { runRealityModel } from "./reality-model.js";
 import { runWorld } from "./world.js";
+import { runSimAction } from "./sim-action.js";
+import { runPlanning } from "./planning.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -31,14 +33,6 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
-import { simulate } from "../simulation/engine/simulator.js";
-import { assertAssumptionAndNotFact } from "../simulation/guard/assumption-guard.js";
-import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/guard/reality-boundary.js";
-import { renderOutcome } from "../simulation/explain/explain.js";
-import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean, assertExecutionEvent, feedbackIsNeutral } from "../action/guard.js";
-import { writeExecution, writeFeedback } from "../action/persistence.js";
-import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../planning/guard.js";
-import { renderContext, renderEvaluation } from "../planning/render.js";
 import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../agency/render.js";
 import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../agency/engine.js";
 import { writeAgencyContext } from "../agency/persistence.js";
@@ -82,59 +76,12 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (viaRealityModel !== undefined) return viaRealityModel;
   const viaWorld = await runWorld(deps, args, { fs, ws, flushWarn });
   if (viaWorld !== undefined) return viaWorld;
-  // v0.32 Counterfactual Simulation：Simulation 是 Representation 的函数（+显式假设+规则），不产 RealityClaim/不改 Identity。
-  if (String(args?.mode) === "simulate") {
-    const condition = String(args?.condition || "");
-    const a = assertAssumptionAndNotFact(condition);
-    if (!a.ok) return scrubFinal(RECALL_PREFIX + "[Simulation Rejected] " + a.reason + "（Assumption ≠ Fact：须 'Assume X'，禁 'X will cause'）" + flushWarn);
-    const basedOn = (args?.basedOn as string[]) || [String(args?.subject || "")].filter(Boolean);
-    const scenario = { id: `sc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, basedOnRepresentationIds: basedOn, initialState: [], changedConditions: [condition], assumptions: [condition], uncertainty: 0.5 };
-    const outcome = simulate(scenario);
-    const b = assertNoRealityFabrication(outcome);
-    if (!b.ok) return scrubFinal(RECALL_PREFIX + `[Simulation Rejected] ${b.reason}` + flushWarn);
-    if (!outcomeHasLineage(outcome)) return scrubFinal(RECALL_PREFIX + "[Simulation Rejected] 无 derivedFrom（lineage 不完整）" + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderOutcome(outcome) + flushWarn);
-  }
-  // v0.33 Action Boundary：Simulation≠Action / Action≠Reality / Result≠Knowledge / Success≠Truth / Failure≠Ignore。
-  if (String(args?.mode) === "candidate") {
-    const conds = (args?.assumptions as string[]) || [String(args?.condition || "Assume change")].filter(Boolean);
-    const candidate = { id: `ac-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, basedOnSimulation: (args?.basedOnSimulation as string[]) || [], assumedConditions: conds, proposedChange: String(args?.proposedChange || ""), uncertainty: Number(args?.uncertainty) || 0.5 };
-    const g = assertCandidateClean(candidate as any);
-    return scrubFinal(RECALL_PREFIX + renderCandidate(candidate) + (g.ok ? "" : `\n（${g.reason}）`) + flushWarn);
-  }
-  if (String(args?.mode) === "execute") {
-    const exec = { id: `ax-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, candidateId: String(args?.candidateId || ""), executedAt: today(), environmentChange: String(args?.environmentChange || ""), result: String(args?.result || "") };
-    const g = assertExecutionEvent(exec as any);
-    if (!g.ok) return scrubFinal(RECALL_PREFIX + "[Action Rejected] " + g.reason + flushWarn);
-    if (!exec.candidateId) return scrubFinal(RECALL_PREFIX + "[Action Rejected] 无 candidateId（需先 mode:candidate + 批准，SimulationOutcome 不直接执行 Action）" + flushWarn);
-    await writeExecution(fs, ws, exec);
-    return scrubFinal(RECALL_PREFIX + renderExecution(exec) + flushWarn);
-  }
-  if (String(args?.mode) === "feedback") {
-    const fb = { executionId: String(args?.executionId || ""), observedChanges: args?.observedChanges || [], successIndicator: String(args?.successIndicator || ""), unexpectedEffects: args?.unexpectedEffects || [], validationRefs: args?.validationRefs || [] };
-    if (!feedbackIsNeutral(fb)) return scrubFinal(RECALL_PREFIX + "[Feedback Rejected] Success ≠ Capability/Identity（只记观察结果，断言『我预测正确』禁）" + flushWarn);
-    await writeFeedback(fs, ws, fb);
-    return scrubFinal(RECALL_PREFIX + renderFeedback(fb) + flushWarn);
-  }
-  // v0.34 Adaptive Planning：constrained comparison，不是 autonomous desire formation；objective 外部来源；无 score/winner。
-  if (String(args?.mode) === "plan") {
-    const objective = { source: "external" as const, description: String(args?.objective || ""), constraints: args?.constraints || [] };
-    const g = assertObjectiveExternal(objective);
-    if (!g.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g.reason + flushWarn);
-    if (String(args?.objectiveSource) === "observer") return scrubFinal(RECALL_PREFIX + "[Planning Rejected] objective 禁自生成（observer.generateObjective()）" + flushWarn);
-    const criteria = String(args?.criteria || "");
-    const gc = assertCriteriaNotValue(criteria);
-    if (!gc.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + gc.reason + flushWarn);
-    const candidates = (args?.candidates as any[]) || [];
-    const planCandidates = candidates.map((c: any, i: number) => ({ id: `pc-${Date.now()}-${i}`, basedOnSimulation: c.basedOnSimulation || [], actionSequence: c.actionSequence || [], assumptions: c.assumptions || [], constraints: c.constraints || [], uncertainty: Number(c.uncertainty) || 0.5 }));
-    let badScore: string | null = null;
-    for (const c of planCandidates) { const g2 = assertCandidateNoScore(c as any); if (!g2.ok) { badScore = g2.reason; break; } }
-    if (badScore) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + badScore + flushWarn);
-    const ctx = { id: `ctx-${Date.now()}`, realitySnapshot: [], representationSnapshot: [], simulationReferences: args?.simulationRefs || [], objective };
-    const ev: any = { candidates: planCandidates, tradeoffs: String(criteria) ? [{ condition: criteria, consequence: "possible", uncertainty: 0.5 }] : [], unresolvedQuestions: ["只比较路径，非系统价值判断（需外部约束权衡）"] };
-    const g3 = assertEvaluationComparison(ev); if (!g3.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g3.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderContext(ctx) + "\n" + renderEvaluation(ev) + flushWarn);
-  }
+  // v0.32–v0.34 sim-action（Counterfactual Simulation + Action Boundary）与 planning
+  // （Adaptive Planning）已迁入 query/sim-action.ts / planning.ts。
+  const viaSimAction = await runSimAction(deps, args, { fs, ws, flushWarn });
+  if (viaSimAction !== undefined) return viaSimAction;
+  const viaPlanning = await runPlanning(deps, args, { fs, ws, flushWarn });
+  if (viaPlanning !== undefined) return viaPlanning;
   // v0.35 Agency Boundary Kernel：AgencyContext（immutable snapshot）/ AgencySelection（reason=constraint_satisfied）/ AgencyBoundaryEvent（audit + lineage）。
   // Agency ≠ Autonomy：行动能力不得自造目的、不因成功而扩张、不升级为自主。此层刻意不实现 Autonomous Agent。
   if (String(args?.mode) === "agency-context") {
