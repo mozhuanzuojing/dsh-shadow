@@ -9,6 +9,7 @@ import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/ut
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
+import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -141,6 +142,27 @@ export async function runReadShadow(deps, args, exec) {
         }
         const tasks = deriveTasks(parsed);
         return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
+    }
+    // ADR-0040 Context Recovery：把证据路径派生成 ContextReference（P0 复核/P1 来源/P2 转换痕迹）。
+    // Context = 当前是否还能用（validated|stale|unknown）；Mapping≠Source Fact，转换标注规则。
+    if (String(args?.mode) === "context") {
+        let memories = await listMemories(fs, ws);
+        const metaC = await readMeta(fs, ws);
+        const forgetC = deps.config.forget ?? {};
+        memories = memories.filter((mm) => !isForgettable(mm.rel, metaC, forgetC) && !isCompacted(metaC, mm.rel));
+        const parsed = [];
+        for (const mm of memories) {
+            const text = await readRel(fs, ws, mm.rel);
+            if (!text)
+                continue;
+            try {
+                parsed.push(parseMemory(text, mm.rel, mm.name));
+            }
+            catch { /* 跳过 */ }
+        }
+        const mappings = (deps.config.context && deps.config.context.mappings) || [];
+        const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
+        return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
     }
     // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
     if (String(args?.mode) === "identity") {

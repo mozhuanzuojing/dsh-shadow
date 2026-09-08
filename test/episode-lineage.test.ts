@@ -291,4 +291,44 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ Task Lifecycle：memory→任务生命周期一等视图（trigger/客观/决策链/观测结果/启发式状态），Outcome≠Success");
 }
 
+// ─────────────────────────────────────────────
+// 场景 9（ADR-0040 Context Recovery / mode:"context"）：证据路径派生成 ContextReference
+//           （P0 复核 validated/stale，P1 来源指针，P2 转换痕迹 Mapping≠Source Fact）。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  // 严格 fs：不存在路径 readText 抛 ENOENT（模拟真实 fs，才能判 stale）。
+  const sf = {
+    async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+    async readText(t: any) { const v = store.get(t.displayPath); if (v === undefined) throw new Error("ENOENT"); return v; },
+    async writeText(t: any, c: string) { store.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir(t: any) {
+      const base = t.displayPath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const prefix = base + "/"; const names = new Set<string>();
+      for (const k of store.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      return [...names].map((n) => ({ name: n }));
+    },
+  };
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-ev.md", "# io/backend\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/good.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:00:00] [io/backend] 改/读 src/good.js\n");
+  store.set("D:/ws/src/good.js", "export {}"); // 存在 → validated
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090001-stale.md", "# io/backend\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:01:00] [io/backend] 改/读 src/gone.js\n"); // gone.js 不在 store → stale
+  const agentsById = new Map<string, any>();
+  const agent9 = (id: string) => { const a = { id, session: { header: { cwd: WS } } }; agentsById.set(id, a); return a; };
+  const T9 = agent9("T9");
+  const services9 = { fs: sf, agents: { currentInitiator: () => null, get: (id: string) => agentsById.get(id) }, systemPrompt: { context: () => {} }, tools: { register: (d: any) => toolRegistry.set(d.name, d) }, llm: undefined, agentDefaultModel: undefined };
+  const listeners9 = new Map<string, Function>();
+  const ctx9 = { get: (k: string) => (services9 as any)[k], on: (e: string, fn: Function) => { listeners9.set(e, fn); return () => listeners9.delete(e); }, inject: (_d: string[], cb: Function) => cb({ get: (k: string) => (services9 as any)[k] }) };
+  const P9 = { name, inject, apply };
+  P9.apply(ctx9, { summary: { enabled: false }, recall: {}, context: { mappings: [{ from: "src", to: "/home/g/src", rule: "windows-wsl" }] } });
+  const r9 = String(await toolRegistry.get("read_shadow").execute({ mode: "context" }, { agent: T9 }));
+  assert.ok(!r9.startsWith("ERR"), "mode:context 不应报错");
+  assert.ok(r9.includes("src/good.js"), "ContextReference 应含证实路径");
+  assert.ok(r9.includes("validated"), "存在的证据路径应 validated");
+  assert.ok(r9.includes("src/gone.js"), "ContextReference 应含过期路径");
+  assert.ok(r9.includes("stale"), "缺失证据路径应 stale");
+  assert.ok(r9.includes("转换") && r9.includes("/home/g/src") && r9.includes("非事实"), "P2 转换痕迹应标注映射规则(非事实)");
+  assert.ok(r9.includes("来源（Evidence Pointer）"), "P1 来源指针应展示");
+  console.log("✔ Context Recovery：证据路径→ContextReference（P0 复核 validated/stale + P1 来源 + P2 转换痕迹）");
+}
+
 console.log("ALL PASS ✅");

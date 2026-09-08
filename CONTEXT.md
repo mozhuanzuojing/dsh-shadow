@@ -40,7 +40,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Event（ADR-0039） | **最底层不可变事实**：`{id, timestamp, type, source, content, evidence}`；Memory Atom（事实层）是其文件化载体。**Event ≠ Summary**（摘要/投影不覆盖事实） |
 | ObservedOutcome（v1.3.0，ADR-0039） | **只记观察结果**（`{event, observation, evidenceRef}`），**禁 Success/Failure**；`测试通过 ≠ 方案正确`。mode:"task" 的"观测结果（非成/败判断）"即其呈现 |
 | 启发式状态（v1.3.0） | Task 的 `active/completed/abandoned` 是**启发式观测**（由"完成/通过/放弃"等信号派生），**不是"方案正确/已确认"判断**（呼应 ADR-0037/0039） |
-| ContextReference（提议，ADR-0040，未实现） | `{subject, value, source: MemoryAtom[], status: validated\|stale\|unknown}`——**不是 Memory**（Memory=曾经观察到；ContextReference=**当前是否还能用**）。答"以前知道的东西现在还能不能作为行动依据"。P0 Candidate+Revalidate / P1 Evidence Pointer / P2 Transformation Trace（`Mapping≠Source Fact`，如 `D:\ → /mnt/d/`） |
+| ContextReference（v1.4.0，ADR-0040 实现） | `{subject, value, source: MemoryAtom[], status: validated\|stale\|unknown}`——**不是 Memory**（Memory=曾经观察到；ContextReference=**当前是否还能用**）。答"以前知道的东西现在还能不能作为行动依据"。P0 Candidate+Revalidate（fs 复核）/ P1 Evidence Pointer / P2 Transformation Trace（`Mapping≠Source Fact`，如 `D:\ → /mnt/d/`） |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
 | 召回 | `read_shadow(topic)` 按命题找出相关记忆的过程：A 档=加权关键词+标签+路径+时间衰减；B 档=先 `llm.stream` 扩词再打分（`rawConfig.recall.enabled` 开启） |
