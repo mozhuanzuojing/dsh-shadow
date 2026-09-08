@@ -21,6 +21,17 @@ export interface IndexEngine {
 const toRefs = (matches: any[]): EvidenceRef[] =>
   (matches || []).slice(0, 20).map((m) => ({ type: "file", locator: String(m.path || ""), fragment: m.startLine ? { start: Number(m.startLine) } : undefined }));
 
+// zg 思想（ADR-0047）：rank 步——按 query 词在候选中命中数排序（锚定精确标识/路径）。纯函数。
+export const rankRefs = (refs: EvidenceRef[], query: string): EvidenceRef[] => {
+  const tokens = String(query || "").toLowerCase().split(/[\s,，。、；:：]+/).filter(Boolean);
+  if (!tokens.length) return refs;
+  const score = (r: EvidenceRef) => {
+    const hay = `${r.locator} ${r.fragment?.start || ""}`.toLowerCase();
+    return tokens.filter((t) => hay.includes(t)).length;
+  };
+  return [...refs].sort((a, b) => score(b) - score(a));
+};
+
 /** 工厂：按 config.indexEngine.provider 路由。fs=默认（空候选，走全量内存扫描）；zg=复用 zg provider。 */
 export const createIndexEngine = (config: any, evidenceProvider: EvidenceProvider = zgEvidenceProvider): IndexEngine => {
   const provider = config?.indexEngine?.provider || "fs";
@@ -32,7 +43,7 @@ export const createIndexEngine = (config: any, evidenceProvider: EvidenceProvide
         const r = await evidenceProvider.verify(ref, ctx);
         if (r.status === "unavailable") return { provider: "zg", unavailable: true, refs: [] };
         const matches = await evidenceProvider.discover(ref, ctx);
-        return { provider: "zg", refs: toRefs(matches) };
+        return { provider: "zg", refs: rankRefs(toRefs(matches), query) }; // zg 思想：语义发现→词汇级排序锚定
       },
     };
   }

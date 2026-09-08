@@ -1,6 +1,6 @@
 // dsh-shadow —— Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk）。
 import assert from "node:assert/strict";
-import { createKnowledgeEngine, renderKnowledgeTree } from "../dist/core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved } from "../dist/core/knowledge-engine.js";
 import { parseMemory } from "../dist/core/episode.js";
 
 // 一段带层级标题的规范文档
@@ -33,5 +33,17 @@ assert.ok(titles.includes("认证") && titles.includes("签名算法") && titles
 // 渲染
 const out = renderKnowledgeTree(tree);
 assert.ok(out.includes("Knowledge Tree") && out.includes("认证"), "渲染含标题");
-console.log("✔ 场景 Knowledge-Engine-1 规范→保留层级树(章节/条款，不转 chunk) + 渲染");
+
+// —— ADR-0047：树上推理检索（PageIndex：relevant≠similar，在树上选章节）——
+const hits = retrieveKnowledge(tree, "RSA");
+assert.ok(hits.length >= 1, "retrieveKnowledge 应命中 RSA 节点");
+assert.ok(hits.some((n) => n.title.includes("RSA")), "命中标题含 RSA");
+assert.ok(renderRetrieved(hits, "RSA").includes("Knowledge Retrieval"), "渲染检索结果");
+
+// —— ADR-0047：corpus 级 file 树（PageIndex File System：模块→文件→章节）——
+const corpus = buildCorpusTree([parsed]);
+assert.ok(corpus.some((m) => m.title === "spec"), "corpus 树含 spec 模块");
+assert.ok(corpus[0].children.length >= 1, "corpus 树模块下含文件节点");
+assert.ok(corpus[0].children.some((f) => f.children.length >= 1), "文件节点下含章节子树");
+console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树（ADR-0047 思想）");
 console.log("ALL PASS ✅");

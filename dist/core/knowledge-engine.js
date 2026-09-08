@@ -1,6 +1,6 @@
 import { nodeTypeOf } from "./node.js";
 /** 把一条规范/文档的内容按「标题层级」建成树（标题行 #/##/###/… → 层级）。纯派生，不补充事实。 */
-const buildTree = (doc) => {
+export const buildTree = (doc) => {
     const root = { title: doc.entry || (doc.goal ? `目标：${doc.goal}` : "规范"), level: 0, content: "", children: [] };
     const stack = [root];
     const pushLine = (line, level) => {
@@ -52,4 +52,53 @@ export const renderKnowledgeTree = (tree) => {
     };
     walk(tree.root, 0);
     return lines.join("\n");
+};
+// ── ADR-0047：吸收 PageIndex/zg 思想（免向量树 + 推理检索 + 语料树）──
+/** 语句检索：在树里按 query 匹配节点（自然章节为单元；LLM 导航是后续 gated 步，此处为确定性走树）。 */
+export const retrieveKnowledge = (tree, query, limit = 10) => {
+    const q = String(query || "").toLowerCase();
+    const tokens = Array.from(new Set(q.split(/[\s,，。、；:：]+/).filter(Boolean)));
+    if (!tokens.length)
+        return tree.root.slice(0, limit);
+    const out = [];
+    const walk = (nodes) => {
+        for (const n of nodes) {
+            const hay = `${n.title} ${n.content} ${n.children.map((c) => c.title).join(" ")}`.toLowerCase();
+            if (tokens.every((t) => hay.includes(t)))
+                out.push(n);
+            if (n.children.length)
+                walk(n.children);
+        }
+    };
+    walk(tree.root);
+    return out.slice(0, limit);
+};
+/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。 */
+export const renderRetrieved = (nodes, query) => {
+    if (!nodes.length)
+        return `（knowledge retrieval 未命中：${query}）`;
+    return `# Knowledge Retrieval · ${query}\n\n` + nodes.map((n) => `- [${n.level}] ${n.title} — ${n.content || "（节点）"}`).join("\n");
+};
+/** 语料级 file-level 树（PageIndex File System）：模块→文件→章节，跨整个项目推理。 */
+export const buildCorpusTree = (parsed) => {
+    const modules = [];
+    const find = (title) => modules.find((m) => m.title === title);
+    for (const p of parsed || []) {
+        const type = nodeTypeOf(p);
+        if (type !== "document" && type !== "code")
+            continue; // 只对文档/代码建文件树
+        const segs = String(p.entry || "").split(/[\\/]/).filter(Boolean);
+        const mod = segs[0] || "root";
+        const file = segs.slice(1).join("/") || p.entry || "file";
+        let modNode = find(mod);
+        if (!modNode) {
+            modNode = { title: mod, level: 0, content: "", children: [] };
+            modules.push(modNode);
+        }
+        const fileNode = { title: file, level: 1, content: "", children: buildTree(p).children };
+        if (!fileNode.children.length && p.goal)
+            fileNode.content = p.goal;
+        modNode.children.push(fileNode);
+    }
+    return modules;
 };

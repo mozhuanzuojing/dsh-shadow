@@ -1,6 +1,6 @@
 // dsh-shadow —— Phase 2 Index Engine（候选生成）：fs 默认 / zg 复用 provider（未装→unavailable，不 fallback）。
 import assert from "node:assert/strict";
-import { createIndexEngine } from "../dist/core/index-engine.js";
+import { createIndexEngine, rankRefs } from "../dist/core/index-engine.js";
 
 // fs 默认：空候选（走全量扫描），provider=fs
 const fsEngine = createIndexEngine({}, { verify: async () => ({ status: "verified", matches: [] }), discover: async () => [] });
@@ -28,5 +28,9 @@ assert.equal(zgOkR.refs[0].type, "file", "候选 type=file");
 assert.equal(zgOkR.refs[0].locator, "src/AuthFilter.java", "候选 locator=路径");
 assert.equal(zgOkR.refs[0].fragment.start, 120, "候选 fragment.start=行号");
 
-console.log("✔ 场景 Index-Engine-1 fs 默认空候选 / zg 未装 unavailable 不 fallback / zg 可用给 refs(fragment 行号)");
+// —— ADR-0047：zg 思想 rank 步（词汇级排序锚定精确标识）——
+const ranked = rankRefs([{ type: "file", locator: "src/other/Util.java" }, { type: "file", locator: "src/AuthFilter.java" }, { type: "file", locator: "docs/Auth.md" }], "auth src");
+assert.equal(ranked[0].locator, "src/AuthFilter.java", "rankRefs 应把含更多 query 词的候选排前");
+assert.ok(ranked.some((r) => r.locator === "docs/Auth.md"), "含部分词的仍在候选");
+console.log("✔ 场景 Index-Engine-1 fs 默认空候选 / zg 未装 unavailable 不 fallback / zg 可用给 refs + rankRefs 按词排序");
 console.log("ALL PASS ✅");

@@ -10,5 +10,6 @@ export interface CandidateResult {
 export interface IndexEngine {
     generateCandidates(query: string, ctx: any): Promise<CandidateResult>;
 }
+export declare const rankRefs: (refs: EvidenceRef[], query: string) => EvidenceRef[];
 /** 工厂：按 config.indexEngine.provider 路由。fs=默认（空候选，走全量内存扫描）；zg=复用 zg provider。 */
 export declare const createIndexEngine: (config: any, evidenceProvider?: EvidenceProvider) => IndexEngine;

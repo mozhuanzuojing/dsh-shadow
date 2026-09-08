@@ -13,7 +13,7 @@ import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { loadOrBuildProjection } from "../core/projection-store.js";
-import { createKnowledgeEngine, renderKnowledgeTree } from "../core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderRetrieved } from "../core/knowledge-engine.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
@@ -210,7 +210,15 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
       try { parsedK.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
     }
     const tree = await createKnowledgeEngine(deps.config).build(parsedK);
-    return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(tree) + flushWarn);
+    const topicK = String(args?.topic || "").trim();
+    if (topicK) {
+      const hits = retrieveKnowledge(tree, topicK);
+      return scrubFinal(RECALL_PREFIX + renderRetrieved(hits, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航为后续 gated 步，事实仍派生）" + flushWarn);
+    }
+    // 无 topic → corpus 级 file 树（PageIndex File System：模块→文件→章节）
+    const corpus = buildCorpusTree(parsedK);
+    const corpusTree = { provider: "tree", root: corpus, sourceCount: corpus.length };
+    return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(corpusTree) + "\n\n（ADR-0047：免向量保留树；不转 vector/chunk）" + flushWarn);
   }
   // Phase 1A.5 Shadow Query Observatory：以只读方式观看 query-log 聚合（命中/证据/关系/类型分布 + 重复查询的 Node 稳定性）。
   if (String(args?.mode) === "query-log") {
