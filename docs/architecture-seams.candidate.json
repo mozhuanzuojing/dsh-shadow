@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dsh-shadow 写读 seam 架构（架构加固后）",
+    "output": "architecture-seams.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "read-seam", "label": "读 seam 主路径", "focus": ["dsh", "query", "seams", "core", "shadowfs"], "note": "read_shadow/recall_shadow/shadow_query 经单一分发器路由到 14 个读族 seam，再落到核心深模块与 .shadow/。" },
+      { "id": "write-seam", "label": "写 seam 副路径", "focus": ["dsh", "writer", "shadowfs"], "note": "事件（fs/tool/goal/session）→ capture 采集 → materialize 物化落盘 .shadow/。" }
+    ]
+  },
+  "components": [
+    { "id": "dsh", "type": "external", "label": "DSH · index.ts", "sublabel": "Cordis Adapter", "pos": [40, 140], "size": [140, 64] },
+    { "id": "query", "type": "backend", "label": "query/query.ts", "sublabel": "read_shadow 分发器", "pos": [250, 140], "size": [200, 60] },
+    { "id": "seams", "type": "backend", "label": "query/* 读族 seam", "sublabel": "14 个读族 seam（含 contverify）", "pos": [510, 140], "size": [300, 70] },
+    { "id": "core", "type": "backend", "label": "core/ 深模块", "sublabel": "concept kernels · knowledge · lineage · materialize", "pos": [850, 130], "size": [230, 90] },
+    { "id": "shadowfs", "type": "database", "label": ".shadow/", "sublabel": "一切皆文件", "pos": [650, 430], "size": [180, 72] },
+    { "id": "writer", "type": "backend", "label": "core/writer.ts", "sublabel": "capture → materialize", "pos": [250, 430], "size": [240, 72] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "query/ seam 层（0 内联 mode 分支）", "wraps": ["query", "seams"] },
+    { "kind": "region", "label": "core/ 深模块层（概念核 + 知识树）", "wraps": ["core"] }
+  ],
+  "connections": [
+    { "id": "dsh-query", "from": "dsh", "to": "query", "label": "read_shadow 分发", "variant": "emphasis", "labelDy": 64 },
+    { "id": "query-seams", "from": "query", "to": "seams", "label": "14 个读族 seam", "labelDy": 64 },
+    { "id": "seams-core", "from": "seams", "to": "core", "label": "域逻辑", "labelDy": 64 },
+    { "id": "core-shadow", "from": "core", "to": "shadowfs", "label": "读 / 物化", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelDy": -58 },
+    { "id": "dsh-writer", "from": "dsh", "to": "writer", "label": "事件：fs/tool/goal/session", "fromSide": "bottom", "toSide": "top", "labelDy": 40 },
+    { "id": "writer-shadow", "from": "writer", "to": "shadowfs", "label": "flush 落盘", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "读 seam", "items": ["query.ts 有 0 条内联 mode 分支（原 50）", "14 个读族 seam 由单一分发器路由", "read_shadow/recall_shadow/shadow_query 表面与 mode 串不变"] },
+    { "dot": "cyan", "title": "写 seam", "items": ["capture（事件→pending）/ materialize（pending→文件+索引+meta+摘要）", "writer.ts 组合根 134 行（共享 WriterCore）", "写路径新增 mock-fs 回归测试"] },
+    { "dot": "rose", "title": "深模块 guard", "items": ["概念核 guard 纯谓词已测（17 测试文件全过）", "knowledge-engine structure/retrieval/cost 三 seam + barrel", "唯一循环依赖（lineage-validator↔node）已打破"] }
+  ]
+}

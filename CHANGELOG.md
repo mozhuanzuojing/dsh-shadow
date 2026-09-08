@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.2] 架构加固：读族 seam 全迁 + fan-in 收窄 + 概念核 guard 测试 + writer capture/materialize 拆分
+
+**把架构审查候选 1/2/3/4/5 全部落地，行为零变化、公共契约不变（read_shadow/recall_shadow/shadow_query + mode 串 + execute(args)），17 测试文件全过：**
+- **读族 seam 全迁（候选 1/5）**：`query/reads.ts` 收齐 episode/decision/task/context/recall/index/knowledge/shadow-manifest/query-log/shadow-report/query 全部读概念；`query.ts` 由 811 行收至 **350 行**、95→**40** import、**0 条内联 mode 分支**（原 50），14 个读族 seam + contverify 由单一分发器路由。
+- **cycle 打破（候选 5）**：`NodeType` 下沉 `core/lineage.ts`，破除 `lineage-validator↔node` 唯一类型循环；并清掉读族迁移残留的 38 个死导入。
+- **knowledge-engine 三 seam（候选 4）**：拆成 `knowledge-structure/retrieval/cost` 三模块 + `knowledge-engine.ts` **barrel**（原 import 面不变）。
+- **概念核深模块可测（候选 3）**：新增 `concept-guards.test.ts` × 2——覆盖 agency/delegation/recall/adaptation/long-horizon + federation/reality/world/sim/planning/continuity 的全部 guard 不变式（~1400 行未测→可验证）。
+- **writer capture/materialize seam（候选 2）**：收敛 4 次 LLM stream scaffold（`writer-llm.ts`）+ 抽纯渲染器（`writer-render.ts`）+ 拆 `writer-core/capture/materialize` 三 seam（`writer.ts` 组合根 134 行）；新增 `writer-write.test.ts`（mock-fs 驱动 flush 落盘）补写路径覆盖。
+- **验证**：tsc + build + **17 测试文件**全 ALL PASS；公共契约不变（recall-attribution/episode-lineage/query-observatory 等黑盒全存活）。
+
+
 ## [v1.12.1] 架构重构：ReadQuery seam + materializeAtoms（收敛读模式 monolith）
 
 **把 `query.ts` 的读模式 monolith 立成深 seam（架构审查候选 1，方案 A 首刀）**，行为零变化：

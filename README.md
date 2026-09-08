@@ -137,10 +137,12 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.12.0`（候选③④⑦⑧：去噪/格式抽取/引用/Manifest）** —— 最新几版摘要：
+**当前版本：`v1.12.2`（架构加固：读族 seam 全迁 + fan-in 收窄 + 概念核 guard 测试 + writer capture/materialize 拆分）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.12.2 | 架构加固（全部审查候选落地，行为/公共契约零变化）：读族全迁 ReadQuery seam（query.ts 0 内联分支）+ 唯一循环依赖打破 + knowledge-engine 三 seam + 概念核 guard 测试 + writer capture/materialize 拆分（17 测试全过） |
+| v1.12.1 | 架构重构（审查候选 1 首刀）：ReadQuery seam + materializeAtoms 收敛读模式 monolith，行为零变化 |
 | v1.12.0 | 内容分类去噪 + 按格式结构抽取（code 包树/标题树/段落）+ 检索引用 + Shadow Manifest 可观测（ADR-0048 候选落地，纯派生无 LLM） |
 | v1.11.0 | 成本感知树优化 + 渐进披露树 + change-set 增量索引 + 授权范围搜索（ADR-0048，均无 LLM、纯派生） |
 | v1.10.0 | Knowledge Engine LLM 树上导航：`mode:"knowledge"` + topic → LLM 只选章节编号，事实仍从树派生（`knowledgeNavigate`，默认 off，失败回退确定性检索） |
