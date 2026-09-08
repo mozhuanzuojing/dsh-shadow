@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.1] 架构重构：ReadQuery seam + materializeAtoms（收敛读模式 monolith）
+
+**把 `query.ts` 的读模式 monolith 立成深 seam（架构审查候选 1，方案 A 首刀）**，行为零变化：
+- **`query/materialize.ts`**：`MaterializedView` + `materializeAtoms`（listMemories→过滤遗忘/收口→parseMemory 的**唯一定义**）——收敛 query.ts 里重复 7–12 次的「读→过滤→parse」脚手架（locality）。
+- **`query/reads.ts`**：`ReadQuery` seam（`modes[]` + `run(deps,args,exec,ctx)`）+ `readQueries` 注册表 + `dispatchReadQuery`；先把**最复杂的 `shadow_query`** 迁为该 seam 的第一个深模块（含 Projection 缓存 + 旁路观测 + Evidence Gate）。
+- `runReadShadow` 顶部先 `dispatchReadQuery`（命中即交模块），`mode:"query"` 分支移除；其余读/命令分支仍内联（候选 3 再收）。
+- **public 契约不变**：`read_shadow/recall_shadow/shadow_query` 表面 + `mode` 串 + `execute(args)` 完全不变（recall-attribution 4207 行黑盒 + episode-lineage + query-observatory 全存活）。`CONTEXT.md` 增补 `ReadQuery seam` 术语。
+- **验证**：tsc + build + 14 测试文件全 ALL PASS（lineage/evidence-gate/atom-kind/query-observatory/episode-lineage/recall-attribution/…）。
+
+
 ## [v1.12.0] Candidate ③④⑦⑧（确定性去噪/格式抽取/引用/Manifest）
 
 **实现 ADR-0048 候选项**（此前留待，现启用）：

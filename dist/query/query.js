@@ -5,17 +5,17 @@ import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
-import { tokenize, today, stamp, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
+import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
-import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
+import { deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
-import { loadOrBuildProjection } from "../core/projection-store.js";
 import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections } from "../core/knowledge-engine.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
+import { materializeAtoms } from "./materialize.js";
+import { dispatchReadQuery } from "./reads.js";
 import { createIndexEngine } from "../core/index-engine.js";
-import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
+import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
@@ -100,6 +100,10 @@ export async function runReadShadow(deps, args, exec) {
     if (!fs)
         return "（fs 服务不可用）";
     const flushWarn = deps.getFlushWarn();
+    // 候选 1 深 seam：把「读概念」路由到 query/reads.ts 的 ReadQuery 模块（先接 shadow_query，其余同类继续迁）。
+    const viaRead = await dispatchReadQuery(deps, args, exec, { fs, ws, flushWarn, agent });
+    if (viaRead !== undefined)
+        return viaRead;
     // v0.24 Reflection：旁支（不是 Memory 查询），用 mode:"reflection" 而非 reflect:true 布尔。
     if (String(args?.mode) === "reflection") {
         const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
@@ -108,21 +112,7 @@ export async function runReadShadow(deps, args, exec) {
     // Episode/Decision Lineage（派生关系层）：把 Event/Turn 级记忆原子串成连续任务（Episode），
     // 并把「决策」提升为可追踪血缘。只读记忆树派生，不写回记忆文件（与 Experience/Judgment 同模式）。
     if (String(args?.mode) === "episode" || String(args?.mode) === "decision") {
-        let memories = await listMemories(fs, ws);
-        const metaQ = await readMeta(fs, ws);
-        const forgetQ = deps.config.forget ?? {};
-        // compacted（收口归档）原子始终移出活跃召回；forgettable 仅在 forget.enabled 时剔除。
-        memories = memories.filter((mm) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
-        const parsed = [];
-        for (const mm of memories) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text)
-                continue;
-            try {
-                parsed.push(parseMemory(text, mm.rel, mm.name));
-            }
-            catch { /* 单条解析失败跳过 */ }
-        }
+        const { parsed } = await materializeAtoms(fs, ws, deps.config); // 唯一一次「物化」（收敛重复脚手架）
         if (String(args?.mode) === "episode") {
             const eps = deriveEpisodes(parsed, { gapMinutes: Math.max(0, Number(deps.config.episodes?.gapMinutes) || 60) });
             return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
@@ -133,40 +123,14 @@ export async function runReadShadow(deps, args, exec) {
     // ADR-0039 Task Lifecycle：把记忆派生为「任务生命周期」一等视图（title/trigger/objective/
     // constraints/status/decisions/outcomes）。派生式投影；Outcome 只记观察，不做成/败判断。
     if (String(args?.mode) === "task") {
-        let memories = await listMemories(fs, ws);
-        const metaT = await readMeta(fs, ws);
-        const forgetT = deps.config.forget ?? {};
-        memories = memories.filter((mm) => !isForgettable(mm.rel, metaT, forgetT) && !isCompacted(metaT, mm.rel));
-        const parsed = [];
-        for (const mm of memories) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text)
-                continue;
-            try {
-                parsed.push(parseMemory(text, mm.rel, mm.name));
-            }
-            catch { /* 跳过 */ }
-        }
+        const { parsed } = await materializeAtoms(fs, ws, deps.config);
         const tasks = deriveTasks(parsed);
         return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
     }
     // ADR-0040 Context Recovery：把证据路径派生成 ContextReference（P0 复核/P1 来源/P2 转换痕迹）。
     // Context = 当前是否还能用（validated|stale|unknown）；Mapping≠Source Fact，转换标注规则。
     if (String(args?.mode) === "context") {
-        let memories = await listMemories(fs, ws);
-        const metaC = await readMeta(fs, ws);
-        const forgetC = deps.config.forget ?? {};
-        memories = memories.filter((mm) => !isForgettable(mm.rel, metaC, forgetC) && !isCompacted(metaC, mm.rel));
-        const parsed = [];
-        for (const mm of memories) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text)
-                continue;
-            try {
-                parsed.push(parseMemory(text, mm.rel, mm.name));
-            }
-            catch { /* 跳过 */ }
-        }
+        const { parsed } = await materializeAtoms(fs, ws, deps.config);
         const mappings = (deps.config.context && deps.config.context.mappings) || [];
         const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
         return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
@@ -174,20 +138,7 @@ export async function runReadShadow(deps, args, exec) {
     // v1.5 Shadow Usability：人类友好的"记忆恢复"统一入口（Task Recovery Bundle）。
     // 一切内容来自派生数据（task/decisions/evidence/outcomes/constraints），不 LLM 补写。
     if (String(args?.mode) === "recall" || args?.recall) {
-        let memories = await listMemories(fs, ws);
-        const metaR = await readMeta(fs, ws);
-        const forgetR = deps.config.forget ?? {};
-        memories = memories.filter((mm) => !isForgettable(mm.rel, metaR, forgetR) && !isCompacted(metaR, mm.rel));
-        const parsed = [];
-        for (const mm of memories) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text)
-                continue;
-            try {
-                parsed.push(parseMemory(text, mm.rel, mm.name));
-            }
-            catch { /* 跳过 */ }
-        }
+        const { parsed } = await materializeAtoms(fs, ws, deps.config);
         const tasks = deriveTasks(parsed);
         const mappings = (deps.config.context && deps.config.context.mappings) || [];
         const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
@@ -218,20 +169,7 @@ export async function runReadShadow(deps, args, exec) {
     }
     // Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk；纯派生、不新增事实）。默认 off。
     if (String(args?.mode) === "knowledge") {
-        let mems = await listMemories(fs, ws);
-        const metaK = await readMeta(fs, ws);
-        const forgetK = deps.config.forget ?? {};
-        mems = mems.filter((mm) => !isForgettable(mm.rel, metaK, forgetK) && !isCompacted(metaK, mm.rel));
-        const parsedK = [];
-        for (const mm of mems) {
-            const text = await readRel(fs, ws, mm.rel);
-            if (!text)
-                continue;
-            try {
-                parsedK.push(parseMemory(text, mm.rel, mm.name));
-            }
-            catch { /* 跳过 */ }
-        }
+        const parsedK = (await materializeAtoms(fs, ws, deps.config)).parsed;
         const tree = await createKnowledgeEngine(deps.config).build(parsedK);
         const topicK = String(args?.topic || "").trim();
         if (topicK) {
@@ -268,78 +206,14 @@ export async function runReadShadow(deps, args, exec) {
     if (String(args?.mode) === "shadow-report") {
         const agg = await summarizeQueryLog(fs, ws);
         let parsedForReport = [];
-        if (agg.total > 0) {
-            let mems = await listMemories(fs, ws);
-            const metaR = await readMeta(fs, ws);
-            const forgetR = deps.config.forget ?? {};
-            mems = mems.filter((mm) => !isForgettable(mm.rel, metaR, forgetR) && !isCompacted(metaR, mm.rel));
-            for (const mm of mems) {
-                const text = await readRel(fs, ws, mm.rel);
-                if (!text)
-                    continue;
-                try {
-                    parsedForReport.push(parseMemory(text, mm.rel, mm.name));
-                }
-                catch { /* 单条失败跳过 */ }
-            }
-        }
+        if (agg.total > 0)
+            parsedForReport = (await materializeAtoms(fs, ws, deps.config)).parsed; // 共享物化
         const report = buildFitnessReport(agg, parsedForReport);
         const text = renderFitnessReport(report);
         await writeShadowReport(fs, ws, scrubFinal(text));
         return scrubFinal(RECALL_PREFIX + text + flushWarn);
     }
-    // Phase 1A Shadow Projection：shadow.query —— 统一 ShadowNode View + 跨类型上下文（带 evidence）。
-    if (String(args?.mode) === "query" || args?.shadowQuery) {
-        const topicQ = String(args?.topic || "").trim();
-        const qStart = Date.now();
-        // Phase 1B Projection Store（Performance）：默认关。开着时缓存/重建节点；关了恒直接派生（行为不变）。
-        const { nodes, cached } = await loadOrBuildProjection(fs, ws, deps.config, async () => {
-            let memories = await listMemories(fs, ws);
-            const metaQ = await readMeta(fs, ws);
-            const forgetQ = deps.config.forget ?? {};
-            memories = memories.filter((mm) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
-            const parsed = [];
-            for (const mm of memories) {
-                const text = await readRel(fs, ws, mm.rel);
-                if (!text)
-                    continue;
-                try {
-                    parsed.push(parseMemory(text, mm.rel, mm.name));
-                }
-                catch { /* 跳过 */ }
-            }
-            return deriveShadowNodes(parsed);
-        });
-        const scope = Array.isArray(args?.scope) ? args.scope.filter((t) => ["memory", "code", "document", "decision", "concept"].includes(t)) : [];
-        const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
-        const items = queryShadow(nodes, topicQ, scope, limit);
-        // Phase 1A.5 Shadow Query Observatory：旁路记录查询模式（只在 query 入口打点，不进入 derive 真相路径）。
-        // 观测是系统派生记录（.shadow/query-log/），rm -rf query-log 不影响任何 Atom；写失败静默，不改变 query 结果。
-        const matchedNodes = matchShadowNodes(nodes, topicQ, scope).slice(0, limit);
-        const nodeTypes = matchedNodes.reduce((acc, n) => { acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
-        const bd = evidenceBreakdownOf(matchedNodes);
-        await recordQueryObservation(fs, ws, deps.config, {
-            date: today(),
-            ts: stamp(),
-            query: topicQ,
-            scope,
-            limit,
-            candidateNodes: nodes.length,
-            projectionCached: cached,
-            returnedNodes: items.length,
-            evidenceCount: Array.from(new Set(items.flatMap((it) => it.evidence))).length,
-            evidenceNodes: matchedNodes.filter((n) => n.evidence.length > 0).length,
-            relationCount: matchedNodes.reduce((a, n) => a + n.relations.length, 0),
-            relationNodes: matchedNodes.filter((n) => n.relations.length > 0).length,
-            nodeTypes,
-            nodeTitles: matchedNodes.map((n) => n.title),
-            latencyMs: Date.now() - qStart,
-            evidenceByType: bd.byType,
-            evidenceByKind: bd.byKind,
-            evidenceByCreatedBy: bd.byCreatedBy,
-        });
-        return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + flushWarn);
-    }
+    // (mode:"query" 已由 query/reads.ts 的 ReadQuery 处理，见上方 dispatchReadQuery)
     // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
     if (String(args?.mode) === "identity") {
         const current = await readCurrentIdentity(fs, ws, agent?.id);
