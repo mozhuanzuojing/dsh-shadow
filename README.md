@@ -122,7 +122,8 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 - **冷热淘汰（默认关，显式开启）**：`rawConfig.recall.cooldownTurns = 5` 时，`.shadow/_recall_log.json` 记录「带内容」发过的路径，N 回合内不重复返回；纯 URI 不带内容则不冷却。写失败降级为「不去重」。
 - **语义召回（B 档，默认关）**：`read_shadow(topic)` 默认走加权关键词召回（A 档，无外部依赖）。要更接近语义，配置 `rawConfig.recall = { enabled, provider, model, maxTokens, timeoutMs }`——`enabled: true` 且给了 `provider/model` 时，先用 `llm.stream` 扩展几个相关检索词，再打分召回；失败/未配置时静默退回 A 档。
 - **Memory Debugger**：`read_shadow(topic, { debug: true })`（或 `recall.debug: true`，默认关）返回召回管线 trace——`候选 → 命中(打分>0) → 冷却 → 预算 → 返回` 计数 + 每条召回「为什么命中（入口/主题/路径/正文打分拆解）/为什么被降权(cooldown/deprioritize)/状态」。默认路径不变。
-- **召回信封（截断不静默）**：借 PageIndex「成功/失败都返回带下一步的信封」——预算/`limit`/冷却砍掉的命中会在结果末尾**自报家门**（`未返回的命中：N 条 · 原因 · 示例入口` + 下一步），空命中不再是一句死路，而是给「换词/看索引/`shadow_query`/`recall_shadow`」四条可执行下一步 + **近似候选（显式标「未验证」）**。全部返回时不加任何多余文字。
+- **召回信封（截断不静默）**：借 PageIndex「成功/失败都返回带下一步的信封」——预算/`limit`/冷却砍掉的命中会在结果末尾**自报家门**（`未返回的命中：N 条（命中 M · 本次返回 K）· 原因分解 · 示例入口 · 下一步`，**N 恒等于 M − K**，冷却也计入），空命中不再是一句死路，而是给「换词/看索引/`shadow_query`/`recall_shadow`」四条可执行下一步 + **近似候选（显式标「未验证」）**；命中全在冷却时给的是「冷却中的命中（是命中，不是近似）」+ 冷却专属下一步。全部返回时不加任何多余文字。
+- **读侧输出保留换行（v1.12.7 根因修复）**：`scrubFinal` 原先整篇套 `scrubUnsafe`（剔 `\u0000-\u001f`，连 `\t\n\r` 一起剔）→ 所有读侧 Markdown 被压成一行；现改用 `scrubUnsafeDoc`（保留 `\t\n\r`，仍剔其余控制符/双向覆盖符）。注入短语与 HTML 标签仍被剥离，「数据非指令」前缀不变。
 
 ### Shadow Query Observatory（Phase 1A.5）
 
@@ -243,11 +244,12 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.12.6`（参考材料落地三项：mode 描述下沉 1789→488 字符 + 召回信封截断披露/空命中给下一步 + `recall.deprioritize` 只降权不移除；同版含 claude-mem 参考材料清理）** —— 最新几版摘要：
+**当前版本：`v1.12.7`（代码审查修复：读侧输出被压成一行的根因 / 信封计数自洽 / 棘轮补齐 `plan` + 文档口径校正）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
-| v1.12.6 | 参考材料落地三项（借 mattpocock/skills、PageIndex、codegraph；均无 LLM/新依赖）：① `mode` 描述下沉到 `CONTEXT.md`「mode 参考」（61 个 mode，schema 只留常用 + 指针，带棘轮测试）② 召回信封（截断自报家门 + 空命中给四条下一步与近似候选·未验证）③ `recall.deprioritize`（只降权不移除）；另清理 claude-mem 参考材料（插件 7 处提及 + 克隆源码 140.8 MB） |
+| v1.12.7 | 审查修复：① 读侧输出**保留换行**（`scrubFinal` 不再把整篇 Markdown 压成一行——`scrubUnsafe` 连 `\t\n\r` 一起剔的根因）② 信封计数恒取「命中 − 返回」（冷却也计入，不再出现「未返回 0 条」）③ 全冷却不再误标「近似候选」④ 近似候选对称归一化 + `hit ≥ 2` 降噪 ⑤ mode 棘轮补齐 `plan`（60→61）⑥ 若干措辞/精度/容错小修 |
+| v1.12.6 | 参考材料落地三项（借 mattpocock/skills、PageIndex、codegraph；均无 LLM/新依赖）：① `mode` 描述下沉到 `CONTEXT.md`「mode 参考」（1747→488 字符，schema 只留常用 + 指针，带棘轮测试）② 召回信封（截断自报家门 + 空命中给四条下一步与近似候选·未验证）③ `recall.deprioritize`（只降权不移除）；另清理 claude-mem 参考材料（插件 7 处提及 + 克隆源码 140.8 MB） |
 | v1.12.5 | 文档（无代码/行为变化）：README 新增「默认开关（装完什么都不动会怎样）」表（15 项，逐项对源码默认值）与「谁能调用（用户显式 vs 模型自动）」权限轴；开头加「给 agent 读的入口」；安全边界表第 4 行补「LLM 增强超时静默降级 = 可取消」 |
 | v1.12.4 | 文档清理（无行为变化）：去掉「一切皆文件」口号（源码注释 / `CONTEXT.md` 术语表 / 投影预设）+ `package.json` 描述同步；ADR / MEMORY 历史原文保留 |
 | v1.12.3 | 文档（无代码/行为变化）：README 新增「谁该用它」定位、「为什么存在」失败模式表、「什么情况用哪个」模式路由表、「给 agent 的粘贴式安装」、护栏下的「安全边界」对照表；references.md 登记 4 条补充材料并逐一核实 |

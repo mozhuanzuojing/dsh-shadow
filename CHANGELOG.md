@@ -3,15 +3,29 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.7] 代码审查修复：读侧换行根因 / 信封计数自洽 / 棘轮补齐 plan + 文档口径校正
+
+对 v1.12.6 做了一轮独立代码审查（两个审查 agent，只读），逐条复核后修复。**其中 ① 是 v0.5 起就存在的读侧缺陷（不是 v1.12.6 引入），另修 6 处自检发现的问题。**
+
+- **① 读侧输出被压成一行（根因修复）**：`security/scrub.ts` 的 `scrubFinal` 把整篇文档交给 `scrubUnsafe`，而后者剔的是 `[\u0000-\u001f]`——**连 `\t\n\r` 一起剔**，于是 16 个读侧模块精心拼的 Markdown（`> 引用`、条目分行、信封）全被压成一行（实测换行数 = 0）。修法：新增 `scrubUnsafeDoc`（保留 `\t\n\r`，仍剔其余 C0 控制符与双向覆盖符），`scrubFinal` 改用它；`scrubUnsafe` 原样保留给单行字段（线索头）。**边界**：只动读侧呈现，canonical 证据/记忆文件不变；注入短语与 HTML 标签仍被剥离，「数据非指令」前缀不变。
+- **② 信封计数自洽**：`truncationNote` 原来 `未返回 = limit 截断 + 预算截断`，把冷却算进「原因」却不计入总数——全冷却时出现「未返回的命中：0 条」却实际丢了 N 条。修法：**总数恒取 `命中 − 返回`**，三个原因只作分解（`limit=X 上限 N 条` / `预算 … N 条` / `冷却 N 条`）；下一步按原因生成（只有冷却时不再建议「提高 max_tokens」）。未返回示例改为从 `scored − returned` 取（原先漏掉冷却项）。
+- **③ 全冷却不再被误标成「近似候选」**：`available` 为空且原因是冷却时，原来会把**真实命中**当成「近似候选·未验证」。修法：`noMatchText` 支持自定义 `steps`/`approxLabel`，该分支给出「冷却中的命中（是命中，不是近似）」+ 冷却专属下一步。
+- **④ 近似候选降噪**：`approxEntries` 原用 `hit / sqrt(条目 gram 数)`（单侧归一化，长入口吃亏）+ 阈值 0.35，实测 `approxEntries("todo")` 会把 `docs`/`mode`/`shadow` 这类只共享一个 bigram 的入口带进来。修法：对称归一化 `hit / sqrt(查询gram × 条目gram)` + 要求 `hit ≥ 2` + 阈值 0.25；查询不足 2 字符（含单个汉字）直接不给候选（2-gram 不成立）。
+- **⑤ 棘轮补齐 `plan`（60 → 61）**：`query/planning.ts` 用 `String(args?.mode || "") !== "plan"` 声明 mode，旧正则抓不到，删掉 CONTEXT.md 的 `plan` 行测试仍绿。修法：补 `mode\s*\|\|[^)]*\)\s*[!=]==` 抓法、断言 `modes.size === 61`、把搜索范围切到「mode 参考」小节内（避免正文别处蒙混）、路径改用 `import.meta.url`（cwd 无关）。
+- **⑥ 其余小修**：`deprioritizeFactor` 容忍字符串配置；debug 分数保留一位小数（原 `Math.round` 把 ×0.4 的差异抹掉）；debug 的降权标记改用 `breakdownOf().deprioritized`（原字段是死的）；`mode` 描述补 `real-refer`（`reality*` 通配不到）并写明 `dsh-shadow 仓库的`；`rank.ts` 注释「前缀」改为「子串」（实现是 `includes`）；`CONTEXT.md` 修正布尔分派清单（`kg`/`observer` 是输出修饰，不参与分派）与 `model` 一行语义（查一条 RealityClaim + Lineage，不是跨类型查询）。
+- **文档口径校正（v1.12.6 条目同步更正）**：mode 描述长度**同一口径**为 **1747 → 488**（v1.12.6 时把 1789=含 `mode: { type… }` 外壳的片段与 488=描述值混比）；棘轮覆盖数 v1.12.6 实为 **60/61**（漏 `plan`）；「召回权重与公共契约不变」精确为「`deprioritize` 关闭时默认权重与工具契约不变」。
+- **验证**：`npx tsc --noEmit` exit 0；`npm run build` exit 0；**18 个测试全 `ALL PASS ✅`**（含新增集成断言：换行保留、信封计数自洽、冷却总数、全冷却不误标、预算截断计数、`recall` 空分支下一步、近似候选降噪、`plan` 棘轮）；实测 mode 描述 1747 → 516（补 `real-refer` 后）；实测读侧换行数从 0 恢复为多行。
+
+
 ## [v1.12.6] 参考材料落地三项（mode 描述下沉 / 召回信封 / deprioritize）+ claude-mem 参考材料清理
 
-把 2026-09-08 参考材料研究（`_reports/2026-09-08-dsh-shadow-references-study.md` §二「第一档」）里剩下的三项落地；同版含用户拍板的 claude-mem 参考材料清理。**三项都无 LLM、无新依赖、不引向量库（ADR-0001）；召回权重与公共契约不变。**
+把 2026-09-08 参考材料研究（`_reports/2026-09-08-dsh-shadow-references-study.md` §二「第一档」）里剩下的三项落地；同版含用户拍板的 claude-mem 参考材料清理。**三项都无 LLM、无新依赖、不引向量库（ADR-0001）；`deprioritize` 关闭时默认召回权重与工具契约不变。**
 
-- **① `mode` 描述下沉**（借 mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）：`read_shadow` 的 `mode` 参数描述 **1789 → 488 字符**（只留常用 mode + 指针），完整 **61 个 mode** 的语义/入参/返回移入 `CONTEXT.md` 新增「mode 参考」表（按 14 个源码族分组）。**棘轮**：`test/recall-envelope.test.ts` 扫 `query/*.ts` 声明的 mode（`MODES`/`modes:`/`mode ===`），逐个要求在 `CONTEXT.md` 出现——新增 mode 不写文档即测试红。
+- **① `mode` 描述下沉**（借 mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）：`read_shadow` 的 `mode` 参数描述 **1747 → 488 字符**（同一口径：描述值本身；只留常用 mode + 指针），完整 **61 个 mode** 的语义/入参/返回移入 `CONTEXT.md` 新增「mode 参考」表（按 14 个源码族分组）。**棘轮**：`test/recall-envelope.test.ts` 扫 `query/*.ts` 声明的 mode（`MODES`/`modes:`/`mode ===`），逐个要求在 `CONTEXT.md` 出现——新增 mode 不写文档即测试红（v1.12.6 时覆盖 60/61，漏了 `plan`，v1.12.7 补齐）。
 - **② 召回信封**（借 PageIndex「成功/失败统一为带下一步的信封」）：`query/query.ts` 主召回不再静默 `break`——预算 / `limit` / 冷却砍掉的命中在结果末尾**自报家门**（`未返回的命中：N 条 · 原因 · 示例入口 · 分数` + 下一步），并进 debug trace（`limit 截断 N` / `预算截断 N`）；`retrieval/render.ts` 的 `noMatchText` 从死路改为「四条可执行下一步 + 近似候选」（新增 `approxEntries`，确定性 2-gram，显式标『近似·未验证』）；`core/recall.ts` 的 `renderRecoveryFor` 空任务分支同样给下一步。**全部返回时零多余文字**（`truncationNote` 返回空串）。
-- **③ `recall.deprioritize`**（借 codegraph 的三态配置：把「移除」和「降权」当两件事）：`retrieval/rank.ts` 新增 `deprioritizeFactor`（`DEPRIORITIZE_FACTOR = 0.4`，反斜杠/大小写归一），配置 `rawConfig.recall.deprioritize: string[]`（默认空 = 不降权）；命中的 `rel`/`entry` 含前缀时**只降权、不移除**（仍可搜到，只是排名靠后）；`breakdownOf` 带 `deprioritized`，debug 逐条显示 `降权(deprioritize)` 并有汇总行。
+- **③ `recall.deprioritize`**（借 codegraph 的三态配置：把「移除」和「降权」当两件事）：`retrieval/rank.ts` 新增 `deprioritizeFactor`（`DEPRIORITIZE_FACTOR = 0.4`，反斜杠/大小写归一），配置 `rawConfig.recall.deprioritize: string[]`（默认空 = 不降权）；命中的 `rel`/`entry` 含该**子串**时**只降权、不移除**（仍可搜到，只是排名靠后）；`breakdownOf` 带 `deprioritized`，debug 逐条显示 `降权(deprioritize)` 并有汇总行。
 - **④ claude-mem 参考材料清理**（用户 2026-09-08 拍板「全删」）：插件内 7 处 `thedotmack/claude-mem` 提及清零（`references.md` 清单 + 分类、ADR-0001/0038/0039 的对照论述、`CHANGELOG.md`、`MEMORY.md`、`security/scrub.ts` 的出处注释与 `SYSTEM_TAG_NAMES` 里的 `claude-mem-context`）；删除工作区克隆 `vendor/_src/claude-mem`（1108 文件 / 140.8 MB）。**行为变化**：写侧 `stripSystemScaffold` 不再剥离 `<claude-mem-context>` 块（读侧 `scrubFinal` 仍剥通用标签）。
-- **验证**：`npx tsc --noEmit` exit 0；`npm run build` exit 0（`dist` 同步）；既有 17 个测试 + 新增 `test/recall-envelope.test.ts` 全 `ALL PASS ✅`；mode 描述 1789→488 字符（实测）；`CONTEXT.md` 覆盖源码声明的全部 60 个 mode（棘轮通过）；`read_shadow` 公共契约（`mode` 串、参数名）未改。
+- **验证**：`npx tsc --noEmit` exit 0；`npm run build` exit 0（`dist` 同步）；既有 17 个测试 + 新增 `test/recall-envelope.test.ts` 全 `ALL PASS ✅`；mode 描述 1747→488 字符（同一口径实测）；`CONTEXT.md` 覆盖源码声明的 60/61 个 mode（棘轮当时漏 `plan`，见 v1.12.7）；`read_shadow` 公共契约（`mode` 串、参数名）未改。
 
 
 ## [v1.12.5] 文档：README 补「默认开关总表」「谁能调用权限轴」「给 agent 的文档入口」+ 安全表补降级/取消
