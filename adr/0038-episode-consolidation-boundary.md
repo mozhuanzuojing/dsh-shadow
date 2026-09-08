@@ -4,6 +4,7 @@
 - 决定日期：2026-09-07
 - 关联术语：`../CONTEXT.md`（Memory Atom / Episode / 收口归档 / Forget≠Delete）
 - 冻结范围：v1.2.2（Episode 收口归档 `compact`）
+- 修订：2026-09-08 移除 claude-mem 对照段（参考材料下线；归因句与对比图首行改为「错误做法」，边界未变）
 
 ## Context
 
