@@ -1,5 +1,5 @@
 /**
- * dsh-shadow — agent「思维/上下文/灵魂」的投影，落成「一切皆文件」的记忆树。
+ * dsh-shadow — agent「思维/上下文/灵魂」的投影，落成记忆树（每条记忆 = 一个文件）。
  *
  * Cordis host plugin entry（Cordis Adapter，薄）：config 解析 + 事件接线 + 工具注册 + systemPrompt。
  * 领域内核已拆出：
@@ -7,7 +7,7 @@
  *   - 读侧查询 → query/query.ts（runReadShadow：多模式分派 + 召回管线）
  *   - 其余（evidence/observer/soul/retrieval/persistence/security）为独立模块。
  *
- * 哲学：一切皆文件，这只是思维/上下文/灵魂的投影。
+ * 哲学：这只是思维/上下文/灵魂的投影，落成文件树。
  * 记忆以「入口点 + 时间」为纲、思维/决策为正文、动作为背景。
  *   - 每条记忆 = 一个文件：.shadow/<日期>/<时刻>-<入口slug>.md
  *   - .shadow/_index.md = 说明文档 + 近期记忆 + 主题索引 + 意识轨迹

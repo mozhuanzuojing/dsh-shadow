@@ -1,5 +1,5 @@
 // dsh-shadow —— core/writer.ts：写侧采集内核（v0.14 Phase 5b）——composition root。
-// 采集「一切皆文件」记忆树的写侧状态机：事件 → pending 累积 → flush 落盘 → 索引/摘要/meta 物化。
+// 采集记忆树的写侧状态机：事件 → pending 累积 → flush 落盘 → 索引/摘要/meta 物化。
 // 本文件只做组合：建 WriterCore（共享状态+cfg）→ makeCapture（事件→pending）→ makeMaterialize
 // （pending→文件+索引+meta+摘要）→ 以 hooks 解 capture↔materialize 的互相调用 → 拼装 ShadowCollector。
 // index.ts 只做 Cordis Adapter 接线（事件 wire + 工具注册 + config），本模块封装领域逻辑。
