@@ -5,12 +5,13 @@ import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
-import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
+import { tokenize, today, stamp, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { deriveShadowNodes, queryShadow, renderContext as renderShadowContext } from "../core/node.js";
+import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
+import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
@@ -199,8 +200,15 @@ export async function runReadShadow(deps, args, exec) {
         }
         return scrubFinal(RECALL_PREFIX + out + flushWarn);
     }
+    // Phase 1A.5 Shadow Query Observatory：以只读方式观看 query-log 聚合（命中/证据/关系/类型分布 + 重复查询的 Node 稳定性）。
+    if (String(args?.mode) === "query-log") {
+        const s = await summarizeQueryLog(fs, ws);
+        return scrubFinal(RECALL_PREFIX + renderQueryLogSummary(s, String(args?.topic || "").trim()) + flushWarn);
+    }
     // Phase 1A Shadow Projection：shadow.query —— 统一 ShadowNode View + 跨类型上下文（带 evidence）。
     if (String(args?.mode) === "query" || args?.shadowQuery) {
+        const topicQ = String(args?.topic || "").trim();
+        const qStart = Date.now();
         let memories = await listMemories(fs, ws);
         const metaQ = await readMeta(fs, ws);
         const forgetQ = deps.config.forget ?? {};
@@ -217,8 +225,29 @@ export async function runReadShadow(deps, args, exec) {
         }
         const nodes = deriveShadowNodes(parsed);
         const scope = Array.isArray(args?.scope) ? args.scope.filter((t) => ["memory", "code", "document", "decision", "concept"].includes(t)) : [];
-        const items = queryShadow(nodes, String(args?.topic || "").trim(), scope, Math.max(1, Math.min(30, Number(args?.limit) || 8)));
-        return scrubFinal(RECALL_PREFIX + renderShadowContext(String(args?.topic || "").trim(), items) + flushWarn);
+        const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
+        const items = queryShadow(nodes, topicQ, scope, limit);
+        // Phase 1A.5 Shadow Query Observatory：旁路记录查询模式（只在 query 入口打点，不进入 derive 真相路径）。
+        // 观测是系统派生记录（.shadow/query-log/），rm -rf query-log 不影响任何 Atom；写失败静默，不改变 query 结果。
+        const matchedNodes = matchShadowNodes(nodes, topicQ, scope).slice(0, limit);
+        const nodeTypes = matchedNodes.reduce((acc, n) => { acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
+        await recordQueryObservation(fs, ws, deps.config, {
+            date: today(),
+            ts: stamp(),
+            query: topicQ,
+            scope,
+            limit,
+            candidateNodes: nodes.length,
+            returnedNodes: items.length,
+            evidenceCount: Array.from(new Set(items.flatMap((it) => it.evidence))).length,
+            evidenceNodes: matchedNodes.filter((n) => n.evidence.length > 0).length,
+            relationCount: matchedNodes.reduce((a, n) => a + n.relations.length, 0),
+            relationNodes: matchedNodes.filter((n) => n.relations.length > 0).length,
+            nodeTypes,
+            nodeTitles: matchedNodes.map((n) => n.title),
+            latencyMs: Date.now() - qStart,
+        });
+        return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + flushWarn);
     }
     // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
     if (String(args?.mode) === "identity") {

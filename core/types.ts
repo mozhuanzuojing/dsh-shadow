@@ -27,6 +27,8 @@ export interface ShadowConfig {
   llmRecall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number };
   /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
   writeConsent?: boolean;
+  /** Phase 1A.5 Shadow Query Observatory：默认开启（观察真实查询）；enabled:false 关闭旁路记录。系统派生记录（.shadow/query-log/），rm -rf 不影响 Atom。 */
+  queryLog?: { enabled?: boolean };
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
   evidenceProvider?: string;
   /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */

@@ -16,6 +16,7 @@ export interface ShadowNode {
 }
 export declare const nodeTypeOf: (p: ParsedMemory) => NodeType;
 export declare const deriveShadowNodes: (parsed: ParsedMemory[]) => ShadowNode[];
+export declare const matchShadowNodes: (nodes: ShadowNode[], query: string, scope: NodeType[]) => ShadowNode[];
 export interface QueryContextItem {
     type: NodeType;
     title: string;

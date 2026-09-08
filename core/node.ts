@@ -50,20 +50,22 @@ export const deriveShadowNodes = (parsed: ParsedMemory[]): ShadowNode[] => {
   return nodes;
 };
 
-// shadow.query 的上下文组装：按 scope + query 过滤，返回带 evidence 的 context items。
-export interface QueryContextItem { type: NodeType; title: string; content: string[]; evidence: string[]; source: string }
-export const queryShadow = (nodes: ShadowNode[], query: string, scope: NodeType[], limit = 8): QueryContextItem[] => {
+// shadow.query 的匹配：按 scope + query 过滤，返回命中节点（AND 匹配），供上下文组装与观测层复用。
+export const matchShadowNodes = (nodes: ShadowNode[], query: string, scope: NodeType[]): ShadowNode[] => {
   const q = String(query || "").toLowerCase();
   const scopeSet = scope && scope.length ? new Set(scope) : null;
   const tokens = q ? Array.from(new Set(q.split(/[\s,，。、；:：]+/).filter(Boolean))) : [];
-  const hits = nodes.filter((n) => {
+  return nodes.filter((n) => {
     if (scopeSet && !scopeSet.has(n.type)) return false;
     if (!q) return true;
     const hay = [n.title, ...n.content, ...n.evidence, ...n.relations.map((r) => r.target)].join(" ").toLowerCase();
     return tokens.every((t) => hay.includes(t)); // AND 匹配（需全部词命中）
   });
-  return hits.slice(0, limit).map((n) => ({ type: n.type, title: n.title, content: n.content.slice(0, 6), evidence: n.evidence, source: n.source }));
 };
+// shadow.query 的上下文组装：匹配 → 截断 → 返回带 evidence 的 context items。
+export interface QueryContextItem { type: NodeType; title: string; content: string[]; evidence: string[]; source: string }
+export const queryShadow = (nodes: ShadowNode[], query: string, scope: NodeType[], limit = 8): QueryContextItem[] =>
+  matchShadowNodes(nodes, query, scope).slice(0, limit).map((n) => ({ type: n.type, title: n.title, content: n.content.slice(0, 6), evidence: n.evidence, source: n.source }));
 
 export const renderContext = (query: string, items: QueryContextItem[]): string => {
   if (!items.length) return `（${query ? `shadow.query 未命中：${query}` : "无节点"}）`;
