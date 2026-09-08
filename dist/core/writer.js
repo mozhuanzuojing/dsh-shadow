@@ -515,6 +515,53 @@ export function createShadowCollector(opts) {
     const getFlushWarn = () => lastFlushError
         ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(lastFlushError.at).toISOString()}：${lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
         : "";
+    // v1.6 recall_shadow 的 LLM 推理导航：只让 LLM【选编号】（意图/排序），不生成事实/理由/判断。
+    // 失败/未配置 → 返回 []，调用方回退到确定性 bestTask（行为不变）。
+    const recallSelect = async (query, candidates) => {
+        const cfg = config.llmRecall ?? {};
+        if (cfg.enabled !== true || !candidates.length)
+            return [];
+        const llm = context.get("llm");
+        if (!llm)
+            return [];
+        const route = routeFor(cfg);
+        if (!route)
+            return [];
+        const maxTokens = Math.max(4, Number(cfg.maxTokens) || 12);
+        const timeoutMs = Math.max(1, Number(cfg.timeoutMs) || 6000);
+        const system = "你是记忆检索规划器。给定用户查询与候选任务列表，选出最相关任务的编号（从 0 开始）。只输出一个整数，不要解释、标点或 Markdown。";
+        const framed = `查询：${query}\n候选任务：\n` + candidates.map((c, i) => `${i}. ${c.title}${c.objective ? " — " + c.objective : ""}${c.summary ? " — " + c.summary : ""}`).join("\n");
+        const messages = [{ id: `shp-${Date.now()}`, role: "user", content: [{ type: "text", text: framed }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            let text = "";
+            for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
+                if (!chunk)
+                    continue;
+                if (chunk.type === "text-delta" && chunk.text)
+                    text += chunk.text;
+                else if (chunk.type === "finish") {
+                    if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted")
+                        return [];
+                    break;
+                }
+            }
+            const m = String(text || "").match(/\d+/);
+            if (m) {
+                const idx = Number(m[0]);
+                if (idx >= 0 && idx < candidates.length)
+                    return [idx];
+            }
+            return [];
+        }
+        catch {
+            return [];
+        }
+        finally {
+            clearTimeout(timer);
+        }
+    };
     // 懒构建索引：flush 只置 dirty（不重建）；这里才在「确实要读索引」时构建/落盘。
     const ensureIndex = async (ws) => {
         if (!ws)
@@ -537,6 +584,7 @@ export function createShadowCollector(opts) {
         push,
         getFlushWarn,
         expandTerms,
+        recallSelect,
         ensureIndex,
         onFsObserved,
         onToolsResult,

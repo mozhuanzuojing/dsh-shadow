@@ -50,8 +50,8 @@ export const activeContextOf = (t) => {
     return { completed, unfinished, constraints, last_decision, next_entry };
 };
 // 恢复包：一段人类可读、全部来自派生数据的 Markdown。
-export const renderRecovery = (query, tasks, refs) => {
-    const t = bestTask(tasks, String(query || ""));
+// 渲染「单个任务的恢复包」（v1.6 拆出：让调用方决定选哪个任务，LLM 或确定性）。
+export const renderRecoveryFor = (query, t, refs) => {
     if (!t)
         return `（未在记忆树中找到可恢复的任务或主题：${query ? D(query) : "空查询"}）`;
     const seg = [];
@@ -113,3 +113,5 @@ export const renderRecovery = (query, tasks, refs) => {
     seg.push("> 以上内容由记忆派生（Task/Decision/Evidence/Outcome），非 LLM 补写；引用前可用 `read_shadow({mode:'context'})` 复核其当前有效性。");
     return seg.join("\n");
 };
+// 确定性恢复包（v1.5/1.5.1 默认）：按查询挑最相关任务再渲染。
+export const renderRecovery = (query, tasks, refs) => renderRecoveryFor(query, bestTask(tasks, String(query || "")), refs);

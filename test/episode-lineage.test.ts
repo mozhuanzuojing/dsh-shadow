@@ -362,4 +362,39 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ 记忆恢复：recall_shadow(一句自然查询) → Task Recovery Bundle + Active Context（派生、不 LLM 补写）");
 }
 
+// ─────────────────────────────────────────────
+// 场景 11（v1.6 recall_shadow LLM 导航规划器）：llmRecall.enabled 时用 LLM 选任务（意图/排序，
+//           覆盖确定性），Bundle 内容仍全来自派生数据；未启用/失败则回退确定性。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx, services } = mkCtx(store);
+  // 任务 A（index 0）：Todo 清理；任务 B（index 1）：U8 补丁
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-a.md",
+    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-b.md",
+    `# u8\n\n> 完整线索\n> 决策：〔user〕采用 U8 同步补丁\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：U8 同步补丁\n\n- [09:30:00] [u8] 改/读 u8/patch.java\n`);
+  const llmMock = { stream: async function* () { yield { type: "text-delta", index: 0, text: "1" }; yield { type: "finish", reason: { kind: "stop" } }; } };
+  services.llm = llmMock;
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, llmRecall: { enabled: true, provider: "p", model: "m" } });
+  const T = agent("T11");
+  const rec = toolRegistry.get("recall_shadow");
+  // 查询 "Todo" → 确定性会选 index0(Todo)；但 LLM 返回 "1" → 应选 index1(U8)
+  const r = String(await rec.execute({ query: "Todo" }, { agent: T }));
+  assert.ok(r.includes("U8 同步补丁"), `LLM 导航应选中 U8 任务(覆盖确定性)：\n${r.slice(0, 200)}`);
+  assert.ok(!r.includes("删除 Todo 同步链路"), "LLM 导航不应落到确定性 Todo 任务");
+  console.log("✔ recall_shadow LLM 导航：启用时 LLM 选任务(意图/排序)，Bundle 内容仍派生");
+  // 控制组：llmRecall 关闭 → 确定性 bestTask("Todo") 选 index0
+  const store2 = new Map<string, string>();
+  const ctx2 = mkCtx(store2);
+  store2.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-a.md", `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
+  const P2 = { name, inject, apply };
+  P2.apply(ctx2.ctx, { summary: { enabled: false }, recall: {} });
+  const T2 = ctx2.agent("T11");
+  const r2 = String(await toolRegistry.get("recall_shadow").execute({ query: "Todo" }, { agent: T2 }));
+  assert.ok(r2.includes("删除 Todo 同步链路"), "llmRecall 关闭应回落确定性(选 Todo)");
+  console.log("✔ recall_shadow 回退：llmRecall 关闭 → 确定性 bestTask");
+}
+
 console.log("ALL PASS ✅");

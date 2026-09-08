@@ -74,6 +74,7 @@ export function apply(ctx, rawConfig = {}) {
         getFlushWarn: collector.getFlushWarn,
         verifyEvidence,
         expandTerms: collector.expandTerms,
+        recallSelect: collector.recallSelect,
         ensureIndex: (ws) => collector.ensureIndex(ws),
     };
     if (typeof context.inject === "function") {

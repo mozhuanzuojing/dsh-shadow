@@ -7,4 +7,5 @@ export declare const activeContextOf: (t: TaskView) => {
     last_decision: string;
     next_entry: string;
 };
+export declare const renderRecoveryFor: (query: string, t: TaskView | null, refs: ContextRef[]) => string;
 export declare const renderRecovery: (query: string, tasks: TaskView[], refs: ContextRef[]) => string;

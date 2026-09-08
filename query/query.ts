@@ -11,7 +11,7 @@ import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { renderRecovery } from "../core/recall.js";
+import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -171,7 +171,17 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const tasks = deriveTasks(parsed);
     const mappings = (deps.config.context && deps.config.context.mappings) || [];
     const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
-    return scrubFinal(RECALL_PREFIX + renderRecovery(String(args?.topic || "").trim(), tasks, refs) + flushWarn);
+    // v1.6：LLM 推理导航（可选）——只让 LLM 选任务编号（意图/排序），Bundle 内容仍全来自派生数据。
+    const llmCfg = deps.config.llmRecall ?? {};
+    let out: string;
+    if (llmCfg.enabled === true && deps.recallSelect) {
+      const candidates = tasks.map((t, i) => ({ id: String(i), title: t.title, objective: t.objective, summary: (t.decisions[0] && t.decisions[0].text) || t.outcomes[0] || "" }));
+      const idx = await deps.recallSelect(String(args?.topic || "").trim(), candidates);
+      out = (idx.length && idx[0] < tasks.length) ? renderRecoveryFor(String(args?.topic || "").trim(), tasks[idx[0]], refs) : renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+    } else {
+      out = renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+    }
+    return scrubFinal(RECALL_PREFIX + out + flushWarn);
   }
   // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
   if (String(args?.mode) === "identity") {

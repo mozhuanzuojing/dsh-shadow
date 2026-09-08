@@ -1,4 +1,4 @@
-import type { ShadowConfig } from "./types.js";
+import type { RecallCandidate, ShadowConfig } from "./types.js";
 export interface ShadowCollectorOpts {
     context: any;
     config: ShadowConfig;
@@ -11,6 +11,8 @@ export interface ShadowCollector {
     push: (agentId: string | undefined, rec: any) => void;
     getFlushWarn: () => string;
     expandTerms: (topic: string) => Promise<string[]>;
+    /** recall_shadow 的 LLM 推理导航（v1.6）：给候选任务列表，LLM 选最相关编号；失败返回 []。 */
+    recallSelect: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;
     /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
     ensureIndex: (ws: string) => Promise<void>;
     /** 事件 handler（index.ts 用 context.on 绑定）。 */

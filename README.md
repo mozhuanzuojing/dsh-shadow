@@ -86,6 +86,8 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 版本 / 变更
 
+> **v1.6.0 · recall_shadow LLM 推理导航（对齐 PageIndex 免向量、推理式检索）**：把 `recall_shadow` 从"关键词相似度召回"升级为"**LLM 推理导航选中任务**"（`config.llmRecall` 门控，默认关）。开启时：给 LLM 候选任务列表（title/objective/摘要），LLM **只输出最相关任务编号**（意图识别+排序）；`recall_shadow` 再沿"任务树"渲染恢复包。**边界**：LLM 只做**导航/选择（Context Planning）**，Bundle 内容仍全来自派生数据（Task/Decision/Evidence/Outcome），**不补 Reason/事实/判断**；LLM **关/失败**回退确定性 `bestTask`（行为不变）。**参考**：VectifyAI/PageIndex（`similarity≠relevance，relevance 需 reasoning`；树索引+LLM 推理遍历+可追溯）——已克隆到 `vendor/_src/PageIndex`。**验证**：场景 11（LLM 导航覆盖确定性 + 关闭回退）+ 全量回归 ALL PASS。
+
 > **v1.5.1 · Active Context Projection（"现在继续要记住什么"）**：给 `recall_shadow` 的恢复包加 **Active Context** 段——`已完成/已决定 / 未完成待厘清 / 约束 / 最近决策 / 入口位置`。**全部来自派生数据**（Decision/Outcome/未明确理由决策/Constraint/任务状态/入口），**不是建议、不是推理、只是恢复**；也**不**让 LLM 生成。这补上 Cursor 式"Continue where you left off"体验——用户第二天打开，`recall_shadow` 直接给"继续工作状态"。**验证**：场景 10（恢复包含 Active Context）+ 全量回归 ALL PASS。**不碰** Entity/自动总结/自动补任务状态。
 
 > **v1.5.0 · Shadow Usability Layer（从"架构对"到"人能用"）**：**补上使用闭环**——`recall_shadow(query)` 人类友好入口：给一句自然查询（如「Todo清理」「上次 OAuth 问题」），返回 **Task Recovery Bundle**（任务/状态/启发式观测/关键决定(含理由)/证据(当前是否仍有效)/观测结果/当前注意/未明确理由的决策）。底层把 `read_shadow` 的 episode/decision/task/context 视图合成一段**人类可读**内容。**原则**：内容全来自派生数据（task/decisions/evidence/outcomes/constraints），**绝不 LLM 补写 Reason/事实/判断/完成**（呼应 ADR-0037/0039/0040）；LLM 只在【意图识别+结果排序】参与（外部可选，默认确定性评分）。`read_shadow` mode 新增 `recall`（同一引擎）；systemPrompt 改为引导用 `recall_shadow`。**验证**：场景 10（recall_shadow → Task Recovery Bundle，含状态/关键决定/观测结果）+ 全量回归 ALL PASS。

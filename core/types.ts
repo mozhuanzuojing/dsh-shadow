@@ -23,6 +23,8 @@ export interface ShadowConfig {
   compact?: { enabled?: boolean; gapMinutes?: number };
   /** Context Recovery（ADR-0040）：P2 转换痕迹规则（Mapping≠Source Fact，如 D:\ → /mnt/d/）。 */
   context?: { mappings?: { from: string; to: string; rule?: string }[] };
+  /** recall_shadow 的 LLM 推理导航规划器（v1.6）：默认关；开启时用 LLM 选任务，关时回归确定性打分。 */
+  llmRecall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number };
   /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
   writeConsent?: boolean;
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
@@ -67,6 +69,14 @@ export interface EvidenceProvider {
 export interface AgentLike {
   id?: string;
   session?: { header?: { cwd?: string }; cwd?: string };
+}
+
+/** recall_shadow 的 LLM 导航候选任务（v1.6）——只给标题/目标/摘要，让 LLM 选编号。 */
+export interface RecallCandidate {
+  id: string;
+  title: string;
+  objective: string;
+  summary: string;
 }
 
 // ── Trace（ADR-0003 §3-5）：World/DSH Events → Trace → Memory → Experience 的中间层。 ──
