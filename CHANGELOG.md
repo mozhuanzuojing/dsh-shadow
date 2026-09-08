@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.6] 参考材料落地三项（mode 描述下沉 / 召回信封 / deprioritize）+ claude-mem 参考材料清理
+
+把 2026-09-08 参考材料研究（`_reports/2026-09-08-dsh-shadow-references-study.md` §二「第一档」）里剩下的三项落地；同版含用户拍板的 claude-mem 参考材料清理。**三项都无 LLM、无新依赖、不引向量库（ADR-0001）；召回权重与公共契约不变。**
+
+- **① `mode` 描述下沉**（借 mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）：`read_shadow` 的 `mode` 参数描述 **1789 → 488 字符**（只留常用 mode + 指针），完整 **61 个 mode** 的语义/入参/返回移入 `CONTEXT.md` 新增「mode 参考」表（按 14 个源码族分组）。**棘轮**：`test/recall-envelope.test.ts` 扫 `query/*.ts` 声明的 mode（`MODES`/`modes:`/`mode ===`），逐个要求在 `CONTEXT.md` 出现——新增 mode 不写文档即测试红。
+- **② 召回信封**（借 PageIndex「成功/失败统一为带下一步的信封」）：`query/query.ts` 主召回不再静默 `break`——预算 / `limit` / 冷却砍掉的命中在结果末尾**自报家门**（`未返回的命中：N 条 · 原因 · 示例入口 · 分数` + 下一步），并进 debug trace（`limit 截断 N` / `预算截断 N`）；`retrieval/render.ts` 的 `noMatchText` 从死路改为「四条可执行下一步 + 近似候选」（新增 `approxEntries`，确定性 2-gram，显式标『近似·未验证』）；`core/recall.ts` 的 `renderRecoveryFor` 空任务分支同样给下一步。**全部返回时零多余文字**（`truncationNote` 返回空串）。
+- **③ `recall.deprioritize`**（借 codegraph 的三态配置：把「移除」和「降权」当两件事）：`retrieval/rank.ts` 新增 `deprioritizeFactor`（`DEPRIORITIZE_FACTOR = 0.4`，反斜杠/大小写归一），配置 `rawConfig.recall.deprioritize: string[]`（默认空 = 不降权）；命中的 `rel`/`entry` 含前缀时**只降权、不移除**（仍可搜到，只是排名靠后）；`breakdownOf` 带 `deprioritized`，debug 逐条显示 `降权(deprioritize)` 并有汇总行。
+- **④ claude-mem 参考材料清理**（用户 2026-09-08 拍板「全删」）：插件内 7 处 `thedotmack/claude-mem` 提及清零（`references.md` 清单 + 分类、ADR-0001/0038/0039 的对照论述、`CHANGELOG.md`、`MEMORY.md`、`security/scrub.ts` 的出处注释与 `SYSTEM_TAG_NAMES` 里的 `claude-mem-context`）；删除工作区克隆 `vendor/_src/claude-mem`（1108 文件 / 140.8 MB）。**行为变化**：写侧 `stripSystemScaffold` 不再剥离 `<claude-mem-context>` 块（读侧 `scrubFinal` 仍剥通用标签）。
+- **验证**：`npx tsc --noEmit` exit 0；`npm run build` exit 0（`dist` 同步）；既有 17 个测试 + 新增 `test/recall-envelope.test.ts` 全 `ALL PASS ✅`；mode 描述 1789→488 字符（实测）；`CONTEXT.md` 覆盖源码声明的全部 60 个 mode（棘轮通过）；`read_shadow` 公共契约（`mode` 串、参数名）未改。
+
+
 ## [v1.12.5] 文档：README 补「默认开关总表」「谁能调用权限轴」「给 agent 的文档入口」+ 安全表补降级/取消
 
 **纯文档，无代码 / 配置 / 行为变化**（改动仅 `README.md`；`npx tsc --noEmit` exit 0；`node test/recall-attribution.test.ts` → `ALL PASS ✅`）：
