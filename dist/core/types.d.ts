@@ -22,7 +22,8 @@ export interface ShadowConfig {
         maxTokens?: number;
         timeoutMs?: number;
         cooldownTurns?: number;
-        debug?: boolean;
+        debug?: boolean; /** v1.12.6 只降权不移除：命中的路径/入口含这些子串时打分乘 0.4（仍可搜到，只排名靠后）。默认空=不降权。 */
+        deprioritize?: string[];
     };
     retention?: {
         enabled?: boolean;

@@ -13,7 +13,7 @@ export interface ShadowConfig {
   /** v1.0.1 observer 层全局根：Global Observer Continuity Shadow 根（默认 ~/.dsh-observer）。 */
   observerGlobalRoot?: string;
   summary?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number };
-  recall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number; cooldownTurns?: number; debug?: boolean };
+  recall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number; cooldownTurns?: number; debug?: boolean; /** v1.12.6 只降权不移除：命中的路径/入口含这些子串时打分乘 0.4（仍可搜到，只排名靠后）。默认空=不降权。 */ deprioritize?: string[] };
   retention?: { enabled?: boolean; halfLifeDays?: number; staleDays?: number };
   /** Episode/Decision Lineage（派生关系层）：控制聚合时间间隔；纯派生不改写侧采集。 */
   episodes?: { gapMinutes?: number; showInIndex?: number };

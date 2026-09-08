@@ -6,7 +6,7 @@ import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
-import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
+import { scoreMemory, breakdownOf, tierFor, approxEntries, deprioritizeFactor } from "../retrieval/rank.js";
 import { dispatchReadQuery } from "./reads.js";
 import { runContVerify } from "./contverify.js";
 import { runObserverKernel } from "./observer-kernel.js";
@@ -22,7 +22,7 @@ import { runRecall } from "./recall.js";
 import { runAdaptation } from "./adaptation.js";
 import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
-import { renderByTier, noMatchText } from "../retrieval/render.js";
+import { renderByTier, noMatchText, truncationNote } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
@@ -232,7 +232,7 @@ export async function runReadShadow(deps, args, exec) {
                 matched.push({ exp, mm, text });
         }
         if (!matched.length)
-            return noMatchText(topic, flushWarn);
+            return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)), reason: "Experience 视图（情境/问题/决策/证据）无匹配项" });
         const newest = newestByEntryOf(entryList);
         const exps = [];
         for (const { exp, mm, text } of matched) {
@@ -283,16 +283,20 @@ export async function runReadShadow(deps, args, exec) {
             if (h < 0.15)
                 stale = true;
         }
+        const dp = deprioritizeFactor(mm.rel, entry, recallCfg.deprioritize);
         if (score > 0) {
             const conflict = await conflictOf(fs, ws, text, deps.verifyEvidence);
             if (conflict.missing.length) {
                 score = score * 0.5;
                 stale = true;
             }
+            // 只降权、不移除：被 deprioritize 的树仍可搜到，只是排名靠后（借 codegraph 的三态配置）。
+            if (dp !== 1)
+                score = score * dp;
             const ev = evidenceOf(text, mm, meta, stale);
             ev.conflict = conflict.missing.length;
             ev.lifecycle = lifecycleOf(meta[mm.rel], ageDaysOf(mm.rel), conflict.missing.length, stale);
-            scored.push({ mm, text, entry, tier, score, tokens, origin, stale, currentOrigin: agent?.id, provenance: provenanceText(ev), evidence: ev, breakdown: breakdownOf(text, mm.rel, entry, tokens), conflict: conflict.missing, observer: observerMode, asOf });
+            scored.push({ mm, text, entry, tier, score, tokens, origin, stale, currentOrigin: agent?.id, provenance: provenanceText(ev), evidence: ev, breakdown: breakdownOf(text, mm.rel, entry, tokens, dp !== 1), deprioritized: dp !== 1, conflict: conflict.missing, observer: observerMode, asOf });
         }
     }
     const newest = newestByEntryOf(entryList);
@@ -311,10 +315,14 @@ export async function runReadShadow(deps, args, exec) {
         s.provenance = provenanceText(s.evidence);
     }
     scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
-    if (debugMode)
+    if (debugMode) {
         diag.push(`命中（打分>0）${scored.length}`);
+        const dpr = scored.filter((s) => s.deprioritized).length;
+        if (dpr)
+            diag.push(`降权·deprioritize ${dpr} 条（recall.deprioritize）`);
+    }
     if (!scored.length)
-        return noMatchText(topic, flushWarn) + (debugMode ? "\n\n" + diag.join("\n") : "");
+        return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)) }) + (debugMode ? "\n\n" + diag.join("\n") : "");
     const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
     const ledger = await readLedger(fs, ws);
     const turn = (ledger.turn || 0) + 1;
@@ -334,34 +342,55 @@ export async function runReadShadow(deps, args, exec) {
     if (debugMode)
         diag.push(`可用（未冷却）${available.length}${cooledCount ? ` · 冷却 ${cooledCount}` : ""}`);
     if (!available.length)
-        return noMatchText(topic, flushWarn) + (debugMode ? "\n\n" + diag.join("\n") : "");
+        return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)), reason: `全部命中都在冷却中（recall.cooldownTurns=${cooldownTurns}，${cooledCount} 条）` }) + (debugMode ? "\n\n" + diag.join("\n") : "");
     const n = available.length;
     const parts = [];
     let used = 0;
+    let droppedByLimit = 0;
+    let droppedByBudget = 0;
+    const servedRels = [];
     const servedDetail = [];
-    for (const s of available) {
-        if (parts.length >= limit)
+    for (let i = 0; i < available.length; i++) {
+        const s = available[i];
+        if (parts.length >= limit) {
+            droppedByLimit = available.length - i;
             break;
+        }
         const sharedPool = Math.max(0, Math.floor((maxChars - used) / Math.max(1, n)));
         const cap = Math.max(120, Math.floor((maxChars / n) * 2) + sharedPool);
         let render = renderByTier(s, cap, false, tokens);
         if (used + render.length > maxChars) {
             const degraded = renderByTier(s, cap, true, tokens);
-            if (used + degraded.length > maxChars)
+            if (used + degraded.length > maxChars) {
+                droppedByBudget = available.length - i;
                 break;
+            }
             render = degraded;
         }
         parts.push(render);
+        servedRels.push(s.mm.rel);
         used += render.length;
         if (debugMode) {
             const b = s.breakdown || {};
-            diag.push(`返回 ${s.mm.rel} · 命中 ${s.score} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
+            diag.push(`返回 ${s.mm.rel} · 命中 ${Math.round(s.score)} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${s.deprioritized ? " · 降权(deprioritize)" : ""}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
         }
         if (s.tier !== "L0" && render.includes("…"))
             servedDetail.push(s.mm.rel);
     }
     if (debugMode)
-        diag.push(`预算 ${maxChars} 字 · 返回 ${parts.length} 条`);
+        diag.push(`预算 ${maxChars} 字 · 返回 ${parts.length} 条${droppedByLimit ? ` · limit 截断 ${droppedByLimit}` : ""}${droppedByBudget ? ` · 预算截断 ${droppedByBudget}` : ""}`);
+    // 截断披露（借 PageIndex 的 part/total_parts/has_more）：砍掉的命中要自报家门，不静默丢。
+    const returnedSet = new Set(servedRels);
+    const envelope = truncationNote({
+        matched: scored.length,
+        returned: parts.length,
+        limit,
+        maxChars,
+        droppedByLimit,
+        droppedByBudget,
+        droppedByCooldown: cooledCount,
+        dropped: available.filter((s) => !returnedSet.has(s.mm.rel)).slice(0, 3).map((s) => ({ entry: s.entry, score: Math.round(s.score) })),
+    });
     if (cooldownTurns > 0 && servedDetail.length) {
         const nextServed = Object.assign({}, ledger.served || {});
         for (const p of servedDetail)
@@ -395,7 +424,7 @@ export async function runReadShadow(deps, args, exec) {
         await writeMeta(fs, ws, next);
     }
     const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
-    const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + flushWarn);
+    const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + envelope + flushWarn);
     await recordObservationTrace(fs, ws, {
         observerId: obsCtx.observerId,
         createdAt: today(),

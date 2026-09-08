@@ -48,7 +48,7 @@ export const activeContextOf = (t: TaskView) => {
 // 恢复包：一段人类可读、全部来自派生数据的 Markdown。
 // 渲染「单个任务的恢复包」（v1.6 拆出：让调用方决定选哪个任务，LLM 或确定性）。
 export const renderRecoveryFor = (query: string, t: TaskView | null, refs: ContextRef[]): string => {
-  if (!t) return `（未在记忆树中找到可恢复的任务或主题：${query ? D(query) : "空查询"}）`;
+  if (!t) return `（未在记忆树中找到可恢复的任务或主题：${query ? D(query) : "空查询"}）\n> 下一步：① 换更短/同义的词再查；② \`read_shadow()\` 无参看 \`.shadow/_index.md\` 的主题索引与近期记忆；③ 跨「决策/代码/文档」找上下文用 \`shadow_query\`。`;
   const seg: string[] = [];
   seg.push(`# ⤴ 记忆恢复 · ${t.title}`);
   seg.push("");
