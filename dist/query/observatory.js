@@ -6,6 +6,8 @@
 //   - 写失败静默（best-effort），绝不改变 query 的返回值；
 //   - query/title 做轻量 scrub（密钥打码 + 剔除控制/双向字符），防敏感检索词与注入残留回显。
 import { SHADOW_ROOT } from "../core/paths.js";
+import { today } from "../core/util.js";
+import { nodeTypeOf } from "../core/node.js";
 import { sanitizeText, scrubUnsafe } from "../security/scrub.js";
 const scrubQuery = (s) => scrubUnsafe(sanitizeText(s)).slice(0, 200);
 const tidy = (s) => scrubUnsafe(s).slice(0, 60);
@@ -126,4 +128,114 @@ export const renderQueryLogSummary = (s, topic) => {
     lines.push("");
     lines.push("> Query Observatory 为系统派生记录（.shadow/query-log/），rm -rf 不影响任何 Atom；仅观察，不改 nodes 结构。");
     return lines.join("\n");
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1A.6 Shadow Fitness Report：把 query-log 变成「是否升级索引层」的客观依据。
+// 输入 .shadow/query-log/*.jsonl（+ 扫记忆原子做 missing-types 启发式），输出 shadow-report.md。
+// 只做「诊断」，不做「变强」；判定是启发式（best-effort、无 LLM、不下结论），标注依据。
+// ─────────────────────────────────────────────────────────────────────────────
+/** Evidence Density 健康阈值：dsh-shadow 坚持「宁可少回答，不要无证据上下文」。 */
+export const EVIDENCE_HEALTHY = 90; // 有证据返回节点 / 总返回节点 %
+// 约束型 / 任务型语言标记（启发式，用来推测「内容被归错类型」）。只作呈现，不替数据作决定。
+const CONSTRAINT_RE = /禁止|严禁|不得|不能|不允许|必须|永不|不可|切勿|务必|只允许|前提|约束|dependency rule/;
+const TASK_RE = /待办|todo|尚未|未完成|下一步|继续做|还需要|要做|未闭环|还剩/;
+const nodeText = (p) => [p.entry, p.goal, ...(p.decisions || []), ...(p.actions || []), ...(p.thinkLines || []), ...(p.userMessages || []), ...(p.materials || [])].join(" ");
+/** 从记忆原子扫描「约束型/任务型」内容，推测可能缺失的 Node 类型（如 constraint/task）。 */
+export const missingTypesOf = (parsed) => {
+    const markers = {
+        constraint: { re: CONSTRAINT_RE, count: 0, byType: {} },
+        task: { re: TASK_RE, count: 0, byType: {} },
+    };
+    for (const p of parsed || []) {
+        const t = nodeTypeOf(p);
+        const text = nodeText(p);
+        for (const name of Object.keys(markers)) {
+            const m = markers[name];
+            if (m.re.test(text)) {
+                m.count++;
+                m.byType[t] = (m.byType[t] || 0) + 1;
+            }
+        }
+    }
+    const out = [];
+    for (const name of Object.keys(markers)) {
+        const m = markers[name];
+        if (m.count >= 3)
+            out.push({ type: name, count: m.count, currentTypes: m.byType }); // ≥3 次才提示，避免单例噪声
+    }
+    return out;
+};
+/** 从 query-log 聚合 + 记忆扫描，构造健身报告数据。 */
+export const buildFitnessReport = (agg, parsed) => {
+    const missing = missingTypesOf(parsed);
+    const evidenceDensity = agg.evidenceCoverage || 0;
+    const repeat = agg.repeatQueries || 0;
+    const driftQ = agg.driftQueries || 0;
+    // 判定为「观察/建议」，非结论。
+    const observations = [];
+    if (agg.total > 0) {
+        if (evidenceDensity >= EVIDENCE_HEALTHY)
+            observations.push(`证据覆盖 ${evidenceDensity}%：多数返回节点带证据，符合「无证据不返回」契约。`);
+        else
+            observations.push(`证据覆盖 ${evidenceDensity}%（低于 ${EVIDENCE_HEALTHY}%）：存在无证据上下文被返回，健康度需关注。`);
+        if (repeat > 0) {
+            if (driftQ === 0)
+                observations.push(`重复查询 ${repeat} 次 Node 全部稳定：派生规则可靠，暂无索引层压力。`);
+            else
+                observations.push(`重复查询 ${repeat} 次中有 ${driftQ} 次漂移：Node 派生可能不稳定，先别上索引，查派生规则。`);
+        }
+        else
+            observations.push("重复查询为 0：样本不足，先积累重复查询再评稳定性。");
+        for (const m of missing)
+            observations.push(`检测到「${m.type}」型内容 ${m.count} 处，当前归类 [${Object.entries(m.currentTypes).map(([t, c]) => `${t}×${c}`).join("、")}]：如真实查询反复需要，再考虑补 ${m.type} 类型。`);
+    }
+    return { date: today(), agg, evidenceDensity, missing, observations };
+};
+export const renderFitnessReport = (r) => {
+    if (!r.agg || !r.agg.total) {
+        return `# Shadow Fitness Report\n\n> 生成：${r.date} · 依据：.shadow/query-log/*.jsonl（系统派生，rm -rf 可重建）\n\n**无查询样本**：尚无 shadow_query 记录。先跑一轮真实工程任务，再回来生成报告。\n\n> 只诊断、不增强；判定为启发式观察，非结论。`;
+    }
+    const a = r.agg;
+    const lines = [
+        `# Shadow Fitness Report`,
+        ``,
+        `> 生成：${r.date} · 依据：.shadow/query-log/*.jsonl（系统派生，rm -rf 可重建）`,
+        ``,
+        `## Query Summary`,
+        `- 总查询 ${a.total} · 平均候选节点 ${a.avgCandidate} → 返回 ${a.avgReturned} · 平均延迟 ${a.avgLatency}ms`,
+        `- scope 使用：${Object.entries(a.scopeDist || {}).map(([k, c]) => `${k || "*"}×${c}`).join("、") || "—"}`,
+        ``,
+        `## Evidence Density（核心指标：dsh-shadow vs 普通 RAG）`,
+        `- 有证据节点 / 总返回节点 = **${r.evidenceDensity}%**（阈值 ${EVIDENCE_HEALTHY}%）`,
+        `- 平均每条返回节点证据数：${a.avgEvidence}`,
+        ``,
+        `## Stability（Node 是否稳定）`,
+        `- 重复查询 ${a.repeatQueries} · 稳定 ${a.stableQueries} · 漂移 ${a.driftQueries}`,
+        ...(a.drift && a.drift.length ? ["- 漂移查询：", ...a.drift.map((d) => `  - "${d.query}" 见过 ${d.seen} 次 · 不同结果集 ${d.distinctResultSets}`)] : []),
+        ``,
+        `## Node Distribution（返回节点类型分布）`,
+        `- ${Object.entries(a.typeDist || {}).map(([t, c]) => `${t} ${c}`).join(" · ") || "—"}`,
+        ``,
+        `## Potential Missing Types`,
+        ...(r.missing && r.missing.length
+            ? r.missing.map((m) => `- **candidate: ${m.type}** — 「${m.type}」型内容 ${m.count} 处，当前归类 [${Object.entries(m.currentTypes).map(([t, c]) => `${t}×${c}`).join("、")}]。如真实查询反复需要，再补该类型（不提前设计）。`)
+            : ["- 未检测到明显的缺失类型（约束/任务标记 < 3 处）。"]),
+        ``,
+        `## 观察与建议`,
+        ...(r.observations && r.observations.length ? r.observations.map((o) => `- ${o}`) : []),
+        ``,
+        `> 只诊断、不增强；判定为启发式观察，非结论。`,
+    ];
+    return lines.join("\n");
+};
+/** 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。 */
+export const writeShadowReport = async (fs, ws, text) => {
+    if (!fs || !ws)
+        return;
+    try {
+        const rel = `${SHADOW_ROOT}/shadow-report.md`;
+        const target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
+        await fs.writeText(target, text);
+    }
+    catch { /* best-effort：报告落盘失败不冒泡 */ }
 };

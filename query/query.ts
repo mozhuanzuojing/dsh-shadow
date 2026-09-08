@@ -12,7 +12,7 @@ import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDec
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
-import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary } from "./observatory.js";
+import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
@@ -189,6 +189,27 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (String(args?.mode) === "query-log") {
     const s = await summarizeQueryLog(fs, ws);
     return scrubFinal(RECALL_PREFIX + renderQueryLogSummary(s, String(args?.topic || "").trim()) + flushWarn);
+  }
+  // Phase 1A.6 Shadow Fitness Report：把 query-log 变成「是否升级索引层」的客观依据。
+  // 只读 query-log 聚合 + 扫记忆原子做 missing-types 启发式，生成 .shadow/shadow-report.md（系统派生，rm -rf 可重建）。
+  if (String(args?.mode) === "shadow-report") {
+    const agg = await summarizeQueryLog(fs, ws);
+    let parsedForReport: any[] = [];
+    if (agg.total > 0) {
+      let mems = await listMemories(fs, ws);
+      const metaR = await readMeta(fs, ws);
+      const forgetR = deps.config.forget ?? {};
+      mems = mems.filter((mm: any) => !isForgettable(mm.rel, metaR, forgetR) && !isCompacted(metaR, mm.rel));
+      for (const mm of mems) {
+        const text = await readRel(fs, ws, mm.rel);
+        if (!text) continue;
+        try { parsedForReport.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 单条失败跳过 */ }
+      }
+    }
+    const report = buildFitnessReport(agg, parsedForReport);
+    const text = renderFitnessReport(report);
+    await writeShadowReport(fs, ws, scrubFinal(text));
+    return scrubFinal(RECALL_PREFIX + text + flushWarn);
   }
   // Phase 1A Shadow Projection：shadow.query —— 统一 ShadowNode View + 跨类型上下文（带 evidence）。
   if (String(args?.mode) === "query" || args?.shadowQuery) {

@@ -6,6 +6,7 @@
 //   4) query-log 是系统派生记录，不进入记忆枚举（rm -rf 无影响）。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
+import { missingTypesOf } from "../dist/query/observatory.js";
 const { apply, name, inject } = mod;
 
 const WS = "D:/ws";
@@ -104,5 +105,28 @@ assert.ok(!String(ep).includes("query-log"), "query-log 不应被当作记忆枚
 const idx = await rs.execute({}, execA);
 assert.ok(!String(idx).includes("Shadow Query Observatory"), "query-log 不污染 _index.md 返回");
 console.log("✔ 场景 Query-Observatory-4 派生记录：query-log 不进入记忆枚举/索引（rm -rf 无影响）");
+
+// —— 场景5：mode:shadow-report 生成 .shadow/shadow-report.md（Evidence Density/稳定性/类型分布/潜在缺失类型）——
+const rep = await rs.execute({ mode: "shadow-report" }, execA);
+assert.ok(rep.includes("Shadow Fitness Report"), `shadow-report 应返回报告头：\n${rep}`);
+assert.ok(rep.includes("Evidence Density") && rep.includes("Stability") && rep.includes("Node Distribution") && rep.includes("Potential Missing Types"), "报告应含四段");
+const reportKey = [...files.keys()].find((k) => k.replace(/\\/g, "/").endsWith("/.shadow/shadow-report.md"));
+assert.ok(reportKey, "应写出 .shadow/shadow-report.md");
+assert.ok(files.get(reportKey).includes("Evidence Density"), "shadow-report.md 内容应含 Evidence Density 段");
+const ep2 = await rs.execute({ mode: "episode" }, execA);
+assert.ok(!String(ep2).includes("Shadow Fitness Report"), "shadow-report 不应被当作记忆枚举");
+console.log("✔ 场景 Query-Observatory-5 Fitness Report：mode:shadow-report 生成 .shadow/shadow-report.md（诊断而非增强）");
+
+// —— 场景6：missing-types 启发式（纯函数）：≥3 处约束型内容 → 提议 candidate:constraint；<3 不提议 ——
+const mkParsed = (n: number, phrase: string) => Array.from({ length: n }, (_, i) => ({
+  rel: `.shadow/2026-09-08/00000${i}-constraint.md`, date: "2026-09-08", time: "000000",
+  entry: `config/policy-${i}.md`, project: "p", agent: "a", goal: "",
+  decisions: [], decisionEvents: [], userMessages: [phrase], materials: [], actions: [], thinkLines: [], body: phrase,
+}));
+const miss = missingTypesOf(mkParsed(3, "禁止直接 fallback 到默认值，必须显式校验"));
+assert.ok(miss.some((m) => m.type === "constraint" && m.count >= 3), "≥3 处约束型 → 应提议 constraint");
+const miss2 = missingTypesOf(mkParsed(2, "禁止直接 fallback 到默认值，必须显式校验"));
+assert.ok(!miss2.some((m) => m.type === "constraint"), "<3 处约束型 → 不提议（防单例噪声）");
+console.log("✔ 场景 Query-Observatory-6 missing-types 启发式：≥3 处约束型内容 → 提议 candidate:constraint；<3 不提议");
 
 console.log("ALL PASS ✅");
