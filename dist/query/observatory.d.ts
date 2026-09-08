@@ -20,6 +20,7 @@ export interface QueryObservation {
     nodeTypes: Record<string, number>;
     nodeTitles: string[];
     latencyMs: number;
+    projectionCached?: boolean;
     evidenceByType?: Record<string, {
         total: number;
         ev: number;

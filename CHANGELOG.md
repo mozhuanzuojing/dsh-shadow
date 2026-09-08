@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.9.0] Projection Store + Index Engine + Knowledge Engine（Phase 1B/2/3 骨架）
+
+**把 v1.8.0 的可证明事实层接上「性能缓存 + 候选生成 + 规范树」**，全部**可插拔、默认关**（不改现有行为），严格遵守 ADR-0046 边界：
+- **Phase 1B Projection Store**（`core/projection-store.ts`）：`ShadowProjectionStore` 接口（save/load/invalidate/rebuild）+ `JsonlProjectionStore` 首版（`.shadow/shadow-index/nodes.jsonl`）+ `loadOrBuildProjection`（命中缓存/未命中重派生回写；`config.projectionStore.enabled` 默认关→行为不变）。**Performance 不是 Storage**：只缓投影，rm -rf 可重建。
+- **Phase 2 Index Engine**（`core/index-engine.ts`）：`IndexEngine` 候选生成抽象 + `createIndexEngine`（`config.indexEngine.provider = fs(默认全量扫描) | zg`）；zg 复用 `zgEvidenceProvider`，**未装→unavailable，绝不静默 fallback 成 verified**（证据契约）；`read_shadow({mode:"index"})` gated 读面。
+- **Phase 3 Knowledge Engine**（`core/knowledge-engine.ts`）：从规范/文档 Atom **保留树**（规范→章节→条款→约束），**不转 vector/chunks**（与 RAG 本质区别）；纯派生、不新增事实；`read_shadow({mode:"knowledge"})` gated 读面。
+- **收尾（v1.8.0 内）**：`mode:"index"` 候选生成、`mode:"knowledge"` 规范树、`projectionCached` 观测标记、`config.projectionStore/indexEngine/knowledgeEngine`。
+- **边界**：gate 保持在 shadow_query（认知查询）；zg/PageIndex 作为可插拔 provider（工具在位才激活，未装→unavailable）。**验证**：lineage/evidence-gate/atom-kind/projection-store/evidence-b2-write/index-engine/knowledge-engine/query-observatory/episode-lineage/recall-attribution 全 ALL PASS。
+
+
 ## [v1.8.0] Evidence Lineage Layer（ADR-0044/0045/0046）
 
 **让每个高价值认知单元都能回答"这个东西为什么存在、它来自哪里"**——提高**可信度与可审计性**，不是搜索/知识。落地核心：

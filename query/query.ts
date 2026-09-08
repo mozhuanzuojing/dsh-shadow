@@ -12,6 +12,9 @@ import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDec
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
+import { loadOrBuildProjection } from "../core/projection-store.js";
+import { createKnowledgeEngine, renderKnowledgeTree } from "../core/knowledge-engine.js";
+import { createIndexEngine } from "../core/index-engine.js";
 import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
@@ -185,6 +188,30 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     }
     return scrubFinal(RECALL_PREFIX + out + flushWarn);
   }
+  // Phase 2 Index Engine（候选生成）：fs 默认（空=全量扫描）| zg 复用 provider（未装→unavailable，不 fallback）。gated 读面。
+  if (String(args?.mode) === "index") {
+    const engine = createIndexEngine(deps.config);
+    const r = await engine.generateCandidates(String(args?.topic || "").trim(), { ws });
+    const lines = [`# Index Engine · provider=${r.provider}${r.unavailable ? " · unAvailable(未装，勿当 verified)" : ""}`, ""];
+    if (r.refs.length) for (const ref of r.refs) lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
+    else lines.push(`- ${r.provider === "zg" ? "（zg 未产出候选：未装或未命中）" : "（fs: 全量扫描，无候选预筛）"}`);
+    return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
+  }
+  // Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk；纯派生、不新增事实）。默认 off。
+  if (String(args?.mode) === "knowledge") {
+    let mems = await listMemories(fs, ws);
+    const metaK = await readMeta(fs, ws);
+    const forgetK = deps.config.forget ?? {};
+    mems = mems.filter((mm: any) => !isForgettable(mm.rel, metaK, forgetK) && !isCompacted(metaK, mm.rel));
+    const parsedK: any[] = [];
+    for (const mm of mems) {
+      const text = await readRel(fs, ws, mm.rel);
+      if (!text) continue;
+      try { parsedK.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
+    }
+    const tree = await createKnowledgeEngine(deps.config).build(parsedK);
+    return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(tree) + flushWarn);
+  }
   // Phase 1A.5 Shadow Query Observatory：以只读方式观看 query-log 聚合（命中/证据/关系/类型分布 + 重复查询的 Node 稳定性）。
   if (String(args?.mode) === "query-log") {
     const s = await summarizeQueryLog(fs, ws);
@@ -215,17 +242,20 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (String(args?.mode) === "query" || args?.shadowQuery) {
     const topicQ = String(args?.topic || "").trim();
     const qStart = Date.now();
-    let memories = await listMemories(fs, ws);
-    const metaQ = await readMeta(fs, ws);
-    const forgetQ = deps.config.forget ?? {};
-    memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
-    const parsed: any[] = [];
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
-    }
-    const nodes = deriveShadowNodes(parsed);
+    // Phase 1B Projection Store（Performance）：默认关。开着时缓存/重建节点；关了恒直接派生（行为不变）。
+    const { nodes, cached } = await loadOrBuildProjection(fs, ws, deps.config, async () => {
+      let memories = await listMemories(fs, ws);
+      const metaQ = await readMeta(fs, ws);
+      const forgetQ = deps.config.forget ?? {};
+      memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
+      const parsed: any[] = [];
+      for (const mm of memories) {
+        const text = await readRel(fs, ws, mm.rel);
+        if (!text) continue;
+        try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
+      }
+      return deriveShadowNodes(parsed);
+    });
     const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept"].includes(t)) : [];
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
     const items = queryShadow(nodes, topicQ, scope, limit);
@@ -241,6 +271,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
       scope,
       limit,
       candidateNodes: nodes.length,
+      projectionCached: cached,
       returnedNodes: items.length,
       evidenceCount: Array.from(new Set(items.flatMap((it) => it.evidence))).length,
       evidenceNodes: matchedNodes.filter((n) => n.evidence.length > 0).length,

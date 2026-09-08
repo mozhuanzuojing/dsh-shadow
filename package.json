@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "agent 思维/上下文/灵魂的投影——一切皆文件，每条记忆一个文件，记录「完整线索链」（背景/材料 + 用户提示/决策 + 概况）；read_shadow 分层召回 + 记忆遗忘(retention) + 护栏(数据非指令)。TypeScript 源码 index.ts → tsc → dist/index.js（DSH 加载编译后 JS）。",
   "type": "module",
   "main": "./dist/index.js",

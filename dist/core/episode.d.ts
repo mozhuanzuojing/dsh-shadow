@@ -61,6 +61,10 @@ export declare const deriveAtomKind: (p: {
     goal: string;
     userMessages: string[];
 }) => AtomKind;
+export declare const isCognitiveAtom: (p: {
+    kind?: AtomKind;
+}) => boolean;
+export declare const isMetadataMemoryText: (text: unknown) => boolean;
 export declare const deriveLineage: (p: {
     source?: string;
     createdBy: CreatedBy;

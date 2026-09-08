@@ -92,6 +92,20 @@ export const deriveAtomKind = (p: { entry: string; materials: string[]; decision
   return "experience";
 };
 
+// v1.8.0 Gate 覆盖：Atom 是否进入「认知查询/召回」默认集（kind∈metadata|session → 排除）。
+export const isCognitiveAtom = (p: { kind?: AtomKind }): boolean => p?.kind !== "metadata" && p?.kind !== "session";
+
+// 读侧（topic 召回路径不 parseMemory）用文本启发式判定「会话元数据」原子：entry=shadow + 有用户要点 + 无材料 + 无决策。
+export const isMetadataMemoryText = (text: unknown): boolean => {
+  const t = String(text || "");
+  const entry = (t.match(/^# (.+)$/m) || [])[1]?.trim() || "";
+  if (entry !== "shadow") return false;
+  const hasMaterials = /^> 背景\/材料：.+$/m.test(t);
+  const hasDecisions = /^> 决策：.+$/m.test(t);
+  const hasUser = /^> 用户要点：|^> 用户提示\/决策：/m.test(t);
+  return hasUser && !hasMaterials && !hasDecisions;
+};
+
 export const deriveLineage = (p: { source?: string; createdBy: CreatedBy; materials: string[]; createdAt: string }): AtomLineage => ({
   source: scrubUnsafe(String(p.source || "")).trim().slice(0, 80) || "unknown",
   createdBy: p.createdBy,

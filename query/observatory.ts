@@ -32,6 +32,7 @@ export interface QueryObservation {
   nodeTypes: Record<string, number>;
   nodeTitles: string[];
   latencyMs: number;
+  projectionCached?: boolean; // Phase 1B：本次节点是否来自 Projection Store 缓存
   // v1.8.0：Evidence Density 按 type/kind/createdBy 维度统计（返回节点里带 evidence 的比例）。
   evidenceByType?: Record<string, { total: number; ev: number }>;
   evidenceByKind?: Record<string, { total: number; ev: number }>;

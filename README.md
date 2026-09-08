@@ -137,10 +137,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.8.0`（Evidence Lineage Layer / 可信事实层）** —— 最新几版摘要：
+**当前版本：`v1.9.0`（Projection Store + Index/Knowledge Engine）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.9.0 | Projection Store + Index Engine + Knowledge Engine：可插拔性能缓存/候选生成/规范树（默认关；zg/PageIndex 是 provider，未装 unavailable） |
 | v1.8.0 | Evidence Lineage Layer：AtomLineage + EvidenceRef + AtomKind + Validation Gate（metadata memory / 无证据 decision 不进查询），Evidence Density 按 type/kind/createdBy 报告 |
 | v1.7.2 | Shadow Fitness Report：query-log → shadow-report.md（Evidence Density/稳定性/类型分布/潜在缺失类型），作为是否升级索引层的客观依据 |
 | v1.7.1 | Shadow Query Observatory：shadow_query 旁路观测（真实查询数据）+ Node 稳定性/类型/relations 观察 |
