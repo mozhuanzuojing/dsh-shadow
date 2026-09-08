@@ -4,6 +4,7 @@
 // provider：fs（默认，全量扫描内存，行为不变）| zg（复用 zgEvidenceProvider.discover 做候选）。
 import type { EvidenceRef } from "./lineage.js";
 import type { EvidenceProvider } from "./types.js";
+import { authorizeScope } from "./authorization.js";
 import { zgEvidenceProvider } from "../evidence/zg.js";
 
 export interface CandidateResult {
@@ -43,7 +44,8 @@ export const createIndexEngine = (config: any, evidenceProvider: EvidenceProvide
         const r = await evidenceProvider.verify(ref, ctx);
         if (r.status === "unavailable") return { provider: "zg", unavailable: true, refs: [] };
         const matches = await evidenceProvider.discover(ref, ctx);
-        return { provider: "zg", refs: rankRefs(toRefs(matches), query) }; // zg 思想：语义发现→词汇级排序锚定
+        const refs = rankRefs(toRefs(matches), query); // zg 思想：语义发现→词汇级排序锚定
+        return { provider: "zg", refs: authorizeScope(refs, { workspace: ctx?.workspace }) }; // ADR-0048⑥ 授权范围
       },
     };
   }

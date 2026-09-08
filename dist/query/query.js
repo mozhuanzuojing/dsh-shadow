@@ -206,7 +206,7 @@ export async function runReadShadow(deps, args, exec) {
     // Phase 2 Index Engine（候选生成）：fs 默认（空=全量扫描）| zg 复用 provider（未装→unavailable，不 fallback）。gated 读面。
     if (String(args?.mode) === "index") {
         const engine = createIndexEngine(deps.config);
-        const r = await engine.generateCandidates(String(args?.topic || "").trim(), { ws });
+        const r = await engine.generateCandidates(String(args?.topic || "").trim(), { ws, workspace: ws });
         const lines = [`# Index Engine · provider=${r.provider}${r.unavailable ? " · unAvailable(未装，勿当 verified)" : ""}`, ""];
         if (r.refs.length)
             for (const ref of r.refs)

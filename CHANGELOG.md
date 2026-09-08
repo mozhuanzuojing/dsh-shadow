@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.11.0] Deeper PageIndex + zg Ideas（成本/渐进披露/增量索引/授权，ADR-0048）
+
+**再次深入 PageIndex/zg 源码，吸收更深的 4 项思想**（ADR-0048）：
+- **①成本感知树优化**（PageIndex `tree_optimize.py`）：`refineTree`——链式合并（单叶子孩子吸收）+ 便宜子树折叠（子树规模 ≤ minPages 则合并，**子标题存 `keyItems`**），使 Knowledge 树**检索代价有界**。
+- **②渐进披露树**（PageIndex `page_index_md.py`）：`progressiveDisclosure`——内部节点 `summary`（标题+节数，路由用），**叶子保留 `content`=全文**；"只读推理到达的节点"（上下文经济）。
+- **⑤change-set 增量索引**（zg `daemon/change-set.ts`）：新增 `core/change-set.ts`（`ChangeSet`：created/changed/deleted + 目录 rescan + `pathCoveredBy` 去重 + `maxChangedPaths` 超阈值→强制全量对齐）；`JsonlProjectionStore.invalidateFor(set)` **只移除变更 rel 的节点**（保持其余缓存）。
+- **⑥授权范围搜索**（zg `authorization/*`）：新增 `core/authorization.ts`（`inScope`/`authorizeScope`：workspace 内放行 / `denied` 优先排除 / `allowed` 扩展；无 workspace 保守放行）；`IndexEngine` zg 候选经 `authorizeScope` 过滤（防越权泄漏）。
+- **边界**：结构确定性（树/成本/增量/授权均**无 LLM**）；不集成 PageIndex/zg；不向量化（ADR-0001）。**候选**（③④⑦⑧，未实现）留待后需。**验证**：change-set / authorization 新增 + knowledge-engine（渐进披露/成本 refine）+ projection-store（invalidateFor）+ 全量回归 ALL PASS（13 测试）。
+
+
 ## [v1.10.0] Knowledge Engine LLM 树上导航（PageIndex `chat=` 步，ADR-0047 落地）
 
 **把 PageIndex 的"检索 = LLM 在树上推理"落地为 dsh-shadow 的 Knowledge 检索**（`mode:"knowledge"` + topic）：

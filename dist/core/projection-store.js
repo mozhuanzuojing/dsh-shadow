@@ -50,6 +50,17 @@ export const createJsonlProjectionStore = (fs, ws) => {
             await this.save(nodes);
             return nodes;
         },
+        async invalidateFor(set) {
+            try {
+                const nodes = await this.load();
+                if (!nodes || nodes.length === 0)
+                    return;
+                const kept = nodes.filter((n) => !set.affects(String(n.source || "")));
+                if (kept.length !== nodes.length)
+                    await this.save(kept);
+            }
+            catch { /* best-effort */ }
+        },
     };
 };
 /** 工厂：取本项目 store（当前仅 JsonlProjectionStore；将来加 sqlite/embedded 在此路由）。 */

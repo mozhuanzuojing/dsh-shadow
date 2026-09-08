@@ -1,6 +1,7 @@
 // dsh-shadow —— Phase 1B Projection Store（Performance Feature，默认关）：save/load/invalidate/rebuild + 缓存行为。
 import assert from "node:assert/strict";
 import { createJsonlProjectionStore, loadOrBuildProjection } from "../dist/core/projection-store.js";
+import { ChangeSet } from "../dist/core/change-set.js";
 
 const makeFs = () => {
   const files = new Map();
@@ -61,6 +62,23 @@ const NODE = (id) => ({ id, type: "code", source: `.shadow/x/${id}.md`, title: i
   assert.equal(r2.nodes.length, 2, "缓存节点数量正确");
 }
 
+// —— 块 4：change-aware invalidateFor（ADR-0048⑤）——只移除变更 rel 的节点，保留其余 ——
+{
+  const { fs } = makeFs();
+  const store = createJsonlProjectionStore(fs, WS);
+  await store.save([
+    { id: "a", type: "code", source: ".shadow/2026-09-08/a.md", title: "a", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
+    { id: "b", type: "code", source: ".shadow/2026-09-08/b.md", title: "b", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
+  ]);
+  const set = new ChangeSet({ root: WS });
+  set.add(".shadow/2026-09-08/a.md", "changed");
+  await store.invalidateFor!(set);
+  const left = await store.load();
+  assert.equal(left.length, 1, "只移除变更 rel 的节点");
+  assert.equal(left[0].id, "b", "保留未变更节点");
+}
+
 console.log("✔ 场景 Projection-Store-1 save/load/invalidate/rebuild");
 console.log("✔ 场景 Projection-Store-2 loadOrBuild：store 关闭恒派生 / 开启首次派生+再次命中缓存");
+console.log("✔ 场景 Projection-Store-3 invalidateFor change-aware：只移除变更 rel 节点（ADR-0048⑤）");
 console.log("ALL PASS ✅");

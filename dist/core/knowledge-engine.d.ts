@@ -5,6 +5,8 @@ export interface KnowNode {
     level: number;
     content: string;
     children: KnowNode[];
+    summary?: string;
+    keyItems?: string[];
 }
 export interface KnowledgeTree {
     provider: string;
@@ -34,7 +36,14 @@ export interface KnowledgeSection {
     title: string;
     content: string;
     level: number;
+    summary?: string;
 }
+/** ② 渐进披露：内部节点设 routing 摘要（标题+节数），叶子保留 content=全文；返回新树（不覆盖输入）。 */
+export declare const progressiveDisclosure: (tree: KnowledgeTree) => KnowledgeTree;
+/** ① 成本感知 refine：链式合并（单叶子孩子吸收）+ 便宜子树折叠（≤minPages 的子树合并，标题存 key_items）。 */
+export declare const refineTree: (tree: KnowledgeTree, opts?: {
+    minPages?: number;
+}) => KnowledgeTree;
 /** 把树展平成"章节候选"（含内容的节点 + 叶子）。LLM 导航只在这些里选编号。 */
 export declare const flattenSections: (tree: KnowledgeTree, limit?: number) => KnowledgeSection[];
 /** 语料级 file-level 树（PageIndex File System）：模块→文件→章节，跨整个项目推理。 */

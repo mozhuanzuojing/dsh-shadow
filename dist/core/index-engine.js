@@ -1,3 +1,4 @@
+import { authorizeScope } from "./authorization.js";
 import { zgEvidenceProvider } from "../evidence/zg.js";
 const toRefs = (matches) => (matches || []).slice(0, 20).map((m) => ({ type: "file", locator: String(m.path || ""), fragment: m.startLine ? { start: Number(m.startLine) } : undefined }));
 // zg 思想（ADR-0047）：rank 步——按 query 词在候选中命中数排序（锚定精确标识/路径）。纯函数。
@@ -23,7 +24,8 @@ export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider)
                 if (r.status === "unavailable")
                     return { provider: "zg", unavailable: true, refs: [] };
                 const matches = await evidenceProvider.discover(ref, ctx);
-                return { provider: "zg", refs: rankRefs(toRefs(matches), query) }; // zg 思想：语义发现→词汇级排序锚定
+                const refs = rankRefs(toRefs(matches), query); // zg 思想：语义发现→词汇级排序锚定
+                return { provider: "zg", refs: authorizeScope(refs, { workspace: ctx?.workspace }) }; // ADR-0048⑥ 授权范围
             },
         };
     }

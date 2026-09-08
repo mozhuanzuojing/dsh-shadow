@@ -5,12 +5,15 @@
 // 触发（ADR-0046）：只在「Node 稳定 + query 稳定 + rebuild 成本明显」时才启用；默认关（config.projectionStore.enabled）。
 import { SHADOW_ROOT } from "./paths.js";
 import type { ShadowNode } from "./node.js";
+import type { ChangeSet } from "./change-set.js";
 
 export interface ShadowProjectionStore {
   save(nodes: ShadowNode[]): Promise<void>;
   load(): Promise<ShadowNode[] | null>;   // null = 无缓存 / 读到坏数据（需 rebuild）
   invalidate(): Promise<void>;
   rebuild(derive: () => Promise<ShadowNode[]>): Promise<ShadowNode[]>;
+  /** ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。 */
+  invalidateFor?(set: ChangeSet): Promise<void>;
 }
 
 export const projectionIndexRel = () => `${SHADOW_ROOT}/shadow-index/nodes.jsonl`;
@@ -45,6 +48,14 @@ export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectio
       const nodes = await derive();
       await this.save(nodes);
       return nodes;
+    },
+    async invalidateFor(set) {
+      try {
+        const nodes = await this.load();
+        if (!nodes || nodes.length === 0) return;
+        const kept = nodes.filter((n) => !set.affects(String(n.source || "")));
+        if (kept.length !== nodes.length) await this.save(kept);
+      } catch { /* best-effort */ }
     },
   };
 };
