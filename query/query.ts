@@ -11,6 +11,7 @@ import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
+import { renderRecovery } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -153,6 +154,24 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const mappings = (deps.config.context && deps.config.context.mappings) || [];
     const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
     return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
+  }
+  // v1.5 Shadow Usability：人类友好的"记忆恢复"统一入口（Task Recovery Bundle）。
+  // 一切内容来自派生数据（task/decisions/evidence/outcomes/constraints），不 LLM 补写。
+  if (String(args?.mode) === "recall" || args?.recall) {
+    let memories = await listMemories(fs, ws);
+    const metaR = await readMeta(fs, ws);
+    const forgetR = deps.config.forget ?? {};
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaR, forgetR) && !isCompacted(metaR, mm.rel));
+    const parsed: any[] = [];
+    for (const mm of memories) {
+      const text = await readRel(fs, ws, mm.rel);
+      if (!text) continue;
+      try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
+    }
+    const tasks = deriveTasks(parsed);
+    const mappings = (deps.config.context && deps.config.context.mappings) || [];
+    const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
+    return scrubFinal(RECALL_PREFIX + renderRecovery(String(args?.topic || "").trim(), tasks, refs) + flushWarn);
   }
   // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
   if (String(args?.mode) === "identity") {

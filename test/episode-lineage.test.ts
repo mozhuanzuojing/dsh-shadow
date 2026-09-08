@@ -331,4 +331,32 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ Context Recovery：证据路径→ContextReference（P0 复核 validated/stale + P1 来源 + P2 转换痕迹）");
 }
 
+// ─────────────────────────────────────────────
+// 场景 10（v1.5 Shadow Usability / recall_shadow）：人类友好「记忆恢复」统一入口 →
+//           给一句自然查询，返回 Task Recovery Bundle（任务/状态/关键决定/观测结果），内容全派生、不 LLM 补写。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-recall.md",
+    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-recall.md",
+    `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const T = agent("T10");
+  const rec = toolRegistry.get("recall_shadow");
+  assert.ok(rec, "应注册 recall_shadow 工具");
+  const r = String(await rec.execute({ query: "Todo清理" }, { agent: T }));
+  assert.ok(!r.startsWith("ERR"), "recall_shadow 不应报错");
+  assert.ok(r.includes("记忆恢复"), "recall_shadow 应给出「记忆恢复」包");
+  assert.ok(r.includes("删除 Todo 同步链路"), "恢复包应含任务标题");
+  assert.ok(r.includes("关键决定"), "恢复包应含关键决定段");
+  assert.ok(r.includes("删除 TodoSyncJob"), "恢复包应含决策");
+  assert.ok(r.includes("85 tests passed"), "恢复包应含观测结果");
+  assert.ok(r.includes("已完成"), "恢复包应含启发式状态");
+  assert.ok(r.includes("非 LLM 补写") || r.includes("非 LLM"), "恢复包应声明内容来自派生、非 LLM 补写");
+  console.log("✔ 记忆恢复：recall_shadow(一句自然查询) → Task Recovery Bundle（派生、不 LLM 补写）");
+}
+
 console.log("ALL PASS ✅");

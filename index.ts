@@ -110,7 +110,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
             lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
             state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
-            mode: { type: "string", description: "模式开关：reflection 时从历史 ObservationTrace 发现候选规律（旁支，非 Memory 查询）；配合从 from/to 限定周期。agency-context/agency-select/agency-event 时是 Agency Boundary Kernel（可解释行动能力，非 Autonomous Agent）。delegation-context/delegation-check/delegation-event 时是 Delegated Execution Boundary。recall-forget/recall-event/recall-validation 时是 Recall Continuity（Access Transition，非 Reality Reconstruction；非 Memory Kernel）。adapt-context/adapt-change/adapt-validation 时是 Controlled Adaptation（行为策略调整，非身份/目标演化；不提升 epistemic/authority）。horizon-context/horizon-summary/horizon-event/horizon-link 时是 Long Horizon Interaction（时间可增加经验，但不能增加主体性；Longer≠MoreAuthority/History≠Purpose/Experience≠Identity）。episode 时返回 Episode Lineage（把 Event/Turn 级记忆原子按「项目/会话+时间间隔」串成连续任务；派生式，不写回记忆文件）；decision 时返回 Decision Lineage（把「决策」提升为可追踪血缘：goal 事件+用户拍板，按入口聚合；派生式）。task 时返回 Task Lifecycle（ADR-0039：把记忆派生为任务生命周期一等视图——title/trigger/objective/constraints/status/决策链/观测结果；结果只记观察，不做成/败判断；派生式投影）。context 时返回 Context Recovery（ADR-0040：把证据路径派生成 ContextReference——subject/value/source(来源)/status(validated|stale|unknown 经 fs 复核)；P2 转换痕迹 Mapping≠Source Fact 标注规则；回答「以前知道的东西现在还能不能作为行动依据」）。否则按布尔参数分派。" },
+            mode: { type: "string", description: "模式开关：reflection 时从历史 ObservationTrace 发现候选规律（旁支，非 Memory 查询）；配合从 from/to 限定周期。agency-context/agency-select/agency-event 时是 Agency Boundary Kernel（可解释行动能力，非 Autonomous Agent）。delegation-context/delegation-check/delegation-event 时是 Delegated Execution Boundary。recall-forget/recall-event/recall-validation 时是 Recall Continuity（Access Transition，非 Reality Reconstruction；非 Memory Kernel）。adapt-context/adapt-change/adapt-validation 时是 Controlled Adaptation（行为策略调整，非身份/目标演化；不提升 epistemic/authority）。horizon-context/horizon-summary/horizon-event/horizon-link 时是 Long Horizon Interaction（时间可增加经验，但不能增加主体性；Longer≠MoreAuthority/History≠Purpose/Experience≠Identity）。episode 时返回 Episode Lineage（把 Event/Turn 级记忆原子按「项目/会话+时间间隔」串成连续任务；派生式，不写回记忆文件）；decision 时返回 Decision Lineage（把「决策」提升为可追踪血缘：goal 事件+用户拍板，按入口聚合；派生式）。task 时返回 Task Lifecycle（ADR-0039：把记忆派生为任务生命周期一等视图——title/trigger/objective/constraints/status/决策链/观测结果；结果只记观察，不做成/败判断；派生式投影）。context 时返回 Context Recovery（ADR-0040：把证据路径派生成 ContextReference——subject/value/source(来源)/status(validated|stale|unknown 经 fs 复核)；P2 转换痕迹 Mapping≠Source Fact 标注规则；回答「以前知道的东西现在还能不能作为行动依据」）。recall 时是 Shadow Usability「记忆恢复」统一入口（Task Recovery Bundle——任务/状态/关键决定/证据/观测结果/当前注意，人类友好；内容全来自派生数据，不 LLM 补写理由/事实/判断）。否则按布尔参数分派。" },
             from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
             to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
             minCount: { type: "number", description: "Identity 重复性闸门：同向轨迹最小次数（默认 5）。与 mode:identity 配合。" },
@@ -218,6 +218,21 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
         execute: (args: any, exec: any) => runReadShadow(queryDeps, args, exec),
       });
+      // v1.5 Shadow Usability Layer：人类友好入口。隐藏 episode/decision/task/context 等底层模式，
+      // 只给一句自然查询，返回「记忆恢复包（Task Recovery Bundle）」。内部 = read_shadow({mode:'recall', topic})。
+      toolsService.register({
+        name: "recall_shadow",
+        description: "人类友好的「记忆恢复」入口：给一句自然语言查询（如『Todo清理』『上次 OAuth 问题』），返回一份与历史任务相关的恢复包——任务/状态/关键决定(含理由)/证据(当前是否仍有效)/观测结果/当前注意。内部把 read_shadow 的 episode/decision/task/context 视图合成一段可读内容；内容全来自派生数据，不 LLM 补写理由/事实/判断。需要快速找回『上次在做什么/为什么/做到哪』时用。",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "自然语言查询（任务/主题/入口，如『Todo清理』『上次 U8 补丁』）" },
+            limit: { type: "number", description: "最多返回的任务数，默认 1（返回最相关任务的恢复包）" },
+          },
+        },
+        output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
+        execute: (args: any, exec: any) => runReadShadow(queryDeps, { mode: "recall", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
+      });
     });
   }
 
@@ -229,8 +244,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
         name: "dsh-shadow",
         order: 40,
         text: () =>
-          "你的思维、上下文与决策沉淀在 shadow 记忆树中。如果发现当前上下文不足、需要回忆最近想过/决定过什么，" +
-          "或要回顾用户最近在往哪个方向走，请先调用 read_shadow（无参读目录索引，带 topic 可按入口穿透）再补充回答。" +
+          "你的思维、上下文与决策沉淀在 shadow 记忆树中。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」），返回一份任务恢复包；需要精细穿透时再用 `read_shadow`（mode:episode/decision/task/context）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
           "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
       });
     });
