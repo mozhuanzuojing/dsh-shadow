@@ -39,12 +39,11 @@ Episode / Replay View
 - **Episode 降级**：Episode = **人类阅读窗口（human reading window）**，**不是系统理解单位（system understanding unit）**。系统理解单位 = Task Graph。
 - **存储**：不推翻"一切皆文件"，但目录可演进：`events/`（事实，不可改）/ `tasks/`（关系）/ `projections/`（可随时重新生成）/ `archive/`。换 Markdown/SQLite/Git/Vector/Graph 都不影响模型——**核心是 `Immutable Event + Lineage Graph + Projection`。**
 
-## 与 claude-mem 的本质区别（本 ADR 强调）
+## 与「摘要式记忆」的本质区别（本 ADR 强调）
 
-> claude-mem：`Observation → Summary → Context`，优化"**给模型更多上下文**"。
-> dsh-shadow：`Event → Lineage → Task Graph → Replay`，优化"**证明过去发生了什么**"（可审计的 Experience Lineage System）。
+> dsh-shadow：`Event → Lineage → Task Graph → Replay`，优化"**证明过去发生了什么**"（可审计的 Experience Lineage System）；而不是 `Observation → Summary → Context` 那种"**给模型更多上下文**"的优化。
 
-两者是两个方向。dsh-shadow 保留**不可替代的事实层**（Memory Atom / Event），不为"省上下文"用摘要覆盖事实。
+dsh-shadow 保留**不可替代的事实层**（Memory Atom / Event），不为"省上下文"用摘要覆盖事实。
 
 ## 接受的边界（本 ADR 先冻结，实现时禁止越界）
 

@@ -12,7 +12,6 @@
 当时可选的方向：
 
 - **OpenViking**（火山引擎）——"Self-evolving Context Database for AI Agents。Unify Agent Memory, Knowledge RAG and Skills"。核心是 Context Types，自带 DB / RAG / 向量检索。
-- **claude-mem**（本机已装 MCP）——已有 chroma + `build_corpus` / `prime` / `query` / `session_start_context`。但实测 corpora 为空、query 超时，等于没在采集。
 - **自建投影文件树**（即 dsh-shadow）——用 DSH 的 `fs` 把每回合动作/记忆落成 `shadow/<日期>/<时刻>-<主题slug>.md`，`shadow/_index.md` 作说明文档 + 主题索引，`read_shadow` 可穿透。
 
 DSH 运行时事实：agent 是模型，**读文本最经济**；文件系统天然可 grep / 可链接 / 可版本化 / 可 diff；不引入外部服务则无需额外运维与授权。
@@ -29,8 +28,7 @@ DSH 运行时事实：agent 是模型，**读文本最经济**；文件系统天
 ## Alternatives Considered
 
 1. **OpenViking**：语义最强、免维护，但要额外跑一个重服务（DB / RAG），且与 DSH 的 agent 工具面需要额外集成；对「agent 缺上下文就去翻」这种低成本诉求过重。
-2. **claude-mem 向量库**：免造存储，但当前 corpora 为空、query 超时，等于从零再建一摊；语义检索对「回忆最近做过什么」并非必要。
-3. **仅静态规则提示（不采集）**：零代码，但没有「近期动态」可翻，等于没有这个能力。
+2. **仅静态规则提示（不采集）**：零代码，但没有「近期动态」可翻，等于没有这个能力。
 
 ## Consequences
 

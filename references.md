@@ -22,7 +22,6 @@
 - https://github.com/Z4nzu/hackingtool
 - https://github.com/affaan-m/ECC
 - https://github.com/google/langextract
-- https://github.com/thedotmack/claude-mem
 - https://github.com/usestrix/strix
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
@@ -34,7 +33,6 @@
 - `VectifyAI/PageIndex` — **免向量库、基于推理的 RAG/上下文索引**（`Document Index for Vectorless, Reasoning-based RAG`；Python，35.7k⭐）。与 dsh-shadow 的「不引向量库 + 分层/推理式召回」同向（呼应 ADR-0001），**已克隆到 `vendor/_src/PageIndex`**。
 - `zvec-ai/zvec-grep` — **本地优先工作区搜索（bm25 + 语义/向量 + ripgrep）**，面向人与 AI agent（TypeScript，3.1k⭐）。这正是本项目 Evidence Gateway 里 **`zg`（证据传感器）** 的检索后端实现；`evidence/zg.ts` 用它做 discover/verify，**已克隆到 `vendor/_src/zvec-grep`**。
 - `tt-a1i/archify` — 已在用的架构图/可视化插件（报告 L2）。
-- `thedotmack/claude-mem` — MCP 记忆（本机已装，corpora 空）。
 - `obra/superpowers` / `leonxlnx/taste-skill` — skills 体系/元技能（design 与能力沉淀参考）。
 - `addyosmani/agent-skills` — agent skills 汇总。
 - `usestrix/strix` — （需查，疑似 agent 相关）。
