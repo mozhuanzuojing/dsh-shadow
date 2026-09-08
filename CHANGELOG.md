@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.4] 文档清理：去掉「一切皆文件」口号（当前口径）+ package.json 描述同步
+
+**纯文档 / 注释 / 预设文案，无代码行为变化**（`npm run build`、`npx tsc --noEmit` 均 exit 0；`node test/recall-attribution.test.ts` → `ALL PASS ✅`）：
+
+- **口号清理**（口径：只清「当前口径」，历史原文保留）：`index.ts` 头注释 2 处、`core/writer.ts` 注释 1 处、`CONTEXT.md` 术语表（原「一切皆文件」行改为「一条记忆 = 一个文件」，并把该表 3 处 `shadow/` 修正为 `.shadow/`）、`agent-presets/projection/preset.yml` 的 description、`agent-presets/projection/agent.cordis.yml` 的 persona；`dist/` 重编译同步。
+- **package.json**：`description` 去掉「一切皆文件，」，与 README 口径一致。
+- **保留（历史原文，不改写）**：`adr/0001`、`adr/0039`、`adr/0043`、`MEMORY.md`。
+- **安装副本同步**：`~/.dsh/.agent-presets/projection/` 先备份（`.bak-20260908_171721`）再覆盖，SHA256 与仓库一致（`0B7C787A6F3B` / `8597A0259D6E`）。
+- **验证**：当前口径 9 个文件（源码 / 文档 / 预设 / dist / README / package.json）grep 无匹配；仓库内剩余匹配仅历史 ADR/MEMORY 与 archify 产物；回归测试 ALL PASS。
+
+
 ## [v1.12.3] 文档：README 开头重排（失败模式 / 模式路由表 / 粘贴式快速开始 / 安全边界）+ 补充材料登记
 
 **纯文档，无代码 / 配置 / 行为变化**（`npx tsc --noEmit` exit 0；改动仅 `README.md`、`references.md`）：
