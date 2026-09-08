@@ -30,15 +30,16 @@ export const scoreMemory = (text, rel, entry, tokens) => {
     }
     return score;
 };
-// v1.12.6 deprioritize（借 codegraph：把「移除」和「降权」当两件事）——命中的路径/入口前缀落在
-// recall.deprioritize 里时只降权、不移除，被降权的记忆仍可搜到、只是排名靠后。
+// v1.12.6 deprioritize（借 codegraph：把「移除」和「降权」当两件事）——命中的路径/入口**含**这些子串时
+// 只降权、不移除，被降权的记忆仍可搜到、只是排名靠后。配置可给数组或单个字符串。
 export const DEPRIORITIZE_FACTOR = 0.4;
 export const deprioritizeFactor = (rel, entry, patterns) => {
-    if (!Array.isArray(patterns) || !patterns.length)
+    const list = typeof patterns === "string" ? [patterns] : Array.isArray(patterns) ? patterns : [];
+    if (!list.length)
         return 1;
     const norm = (s) => String(s || "").toLowerCase().replace(/\\/g, "/");
     const hay = `${norm(rel)} ${norm(entry)}`;
-    for (const p of patterns) {
+    for (const p of list) {
         const q = norm(p).trim();
         if (q && hay.includes(q))
             return DEPRIORITIZE_FACTOR;
@@ -46,6 +47,8 @@ export const deprioritizeFactor = (rel, entry, patterns) => {
     return 1;
 };
 // v1.12.6 近似入口（空命中时的「下一步」用）：确定性 2-gram 重合度，只做提示，绝不冒充命中。
+// 归一化用对称式 `hit / sqrt(qGrams × eGrams)`（只除自己那侧会让长入口占便宜）；要求 hit ≥ 2，
+// 避免单个 bigram（如 "todo" 与 "mode" 共享 "od"）冒充相关。查询不足 2 字符（含单个汉字）→ 无候选。
 export const approxEntries = (query, entries, k = 3) => {
     const grams = (s) => {
         const t = String(s || "").toLowerCase().replace(/\s+/g, " ");
@@ -71,8 +74,10 @@ export const approxEntries = (query, entries, k = 3) => {
         for (const g of eg)
             if (qg.has(g))
                 hit++;
-        const s = hit / Math.sqrt(eg.length);
-        if (s > 0.35)
+        if (hit < 2)
+            continue;
+        const s = hit / Math.sqrt(qg.size * eg.length);
+        if (s >= 0.25)
             scored.push({ e: name, s });
     }
     scored.sort((a, b) => b.s - a.s || a.e.localeCompare(b.e));

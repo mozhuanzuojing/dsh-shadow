@@ -290,7 +290,18 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     available.push(s);
   }
   if (debugMode) diag.push(`可用（未冷却）${available.length}${cooledCount ? ` · 冷却 ${cooledCount}` : ""}`);
-  if (!available.length) return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)), reason: `全部命中都在冷却中（recall.cooldownTurns=${cooldownTurns}，${cooledCount} 条）` }) + (debugMode ? "\n\n" + diag.join("\n") : "");
+  if (!available.length) {
+    // 全冷却 ≠ 没找到：给的是「就是这些命中，但都在冷却」，不要把它们标成「近似候选」。
+    const cooledEntries = scored.slice(0, 3).map((s) => s.entry || s.mm.rel);
+    return (
+      noMatchText(topic, flushWarn, {
+        reason: `全部命中都在冷却中（recall.cooldownTurns=${cooldownTurns}，${cooledCount} 条）`,
+        approx: cooledEntries,
+        approxLabel: "冷却中的命中（是命中，不是近似）",
+        steps: `> 下一步：① 等 ${cooldownTurns} 回合后再查（冷却按回合计数）；② 或调低 \`recall.cooldownTurns\`；③ \`read_shadow({debug:true})\` 看完整候选。`,
+      }) + (debugMode ? "\n\n" + diag.join("\n") : "")
+    );
+  }
   const n = available.length;
   const parts: string[] = [];
   let used = 0;
@@ -314,7 +325,8 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     used += render.length;
     if (debugMode) {
       const b = s.breakdown || {};
-      diag.push(`返回 ${s.mm.rel} · 命中 ${Math.round(s.score)} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${s.deprioritized ? " · 降权(deprioritize)" : ""}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
+      const sc = Math.round(s.score * 10) / 10;
+      diag.push(`返回 ${s.mm.rel} · 命中 ${sc} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${b.deprioritized ? " · 降权(deprioritize)" : ""}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
     }
     if (s.tier !== "L0" && render.includes("…")) servedDetail.push(s.mm.rel);
   }
@@ -329,7 +341,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     droppedByLimit,
     droppedByBudget,
     droppedByCooldown: cooledCount,
-    dropped: available.filter((s) => !returnedSet.has(s.mm.rel)).slice(0, 3).map((s) => ({ entry: s.entry, score: Math.round(s.score) })),
+    dropped: scored.filter((s) => !returnedSet.has(s.mm.rel)).slice(0, 3).map((s) => ({ entry: s.entry, score: Math.round(s.score * 10) / 10 })),
   });
   if (cooldownTurns > 0 && servedDetail.length) {
     const nextServed = Object.assign({}, ledger.served || {});

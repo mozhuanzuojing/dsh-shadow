@@ -58,7 +58,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## mode 参考（`read_shadow` 的 mode 串）
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
-> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verify`/`experience`/`kg`/`observer`）分派。
+> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verify`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
 
 | 族（源码） | mode | 一句话语义 |
 |------------|------|-----------|
@@ -78,7 +78,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `offline` | SleepWindow → 压缩 → DreamArtifact + Hypothesis（`trigger`） |
 | 假设验证 `query/validation.ts` | `evidence` / `validate` / `timeline` | FutureEvidence 注册 / 假设竞争验证 / 验证历史 |
 | Epistemic `query/federation.ts` | `federation` / `federation-perspective` / `federation-diff` / `distortion` / `stability` / `reality` / `real-refer` | 投影契约交换 / 视角 / 差异 / 失真 / 稳定性 / RealityEvidence 注册 / 引用 |
-| Reality Model `query/reality-model.ts` | `model` / `model-claim` / `model-observation` | 跨类型查询 / RealityClaim（必须留 lineage）/ RealityObservation 弱事实 |
+| Reality Model `query/reality-model.ts` | `model` / `model-claim` / `model-observation` | 查一条 RealityClaim + 它的 Lineage / 由 RealityObservation 生成 RealityClaim（predicate 必须可观察）/ RealityObservation 弱事实注册 |
 | World `query/world.ts` | `world` / `world-relation` / `world-represent` | Graph 可重建 / RelationHypothesis / RepresentationObject（只接受 supported） |
 | Simulation + Action `query/sim-action.ts` | `simulate` / `candidate` / `execute` / `feedback` | 反事实模拟 / 候选 / 执行 / 反馈（Simulation≠Action≠Reality） |
 | Planning `query/planning.ts` | `plan` | 受限比较（objective 须外部来源；无 score/winner） |
@@ -93,6 +93,8 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `verify` | VerificationRun（只读只报；禁改 authority/identity） |
 
 ## 关联
+- **召回信封（v1.12.6/1.12.7）**：`read_shadow(topic)` 结果末尾的 `> 未返回的命中：N 条（命中 M · 本次返回 K）` 是**披露**不是指令；`N = M − K`（预算 / `limit` / 冷却都算），空命中给「下一步 + 近似候选（标未验证）」。
+- **`recall.deprioritize`（v1.12.6，默认空）**：命中路径/入口**含**这些子串时打分 ×0.4——**只降权不移除**（仍可搜到），用来压 `references-agents/`、`_reports/` 这类通用命名抢排位。
 - `read_shadow` 无参数 = 读「目录」；带 `topic`/`entry` = 按入口点/主题加权召回命中记忆（返回摘要行+命中片段+相关度，非整篇全文）。
 - 「说明文档」「主题索引」「意识轨迹」落在同一个 `_index.md`。
 - 记忆以**入口点 + 时间**为纲，动作为背景，思维落点为正文。

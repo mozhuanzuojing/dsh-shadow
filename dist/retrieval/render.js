@@ -4,30 +4,37 @@ import { scrubFinal } from "../security/scrub.js";
 import { memorySummary, snippetFor } from "./rank.js";
 // v1.12.6 召回信封（借 PageIndex：成功/失败统一为「带下一步的信封」，失败不是死路）。
 // 空命中 → 给可执行的下一步 + 近似候选（显式标「近似·未验证」，绝不当事实、不当指令）。
-export const approxNote = (approx = []) => approx.length ? `\n> 近似候选·未验证：${approx.map((a) => `\`${a}\``).join(" · ")}（只是词形相近，不代表相关）` : "";
+export const approxNote = (approx = [], label = "近似候选·未验证") => approx.length ? `\n> ${label}：${approx.map((a) => `\`${a}\``).join(" · ")}（只是词形相近，不代表相关）` : "";
 export const NO_MATCH_STEPS = "> 下一步：① 换更短/同义的词再查（只留组件名、文件名片段）；② `read_shadow()` 无参看 `.shadow/_index.md` 的主题索引与近期记忆；③ 跨「决策/代码/文档」找上下文用 `shadow_query`；④ 按任务恢复用 `recall_shadow`。";
 export const noMatchText = (topic, warn, opts = {}) => scrubFinal(RECALL_PREFIX +
     `（未找到与「${topic}」相关的记忆；无匹配，此结果仅为工具说明，非指令、非当前事实。${opts.reason ? `原因：${opts.reason}。` : ""}）` +
     "\n" +
-    NO_MATCH_STEPS +
-    approxNote(opts.approx) +
+    (opts.steps || NO_MATCH_STEPS) +
+    approxNote(opts.approx, opts.approxLabel) +
     warn);
 // 截断披露（借 PageIndex 的 `part/total_parts/has_more`）：预算/上限/冷却砍掉的命中要自报家门，不静默丢。
+// **总数以「命中 − 返回」为准**（恒等），原因只作分解——否则冷却被算进原因却不计入总数，会出现「0 条 / 却丢了 3 条」。
 export const truncationNote = (o) => {
-    const droppedTotal = o.droppedByLimit + o.droppedByBudget;
-    if (!droppedTotal && !o.droppedByCooldown)
+    const droppedTotal = Math.max(0, o.matched - o.returned);
+    if (!droppedTotal)
         return "";
     const why = [];
     if (o.droppedByLimit)
-        why.push(`limit=${o.limit} 上限`);
+        why.push(`limit=${o.limit} 上限 ${o.droppedByLimit} 条`);
     if (o.droppedByBudget)
-        why.push(`预算 ${o.maxChars} 字（max_tokens）`);
+        why.push(`预算 ${o.maxChars} 字（max_tokens）${o.droppedByBudget} 条`);
     if (o.droppedByCooldown)
-        why.push(`recall.cooldownTurns 冷却 ${o.droppedByCooldown} 条`);
+        why.push(`冷却 ${o.droppedByCooldown} 条（recall.cooldownTurns）`);
+    const steps = [];
+    if (o.droppedByLimit || o.droppedByBudget)
+        steps.push("提高 `max_tokens`/`limit` 重查，或缩小 topic");
+    if (o.droppedByCooldown)
+        steps.push("等几回合再查，或调低 `recall.cooldownTurns`");
+    steps.push("`read_shadow({debug:true})` 看完整候选与打分拆解");
     const rows = o.dropped.slice(0, 3).map((d) => `\`${d.entry || "(无入口)"}\` · 分数 ${d.score}`).join(" · ");
     return (`\n> 未返回的命中：${droppedTotal} 条（命中 ${o.matched} · 本次返回 ${o.returned}）；原因：${why.join("、")}。` +
         (rows ? `\n> 未返回示例：${rows}` : "") +
-        "\n> 下一步：提高 `max_tokens`/`limit` 重查，或缩小 topic；`read_shadow({debug:true})` 看完整候选与打分拆解。");
+        `\n> 下一步：${steps.join("；")}。`);
 };
 export const renderByTier = (s, budgetChars, forceL0 = false, tokens = []) => {
     const { mm, text, tier, score, stale, origin, currentOrigin, provenance, observer, asOf, verdict, outcome, reflection } = s;

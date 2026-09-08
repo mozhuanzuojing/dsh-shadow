@@ -3,6 +3,8 @@ export declare const UNSAFE_CONTROL: RegExp;
 export declare const sanitizeText: (text: unknown) => string;
 export declare const isUnsafe: (line: unknown) => boolean;
 export declare const scrubUnsafe: (s: unknown) => string;
+export declare const UNSAFE_CONTROL_DOC: RegExp;
+export declare const scrubUnsafeDoc: (s: unknown) => string;
 export declare const SYSTEM_TAG_NAMES: string[];
 export declare const SYSTEM_TAG_RE: RegExp;
 export declare const SYSTEM_TAG_RESIDUE_RE: RegExp;
