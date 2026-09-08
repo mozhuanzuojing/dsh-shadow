@@ -29,6 +29,26 @@ const bestTask = (tasks, query) => {
     return best;
 };
 const statusLabel = { active: "进行中", completed: "已完成", abandoned: "已放弃" };
+// Active Context（v1.5.1）："现在继续要记得什么"——全部来自派生数据（Decision/Outcome/Constraint/
+// 未明确理由决策/任务状态/入口），不是建议、不是推理，只是恢复。也**不**让 LLM 生成。
+export const activeContextOf = (t) => {
+    const completed = [];
+    for (const d of t.decisions.slice(0, 10))
+        completed.push(D(d.text, 40));
+    for (const o of t.outcomes.slice(0, 6))
+        completed.push(D(o, 40));
+    const unfinished = [];
+    for (const d of t.decisions)
+        if (!d.reason)
+            unfinished.push(`${D(d.text, 40)}（无明确理由）`);
+    if (t.status === "active")
+        unfinished.push("任务仍进行中（未观测到完成信号）");
+    const constraints = t.constraints.slice(0, 6);
+    const last_decision = t.decisions.length ? D(t.decisions[t.decisions.length - 1].text, 40) : "—";
+    const next_entry = t.evidence.length ? D(t.evidence[0], 48)
+        : (t.memoryRefs.length ? D(t.memoryRefs[0].split("/").slice(-2).join("/"), 48) : "—");
+    return { completed, unfinished, constraints, last_decision, next_entry };
+};
 // 恢复包：一段人类可读、全部来自派生数据的 Markdown。
 export const renderRecovery = (query, tasks, refs) => {
     const t = bestTask(tasks, String(query || ""));
@@ -80,6 +100,15 @@ export const renderRecovery = (query, tasks, refs) => {
             seg.push(`- ${u}（无明确理由/未记录）`);
         seg.push("");
     }
+    const ac = activeContextOf(t);
+    seg.push("## Active Context（现在继续，要记住什么）");
+    seg.push(`- **已完成 / 已决定**：${ac.completed.join("、") || "—"}`);
+    seg.push(`- **未完成 / 待厘清**：${ac.unfinished.join("、") || "—"}`);
+    if (ac.constraints.length)
+        seg.push(`- **约束**：${ac.constraints.join("；")}`);
+    seg.push(`- **最近决策**：${ac.last_decision}`);
+    seg.push(`- **入口 / 位置**：${ac.next_entry}`);
+    seg.push("");
     seg.push("---");
     seg.push("> 以上内容由记忆派生（Task/Decision/Evidence/Outcome），非 LLM 补写；引用前可用 `read_shadow({mode:'context'})` 复核其当前有效性。");
     return seg.join("\n");

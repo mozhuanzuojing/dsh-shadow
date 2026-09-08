@@ -355,8 +355,11 @@ const toolRegistry = new Map<string, any>();
   assert.ok(r.includes("删除 TodoSyncJob"), "恢复包应含决策");
   assert.ok(r.includes("85 tests passed"), "恢复包应含观测结果");
   assert.ok(r.includes("已完成"), "恢复包应含启发式状态");
-  assert.ok(r.includes("非 LLM 补写") || r.includes("非 LLM"), "恢复包应声明内容来自派生、非 LLM 补写");
-  console.log("✔ 记忆恢复：recall_shadow(一句自然查询) → Task Recovery Bundle（派生、不 LLM 补写）");
+  assert.ok(r.includes("Active Context"), "恢复包应含 Active Context（现在继续要记住什么）");
+  assert.ok(r.includes("已完成 / 已决定"), "Active Context 应含 已完成/已决定");
+  assert.ok(r.includes("入口 / 位置"), "Active Context 应含 入口/位置");
+  assert.ok(r.includes("非 LLM") || r.includes("非 LLM 补写"), "恢复包应声明内容来自派生、非 LLM 补写");
+  console.log("✔ 记忆恢复：recall_shadow(一句自然查询) → Task Recovery Bundle + Active Context（派生、不 LLM 补写）");
 }
 
 console.log("ALL PASS ✅");

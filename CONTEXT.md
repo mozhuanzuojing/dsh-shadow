@@ -42,6 +42,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | 启发式状态（v1.3.0） | Task 的 `active/completed/abandoned` 是**启发式观测**（由"完成/通过/放弃"等信号派生），**不是"方案正确/已确认"判断**（呼应 ADR-0037/0039） |
 | ContextReference（v1.4.0，ADR-0040 实现） | `{subject, value, source: MemoryAtom[], status: validated\|stale\|unknown}`——**不是 Memory**（Memory=曾经观察到；ContextReference=**当前是否还能用**）。答"以前知道的东西现在还能不能作为行动依据"。P0 Candidate+Revalidate（fs 复核）/ P1 Evidence Pointer / P2 Transformation Trace（`Mapping≠Source Fact`，如 `D:\ → /mnt/d/`） |
 | 记忆恢复（v1.5.0，recall_shadow） | **人类友好统一入口**：一句自然查询 → **Task Recovery Bundle**（任务/状态/启发式观测/关键决定(含理由)/证据(当前是否有效)/观测结果/当前注意/未明确理由决策）。内容全来自派生数据，**不 LLM 补写 Reason/事实/判断**；LLM 只在意图/排序参与（确定性评分默认）。底层合成 read_shadow 的 episode/decision/task/context |
+| Active Context（v1.5.1） | 恢复包里的"**现在继续要记住什么**"段：`已完成/已决定`/`未完成待厘清`/`约束`/`最近决策`/`入口位置`——**全部派生**（Decision/Outcome/未明确理由决策/Constraint/任务状态/入口），**不是建议、不是推理、只是恢复**，不 LLM 生成。补上 Cursor 式"Continue where you left off" |
 | Entity / State / Rule / Reconstruction（提议，ADR-0041，未实现） | **Entity**=观察到的可复用对象（路径/文件/模块/服务），非 LLM 创造；**State**=Context Resume Point（`state/current-task`，非 Memory）；**Rule**=永远约束（`rules/workspace`，与"曾经发生"分离）；**Context Reconstruction**=Planner(LLM 选择)+Resolver+Builder→Context Bundle（**带证据来源**）。禁 LLM 创造 Entity/补事实/生成 memory/补 reason；Summary≠Atom、State≠Memory |
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
