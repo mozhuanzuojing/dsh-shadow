@@ -3,6 +3,18 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.5] 文档：README 补「默认开关总表」「谁能调用权限轴」「给 agent 的文档入口」+ 安全表补降级/取消
+
+**纯文档，无代码 / 配置 / 行为变化**（改动仅 `README.md`；`npx tsc --noEmit` exit 0；`node test/recall-attribution.test.ts` → `ALL PASS ✅`）：
+
+- **补齐 4 条参考材料里尚未落地的部分**（v1.12.3 已吸收失败模式表 / 模式路由表 / 粘贴式安装 / 安全边界对照，本轮补剩余）：
+  - **「默认开关（装完什么都不动会怎样）」表**（借 hyperframes「安装克制：核心集常驻、其余按需装，不会在背后偷偷拉全套」）：15 行覆盖采集、`summary`、`queryLog`、`episodes`、`recall`（含 `cooldownTurns`/`debug`）、`retention`、`forget`、`compact`、`llmRecall`、`projectionStore`、`knowledgeEngine`、`kg`、`evidenceProvider`；默认值逐项对 `core/types.ts` 的 `ShadowConfig` + `core/writer-core.ts` / `query/observatory.ts` / `core/forget.ts` / `core/projection-store.ts` / `query/reads.ts` 的判定语句核对（`=== false` 才关=默认开：采集/摘要/查询观测/episodes；`!== true` 即关=默认关：其余）。
+  - **「谁能调用（用户显式 vs 模型自动）」表**（借 mattpocock/skills 的权限轴）：模型可自动调用 = 三个只读工具及其 `debug`/`verify`/`kg` 变体；仅用户显式要求 = 开 `retention`/`forget`/`compact`/`projectionStore`/`knowledgeEngine`、`writeConsent: true` 后的落盘。
+  - **开头加「给 agent 读的入口」一行**（借 OpenAI 指南的机器可读文档入口）：`AGENTS.md` / `CONTEXT.md` / `adr/`；仓库无 `llms.txt`，用现有三处代替，不新建文件。
+  - **安全边界表第 4 行补「支持取消」**：写明每个 LLM 增强（摘要 / 语义召回 / 推理导航 / 知识导航）都有 `timeoutMs`，失败或超时静默退回确定性路径、不阻塞主路径。
+- **验证**：`npx tsc --noEmit` exit 0；`node test/recall-attribution.test.ts` → `ALL PASS ✅`；两个新表逐行对照源码默认值判定语句；`git diff --stat` 仅 `README.md` + `package.json` + `CHANGELOG.md`。
+
+
 ## [v1.12.4] 文档清理：去掉「一切皆文件」口号（当前口径）+ package.json 描述同步
 
 **纯文档 / 注释 / 预设文案，无代码行为变化**（`npm run build`、`npx tsc --noEmit` 均 exit 0；`node test/recall-attribution.test.ts` → `ALL PASS ✅`）：

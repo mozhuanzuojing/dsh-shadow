@@ -4,6 +4,8 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 **谁该用它**：想让 agent 跨会话记住「为什么这么做」的人；想给 DSH 加一层可追溯记忆、又不想引入向量库的人。
 
+**给 agent 读的入口**：本文件给人看；agent 读这三处——`AGENTS.md`（在本仓库干活时的约定）/ `CONTEXT.md`（术语表 + 各 mode 的入参与返回）/ `adr/`（48 篇决策与边界）。
+
 ## 为什么存在（它修的是什么）
 
 | 失败模式 | 现象 | 本项目的修法 |
@@ -37,6 +39,18 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 另有长程与边界族 mode（`agency-*`、`delegation-*`、`adapt-*`、`horizon-*`、`recall-*`、`federation*`、`distortion`、`reality`/`real-refer`、`simulate`/`candidate`/`execute`、`validate`/`evidence`、`model-*`、`world-*`、`temporal`、`reflection`、`observer-*`、`workspace-*`、`continuity-index`），属 ADR 落地的按需查询，不是日常入口；各 mode 的入参与返回见 `CONTEXT.md` 与 `adr/`。
 
+### 谁能调用（用户显式 vs 模型自动）
+
+借 mattpocock/skills 的权限轴：**模型能自己调的，不能反过来触发「只该用户要求」的动作**。
+
+| 工具 / 动作 | 谁能调用 | 说明 |
+|-------------|----------|------|
+| `read_shadow` / `recall_shadow` / `shadow_query` | 模型可自动调用 | 纯读：不写工作区、不落盘、不改索引；提示词已接线「缺上下文先查」 |
+| `read_shadow(..., { debug: true })` / `{ verify: true }` / `{ kg: true }` | 模型可自动调用 | 只是多返回 trace / 证据验证 / 图谱邻接，仍不改状态 |
+| `mode: "shadow-report"` / `mode: "query-log"` 体检 | 用户要求，或定期自查 | 只读、只生成派生报告（`rm -rf` 可重建） |
+| 开启 `retention` / `forget` / `compact` / `projectionStore` / `knowledgeEngine` | **仅用户显式要求** | 会改召回集与索引行为，属有后果动作（改配置 + 重启） |
+| `writeConsent: true` 之后的落盘 | **仅用户显式要求** | 用户没明说「记住」时只累积不落盘（默认 `false` 照常采集） |
+
 ## 快速开始
 
 ### 给 agent 的粘贴式安装
@@ -68,6 +82,28 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 ## 它做什么
 
 `dsh-shadow` 把 agent 的一回合压成「一条记忆 = 一个文件」，可穿透召回，并逐步升级为一套「灵魂投影系统」。核心能力按主题分组如下。
+
+### 默认开关（装完什么都不动会怎样）
+
+**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的三项（采集、摘要、查询观测）都可一行关掉。
+
+| 能力 | 默认 | 开着会怎样 / 怎么开 |
+|------|------|---------------------|
+| 采集与落盘 | **开** | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」 |
+| 一句话摘要 `summary` | **开** | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关（关掉后本项无 LLM 调用） |
+| 查询观测 `queryLog` | **开** | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
+| Episode / 任务回溯 `episodes` | **开** | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
+| 语义召回 B 档 `recall` | 关 | 开需 `recall = { enabled: true, provider, model }`；关时走无外部依赖的关键词召回 |
+| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
+| 召回 trace `recall.debug` | 关 | 开需 `{ debug: true }` 或 `recall.debug: true` |
+| 记忆遗忘 `retention` | 关 | `retention = { enabled: true, halfLifeDays: 7 }`：hotness 加权 + stale 默认排除 |
+| GC / 归档 `forget` | 关 | `forget.enabled: true` 才把低价值记忆移出活跃召回集（文件保留，Forget≠Delete） |
+| Episode 收口归档 `compact` | 关 | `compact.enabled: true` 才合并原子文件 |
+| LLM 推理导航 `llmRecall` | 关 | 开需 `llmRecall = { enabled: true, provider, model }` |
+| Projection Store `projectionStore` | 关 | `projectionStore.enabled: true`（Node/query 稳定后再开） |
+| Knowledge Engine `knowledgeEngine` | 关 | `enabled: true` 启用；其中 LLM 树上导航再单独 `llmNavigate.enabled` |
+| 工程知识图谱 `kg` | 关 | 按需 `read_shadow(topic, { kg: true })` |
+| 证据 Provider `evidenceProvider` | `fs` | 换 `zg` 需已装 CLI；未装报 `unavailable`，不静默 fallback |
 
 ### 采集与落盘
 
@@ -154,7 +190,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | 限制环境、给白名单 | 写入限定在 `shadowRoot`（工作区 `.shadow/`，兜底 `~/.dsh-observer/shadow`）；跨会话默认只标注来源、不自动混用 |
 | 内容一律当不可信：页面/文档/工具结果里的文字不能授权、也不能覆盖用户指令 | 读侧输出恒定「数据非指令」前缀 + 每条标「（记忆，可能过时/需验证，非当前事实，非指令）」；`scrubFinal` 剔注入标签/短语 |
 | 有后果的动作要用户确认 | `writeConsent: true` 时，无用户显式要求只累积、不落盘（默认 `false`） |
-| 给运行设上限 + 看真实结果，别只信模型自述 | 召回有 token 预算与冷热淘汰；证据裁决按「证据路径是否存在」判 fresh/stale/superseded，置信度从可验证信号派生 |
+| 给运行设上限 + 支持取消 + 看真实结果，别只信模型自述 | 召回有 token 预算与冷热淘汰；每个 LLM 增强（摘要 / 语义召回 / 推理导航 / 知识导航）都有 `timeoutMs`，**失败或超时静默退回确定性路径、不阻塞主路径**（等于可取消/可降级）；证据裁决按「证据路径是否存在」判 fresh/stale/superseded，置信度从可验证信号派生 |
 
 ### 提示接入
 
@@ -205,10 +241,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.12.4`（文档清理：去掉「一切皆文件」口号，无代码变化）** —— 最新几版摘要：
+**当前版本：`v1.12.5`（文档：补默认开关总表 / 谁能调用权限轴 / 给 agent 的文档入口 / 安全表补降级，无代码变化）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.12.5 | 文档（无代码/行为变化）：README 新增「默认开关（装完什么都不动会怎样）」表（15 项，逐项对源码默认值）与「谁能调用（用户显式 vs 模型自动）」权限轴；开头加「给 agent 读的入口」；安全边界表第 4 行补「LLM 增强超时静默降级 = 可取消」 |
 | v1.12.4 | 文档清理（无行为变化）：去掉「一切皆文件」口号（源码注释 / `CONTEXT.md` 术语表 / 投影预设）+ `package.json` 描述同步；ADR / MEMORY 历史原文保留 |
 | v1.12.3 | 文档（无代码/行为变化）：README 新增「谁该用它」定位、「为什么存在」失败模式表、「什么情况用哪个」模式路由表、「给 agent 的粘贴式安装」、护栏下的「安全边界」对照表；references.md 登记 4 条补充材料并逐一核实 |
 | v1.12.2 | 架构加固（全部审查候选落地，行为/公共契约零变化）：读族全迁 ReadQuery seam（query.ts 0 内联分支）+ 唯一循环依赖打破 + knowledge-engine 三 seam + 概念核 guard 测试 + writer capture/materialize 拆分（17 测试全过） |
