@@ -13,7 +13,7 @@ import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { loadOrBuildProjection } from "../core/projection-store.js";
-import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderRetrieved } from "../core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderRetrieved, flattenSections } from "../core/knowledge-engine.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
@@ -212,8 +212,17 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     const tree = await createKnowledgeEngine(deps.config).build(parsedK);
     const topicK = String(args?.topic || "").trim();
     if (topicK) {
-      const hits = retrieveKnowledge(tree, topicK);
-      return scrubFinal(RECALL_PREFIX + renderRetrieved(hits, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航为后续 gated 步，事实仍派生）" + flushWarn);
+      // v1.10.0：LLM 树上导航（PageIndex `chat=` 步，ADR-0047）：LLM 只选章节编号，事实仍从树派生。
+      let hits = retrieveKnowledge(tree, topicK);
+      if (deps.knowledgeNavigate) {
+        const sections = flattenSections(tree);
+        const picks = await deps.knowledgeNavigate(topicK, sections.map((s) => ({ id: s.id, title: s.title, content: s.content })));
+        if (picks.length) {
+          const picked = picks.map((i) => sections[i]).filter(Boolean);
+          return scrubFinal(RECALL_PREFIX + renderRetrieved(picked, topicK) + "\n\n（v1.10.0 LLM 树上导航：LLM 只选章节编号，事实仍从树派生；未纳入生成）" + flushWarn);
+        }
+      }
+      return scrubFinal(RECALL_PREFIX + renderRetrieved(hits, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航未启用/失败 → 确定性检索）" + flushWarn);
     }
     // 无 topic → corpus 级 file 树（PageIndex File System：模块→文件→章节）
     const corpus = buildCorpusTree(parsedK);

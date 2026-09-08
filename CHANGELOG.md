@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.10.0] Knowledge Engine LLM 树上导航（PageIndex `chat=` 步，ADR-0047 落地）
+
+**把 PageIndex 的"检索 = LLM 在树上推理"落地为 dsh-shadow 的 Knowledge 检索**（`mode:"knowledge"` + topic）：
+- **LLM 树上导航**：`knowledgeNavigate`（`writer.ts`，同 `recallSelect` 模式）——给候选章节（`flattenSections` 展平树），LLM 只**选章节编号**（导航/排序），**事实仍从树派生**（页面说"让最强大模型在树上推理检索"，我们只让它选章节，不生成内容）。
+- **边界（ADR-0043/0047）**：LLM **只导航/排序，绝不创造事实/关系**；`config.knowledgeEngine.llmNavigate.{enabled,provider,model}` 门控（默认 off）；失败/未配置 → 回退确定性 `retrieveKnowledge`（行为不变）。
+- **`mode:"knowledge"`**：topic → LLM 导航（可选）+ 树上检索；无 topic → corpus 级 file 树（模块→文件→章节）。
+- **配置**：`ShadowConfig.knowledgeEngine.llmNavigate`；`ShadowCollector/ShadowQueryDeps` 加 `knowledgeNavigate`。
+- **验证**：knowledge-navigate（端到端，LLM 未配置→确定性回退不崩溃）+ knowledge-engine（corpus 树/检索/flattenSections）+ index-engine + 全量回归 ALL PASS。
+
+
 ## [v1.9.0] Projection Store + Index Engine + Knowledge Engine（Phase 1B/2/3 骨架）
 
 **把 v1.8.0 的可证明事实层接上「性能缓存 + 候选生成 + 规范树」**，全部**可插拔、默认关**（不改现有行为），严格遵守 ADR-0046 边界：

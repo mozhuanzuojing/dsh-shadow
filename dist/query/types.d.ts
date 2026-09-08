@@ -11,6 +11,12 @@ export interface ShadowQueryDeps {
     expandTerms: (topic: string) => Promise<string[]>;
     /** recall_shadow 的 LLM 回导航（v1.6）：给候选任务，LLM 选最相关编号；失败返回 []（回退确定性）。 */
     recallSelect?: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;
+    /** Knowledge Engine 的 LLM 树上导航（v1.10.0，PageIndex `chat=` 步）：给候选章节，LLM 选编号；失败 []（回退确定性检索）。 */
+    knowledgeNavigate?: (query: string, candidates: {
+        id: string;
+        title: string;
+        content: string;
+    }[]) => Promise<number[]>;
     /** 懒构建索引：read_shadow 无参读索引前调用（flush 只置 dirty，不重建）。 */
     ensureIndex: (ws: string) => Promise<void>;
 }

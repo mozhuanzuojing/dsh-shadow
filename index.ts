@@ -79,6 +79,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     verifyEvidence,
     expandTerms: collector.expandTerms,
     recallSelect: collector.recallSelect,
+    knowledgeNavigate: collector.knowledgeNavigate,
     ensureIndex: (ws: string) => collector.ensureIndex(ws),
   };
   if (typeof context.inject === "function") {

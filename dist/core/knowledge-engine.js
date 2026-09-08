@@ -73,11 +73,26 @@ export const retrieveKnowledge = (tree, query, limit = 10) => {
     walk(tree.root);
     return out.slice(0, limit);
 };
-/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。 */
+/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。接受 KnowNode / KnowledgeSection 形状。 */
 export const renderRetrieved = (nodes, query) => {
     if (!nodes.length)
         return `（knowledge retrieval 未命中：${query}）`;
     return `# Knowledge Retrieval · ${query}\n\n` + nodes.map((n) => `- [${n.level}] ${n.title} — ${n.content || "（节点）"}`).join("\n");
+};
+/** 把树展平成"章节候选"（含内容的节点 + 叶子）。LLM 导航只在这些里选编号。 */
+export const flattenSections = (tree, limit = 50) => {
+    const out = [];
+    const walk = (nodes) => {
+        for (const n of nodes) {
+            if (out.length >= limit)
+                return;
+            out.push({ id: String(out.length), title: n.title, content: n.content || "", level: n.level });
+            if (n.children.length)
+                walk(n.children);
+        }
+    };
+    walk(tree.root);
+    return out;
 };
 /** 语料级 file-level 树（PageIndex File System）：模块→文件→章节，跨整个项目推理。 */
 export const buildCorpusTree = (parsed) => {

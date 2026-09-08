@@ -137,10 +137,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.9.0`（Projection Store + Index/Knowledge Engine）** —— 最新几版摘要：
+**当前版本：`v1.10.0`（Knowledge Engine LLM 树上导航 / PageIndex `chat=` 步）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.10.0 | Knowledge Engine LLM 树上导航：`mode:"knowledge"` + topic → LLM 只选章节编号，事实仍从树派生（`knowledgeNavigate`，默认 off，失败回退确定性检索） |
 | v1.9.0 | Projection Store + Index Engine + Knowledge Engine：可插拔性能缓存/候选生成/规范树（默认关；zg/PageIndex 是 provider，未装 unavailable） |
 | v1.8.0 | Evidence Lineage Layer：AtomLineage + EvidenceRef + AtomKind + Validation Gate（metadata memory / 无证据 decision 不进查询），Evidence Density 按 type/kind/createdBy 报告 |
 | v1.7.2 | Shadow Fitness Report：query-log → shadow-report.md（Evidence Density/稳定性/类型分布/潜在缺失类型），作为是否升级索引层的客观依据 |

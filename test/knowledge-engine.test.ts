@@ -1,6 +1,6 @@
 // dsh-shadow —— Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk）。
 import assert from "node:assert/strict";
-import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved } from "../dist/core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved, flattenSections } from "../dist/core/knowledge-engine.js";
 import { parseMemory } from "../dist/core/episode.js";
 
 // 一段带层级标题的规范文档
@@ -45,5 +45,9 @@ const corpus = buildCorpusTree([parsed]);
 assert.ok(corpus.some((m) => m.title === "spec"), "corpus 树含 spec 模块");
 assert.ok(corpus[0].children.length >= 1, "corpus 树模块下含文件节点");
 assert.ok(corpus[0].children.some((f) => f.children.length >= 1), "文件节点下含章节子树");
-console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树（ADR-0047 思想）");
+// —— v1.10.0：flattenSections（LLM 导航候选章节）——
+const sections = flattenSections(tree);
+assert.ok(sections.length >= 1, "flattenSections 应产出候选章节");
+assert.ok(sections.every((s) => typeof s.id === "string" && s.title), "候选含 id/title");
+console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树 + flattenSections（ADR-0047 + v1.10.0）");
 console.log("ALL PASS ✅");

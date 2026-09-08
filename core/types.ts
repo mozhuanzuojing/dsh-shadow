@@ -34,7 +34,7 @@ export interface ShadowConfig {
   /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback)。 */
   indexEngine?: { provider?: "fs" | "zg" };
   /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）：provider 仅占位，默认 off。 */
-  knowledgeEngine?: { enabled?: boolean; provider?: string };
+  knowledgeEngine?: { enabled?: boolean; provider?: string; llmNavigate?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number } };
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
   evidenceProvider?: string;
   /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */

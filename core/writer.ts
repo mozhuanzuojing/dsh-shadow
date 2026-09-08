@@ -29,6 +29,8 @@ export interface ShadowCollector {
   expandTerms: (topic: string) => Promise<string[]>;
   /** recall_shadow 的 LLM 推理导航（v1.6）：给候选任务列表，LLM 选最相关编号；失败返回 []。 */
   recallSelect: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;
+  /** Knowledge Engine 的 LLM 树上导航（v1.10.0，PageIndex `chat=` 步）：给候选章节，LLM 选编号；失败 []。 */
+  knowledgeNavigate: (query: string, candidates: { id: string; title: string; content: string }[]) => Promise<number[]>;
   /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
   ensureIndex: (ws: string) => Promise<void>;
   /** 事件 handler（index.ts 用 context.on 绑定）。 */
@@ -513,6 +515,39 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     }
   };
 
+  // v1.10.0 Knowledge Engine 的 LLM 树上导航（PageIndex `chat=` 步，ADR-0047 思想）：
+  // 只让 LLM【选章节编号】（导航/排序），不生成事实/理由（事实仍从树派生）。
+  // 失败/未配置 → 返回 []，调用方回退到确定性 retrieveKnowledge（行为不变）。
+  const knowledgeNavigate = async (query: string, candidates: { id: string; title: string; content: string }[]) => {
+    const cfg = config.knowledgeEngine?.llmNavigate ?? {};
+    if (cfg.enabled !== true || !candidates.length) return [];
+    const llm = context.get("llm");
+    if (!llm) return [];
+    const route = routeFor({ provider: cfg.provider, model: cfg.model });
+    if (!route) return [];
+    const maxTokens = Math.max(4, Number(cfg.maxTokens) || 12);
+    const timeoutMs = Math.max(1, Number(cfg.timeoutMs) || 6000);
+    const system = "你是知识树检索规划器（像人翻长文档定位正确章节）。给定查询与候选章节，选出最相关章节的编号（逗号分隔，从 0 开始，可多选）。只输出编号，不要解释、标点或 Markdown。";
+    const framed = `查询：${query}\n候选章节：\n` + candidates.map((c, i) => `${i}. ${c.title}${c.content ? " — " + c.content : ""}`).join("\n");
+    const messages = [{ id: `shk-${Date.now()}`, role: "user", content: [{ type: "text", text: framed }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      let text = "";
+      for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
+        if (!chunk) continue;
+        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
+        else if (chunk.type === "finish") { if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return []; break; }
+      }
+      const idxs = (String(text || "").match(/\d+/g) || []).map(Number).filter((i) => i >= 0 && i < candidates.length);
+      return Array.from(new Set(idxs)).slice(0, 6);
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   // 懒构建索引：flush 只置 dirty（不重建）；这里才在「确实要读索引」时构建/落盘。
   const ensureIndex = async (ws: string) => {
     if (!ws) return;
@@ -535,6 +570,7 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     getFlushWarn,
     expandTerms,
     recallSelect,
+    knowledgeNavigate,
     ensureIndex,
     onFsObserved,
     onToolsResult,

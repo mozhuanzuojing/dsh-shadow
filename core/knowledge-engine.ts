@@ -90,10 +90,27 @@ export const retrieveKnowledge = (tree: KnowledgeTree, query: string, limit = 10
   return out.slice(0, limit);
 };
 
-/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。 */
-export const renderRetrieved = (nodes: KnowNode[], query: string): string => {
+/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。接受 KnowNode / KnowledgeSection 形状。 */
+export const renderRetrieved = (nodes: { title: string; content: string; level: number }[], query: string): string => {
   if (!nodes.length) return `（knowledge retrieval 未命中：${query}）`;
   return `# Knowledge Retrieval · ${query}\n\n` + nodes.map((n) => `- [${n.level}] ${n.title} — ${n.content || "（节点）"}`).join("\n");
+};
+
+/** 候选章节（供 LLM 导航 step：只给编号，事实仍从树派生）。 */
+export interface KnowledgeSection { id: string; title: string; content: string; level: number }
+
+/** 把树展平成"章节候选"（含内容的节点 + 叶子）。LLM 导航只在这些里选编号。 */
+export const flattenSections = (tree: KnowledgeTree, limit = 50): KnowledgeSection[] => {
+  const out: KnowledgeSection[] = [];
+  const walk = (nodes: KnowNode[]) => {
+    for (const n of nodes) {
+      if (out.length >= limit) return;
+      out.push({ id: String(out.length), title: n.title, content: n.content || "", level: n.level });
+      if (n.children.length) walk(n.children);
+    }
+  };
+  walk(tree.root);
+  return out;
 };
 
 /** 语料级 file-level 树（PageIndex File System）：模块→文件→章节，跨整个项目推理。 */

@@ -13,6 +13,12 @@ export interface ShadowCollector {
     expandTerms: (topic: string) => Promise<string[]>;
     /** recall_shadow 的 LLM 推理导航（v1.6）：给候选任务列表，LLM 选最相关编号；失败返回 []。 */
     recallSelect: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;
+    /** Knowledge Engine 的 LLM 树上导航（v1.10.0，PageIndex `chat=` 步）：给候选章节，LLM 选编号；失败 []。 */
+    knowledgeNavigate: (query: string, candidates: {
+        id: string;
+        title: string;
+        content: string;
+    }[]) => Promise<number[]>;
     /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
     ensureIndex: (ws: string) => Promise<void>;
     /** 事件 handler（index.ts 用 context.on 绑定）。 */

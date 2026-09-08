@@ -80,6 +80,13 @@ export interface ShadowConfig {
     knowledgeEngine?: {
         enabled?: boolean;
         provider?: string;
+        llmNavigate?: {
+            enabled?: boolean;
+            provider?: string;
+            model?: string;
+            maxTokens?: number;
+            timeoutMs?: number;
+        };
     };
     /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
     evidenceProvider?: string;

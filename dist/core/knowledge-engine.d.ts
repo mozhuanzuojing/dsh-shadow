@@ -22,7 +22,20 @@ export declare const createKnowledgeEngine: (config: any) => KnowledgeEngine;
 export declare const renderKnowledgeTree: (tree: KnowledgeTree) => string;
 /** 语句检索：在树里按 query 匹配节点（自然章节为单元；LLM 导航是后续 gated 步，此处为确定性走树）。 */
 export declare const retrieveKnowledge: (tree: KnowledgeTree, query: string, limit?: number) => KnowNode[];
-/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。 */
-export declare const renderRetrieved: (nodes: KnowNode[], query: string) => string;
+/** 渲染检索命中节点（可追溯：标题+内容+层级路径）。接受 KnowNode / KnowledgeSection 形状。 */
+export declare const renderRetrieved: (nodes: {
+    title: string;
+    content: string;
+    level: number;
+}[], query: string) => string;
+/** 候选章节（供 LLM 导航 step：只给编号，事实仍从树派生）。 */
+export interface KnowledgeSection {
+    id: string;
+    title: string;
+    content: string;
+    level: number;
+}
+/** 把树展平成"章节候选"（含内容的节点 + 叶子）。LLM 导航只在这些里选编号。 */
+export declare const flattenSections: (tree: KnowledgeTree, limit?: number) => KnowledgeSection[];
 /** 语料级 file-level 树（PageIndex File System）：模块→文件→章节，跨整个项目推理。 */
 export declare const buildCorpusTree: (parsed: ParsedMemory[]) => KnowNode[];
