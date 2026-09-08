@@ -55,6 +55,43 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | 命中片段 | 召回时从记忆正文抽出的、最相关的一行（优先非纯动作行），用于节约上下文而非整篇全文 |
 | 摘要 | 每回合记忆落盘后由 `llm.stream` 生成的一句中文概括，回填记忆文件头（`> 摘要：…`）；失败/超时则不写 |
 
+## mode 参考（`read_shadow` 的 mode 串）
+
+> **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
+> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verify`/`experience`/`kg`/`observer`）分派。
+
+| 族（源码） | mode | 一句话语义 |
+|------------|------|-----------|
+| 核心读 `query/reads.ts` | `episode` / `decision` | Episode Lineage（按「项目/会话+时间间隔」串连续任务）/ Decision Lineage（goal 事件 + 用户拍板，按入口聚合） |
+| | `task` | Task Lifecycle（ADR-0039：title/trigger/objective/constraints/status/决策链/观测结果） |
+| | `context` | Context Recovery（ADR-0040：ContextReference `subject/value/source/status`，答「以前知道的还能不能用」） |
+| | `recall` | Task Recovery Bundle（人类友好恢复包；`recall_shadow` 内部即此） |
+| | `query` | Shadow Projection（ShadowNode 跨类型查询，带 evidence；`shadow_query` 内部即此） |
+| | `query-log` | Shadow Query Observatory（查询观测汇总 + 重复查询的 Node 稳定性） |
+| | `shadow-report` | Shadow Fitness Report（Evidence Density / 类型分布 / 潜在缺失类型） |
+| | `shadow-manifest` | Shadow Manifest（记忆树清单/可观测） |
+| | `index` | Index Engine 候选生成（配合 `projectionStore`） |
+| | `knowledge` | Knowledge Engine 规范/文档树（**不转 vector**） |
+| Observer 时间/梦核 `query/observer-kernel.ts` | `reflection` | 从 ObservationTrace 发现候选规律（旁支；`from`/`to` 限周期） |
+| | `identity` | Identity 主体锚（`minCount`/`minRecency`/`maxContradiction`/`halfLifeDays` 闸门） |
+| | `temporal` | 时间坐标系重放（`at`） |
+| | `offline` | SleepWindow → 压缩 → DreamArtifact + Hypothesis（`trigger`） |
+| 假设验证 `query/validation.ts` | `evidence` / `validate` / `timeline` | FutureEvidence 注册 / 假设竞争验证 / 验证历史 |
+| Epistemic `query/federation.ts` | `federation` / `federation-perspective` / `federation-diff` / `distortion` / `stability` / `reality` / `real-refer` | 投影契约交换 / 视角 / 差异 / 失真 / 稳定性 / RealityEvidence 注册 / 引用 |
+| Reality Model `query/reality-model.ts` | `model` / `model-claim` / `model-observation` | 跨类型查询 / RealityClaim（必须留 lineage）/ RealityObservation 弱事实 |
+| World `query/world.ts` | `world` / `world-relation` / `world-represent` | Graph 可重建 / RelationHypothesis / RepresentationObject（只接受 supported） |
+| Simulation + Action `query/sim-action.ts` | `simulate` / `candidate` / `execute` / `feedback` | 反事实模拟 / 候选 / 执行 / 反馈（Simulation≠Action≠Reality） |
+| Planning `query/planning.ts` | `plan` | 受限比较（objective 须外部来源；无 score/winner） |
+| Agency `query/agency.ts` | `agency-context` / `agency-select` / `agency-event` | 可解释行动能力（Agency≠Autonomy；`authoritySource` 禁 self） |
+| Delegation `query/delegation.ts` | `delegation-context` / `delegation-check` / `delegation-event` | 委派边界（`revocation`/`expiration` 优先于执行历史） |
+| Recall Continuity `query/recall.ts` | `recall-forget` / `recall-event` / `recall-validation` | 访问转移（非现实重建；不提升证据等级） |
+| Adaptation `query/adaptation.ts` | `adapt-context` / `adapt-change` / `adapt-validation` | 行为策略调整（禁 objective/authority/identity） |
+| Long Horizon `query/horizon.ts` | `horizon-context` / `horizon-summary` / `horizon-event` / `horizon-link` | 长期交互（时间增经验，不增主体性） |
+| Observer Continuity / Verify `query/contverify.ts` | `observer-config` / `observer-boundary` / `observer-context` / `observer-lineage` | 配置 / 边界 / 观察事件 / 血缘 |
+| | `workspace-record` / `workspace-context` / `continuity-index` | 工作区记录 / 上下文 / 连续性索引 |
+| | `recall-index` | RecallIndex（导航非内容） |
+| | `verify` | VerificationRun（只读只报；禁改 authority/identity） |
+
 ## 关联
 - `read_shadow` 无参数 = 读「目录」；带 `topic`/`entry` = 按入口点/主题加权召回命中记忆（返回摘要行+命中片段+相关度，非整篇全文）。
 - 「说明文档」「主题索引」「意识轨迹」落在同一个 `_index.md`。
