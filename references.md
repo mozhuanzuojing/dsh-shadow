@@ -24,11 +24,13 @@
 - https://github.com/google/langextract
 - https://github.com/thedotmack/claude-mem
 - https://github.com/usestrix/strix
+- https://github.com/VectifyAI/PageIndex
 
 ## 按与本项目（dsh-shadow / 投影模式 / 能力扩展）的关联度粗分
 
 **强相关（记忆 / 设计拷打 / 能力扩展 / DSH 生态）**
 - `volcengine/OpenViking` — 自进化上下文库（本项目 ADR 的对照项）。
+- `VectifyAI/PageIndex` — **免向量库、基于推理的 RAG/上下文索引**（`Document Index for Vectorless, Reasoning-based RAG`；Python，35.7k⭐）。与 dsh-shadow 的「不引向量库 + 分层/推理式召回」同向（呼应 ADR-0001），**已克隆到 `vendor/_src/PageIndex`**。
 - `tt-a1i/archify` — 已在用的架构图/可视化插件（报告 L2）。
 - `thedotmack/claude-mem` — MCP 记忆（本机已装，corpora 空）。
 - `obra/superpowers` / `leonxlnx/taste-skill` — skills 体系/元技能（design 与能力沉淀参考）。
