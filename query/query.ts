@@ -12,6 +12,9 @@ import { dispatchReadQuery } from "./reads.js";
 import { runContVerify } from "./contverify.js";
 import { runObserverKernel } from "./observer-kernel.js";
 import { runValidation } from "./validation.js";
+import { runFederation } from "./federation.js";
+import { runRealityModel } from "./reality-model.js";
+import { runWorld } from "./world.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -28,21 +31,6 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
-import { packetOf, renderPacket, assertPacketBarrier } from "../federation/contract.js";
-import { compareProjections, renderDistortion } from "../federation/guard.js";
-import { perspectiveOf, renderPerspective, perspectiveIsClean } from "../federation/perspective.js";
-import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../federation/reality.js";
-import { differenceOf, renderDifference } from "../federation/difference.js";
-import { perspectiveStateOf, renderStability } from "../federation/stability.js";
-import { observationOf, renderObservation } from "../reality/observation.js";
-import { registerObservation, readObservations } from "../reality/registry.js";
-import { claimOf as claimOfReality, renderClaim, isObservablePredicate } from "../reality/claim/engine.js";
-import { writeClaim, readClaims } from "../reality/claim/persist.js";
-import { buildRepresentationGraph } from "../world/builder/representation-builder.js";
-import { writeGraph } from "../world/persistence/persist.js";
-import { createRepresentationFromClaims, renderAdmission } from "../world/guard/claim-admission.js";
-import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../world/guard/relation-guard.js";
-import { explain } from "../world/explain/explain.js";
 import { simulate } from "../simulation/engine/simulator.js";
 import { assertAssumptionAndNotFact } from "../simulation/guard/assumption-guard.js";
 import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/guard/reality-boundary.js";
@@ -86,87 +74,14 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (viaObserverKernel !== undefined) return viaObserverKernel;
   const viaValidation = await runValidation(deps, args, { fs, ws, flushWarn });
   if (viaValidation !== undefined) return viaValidation;
-  // v0.28.1 Epistemic Kernel：Federation 只交换 ObservationClaim（投影契约，非权限）。
-  if (String(args?.mode) === "federation") {
-    const p = packetOf({ sourceObserverId: String(args?.sourceObserverId || agent?.id || "unknown"), observationClaim: String(args?.obsClaim || ""), lens: args?.lens as string, visible: args?.visible || [], hidden: args?.hidden || [], distortion: args?.distortion || [] });
-    const barrier = assertPacketBarrier(p);
-    return scrubFinal(RECALL_PREFIX + renderPacket(p) + (barrier.ok ? "\n（boundary OK：Identity/Memory/Dream 不交换）" : `\n（boundary FAIL: ${barrier.reasons.join("、")}）`) + flushWarn);
-  }
-  if (String(args?.mode) === "distortion") {
-    const d = compareProjections({ observerId: String(args?.sourceObserverId || "A"), visible: args?.visibleA || [], hidden: args?.hiddenA || [] }, { observerId: String(args?.targetObserverId || "B"), visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
-    return scrubFinal(RECALL_PREFIX + renderDistortion(d) + flushWarn);
-  }
-  // v0.29 Observer Federation Kernel：Perspective Exchange + Reality Evidence Registry + Difference + Stability。
-  if (String(args?.mode) === "federation-perspective") {
-    const p = perspectiveOf({ observerId: String(args?.sourceObserverId || agent?.id || "unknown"), temporalReference: String(args?.temporalReference || ""), observationClaim: String(args?.obsClaim || ""), lens: args?.lens as string, visible: args?.visible || [], hidden: args?.hidden || [], observationConfidence: Number(args?.obsConfidence) || 0.5, validationConfidence: Number(args?.valConfidence) || 0.5 });
-    const clean = perspectiveIsClean(p);
-    return scrubFinal(RECALL_PREFIX + renderPerspective(p) + (clean.ok ? "\n（perspective OK：不携带 Memory/Identity/Dream/Knowledge，confidence 已拆分）" : `\n（perspective FAIL: ${clean.reasons.join("、")}）`) + flushWarn);
-  }
-  if (String(args?.mode) === "reality") {
-    const ev = await registerRealityEvidence(fs, ws, { observedAt: String(args?.observedAt || today()), source: String(args?.sourceObserverId || "unknown"), observation: String(args?.observation || ""), linkedHypothesis: args?.linkedHypothesis || [] });
-    return scrubFinal(RECALL_PREFIX + renderRealityEvidence(ev) + flushWarn);
-  }
-  if (String(args?.mode) === "real-refer") {
-    const ev = await referenceEvidence(fs, ws, String(args?.realityId || ""), String(args?.sourceObserverId || "unknown"));
-    return scrubFinal(RECALL_PREFIX + (ev ? renderRealityEvidence(ev) : `（无 reality evidence ${args?.realityId}）`) + flushWarn);
-  }
-  if (String(args?.mode) === "federation-diff") {
-    const pa = perspectiveOf({ observerId: String(args?.sourceObserverId || "A"), observationClaim: String(args?.obsClaim || "claim-A"), lens: args?.lensA as string, visible: args?.visibleA || [], hidden: args?.hiddenA || [] });
-    const pb = perspectiveOf({ observerId: String(args?.targetObserverId || "B"), observationClaim: String(args?.obsClaimB || "claim-B"), lens: args?.lensB as string, visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
-    const d = differenceOf(pa, pb, String(args?.realityEvidenceRef || ""));
-    return scrubFinal(RECALL_PREFIX + renderDifference(d) + flushWarn);
-  }
-  if (String(args?.mode) === "stability") {
-    const evs = await readRealityEvidence(fs, ws);
-    const ev = evs.find((e) => e.id === String(args?.realityId || "")) || null;
-    const state = perspectiveStateOf(ev, Boolean(args?.hasValidation));
-    return scrubFinal(RECALL_PREFIX + renderStability(state) + flushWarn);
-  }
-  // v0.30 Reality Model Kernel：RealityObservation（弱事实）→ RealityClaim（必须保留 lineage）→ mode:"model" 查询。
-  if (String(args?.mode) === "model-observation") {
-    const ro = observationOf({ observedAt: String(args?.observedAt || today()), subjectRef: String(args?.subject || ""), sourcePerspectives: args?.sourcePerspectives || [String(args?.sourceObserverId || "unknown")], observation: String(args?.observation || ""), temporalContext: String(args?.temporalContext || today()), validationRefs: args?.validationRefs || [] });
-    await registerObservation(fs, ws, ro);
-    return scrubFinal(RECALL_PREFIX + renderObservation(ro) + flushWarn);
-  }
-  if (String(args?.mode) === "model-claim") {
-    const obs = await readObservations(fs, ws, String(args?.subject || ""));
-    const validations = (args?.validations as any) || [];
-    const c = claimOfReality({ observations: obs, validations });
-    if (!c) return scrubFinal(RECALL_PREFIX + "（无 RealityObservation：仅 Temporal/Federation 不足以生成 RealityClaim）" + flushWarn);
-    if (!isObservablePredicate(c.predicate)) return scrubFinal(RECALL_PREFIX + "[Rejected] predicate_not_observable（RealityClaim ≠ EvaluationClaim：predicate 必须属 observable set）" + flushWarn);
-    await writeClaim(fs, ws, c);
-    return scrubFinal(RECALL_PREFIX + renderClaim(c) + flushWarn);
-  }
-  if (String(args?.mode) === "model") {
-    const claims = await readClaims(fs, ws);
-    const subject = String(args?.subject || "");
-    const claim = claims.find((c) => !subject || c.subjectRef === subject || c.subject === subject || c.id === String(args?.claimId || "")) || null;
-    if (!claim) return scrubFinal(RECALL_PREFIX + "（无匹配 RealityClaim）" + flushWarn);
-    const obss = await readObservations(fs, ws, claim.subjectRef || claim.subject);
-    return scrubFinal(RECALL_PREFIX + renderClaim(claim) + `\n[Lineage] 为什么系统认为它存在：\n` + obss.map((o) => `  - ${o.observation} (perspectives: ${o.sourcePerspectives.join("、") || "—"})`).join("\n") + flushWarn);
-  }
-  // v0.31 World Representation Kernel：RepresentationObject（只接受 supported）+ RelationHypothesis（恒 hypothesis）+ Graph（可重建）。
-  if (String(args?.mode) === "world-represent") {
-    const claims = await readClaims(fs, ws);
-    const subject = String(args?.subject || "");
-    const target = claims.filter((c) => !subject || c.subjectRef === subject || c.subject === subject);
-    const r = createRepresentationFromClaims(target);
-    return scrubFinal(RECALL_PREFIX + renderAdmission(r) + flushWarn);
-  }
-  if (String(args?.mode) === "world-relation") {
-    const rh = relationHypothesisOf({ from: String(args?.from || ""), to: String(args?.to || ""), relation: String(args?.relation || ""), evidence: args?.evidence || [] });
-    return scrubFinal(RECALL_PREFIX + renderRelation(rh) + (isRelationHypothesis(rh) ? "" : "\n（relation guard FAIL）") + flushWarn);
-  }
-  if (String(args?.mode) === "world") {
-    const claims = await readClaims(fs, ws);
-    const validations = claims.flatMap((c) => c.validationHistory.map((id) => ({ id })));
-    const graph = buildRepresentationGraph(claims, validations);
-    await writeGraph(fs, ws, graph);
-    const subject = String(args?.subject || "");
-    const supportedSubject = claims.find((c) => c.status === "supported" && (!subject || c.subjectRef === subject || c.subject === subject));
-    const obss = await readObservations(fs, ws, supportedSubject ? (supportedSubject.subjectRef || supportedSubject.subject) : subject);
-    return scrubFinal(RECALL_PREFIX + explain(graph, subject, obss, claims) + flushWarn);
-  }
+  // v0.28.1–v0.31 federation（Epistemic Kernel）+ reality-model（Reality Model Kernel）+
+  // world（World Representation Kernel）三族已迁入 query/federation.ts / reality-model.ts / world.ts。
+  const viaFederation = await runFederation(deps, args, { fs, ws, flushWarn, agent });
+  if (viaFederation !== undefined) return viaFederation;
+  const viaRealityModel = await runRealityModel(deps, args, { fs, ws, flushWarn });
+  if (viaRealityModel !== undefined) return viaRealityModel;
+  const viaWorld = await runWorld(deps, args, { fs, ws, flushWarn });
+  if (viaWorld !== undefined) return viaWorld;
   // v0.32 Counterfactual Simulation：Simulation 是 Representation 的函数（+显式假设+规则），不产 RealityClaim/不改 Identity。
   if (String(args?.mode) === "simulate") {
     const condition = String(args?.condition || "");
