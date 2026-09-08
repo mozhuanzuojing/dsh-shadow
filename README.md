@@ -86,7 +86,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 版本 / 变更
 
-> **v1.2.2 · Episode 收口归档（对齐参考：会话级聚合+只留摘要+原始归档）**：参考 claude-mem 按**会话聚合**（非一事件一文件），dsh-shadow 补上"**收口**"——`compact:{enabled,gapMinutes}`（默认关）：当一个 episode 结束（出现下一个 episode）时，把该 episode 的所有 turn 原子**合并成 1 个 consolidated 文件**（保留 决策/动作/材料/结果/用户消息），个体原子 mark `status=compacted` 并**移出活跃索引/召回**（文件保留、可回放，Forget≠Delete）。活跃树由"每 turn 一文件"→"每 episode 一 consolidated 文件 + 当前 open episode 原子"，**热集文件数大降**。读侧召回/索引/Episode/Decision 均跳过 `compacted` 原子。**验证**：场景 7（收口生成 consolidated、原子压缩归档、决策可回放）+ 全量回归 ALL PASS。
+> **v1.2.2 · Episode 收口归档（对齐参考：会话级聚合+只留摘要+原始归档）**：参考 claude-mem 按**会话聚合**（非一事件一文件），dsh-shadow 补上"**收口**"——`compact:{enabled,gapMinutes}`（默认关）：当一个 episode 结束（出现下一个 episode）时，把该 episode 的所有 turn 原子**合并成 1 个 consolidated 文件**（保留 决策/动作/材料/结果/用户消息），个体原子 mark `status=compacted` 并**移出活跃索引/召回**（文件保留、可回放，Forget≠Delete）。活跃树由"每 turn 一文件"→"每 episode 一 consolidated 文件 + 当前 open episode 原子"，**热集文件数大降**。读侧召回/索引/Episode/Decision 均跳过 `compacted` 原子。**验证**：场景 7（收口生成 consolidated、原子压缩归档、决策可回放）+ 全量回归 ALL PASS。**边界冻结：ADR-0038（Episode Consolidation Boundary）**——Episode = 投影非事实、Compact≠Forget、Summary≠Reality、Closed Episode≠Completed Truth、**Replay 必须活过收口**；且**不做方向 A（写侧按 episode 成文件）**，Episode 是 derived boundary 而非 write boundary，写侧仍产 Memory Atom（事实层）。
 
 > **v1.2.1 · 索引懒构建 + 缓存隔离（v1.2.0 修正）**：①**索引改懒构建**——flush 只写文件+增补缓存+置 dirty，**不再同步 rebuildIndex**；`read_shadow` 无参读索引时才触发 `ensureIndex` 构建/落盘（索引=派生产物，不应每次写都全量重建）。②**修复 L2 缓存跨 workspace 隔离 bug**（v1.2.0 的单 Map 缓存会把 A 工作区记忆混进 B 的索引）——改为**按 ws 嵌套**，dirty 也按 ws。③冷启动全量读只在首次读索引时发生一次。**验证**：场景 11 隔离回归 + 场景 16/2/6 懒索引各自 ALL PASS。
 
