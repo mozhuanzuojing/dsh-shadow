@@ -3,6 +3,20 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.3] 文档：README 开头重排（失败模式 / 模式路由表 / 粘贴式快速开始 / 安全边界）+ 补充材料登记
+
+**纯文档，无代码 / 配置 / 行为变化**（`npx tsc --noEmit` exit 0；改动仅 `README.md`、`references.md`）：
+
+- **README（+68 行；正文能力清单与安装/验证节未动）**：
+  - 「谁该用它」一句定位；
+  - 「为什么存在」7 条失败模式 → 修法表（换会话失忆 / 只记动作不记理由 / 召回无证据 / 记忆过时 / 系统提示与密钥混入 / 把记忆当指令 / 上下文膨胀）；
+  - 「什么情况用哪个」模式路由表：14 个日常入口（`read_shadow()` 无参 / `topic` / `debug` / `decision` / `episode` / `task` / `context` / `observer` / `identity`·`soul`·`taste`·`experience`·`judgment` / `knowledge` / `verify` / `shadow-report`·`query-log` + `recall_shadow` + `shadow_query`）+ 长程与边界族 mode 一行，mode 串按 `query/reads.ts`、`query/*.ts` 实测核对；
+  - 「快速开始」给 agent 的粘贴式安装提示（link: 依赖 + bundles + `pnpm install` + `dump-config` + 落盘验证 + `recall_shadow` 冒烟）；
+  - 护栏下新增「安全边界」表：把 OpenAI《Computer use》指南四条控制（限制环境 / 内容当不可信 / 有后果动作要确认 / 设上限并看真实结果）对照到本项目落点。
+- **references.md（+55 行）**：登记用户 2026-09-08 提供的 4 条补充材料并逐一联网核实——OpenAI《Computer use》工具指南、`browser-use/browser-use`、`heygen-com/hyperframes`、`mattpocock/skills`（star / 许可 / 最近提交按 GitHub API 记录），每条给出「是什么 / 值得借鉴什么 / 与 dsh-shadow 的关系」，末尾汇总四条共同点。
+- **验证**：表格完整性脚本 4 个表 0 不一致、无转义竖线残留；`ContextStatus` 与 `core/context.ts` 一致；`npx tsc --noEmit` exit 0；`git diff --stat` 仅文档两文件。
+
+
 ## [v1.12.2] 架构加固：读族 seam 全迁 + fan-in 收窄 + 概念核 guard 测试 + writer capture/materialize 拆分
 
 **把架构审查候选 1/2/3/4/5 全部落地，行为零变化、公共契约不变（read_shadow/recall_shadow/shadow_query + mode 串 + execute(args)），17 测试文件全过：**
