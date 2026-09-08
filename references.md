@@ -45,3 +45,58 @@
 - `asgeirtj/system_prompts_leaks`、`shadcn-ui/ui`、`datalab-to/marker`、`DataExpert-io/data-engineer-handbook`、`harry0703/MoneyPrinterTurbo`、`Z4nzu/hackingtool`、`affaan-m/ECC`、`google/langextract`、`firecrawl/open-lovable`。
 
 > 备注：本表只是"记录 + 粗分"，未逐一核实仓库内容与最新状态；使用时需按 research-before-action 三步核对。
+
+## 补充材料（2026-09-08 用户提供，本轮已逐一核实）
+
+> 用户 2026-09-08 提供的 4 条补充材料。**已联网核实**（GitHub API + 官网文档，抓取时间 2026-09-08 17:12 +08:00），
+> 每条给出「是什么 / 值得借鉴什么 / 与 dsh-shadow 的关系」。star 数为抓取当时数值，按 API 原样记录。
+
+### 1. OpenAI《Computer use》工具指南
+
+- 链接：https://developers.openai.com/api/docs/guides/tools-computer-use
+- **是什么**：官方讲「让模型操作浏览器/桌面」的集成指南。两条接入路径——让模型写代码（Playwright / PyAutoGUI）来操作界面，或让模型返回结构化鼠标键盘动作、由宿主应用执行；配套讲保持会话状态、把观察结果回传、以及安全边界。
+- **值得借鉴**：
+  - **安全四条**：①限制环境（隔离浏览器/虚拟机 + 站点与动作白名单）；②**把屏幕内容当不可信**——页面、文档、工具结果里的文字**不能授权、不能覆盖用户指令**；③有后果的动作（付款、外发数据、破坏性变更、把敏感信息填进表单）要用户确认；④给运行设步数/时间/花费上限 + 支持取消 + **看真实结果，不要只信模型自述**。
+  - **文档形态**：页面 URL 加 `.md` 即得机器可读版本，另有 `llms.txt` 索引——说明「给 agent 读的文档」值得单独留一个机器可读入口。
+  - **状态与观察**：跨调用保持环境、把观察回传，是「多轮记忆」在工具层的同构做法。
+- **与 dsh-shadow 的关系**：第②条与读侧「数据非指令」前缀 + `scrubFinal` 同构，可作为护栏写法的**外部权威参照**；第④条「看真实结果」对应本项目的证据裁决 / `verify`。**不引入其代码或依赖**。
+
+### 2. browser-use/browser-use
+
+- 链接：https://github.com/browser-use/browser-use
+- **是什么**：让 AI agent 像人一样用浏览器的开源框架（Python，MIT，`🌐 Make websites accessible for AI agents`）。
+- **核实**：113,015 ⭐ / 12,468 fork，主语言 Python，最近提交 2026-09-07。
+- **值得借鉴（README 写法）**：开头「它能做什么」用**任务描述 + 录屏 + 示例代码链接**，而不是先讲架构；给 agent 用的**一行粘贴式安装提示**（复制进 Claude Code / Codex / Cursor 就能自己装好）；开源库与云服务分开讲清，不让读者猜。
+- **与 dsh-shadow 的关系**：浏览器自动化能力的参考实现（同清单里已有 `browser-harness`）。**不引入依赖**。
+
+### 3. heygen-com/hyperframes
+
+- 链接：https://github.com/heygen-com/hyperframes
+- **是什么**：把 HTML/CSS/动画渲染成确定性 MP4 的开源框架（TypeScript，Apache-2.0，`Write HTML. Render video. Built for agents.`）。本机已装它的 9 个技能与 CLI，是报告 L3 视频链路。
+- **核实**：47,082 ⭐ / 4,362 fork，最近提交 2026-09-08。
+- **值得借鉴（README 写法，对 dsh-shadow 最直接）**：
+  - 一句话定位 + 一排入口链接（Quickstart / Showcase / Playground / Catalog / Docs）；
+  - **「先用 agent」的快速开始**：一条安装命令 + 一句示例提示；
+  - **路由器技能 + 领域技能表**：一张表用「**Use when**」列说清「什么情况下用哪个」，比按主题罗列能力更好用；
+  - **安装克制**：核心集常驻、其余按需装，并明确「不会在背后偷偷拉全套」。
+- **与 dsh-shadow 的关系**：dsh-shadow 的读侧同样模式很多（`read_shadow` 的 episode / decision / task / context / query / observation…），目前 README 是**按主题罗列能力**，缺一张「什么情况用哪个模式」的路由表——这是最值得抄的一条。
+
+### 4. mattpocock/skills
+
+- 链接：https://github.com/mattpocock/skills
+- **是什么**：作者日常在用的 agent 技能集（Shell + `SKILL.md`，MIT，`Skills for Real Engineers`）。
+- **核实**：256,453 ⭐ / 21,605 fork，最近提交 2026-09-04（star 数偏大，按 GitHub API 原样记录）。
+- **值得借鉴（README 写法 + 技能组织）**：
+  - 正文主干是「**为什么存在**」→ 四类失败模式（#1 没按我要的做 / #2 太啰嗦 / #3 代码跑不起来 / #4 建成一坨泥），每类给「**问题 → 修法 → 对应技能链接**」——先讲痛点再讲能力；
+  - **按「谁能调用」分类**：用户显式调用的技能 vs 模型可自动调用的技能，并规定前者可以调后者、后者不能调前者（很清晰的一条权限轴）；
+  - `CONTEXT.md`（共享语言）+ ADR 内联更新，与本项目已有 CONTEXT.md / ADR 做法同源；
+  - 有专门的 `writing-for-agents` 技能（讲怎么写给 agent 看的文档）。
+- **与 dsh-shadow 的关系**：dsh-shadow 的模式里有「用户显式调用」与「提示词里自动使用」的区别，可借这条轴把工具面说清；「为什么存在 → 失败模式 → 修法」的结构可作 README 开头。
+
+### 四条共同点 → 对 dsh-shadow README 的直接结论
+
+1. 开头一句话定位 + 谁该用它；
+2. 先讲「解决什么痛点 / 失败模式」，再讲能力清单；
+3. **一张「什么情况用哪个」的路由表**（本项目最缺）；
+4. 给 agent 的粘贴式快速开始 + 机器可读文档入口；
+5. 明确写边界 / 限制 / 安全，而不是只讲能力。
