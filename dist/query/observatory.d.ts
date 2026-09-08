@@ -20,7 +20,33 @@ export interface QueryObservation {
     nodeTypes: Record<string, number>;
     nodeTitles: string[];
     latencyMs: number;
+    evidenceByType?: Record<string, {
+        total: number;
+        ev: number;
+    }>;
+    evidenceByKind?: Record<string, {
+        total: number;
+        ev: number;
+    }>;
+    evidenceByCreatedBy?: Record<string, {
+        total: number;
+        ev: number;
+    }>;
 }
+export declare const evidenceBreakdownOf: (nodes: any[]) => {
+    byType: Record<string, {
+        total: number;
+        ev: number;
+    }>;
+    byKind: Record<string, {
+        total: number;
+        ev: number;
+    }>;
+    byCreatedBy: Record<string, {
+        total: number;
+        ev: number;
+    }>;
+};
 export declare const recordQueryObservation: (fs: any, ws: string, cfg: any, obs: QueryObservation) => Promise<void>;
 /** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
 export declare const summarizeQueryLog: (fs: any, ws: string) => Promise<any>;
@@ -44,6 +70,9 @@ export declare const buildFitnessReport: (agg: any, parsed: ParsedMemory[]) => {
         currentTypes: Record<string, number>;
     }[];
     observations: string[];
+    evByType: any;
+    evByKind: any;
+    evByCreatedBy: any;
 };
 export declare const renderFitnessReport: (r: any) => string;
 /** 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。 */

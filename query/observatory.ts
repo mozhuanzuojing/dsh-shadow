@@ -32,10 +32,33 @@ export interface QueryObservation {
   nodeTypes: Record<string, number>;
   nodeTitles: string[];
   latencyMs: number;
+  // v1.8.0：Evidence Density 按 type/kind/createdBy 维度统计（返回节点里带 evidence 的比例）。
+  evidenceByType?: Record<string, { total: number; ev: number }>;
+  evidenceByKind?: Record<string, { total: number; ev: number }>;
+  evidenceByCreatedBy?: Record<string, { total: number; ev: number }>;
 }
 
 const scrubQuery = (s: string) => scrubUnsafe(sanitizeText(s)).slice(0, 200);
 const tidy = (s: string) => scrubUnsafe(s).slice(0, 60);
+
+// v1.8.0：从返回节点算出 Evidence Density 的三维分布（type/kind/createdBy 各自的 total/ev）。
+export const evidenceBreakdownOf = (nodes: any[]): { byType: Record<string, { total: number; ev: number }>; byKind: Record<string, { total: number; ev: number }>; byCreatedBy: Record<string, { total: number; ev: number }> } => {
+  const inc = (m: Record<string, { total: number; ev: number }>, k: string, hasEv: boolean) => {
+    m[k] = m[k] || { total: 0, ev: 0 };
+    m[k].total++;
+    if (hasEv) m[k].ev++;
+  };
+  const byType: Record<string, { total: number; ev: number }> = {};
+  const byKind: Record<string, { total: number; ev: number }> = {};
+  const byCreatedBy: Record<string, { total: number; ev: number }> = {};
+  for (const n of nodes) {
+    const hasEv = Array.isArray(n.evidence) && n.evidence.length > 0;
+    inc(byType, String(n.type || "memory"), hasEv);
+    if (n.kind) inc(byKind, String(n.kind), hasEv);
+    if (n.createdBy) inc(byCreatedBy, String(n.createdBy), hasEv);
+  }
+  return { byType, byKind, byCreatedBy };
+};
 
 const logRel = (date: string) => `${SHADOW_ROOT}/query-log/${date}.jsonl`;
 
@@ -79,6 +102,17 @@ const aggregateObservations = (obs: any[]) => {
   const avg = (k: string) => sum(k) / total;
   const typeDist: Record<string, number> = {};
   const scopeDist: Record<string, number> = {};
+  // v1.8.0：Evidence Density 三维聚合（跨观测累加）。
+  const evByType: Record<string, { total: number; ev: number }> = {};
+  const evByKind: Record<string, { total: number; ev: number }> = {};
+  const evByCreatedBy: Record<string, { total: number; ev: number }> = {};
+  const merge = (dst: Record<string, { total: number; ev: number }>, src?: Record<string, { total: number; ev: number }>) => {
+    for (const [k, v] of Object.entries(src || {})) {
+      dst[k] = dst[k] || { total: 0, ev: 0 };
+      dst[k].total += Number(v.total) || 0;
+      dst[k].ev += Number(v.ev) || 0;
+    }
+  };
   let evSum = 0, evNodeSum = 0, relSum = 0, relNodeSum = 0;
   const byQuery = new Map<string, any[]>();
   for (const o of obs) {
@@ -89,6 +123,9 @@ const aggregateObservations = (obs: any[]) => {
     evNodeSum += Number(o.evidenceNodes) || 0;
     relSum += Number(o.relationCount) || 0;
     relNodeSum += Number(o.relationNodes) || 0;
+    merge(evByType, o.evidenceByType);
+    merge(evByKind, o.evidenceByKind);
+    merge(evByCreatedBy, o.evidenceByCreatedBy);
     const q = String(o.query || "");
     if (!byQuery.has(q)) byQuery.set(q, []);
     byQuery.get(q)!.push(o);
@@ -116,7 +153,16 @@ const aggregateObservations = (obs: any[]) => {
     repeatQueries, stableQueries, driftQueries,
     drift,
     avgLatency: Math.round(avg("latencyMs")),
+    evByType, evByKind, evByCreatedBy,   // v1.8.0 Evidence Density 三维
   };
+};
+
+// 渲染一个「维度 → 覆盖率」段（total/ev → %；ev 为 0 的维度显示 0%）。
+const renderDim = (label: string, m: Record<string, { total: number; ev: number }>): string | null => {
+  const entries = Object.entries(m);
+  if (!entries.length) return null;
+  const parts = entries.map(([k, v]) => `${k} ${v.total ? Math.round((v.ev / v.total) * 100) : 0}%`).join(" · ");
+  return `- ${label}：${parts}`;
 };
 
 export const renderQueryLogSummary = (s: any, topic: string): string => {
@@ -192,7 +238,7 @@ export const buildFitnessReport = (agg: any, parsed: ParsedMemory[]) => {
     } else observations.push("重复查询为 0：样本不足，先积累重复查询再评稳定性。");
     for (const m of missing) observations.push(`检测到「${m.type}」型内容 ${m.count} 处，当前归类 [${Object.entries(m.currentTypes).map(([t, c]) => `${t}×${c}`).join("、")}]：如真实查询反复需要，再考虑补 ${m.type} 类型。`);
   }
-  return { date: today(), agg, evidenceDensity, missing, observations };
+  return { date: today(), agg, evidenceDensity, missing, observations, evByType: agg.evByType, evByKind: agg.evByKind, evByCreatedBy: agg.evByCreatedBy };
 };
 
 export const renderFitnessReport = (r: any): string => {
@@ -212,6 +258,9 @@ export const renderFitnessReport = (r: any): string => {
     `## Evidence Density（核心指标：dsh-shadow vs 普通 RAG）`,
     `- 有证据节点 / 总返回节点 = **${r.evidenceDensity}%**（阈值 ${EVIDENCE_HEALTHY}%）`,
     `- 平均每条返回节点证据数：${a.avgEvidence}`,
+    ...(renderDim("按 type", r.evByType) ? [renderDim("按 type", r.evByType)] : []),
+    ...(renderDim("按 kind（metadata 已排除）", r.evByKind) ? [renderDim("按 kind（metadata 已排除）", r.evByKind)] : []),
+    ...(renderDim("按 createdBy", r.evByCreatedBy) ? [renderDim("按 createdBy", r.evByCreatedBy)] : []),
     ``,
     `## Stability（Node 是否稳定）`,
     `- 重复查询 ${a.repeatQueries} · 稳定 ${a.stableQueries} · 漂移 ${a.driftQueries}`,

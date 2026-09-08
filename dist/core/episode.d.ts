@@ -1,3 +1,4 @@
+import type { AtomKind, AtomLineage, CreatedBy, EvidenceRef } from "./lineage.js";
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
     rel: string;
@@ -14,6 +15,8 @@ export interface ParsedMemory {
     actions: string[];
     thinkLines: string[];
     body: string;
+    kind?: AtomKind;
+    lineage?: AtomLineage;
 }
 /** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
 export interface DecisionEvent {
@@ -45,6 +48,25 @@ export interface Episode {
     }[];
     materials: string[];
 }
+export declare const materialsToEvidence: (materials: string[]) => EvidenceRef[];
+export declare const deriveCreatedBy: (p: {
+    decisionEvents: DecisionEvent[];
+    userMessages: string[];
+    materials: string[];
+}) => CreatedBy;
+export declare const deriveAtomKind: (p: {
+    entry: string;
+    materials: string[];
+    decisions: string[];
+    goal: string;
+    userMessages: string[];
+}) => AtomKind;
+export declare const deriveLineage: (p: {
+    source?: string;
+    createdBy: CreatedBy;
+    materials: string[];
+    createdAt: string;
+}) => AtomLineage;
 export declare const parseMemory: (text: string, rel: string, name: string) => ParsedMemory;
 export interface DeriveEpisodesOpts {
     gapMinutes?: number;

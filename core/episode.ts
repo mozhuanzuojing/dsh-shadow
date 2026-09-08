@@ -12,6 +12,7 @@
 // 数据流：Events → Trace → Memory Atom → Episode/Decision（派生）→ 可穿透 Recall。
 
 import { scrubUnsafe } from "../security/scrub.js";
+import type { AtomKind, AtomLineage, CreatedBy, EvidenceRef } from "./lineage.js";
 
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
@@ -29,6 +30,9 @@ export interface ParsedMemory {
   actions: string[];    // 动作行（改/读 + 调用）
   thinkLines: string[]; // 非动作正文行（思维/结论，供"为什么"）
   body: string;         // 完整正文（含线索头），供标题/摘要兜底
+  // v1.8.0 Evidence Lineage：从可观察信号派生（无 LLM / event-sourced）。可选=兼容旧 Atom/合成构造。
+  kind?: AtomKind;                // memory 二级属性（experience/metadata/session/task/artifact）
+  lineage?: AtomLineage;          // 为什么存在/来自哪里（source≠evidence）
 }
 
 /** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
@@ -64,6 +68,36 @@ interface Meta {
 const fieldOf = (text: string, key: string) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
 
 const stripPrompt = (s: string) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
+
+// ── v1.8.0 Evidence Lineage：派生读侧（纯函数、无 LLM、只读可观察信号）──
+// materials → EvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
+export const materialsToEvidence = (materials: string[]): EvidenceRef[] =>
+  materials.map((m) => ({ type: "file", locator: scrubUnsafe(String(m || "")).slice(0, 200) }));
+
+// createdBy：优先决策源（user 早于 agent），其次用户消息→user，材料→tool，兜底 agent。
+export const deriveCreatedBy = (p: { decisionEvents: DecisionEvent[]; userMessages: string[]; materials: string[] }): CreatedBy => {
+  if (p.decisionEvents.length) return p.decisionEvents.some((e) => e.source === "user") ? "user" : "agent";
+  if (p.userMessages.length) return "user";
+  if (p.materials.length) return "tool";
+  return "agent";
+};
+
+// kind：memory 二级属性（非新 type）。决策→experience；todo/plan 内容→task；
+// 无材料且为会话元数据入口→metadata；其余→experience。
+export const deriveAtomKind = (p: { entry: string; materials: string[]; decisions: string[]; goal: string; userMessages: string[] }): AtomKind => {
+  if (p.decisions.length || p.goal) return "experience";
+  const text = `${p.entry} ${[...p.materials, ...p.userMessages, p.goal].join(" ")}`.toLowerCase();
+  if (/todo|plan|待办|任务|尚未|未完成|next|backlog/.test(text)) return "task";
+  if (!p.materials.length && (p.entry === "shadow" || p.userMessages.length)) return "metadata";
+  return "experience";
+};
+
+export const deriveLineage = (p: { source?: string; createdBy: CreatedBy; materials: string[]; createdAt: string }): AtomLineage => ({
+  source: scrubUnsafe(String(p.source || "")).trim().slice(0, 80) || "unknown",
+  createdBy: p.createdBy,
+  evidence: materialsToEvidence(p.materials),
+  createdAt: p.createdAt,
+});
 
 export const parseMemory = (text: string, rel: string, name: string): ParsedMemory => {
   const body = String(text || "");
@@ -132,7 +166,11 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
   }
   for (const ev of decisionEvents) if (!ev.reason && reasonsBySource[ev.source]) ev.reason = reasonsBySource[ev.source];
   const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
-  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
+  const ns = time.replace(/(\d{2})(\d{2})(\d{2})/, "$1:$2:$3");
+  const createdAt = `${date} ${ns || "00:00:00"}`;
+  const kind = deriveAtomKind({ entry, materials, decisions: uniq(decisions), goal, userMessages: uniq(userMessages) });
+  const lineage = deriveLineage({ source: fieldOf(body, "来源会话"), createdBy: deriveCreatedBy({ decisionEvents, userMessages: uniq(userMessages), materials }), materials, createdAt });
+  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body, kind, lineage };
 };
 
 // ── 时间辅助 ──

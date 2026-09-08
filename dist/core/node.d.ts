@@ -1,4 +1,5 @@
 import type { ParsedMemory } from "./episode.js";
+import type { AtomKind, CreatedBy } from "./lineage.js";
 export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
 export interface ShadowRel {
     type: string;
@@ -13,6 +14,8 @@ export interface ShadowNode {
     content: string[];
     evidence: string[];
     relations: ShadowRel[];
+    kind?: AtomKind;
+    createdBy?: CreatedBy;
 }
 export declare const nodeTypeOf: (p: ParsedMemory) => NodeType;
 export declare const deriveShadowNodes: (parsed: ParsedMemory[]) => ShadowNode[];

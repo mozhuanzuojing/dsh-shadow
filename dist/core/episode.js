@@ -14,6 +14,37 @@ import { scrubUnsafe } from "../security/scrub.js";
 // ── 解析一条记忆 ──
 const fieldOf = (text, key) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
 const stripPrompt = (s) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
+// ── v1.8.0 Evidence Lineage：派生读侧（纯函数、无 LLM、只读可观察信号）──
+// materials → EvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
+export const materialsToEvidence = (materials) => materials.map((m) => ({ type: "file", locator: scrubUnsafe(String(m || "")).slice(0, 200) }));
+// createdBy：优先决策源（user 早于 agent），其次用户消息→user，材料→tool，兜底 agent。
+export const deriveCreatedBy = (p) => {
+    if (p.decisionEvents.length)
+        return p.decisionEvents.some((e) => e.source === "user") ? "user" : "agent";
+    if (p.userMessages.length)
+        return "user";
+    if (p.materials.length)
+        return "tool";
+    return "agent";
+};
+// kind：memory 二级属性（非新 type）。决策→experience；todo/plan 内容→task；
+// 无材料且为会话元数据入口→metadata；其余→experience。
+export const deriveAtomKind = (p) => {
+    if (p.decisions.length || p.goal)
+        return "experience";
+    const text = `${p.entry} ${[...p.materials, ...p.userMessages, p.goal].join(" ")}`.toLowerCase();
+    if (/todo|plan|待办|任务|尚未|未完成|next|backlog/.test(text))
+        return "task";
+    if (!p.materials.length && (p.entry === "shadow" || p.userMessages.length))
+        return "metadata";
+    return "experience";
+};
+export const deriveLineage = (p) => ({
+    source: scrubUnsafe(String(p.source || "")).trim().slice(0, 80) || "unknown",
+    createdBy: p.createdBy,
+    evidence: materialsToEvidence(p.materials),
+    createdAt: p.createdAt,
+});
 export const parseMemory = (text, rel, name) => {
     const body = String(text || "");
     const date = (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || "";
@@ -96,7 +127,11 @@ export const parseMemory = (text, rel, name) => {
         if (!ev.reason && reasonsBySource[ev.source])
             ev.reason = reasonsBySource[ev.source];
     const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
-    return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
+    const ns = time.replace(/(\d{2})(\d{2})(\d{2})/, "$1:$2:$3");
+    const createdAt = `${date} ${ns || "00:00:00"}`;
+    const kind = deriveAtomKind({ entry, materials, decisions: uniq(decisions), goal, userMessages: uniq(userMessages) });
+    const lineage = deriveLineage({ source: fieldOf(body, "来源会话"), createdBy: deriveCreatedBy({ decisionEvents, userMessages: uniq(userMessages), materials }), materials, createdAt });
+    return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body, kind, lineage };
 };
 // ── 时间辅助 ──
 const fmt = (hhmmss) => {

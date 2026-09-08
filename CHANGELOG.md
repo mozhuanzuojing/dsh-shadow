@@ -3,6 +3,20 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.8.0] Evidence Lineage Layer（ADR-0044/0045/0046）
+
+**让每个高价值认知单元都能回答"这个东西为什么存在、它来自哪里"**——提高**可信度与可审计性**，不是搜索/知识。落地核心：
+- **数据模型**：`core/lineage.ts` 新增 `AtomLineage{source,createdBy,evidence:EvidenceRef[],createdAt}` / `EvidenceRef{type,locator,fragment}` / `AtomKind(experience|metadata|session|task|artifact)` / `CreatedBy`。**source≠evidence**（source=产生处，evidence=支撑材料）。
+- **Atom schema**：`ParsedMemory` 加 `kind?`/`lineage?`（兼容旧 Atom，**不做 migration**）。
+- **写侧采集（B2）**：`buildClueHeader` 已把当回合 `fs/observed` + 用户引用材料写进同一原子的 `> 背景/材料`；读侧 `parseMemory` 据此**派生** `lineage.evidence`（event-sourced，**非 LLM 补写**）。
+- **Validation Gate**：`core/lineage-validator.ts` `validateAtomProjection`——`memory+kind∈{metadata,session}` → reject；`decision 无 evidence` → reject（**Atom 保留**，决策发生过≠可靠）。
+- **Projection/Query**：`deriveShadowNodes` 只投影过 gate 的 Atom（**不猜 evidence/不补 lineage/不调 LLM**）；`shadow_query` 透明升级，只返回可证明节点。
+- **Report**：`shadow-report` 的 Evidence Density 按 **type / kind / createdBy** 三维统计（`evidenceBreakdownOf` + 聚合 + 渲染）。
+- **测试**：`test/lineage.test.ts` / `test/evidence-gate.test.ts` / `test/atom-kind.test.ts`（无证据 decision 不进 query、metadata memory 不进默认查询、projection 无 generate/infer/guess）。`episode-lineage` 场景12 跟随 gate（decision 需 evidence 才命中）。
+- **真实数据验证**（OpenAPI-Gateway 52 原子）：**52 → 14 个可证明节点**，正确排除 33 个 metadata memory + 5 个无证据 decision，保留 document(9)+code(4)+task-kind(4)。
+- **边界**：不做 `nodes.jsonl` / Projection Store / zg / PageIndex / Graph 关系扩展 / 自动经验总结。**验证**：lineage / evidence-gate / atom-kind / query-observatory / episode-lineage / recall-attribution 全 ALL PASS。
+
+
 ## [v1.7.2] Shadow Fitness Report（Phase 1A.6）
 
 **把 query-log 变成"是否升级索引层"的客观依据**——`read_shadow({mode:"shadow-report"})` 把 `query-log` 聚合 + 扫记忆做 **missing-types 启发式**（`missingTypesOf`：检测约束型/任务型内容被归错类型，≥3 处才提示，防单例噪声），生成 `.shadow/shadow-report.md`（系统派生，rm -rf 可重建）。**报告四段**：`Query Summary`（总查询/候选→返回/延迟）、`Evidence Density`（有证据节点/总返回节点，核心指标 dsh-shadow vs 普通 RAG）、`Stability`（重复查询的 Node 稳定/漂移）、`Node Distribution` + `Potential Missing Types`。**关键指标 Evidence Density** = 有证据返回节点数/总返回节点数；dsh-shadow 坚持「宁可少回答，不要无证据上下文」（阈值默认 90%）。**边界**：**只诊断、不增强**；判定是启发式观察（best-effort、无 LLM、不下结论），标注依据；缺失类型只在真实数据反复需要时才采纳（**不理论驱动、不提前补 task/constraint**）。**验证**：场景 Query-Observatory-5~6（shadow-report 落盘 + missing-types 启发式 ≥3 才提示）+ 全量回归 ALL PASS。

@@ -407,9 +407,9 @@ const toolRegistry = new Map<string, any>();
   // code 节点（纯代码入口，无决策/goal）
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-code.md",
     `# io/backend/AuthFilter.java\n\n> 完整线索\n> 背景/材料：io/backend/AuthFilter.java\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:00:00] [io/backend/AuthFilter.java] 改/读 io/backend/AuthFilter.java\n`);
-  // decision 节点（goal + decision）
+  // decision 节点（goal + decision）；v1.8.0 Evidence Gate：decision 需 evidence（材料）才能进 context
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090100-decision.md",
-    `# adr/003\n\n> 完整线索\n> 决策：〔user〕采用 RSA+MD5Key\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T12\n> 目标：appid 签名方案\n\n- [09:01:00] [adr/003] 改/读 adr/003.md\n`);
+    `# adr/003\n\n> 完整线索\n> 背景/材料：adr/003.md\n> 决策：〔user〕采用 RSA+MD5Key\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T12\n> 目标：appid 签名方案\n\n- [09:01:00] [adr/003] 改/读 adr/003.md\n`);
   // document 节点（.md 文档入口）
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090200-doc.md",
     `# docs/sso.md\n\n> 完整线索\n> 背景/材料：docs/sso.md\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:02:00] [docs/sso.md] 改/读 docs/sso.md\n`);

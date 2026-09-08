@@ -6,6 +6,8 @@
 import { slug } from "./util.js";
 import { scrubUnsafe } from "../security/scrub.js";
 import type { ParsedMemory } from "./episode.js";
+import type { AtomKind, CreatedBy } from "./lineage.js";
+import { validateAtomProjection } from "./lineage-validator.js";
 
 export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
 export interface ShadowRel { type: string; target: string; source: string }
@@ -17,6 +19,9 @@ export interface ShadowNode {
   content: string[];
   evidence: string[]; // 可追溯证据(指向 Atom 的路径/材料)
   relations: ShadowRel[];
+  // v1.8.0 Evidence Lineage：透传 Atom 的 kind/createdBy，供 report 按维度统计。
+  kind?: AtomKind;
+  createdBy?: CreatedBy;
 }
 
 const CODE_EXT = /\.(java|kt|ts|tsx|js|jsx|py|go|rs|vue|scala|cs|cpp|c|h|sql|xml|json|yaml|yml)$/i;
@@ -33,19 +38,25 @@ export const nodeTypeOf = (p: ParsedMemory): NodeType => {
 };
 
 // ShadowNode 视图：每条 Memory Atom → 一个 ShadowNode（投影，不覆盖 Atom）。
+// v1.8.0 Evidence Gate：先过 validateAtomProjection（memory metadata / decision 无 evidence → reject），
+// reject 的 Atom 不投影为 Node（但 Atom 仍在记忆树）。derive 只做投影，不猜 evidence/不补 lineage/不调 LLM。
 export const deriveShadowNodes = (parsed: ParsedMemory[]): ShadowNode[] => {
   const nodes: ShadowNode[] = [];
   for (const p of parsed) {
     const entry = p.entry || p.goal || "memory";
     const type = nodeTypeOf(p);
+    const gate = validateAtomProjection({ type, kind: p.kind, lineage: p.lineage });
+    if (!gate.allowed) continue;
     const id = `sn-${p.date}-${p.time || "000000"}-${slug(entry)}`;
     const content = [...(p.decisions || []).slice(0, 5), ...(p.actions || []).slice(0, 3), ...(p.thinkLines || []).slice(0, 3)].map((x) => scrubUnsafe(String(x || "")).slice(0, 80));
-    const evidence = (p.materials || []).slice(0, 6).map((x) => scrubUnsafe(String(x || "")).slice(0, 80));
+    // evidence 优先取 lineage.evidence 的 locator（v1.8.0），无 lineage 回退 materials（兼容旧 Atom/合成）。
+    const evidenceSrc = p.lineage?.evidence?.length ? p.lineage.evidence.map((e) => e.locator) : (p.materials || []);
+    const evidence = evidenceSrc.slice(0, 6).map((x) => scrubUnsafe(String(x || "")).slice(0, 80));
     const relations: ShadowRel[] = [];
     for (const ev of evidence) relations.push({ type: "references", target: ev, source: "evidence" });
     if (p.goal && p.goal !== entry) relations.push({ type: "objective", target: scrubUnsafe(String(p.goal || "")).slice(0, 60), source: "goal" });
     if (p.project) relations.push({ type: "belongs_to", target: scrubUnsafe(String(p.project || "")).slice(0, 60), source: "project" });
-    nodes.push({ id, type, source: p.rel, title: scrubUnsafe(String(entry || "")).slice(0, 60), content, evidence, relations });
+    nodes.push({ id, type, source: p.rel, title: scrubUnsafe(String(entry || "")).slice(0, 60), content, evidence, relations, kind: p.kind, createdBy: p.lineage?.createdBy });
   }
   return nodes;
 };

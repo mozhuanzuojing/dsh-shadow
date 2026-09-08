@@ -12,7 +12,7 @@ import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDec
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
-import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
+import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
@@ -233,6 +233,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     // 观测是系统派生记录（.shadow/query-log/），rm -rf query-log 不影响任何 Atom；写失败静默，不改变 query 结果。
     const matchedNodes = matchShadowNodes(nodes, topicQ, scope).slice(0, limit);
     const nodeTypes = matchedNodes.reduce((acc: Record<string, number>, n) => { acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
+    const bd = evidenceBreakdownOf(matchedNodes);
     await recordQueryObservation(fs, ws, deps.config, {
       date: today(),
       ts: stamp(),
@@ -248,6 +249,9 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
       nodeTypes,
       nodeTitles: matchedNodes.map((n) => n.title),
       latencyMs: Date.now() - qStart,
+      evidenceByType: bd.byType,
+      evidenceByKind: bd.byKind,
+      evidenceByCreatedBy: bd.byCreatedBy,
     });
     return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + flushWarn);
   }
