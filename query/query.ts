@@ -17,6 +17,11 @@ import { runRealityModel } from "./reality-model.js";
 import { runWorld } from "./world.js";
 import { runSimAction } from "./sim-action.js";
 import { runPlanning } from "./planning.js";
+import { runAgency } from "./agency.js";
+import { runDelegation } from "./delegation.js";
+import { runRecall } from "./recall.js";
+import { runAdaptation } from "./adaptation.js";
+import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -33,21 +38,6 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
-import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../agency/render.js";
-import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../agency/engine.js";
-import { writeAgencyContext } from "../agency/persistence.js";
-import { renderContext as renderDelegationContext, renderCheck, renderEvent as renderDelegationEvent } from "../delegation/render/render.js";
-import { buildDelegationContext, checkDelegation, recordDelegationEvent } from "../delegation/engine/delegated-execution.js";
-import { writeDelegationContext } from "../delegation/persistence/persist.js";
-import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../recall/render/render.js";
-import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../recall/engine/recall-continuity.js";
-import { writeForgottenRecord } from "../recall/persistence/persist.js";
-import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../adaptation/render/render.js";
-import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../adaptation/engine/adaptation.js";
-import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
-import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../long-horizon/render/render.js";
-import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../long-horizon/engine/interaction.js";
-import { writeInteractionContext, writeHistorySummary } from "../long-horizon/persistence/persist.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
@@ -82,103 +72,17 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (viaSimAction !== undefined) return viaSimAction;
   const viaPlanning = await runPlanning(deps, args, { fs, ws, flushWarn });
   if (viaPlanning !== undefined) return viaPlanning;
-  // v0.35 Agency Boundary Kernel：AgencyContext（immutable snapshot）/ AgencySelection（reason=constraint_satisfied）/ AgencyBoundaryEvent（audit + lineage）。
-  // Agency ≠ Autonomy：行动能力不得自造目的、不因成功而扩张、不升级为自主。此层刻意不实现 Autonomous Agent。
-  if (String(args?.mode) === "agency-context") {
-    const c = buildAgencyContext(args);
-    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[AgencyContext Rejected] " + c.reason + flushWarn);
-    await writeAgencyContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderAgencyContext(c.ctx) + flushWarn);
-  }
-  if (String(args?.mode) === "agency-select") {
-    const s = pickAgencySelection(args);
-    if (!s.ok || !s.sel) return scrubFinal(RECALL_PREFIX + "[AgencySelection Rejected] " + (s.reject || "") + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderSelection(s.sel) + flushWarn);
-  }
-  if (String(args?.mode) === "agency-event") {
-    const e = await buildAgencyEvent(fs, ws, args);
-    if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + flushWarn);
-  }
-  // v0.36 Delegated Execution Boundary Kernel：DelegationContext / DelegationCheck / AutonomyBoundaryEvent。
-  // 委派执行 + 有限适应；不新增 trust/reputation/capabilityLevel；AutonomyBoundaryEvent 是纯审计事件。
-  if (String(args?.mode) === "delegation-context") {
-    const c = buildDelegationContext(args);
-    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[DelegationContext Rejected] " + c.reason + flushWarn);
-    await writeDelegationContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderDelegationContext(c.ctx) + flushWarn);
-  }
-  if (String(args?.mode) === "delegation-check") {
-    const r = await checkDelegation(fs, ws, args);
-    if (r.notFound) return scrubFinal(RECALL_PREFIX + "[DelegationCheck Rejected] " + r.reason + flushWarn);
-    if (!r.ok) return scrubFinal(RECALL_PREFIX + "[DelegationCheck Rejected] " + r.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderCheck(r.result) + flushWarn);
-  }
-  if (String(args?.mode) === "delegation-event") {
-    const e = await recordDelegationEvent(fs, ws, args);
-    if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[DelegationEvent Rejected] " + e.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderDelegationEvent(e.ev) + flushWarn);
-  }
-  // v0.37 Recall Continuity Kernel：ForgottenRecord / RecallEvent / RecallValidation。
-  // Recall = Access Transition（恢复访问路径），不是 Reality Reconstruction；不为 Memory Kernel。
-  if (String(args?.mode) === "recall-forget") {
-    const r = buildForgottenRecord(args);
-    if (!r.ok || !r.record) return scrubFinal(RECALL_PREFIX + "[Recall Rejected] " + r.reason + flushWarn);
-    await writeForgottenRecord(fs, ws, r.record);
-    return scrubFinal(RECALL_PREFIX + renderRecord(r.record) + flushWarn);
-  }
-  if (String(args?.mode) === "recall-event") {
-    const e = await buildRecallEvent(fs, ws, args);
-    if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[RecallEvent Rejected] " + e.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderRecallEvent(e.ev) + flushWarn);
-  }
-  if (String(args?.mode) === "recall-validation") {
-    const v = await validateRecall(fs, ws, args);
-    if (!v.ok || !v.result) return scrubFinal(RECALL_PREFIX + "[RecallValidation Rejected] " + v.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderRecallValidation(v.result) + flushWarn);
-  }
-  // v0.38 Controlled Adaptation Kernel：AdaptationContext / AdaptationChange / AdaptationValidation。
-  // Adaptation = 行为策略调整（How I do），不是身份/目标/价值观演化（Who I am）；不提升 epistemic status / authority。
-  if (String(args?.mode) === "adapt-context") {
-    const c = buildAdaptationContext(args);
-    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[Adaptation Rejected] " + c.reason + flushWarn);
-    await writeAdaptationContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderAdaptContext(c.ctx) + flushWarn);
-  }
-  if (String(args?.mode) === "adapt-change") {
-    const ch = await buildAdaptationChange(fs, ws, args);
-    if (!ch.ok || !ch.change) return scrubFinal(RECALL_PREFIX + "[AdaptationChange Rejected] " + ch.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderChange(ch.change) + flushWarn);
-  }
-  if (String(args?.mode) === "adapt-validation") {
-    const v = await validateAdaptation(fs, ws, args);
-    if (!v.ok || !v.validation) return scrubFinal(RECALL_PREFIX + "[AdaptationValidation Rejected] " + v.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + flushWarn);
-  }
-  // v0.39 Long Horizon Interaction Kernel：InteractionContext / HistorySummary / HistoryContinuityEvent / InteractionAdaptationLink。
-  // 时间可增加经验，但不能增加主体性：Longer≠MoreAuthority / History≠Purpose / Experience≠Identity / Adaptation≠Evolution / Continuity≠Autonomy。
-  if (String(args?.mode) === "horizon-context") {
-    const c = buildInteractionContext(args);
-    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[Interaction Rejected] " + c.reason + flushWarn);
-    await writeInteractionContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderHorizonContext(c.ctx) + flushWarn);
-  }
-  if (String(args?.mode) === "horizon-summary") {
-    const s = buildHistorySummary(args);
-    if (!s.ok || !s.summary) return scrubFinal(RECALL_PREFIX + "[HistorySummary Rejected] " + s.reason + flushWarn);
-    await writeHistorySummary(fs, ws, s.summary);
-    return scrubFinal(RECALL_PREFIX + renderSummary(s.summary) + flushWarn);
-  }
-  if (String(args?.mode) === "horizon-event") {
-    const e = await buildContinuityEvent(fs, ws, args);
-    if (!e.ok || !e.event) return scrubFinal(RECALL_PREFIX + "[ContinuityEvent Rejected] " + e.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderHorizonEvent(e.event) + flushWarn);
-  }
-  if (String(args?.mode) === "horizon-link") {
-    const l = await buildInteractionAdaptationLink(fs, ws, args);
-    if (!l.ok || !l.link) return scrubFinal(RECALL_PREFIX + "[InteractionLink Rejected] " + l.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderLink(l.link) + flushWarn);
-  }
+  // v0.35–v0.39 agency/delegation/recall/adaptation/horizon 五族已迁入各自 seam 模块。
+  const viaAgency = await runAgency(deps, args, { fs, ws, flushWarn });
+  if (viaAgency !== undefined) return viaAgency;
+  const viaDelegation = await runDelegation(deps, args, { fs, ws, flushWarn });
+  if (viaDelegation !== undefined) return viaDelegation;
+  const viaRecall = await runRecall(deps, args, { fs, ws, flushWarn });
+  if (viaRecall !== undefined) return viaRecall;
+  const viaAdaptation = await runAdaptation(deps, args, { fs, ws, flushWarn });
+  if (viaAdaptation !== undefined) return viaAdaptation;
+  const viaHorizon = await runHorizon(deps, args, { fs, ws, flushWarn });
+  if (viaHorizon !== undefined) return viaHorizon;
   // v1.0.1/1.0.2 continuity+verify 族已迁入 query/contverify.ts（Observer Continuity + Runtime Verification 双层边界）。
   const viaContVerify = await runContVerify(deps, args, { fs, ws, flushWarn });
   if (viaContVerify !== undefined) return viaContVerify;
