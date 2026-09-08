@@ -5,8 +5,7 @@
 //   - decision 无 lineage.evidence → reject context（但 Atom 保留：决策发生过 ≠ 决策可信）。
 //   - 其余 → allowed。
 // 关键：reject 不是删除，Atom 仍然存在；只影响「是否进入 shadow_query context / 认知查询」。
-import type { NodeType } from "./node.js";
-import type { AtomKind, AtomLineage, AtomProjectionVerdict } from "./lineage.js";
+import type { NodeType, AtomKind, AtomLineage, AtomProjectionVerdict } from "./lineage.js";
 
 export interface AtomLike {
   type: NodeType;

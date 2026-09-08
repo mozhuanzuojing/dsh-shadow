@@ -1,6 +1,6 @@
 import type { ParsedMemory } from "./episode.js";
-import type { AtomKind, CreatedBy } from "./lineage.js";
-export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
+import type { AtomKind, CreatedBy, NodeType } from "./lineage.js";
+export type { NodeType } from "./lineage.js";
 export interface ShadowRel {
     type: string;
     target: string;

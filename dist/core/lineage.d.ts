@@ -2,6 +2,8 @@
 export type CreatedBy = "user" | "agent" | "tool";
 /** Atom 的二级分类（memory 专用；非新 type）。 */
 export type AtomKind = "experience" | "metadata" | "session" | "task" | "artifact";
+/** ShadowNode 的投影类型。来自 lineage.ts 而非 node.ts，避免 lineage-validator ↔ node 类型循环。 */
+export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
 /** 一条证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
 export interface EvidenceRef {
     type: "file" | "conversation" | "document" | "commit" | "url";
