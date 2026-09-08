@@ -397,4 +397,39 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ recall_shadow 回退：llmRecall 关闭 → 确定性 bestTask");
 }
 
+// ─────────────────────────────────────────────
+// 场景 12（Phase 1A Shadow Projection / shadow_query）：统一 ShadowNode（memory/decision/code/document），
+//           跨类型查询返回带 evidence 的 context；Node 是派生投影（非事实源）。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  // code 节点（纯代码入口，无决策/goal）
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-code.md",
+    `# io/backend/AuthFilter.java\n\n> 完整线索\n> 背景/材料：io/backend/AuthFilter.java\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:00:00] [io/backend/AuthFilter.java] 改/读 io/backend/AuthFilter.java\n`);
+  // decision 节点（goal + decision）
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090100-decision.md",
+    `# adr/003\n\n> 完整线索\n> 决策：〔user〕采用 RSA+MD5Key\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T12\n> 目标：appid 签名方案\n\n- [09:01:00] [adr/003] 改/读 adr/003.md\n`);
+  // document 节点（.md 文档入口）
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090200-doc.md",
+    `# docs/sso.md\n\n> 完整线索\n> 背景/材料：docs/sso.md\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:02:00] [docs/sso.md] 改/读 docs/sso.md\n`);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const T = agent("T12");
+  const q = toolRegistry.get("shadow_query");
+  assert.ok(q, "应注册 shadow_query 工具");
+  // 跨类型查询：query=appid, scope=[decision] → 命中 decision 节点，带 evidence
+  const r = String(await q.execute({ query: "appid", scope: ["decision"] }, { agent: T }));
+  assert.ok(r.includes("adr/003"), "shadow_query 应命中 decision 节点");
+  assert.ok(r.includes("采用 RSA+MD5Key"), "decision 节点应含决策内容");
+  assert.ok(r.includes("证据"), "context 应带 evidence(App 可追溯)");
+  // scope=[code] + query=AuthFilter → 命中 code 节点
+  const rCode = String(await q.execute({ query: "AuthFilter", scope: ["code"] }, { agent: T }));
+  assert.ok(rCode.includes("AuthFilter.java"), "code 节点应命中");
+  // 不限定 scope → 全部（但 query 只命中含 appid 的 decision）
+  const rAll = String(await q.execute({ query: "AuthFilter" }, { agent: T }));
+  assert.ok(rAll.includes("code") || rAll.includes("AuthFilter"), "无 scope 查询应命中 code 节点");
+  console.log("✔ Shadow Projection：shadow_query 跨类型统一 ShadowNode + evidence 可追溯（Node 是派生投影）");
+}
+
 console.log("ALL PASS ✅");

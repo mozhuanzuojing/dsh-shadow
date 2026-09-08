@@ -86,6 +86,8 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 版本 / 变更
 
+> **v1.7.0 · Shadow Projection Layer（Phase 1A，ADR-0042/0043）**：**把 ShadowNode 初始化落地**——`shadow_query({query, scope, mode, evidence})` 把记忆**统一派生为 ShadowNode**（`type: memory|code|document|decision|concept`，带 `source/evidence/relations`），跨类型查询返回**带 evidence 的 context**。**守 Shadow Contract（ADR-0043）**：Node 是**派生投影**（非事实源，可重建/rm -rf 无影响）；`evidence` 指向 Atom（源文件/文档），**无证据不返回**；`relations` 只从**可观察信号**派生（`references`=材料路径、`objective`=goal、`belongs_to`=项目），**LLM 不能制造关系**。`read_shadow` mode 新增 `query`；新增 `shadow_query` 工具。**验证**：场景 12（跨类型统一 ShadowNode + evidence 可追溯）+ 全量回归 ALL PASS。
+
 > **v1.6.0 · recall_shadow LLM 推理导航（对齐 PageIndex 免向量、推理式检索）**：把 `recall_shadow` 从"关键词相似度召回"升级为"**LLM 推理导航选中任务**"（`config.llmRecall` 门控，默认关）。开启时：给 LLM 候选任务列表（title/objective/摘要），LLM **只输出最相关任务编号**（意图识别+排序）；`recall_shadow` 再沿"任务树"渲染恢复包。**边界**：LLM 只做**导航/选择（Context Planning）**，Bundle 内容仍全来自派生数据（Task/Decision/Evidence/Outcome），**不补 Reason/事实/判断**；LLM **关/失败**回退确定性 `bestTask`（行为不变）。**参考**：VectifyAI/PageIndex（`similarity≠relevance，relevance 需 reasoning`；树索引+LLM 推理遍历+可追溯）——已克隆到 `vendor/_src/PageIndex`。**验证**：场景 11（LLM 导航覆盖确定性 + 关闭回退）+ 全量回归 ALL PASS。
 
 > **v1.5.1 · Active Context Projection（"现在继续要记住什么"）**：给 `recall_shadow` 的恢复包加 **Active Context** 段——`已完成/已决定 / 未完成待厘清 / 约束 / 最近决策 / 入口位置`。**全部来自派生数据**（Decision/Outcome/未明确理由决策/Constraint/任务状态/入口），**不是建议、不是推理、只是恢复**；也**不**让 LLM 生成。这补上 Cursor 式"Continue where you left off"体验——用户第二天打开，`recall_shadow` 直接给"继续工作状态"。**验证**：场景 10（恢复包含 Active Context）+ 全量回归 ALL PASS。**不碰** Entity/自动总结/自动补任务状态。

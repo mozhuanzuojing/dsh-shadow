@@ -11,6 +11,7 @@ import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
+import { deriveShadowNodes, queryShadow, renderContext as renderShadowContext } from "../core/node.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
@@ -182,6 +183,23 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
       out = renderRecovery(String(args?.topic || "").trim(), tasks, refs);
     }
     return scrubFinal(RECALL_PREFIX + out + flushWarn);
+  }
+  // Phase 1A Shadow Projection：shadow.query —— 统一 ShadowNode View + 跨类型上下文（带 evidence）。
+  if (String(args?.mode) === "query" || args?.shadowQuery) {
+    let memories = await listMemories(fs, ws);
+    const metaQ = await readMeta(fs, ws);
+    const forgetQ = deps.config.forget ?? {};
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaQ, forgetQ) && !isCompacted(metaQ, mm.rel));
+    const parsed: any[] = [];
+    for (const mm of memories) {
+      const text = await readRel(fs, ws, mm.rel);
+      if (!text) continue;
+      try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
+    }
+    const nodes = deriveShadowNodes(parsed);
+    const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept"].includes(t)) : [];
+    const items = queryShadow(nodes, String(args?.topic || "").trim(), scope, Math.max(1, Math.min(30, Number(args?.limit) || 8)));
+    return scrubFinal(RECALL_PREFIX + renderShadowContext(String(args?.topic || "").trim(), items) + flushWarn);
   }
   // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
   if (String(args?.mode) === "identity") {
