@@ -9,6 +9,7 @@ import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
+import { deriveTasks, renderTasks } from "../core/task.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -118,6 +119,22 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     }
     const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
     return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + flushWarn);
+  }
+  // ADR-0039 Task Lifecycle：把记忆派生为「任务生命周期」一等视图（title/trigger/objective/
+  // constraints/status/decisions/outcomes）。派生式投影；Outcome 只记观察，不做成/败判断。
+  if (String(args?.mode) === "task") {
+    let memories = await listMemories(fs, ws);
+    const metaT = await readMeta(fs, ws);
+    const forgetT = deps.config.forget ?? {};
+    memories = memories.filter((mm: any) => !isForgettable(mm.rel, metaT, forgetT) && !isCompacted(metaT, mm.rel));
+    const parsed: any[] = [];
+    for (const mm of memories) {
+      const text = await readRel(fs, ws, mm.rel);
+      if (!text) continue;
+      try { parsed.push(parseMemory(text, mm.rel, mm.name)); } catch { /* 跳过 */ }
+    }
+    const tasks = deriveTasks(parsed);
+    return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
   }
   // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
   if (String(args?.mode) === "identity") {

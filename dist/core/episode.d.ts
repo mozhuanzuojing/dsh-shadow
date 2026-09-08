@@ -9,6 +9,7 @@ export interface ParsedMemory {
     goal: string;
     decisions: string[];
     decisionEvents: DecisionEvent[];
+    userMessages: string[];
     materials: string[];
     actions: string[];
     thinkLines: string[];

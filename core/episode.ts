@@ -24,6 +24,7 @@ export interface ParsedMemory {
   goal: string;         // > 目标：
   decisions: string[];  // 这条记忆里的决策语句（goal 事件 + 用户拍板 + assistant 明确决策）
   decisionEvents: DecisionEvent[]; // 富化决策事件（statement + source + reason；reason 只在原文明确时非空）
+  userMessages: string[]; // 用户消息（`用户：` 行，供 Task 触发/约束派生）
   materials: string[];  // 背景/材料
   actions: string[];    // 动作行（改/读 + 调用）
   thinkLines: string[]; // 非动作正文行（思维/结论，供"为什么"）
@@ -111,14 +112,17 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
       }
     }
   }
-  // ④ 正文逐行：goal 事件（决定 …）+ 动作行 + 思维行
+  // ④ 正文逐行：goal 事件（决定 …）+ 用户消息 + 动作行 + 思维行
+  const userMessages: string[] = [];
   const actions: string[] = [];
   const thinkLines: string[] = [];
   const bodyLines = body.split("\n").map((s) => s.trim()).filter((l) => /^-\s*\[/.test(l));
   for (const l of bodyLines) {
     const m = l.match(/^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/);
     const txt = m ? m[1] : l;
-    if (/^决定 /.test(txt)) {
+    if (/^用户：/.test(txt)) {
+      userMessages.push(scrubUnsafe(txt.replace(/^用户：/, "")).trim().slice(0, 160));
+    } else if (/^决定 /.test(txt)) {
       addDecision(scrubUnsafe(txt.replace(/^决定 /, "")).trim(), "assistant");
     } else if (/改\/读 |调用 /.test(txt)) {
       actions.push(scrubUnsafe(txt).trim());
@@ -128,7 +132,7 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
   }
   for (const ev of decisionEvents) if (!ev.reason && reasonsBySource[ev.source]) ev.reason = reasonsBySource[ev.source];
   const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
-  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
+  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
 };
 
 // ── 时间辅助 ──

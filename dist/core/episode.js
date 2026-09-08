@@ -71,14 +71,18 @@ export const parseMemory = (text, rel, name) => {
             }
         }
     }
-    // ④ 正文逐行：goal 事件（决定 …）+ 动作行 + 思维行
+    // ④ 正文逐行：goal 事件（决定 …）+ 用户消息 + 动作行 + 思维行
+    const userMessages = [];
     const actions = [];
     const thinkLines = [];
     const bodyLines = body.split("\n").map((s) => s.trim()).filter((l) => /^-\s*\[/.test(l));
     for (const l of bodyLines) {
         const m = l.match(/^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/);
         const txt = m ? m[1] : l;
-        if (/^决定 /.test(txt)) {
+        if (/^用户：/.test(txt)) {
+            userMessages.push(scrubUnsafe(txt.replace(/^用户：/, "")).trim().slice(0, 160));
+        }
+        else if (/^决定 /.test(txt)) {
             addDecision(scrubUnsafe(txt.replace(/^决定 /, "")).trim(), "assistant");
         }
         else if (/改\/读 |调用 /.test(txt)) {
@@ -92,7 +96,7 @@ export const parseMemory = (text, rel, name) => {
         if (!ev.reason && reasonsBySource[ev.source])
             ev.reason = reasonsBySource[ev.source];
     const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
-    return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
+    return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body };
 };
 // ── 时间辅助 ──
 const fmt = (hhmmss) => {

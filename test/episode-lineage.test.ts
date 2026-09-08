@@ -265,4 +265,30 @@ const toolRegistry = new Map<string, any>();
   console.log("✔ Episode 收口归档：关闭 episode → consolidated 文件 + 原子压缩归档（文件数大降、可回放）");
 }
 
+// ─────────────────────────────────────────────
+// 场景 8（ADR-0039 Task Lifecycle / mode:"task"）：把记忆派生为任务生命周期视图
+//           （trigger/客观/决策链/观测结果/启发式状态）；Outcome 只记观察，不做成/败判断。
+// ─────────────────────────────────────────────
+{
+  const store = new Map<string, string>();
+  const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-task.md",
+    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
+  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-task.md",
+    `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const T = agent("T8");
+  const r = String(await toolRegistry.get("read_shadow").execute({ mode: "task" }, { agent: T }));
+  assert.ok(!r.startsWith("ERR"), "mode:task 不应报错");
+  assert.ok(r.includes("删除 Todo 同步链路"), "Task 寿命周期应含目标/主题");
+  assert.ok(r.includes("触发：清理待办残留"), "Task 应含触发（用户）");
+  assert.ok(r.includes("删除 TodoSyncJob"), "Task 应含决策链");
+  assert.ok(r.includes("mvn test：85 tests passed"), "Task 应含观测结果文本");
+  assert.ok(r.includes("观测结果（非成/败判断）"), "Task 结果应标为观测（非成功判断）");
+  assert.ok(r.includes("状态：completed"), "Task 状态为启发式观测的 completed");
+  assert.ok(r.includes("非「方案正确」判断"), "状态注释不得做『方案正确』判断（Outcome≠Success）");
+  console.log("✔ Task Lifecycle：memory→任务生命周期一等视图（trigger/客观/决策链/观测结果/启发式状态），Outcome≠Success");
+}
+
 console.log("ALL PASS ✅");
