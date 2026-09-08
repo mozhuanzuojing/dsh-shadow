@@ -12,7 +12,8 @@ import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { loadOrBuildProjection } from "../core/projection-store.js";
-import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderRetrieved, flattenSections } from "../core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections } from "../core/knowledge-engine.js";
+import { readManifest, renderManifest } from "../core/manifest.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { recordQueryObservation, summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport, evidenceBreakdownOf } from "./observatory.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
@@ -236,20 +237,26 @@ export async function runReadShadow(deps, args, exec) {
         if (topicK) {
             // v1.10.0：LLM 树上导航（PageIndex `chat=` 步，ADR-0047）：LLM 只选章节编号，事实仍从树派生。
             let hits = retrieveKnowledge(tree, topicK);
+            const cited = hits.map((h) => ({ ...h, __path: sectionPath(tree, h) })); // ADR-0048④ 引用（节路径溯源）
             if (deps.knowledgeNavigate) {
                 const sections = flattenSections(tree);
                 const picks = await deps.knowledgeNavigate(topicK, sections.map((s) => ({ id: s.id, title: s.title, content: s.content })));
                 if (picks.length) {
-                    const picked = picks.map((i) => sections[i]).filter(Boolean);
-                    return scrubFinal(RECALL_PREFIX + renderRetrieved(picked, topicK) + "\n\n（v1.10.0 LLM 树上导航：LLM 只选章节编号，事实仍从树派生；未纳入生成）" + flushWarn);
+                    const picked = picks.map((i) => sections[i]).filter(Boolean).map((s) => ({ ...s, __path: s.summary || "" }));
+                    return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, picked, topicK) + "\n\n（v1.10.0 LLM 树上导航：LLM 只选章节编号，事实仍从树派生；未纳入生成）" + flushWarn);
                 }
             }
-            return scrubFinal(RECALL_PREFIX + renderRetrieved(hits, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航未启用/失败 → 确定性检索）" + flushWarn);
+            return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, cited, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航未启用/失败 → 确定性检索）" + flushWarn);
         }
         // 无 topic → corpus 级 file 树（PageIndex File System：模块→文件→章节）
         const corpus = buildCorpusTree(parsedK);
         const corpusTree = { provider: "tree", root: corpus, sourceCount: corpus.length };
         return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(corpusTree) + "\n\n（ADR-0047：免向量保留树；不转 vector/chunk）" + flushWarn);
+    }
+    // Phase 3/ADR-0048⑧：Shadow Manifest（可观测：索引投影元数据 + 诊断）。只读，不增强。
+    if (String(args?.mode) === "shadow-manifest") {
+        const m = await readManifest(fs, ws);
+        return scrubFinal(RECALL_PREFIX + renderManifest(m) + flushWarn);
     }
     // Phase 1A.5 Shadow Query Observatory：以只读方式观看 query-log 聚合（命中/证据/关系/类型分布 + 重复查询的 Node 稳定性）。
     if (String(args?.mode) === "query-log") {

@@ -4,6 +4,7 @@
 // 接口先行（save/load/invalidate/rebuild），首版 JsonlProjectionStore；将来可换 SQLite / EmbeddedGraph（不改调用方）。
 // 触发（ADR-0046）：只在「Node 稳定 + query 稳定 + rebuild 成本明显」时才启用；默认关（config.projectionStore.enabled）。
 import { SHADOW_ROOT } from "./paths.js";
+import { buildManifest, writeManifest } from "./manifest.js";
 export const projectionIndexRel = () => `${SHADOW_ROOT}/shadow-index/nodes.jsonl`;
 /** JsonlProjectionStore：把 ShadowNode 投影持久化到 `.shadow/shadow-index/nodes.jsonl`（逐行 JSON，可重建）。 */
 export const createJsonlProjectionStore = (fs, ws) => {
@@ -48,6 +49,8 @@ export const createJsonlProjectionStore = (fs, ws) => {
         async rebuild(derive) {
             const nodes = await derive();
             await this.save(nodes);
+            // ADR-0048⑧：重建后写 manifest（可观测：节点数/来源数/构建时间）。
+            await writeManifest(fs, ws, buildManifest("1", nodes));
             return nodes;
         },
         async invalidateFor(set) {

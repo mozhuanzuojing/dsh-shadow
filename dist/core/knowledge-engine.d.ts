@@ -16,7 +16,9 @@ export interface KnowledgeTree {
 export interface KnowledgeEngine {
     build(parsed: ParsedMemory[], nodes?: ShadowNode[]): Promise<KnowledgeTree>;
 }
-/** 把一条规范/文档的内容按「标题层级」建成树（标题行 #/##/###/… → 层级）。纯派生，不补充事实。 */
+/** 判定一行是否为「样板/噪声」（目录、页眉页脚、代码块标记）。确定性，无 LLM。 */
+export declare const isBoilerplateLine: (line: unknown) => boolean;
+/** ⑦ 按格式结构化抽取：code→包树 / document→标题树 / text→段落树。统一入口。 */
 export declare const buildTree: (doc: ParsedMemory) => KnowNode;
 /** TreeKnowledgeEngine：从文档/规范/决策 Atom 派生知识树（保留层级，不转 chunk）。 */
 export declare const createKnowledgeEngine: (config: any) => KnowledgeEngine;
@@ -38,6 +40,14 @@ export interface KnowledgeSection {
     level: number;
     summary?: string;
 }
+/** 计算节点在树中的路径（根→…→node），用作引用/溯源。 */
+export declare const sectionPath: (tree: KnowledgeTree, node: KnowNode) => string;
+/** 渲染检索结果 + 引用（节路径溯源）。 */
+export declare const renderKnowledgeRetrieval: (tree: KnowledgeTree, hits: {
+    title: string;
+    content: string;
+    level: number;
+}[], query: string) => string;
 /** ② 渐进披露：内部节点设 routing 摘要（标题+节数），叶子保留 content=全文；返回新树（不覆盖输入）。 */
 export declare const progressiveDisclosure: (tree: KnowledgeTree) => KnowledgeTree;
 /** ① 成本感知 refine：链式合并（单叶子孩子吸收）+ 便宜子树折叠（≤minPages 的子树合并，标题存 key_items）。 */

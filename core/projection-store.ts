@@ -6,6 +6,7 @@
 import { SHADOW_ROOT } from "./paths.js";
 import type { ShadowNode } from "./node.js";
 import type { ChangeSet } from "./change-set.js";
+import { buildManifest, writeManifest } from "./manifest.js";
 
 export interface ShadowProjectionStore {
   save(nodes: ShadowNode[]): Promise<void>;
@@ -47,6 +48,8 @@ export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectio
     async rebuild(derive) {
       const nodes = await derive();
       await this.save(nodes);
+      // ADR-0048⑧：重建后写 manifest（可观测：节点数/来源数/构建时间）。
+      await writeManifest(fs, ws, buildManifest("1", nodes));
       return nodes;
     },
     async invalidateFor(set) {

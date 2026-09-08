@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.0] Candidate ③④⑦⑧（确定性去噪/格式抽取/引用/Manifest）
+
+**实现 ADR-0048 候选项**（此前留待，现启用）：
+- **③ 内容分类去噪**（PageIndex `flash/classification`）：`isBoilerplateLine`——剔除目录/页眉页脚/代码块标记/TOC 点线；`cleanLines` 只留正文/标题。
+- **⑦ 按格式结构化抽取**（zg `retrieval/*`）：`buildTree` 改为格式感知——**code→包树**（路径分层）、**document→标题树**、**text→段落树**；纯确定性，无 LLM。
+- **④ 树即 agent 工具 + 引用**（PageIndex `agent_tools.py`）：`sectionPath`（根→节点路径）+ `renderKnowledgeRetrieval`（检索结果带**节路径引用/溯源**）；`mode:"knowledge"` 检索带引用。
+- **⑧ Manifest / 可观测**（zg `manifest.json`/`status --debug`）：新增 `core/manifest.ts`（`ShadowManifest`：版本/构建时间/节点数/来源数/失败项）+ `writeManifest/readManifest/renderManifest`；投影 store `rebuild` 回写 manifest；`read_shadow({mode:"shadow-manifest"})` 诊断读面。
+- **边界**：全部纯派生/无 LLM；不集成 PageIndex/zg；不向量化（ADR-0001）。**验证**：manifest 新增 + knowledge-engine（③去噪/⑦格式/④引用）+ projection-store（manifest 回写）+ 全量回归 ALL PASS（14 测试）。
+
+
 ## [v1.11.0] Deeper PageIndex + zg Ideas（成本/渐进披露/增量索引/授权，ADR-0048）
 
 **再次深入 PageIndex/zg 源码，吸收更深的 4 项思想**（ADR-0048）：

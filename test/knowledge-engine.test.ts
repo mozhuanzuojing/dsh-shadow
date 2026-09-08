@@ -1,6 +1,6 @@
 // dsh-shadow —— Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk）。
 import assert from "node:assert/strict";
-import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved, flattenSections, progressiveDisclosure, refineTree } from "../dist/core/knowledge-engine.js";
+import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved, flattenSections, progressiveDisclosure, refineTree, buildTree, isBoilerplateLine, sectionPath, renderKnowledgeRetrieval } from "../dist/core/knowledge-engine.js";
 import { parseMemory } from "../dist/core/episode.js";
 
 // 一段带层级标题的规范文档
@@ -60,5 +60,28 @@ const refined = refineTree(tree, { minPages: 2 });
 // 根(spec) 下应有折叠结果；只要有 children 被合并进父（children 变少或空）且 keyItems 保留标题
 const hasRefine = JSON.stringify(refined).includes("keyItems") || refined.root[0]?.children.length <= tree.root[0]?.children.length;
 assert.ok(hasRefine, "refine 应产生合并（children 减少或 keyItems）");
-console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树 + flattenSections（ADR-0047 + v1.10.0）+ 渐进披露 + 成本 refine（ADR-0048①②）");
+// —— ADR-0048③：内容分类去噪 ——
+assert.equal(isBoilerplateLine("目录"), true, "「目录」=样板");
+assert.equal(isBoilerplateLine("第 1 页"), true, "「第 N 页」=页眉页脚");
+assert.equal(isBoilerplateLine("1.1 认证 ...... 12"), true, "TOC 形式=样板");
+assert.equal(isBoilerplateLine("### RSA"), false, "标题行非样板");
+// ⑦ 按格式抽取：code → 包树
+const code = parseMemory(`# io/backend/src/main/java/com/openapi/io/DeptMapService.java
+
+> 完整线索
+> 背景/材料：io/backend/DeptMapService.java
+> 概况：1 动作 · 0 用户消息 · 0 决策
+- [09:00:00] [io/backend] 改/读 io/backend/DeptMapService.java
+`, ".shadow/2026-09-08/2026-09-08--090000-code.md", "2026-09-08--090000-code.md");
+const codeTree = buildTree(code);
+assert.equal(codeTree.title, "io", "code 包树根=首路径段");
+assert.ok(codeTree.children.some((c) => c.title === "backend"), "code 包树含模块层");
+// ④ 引用（节路径）
+const tree2 = { provider: "tree", root: [buildTree(parsed)], sourceCount: 1 };
+const node = tree2.root[0].children[0];   // spec 下第一节点
+const path = sectionPath(tree2, node);
+assert.ok(path.includes(tree2.root[0].title) && path.includes(node.title), "sectionPath 应含根→节点的路径");
+const cited = renderKnowledgeRetrieval(tree2, [{ title: node.title, content: node.content, level: node.level, __path: path }], "RSA");
+assert.ok(cited.includes(path), "renderKnowledgeRetrieval 应含引用路径");
+console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树 + flattenSections（ADR-0047 + v1.10.0）+ 渐进披露 + 成本 refine（ADR-0048①②）+ 去噪③ + 格式抽取⑦ + 引用④");
 console.log("ALL PASS ✅");
