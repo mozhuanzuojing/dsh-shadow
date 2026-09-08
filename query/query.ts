@@ -9,6 +9,7 @@ import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { dispatchReadQuery } from "./reads.js";
+import { runContVerify } from "./contverify.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -76,11 +77,6 @@ import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
 import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../long-horizon/render/render.js";
 import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../long-horizon/engine/interaction.js";
 import { writeInteractionContext, writeHistorySummary } from "../long-horizon/persistence/persist.js";
-import { buildObserverConfig, buildObserverBoundary, buildRecallIndex, buildLineage, buildWorkspaceRecord, readObserverContext, readWorkspaceContext, readContinuityIndex } from "../continuity/engine.js";
-import { DEFAULT_OBSERVER_ROOT, writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord } from "../continuity/persist.js";
-import { renderObserverContext as renderContinuityObserverContext, renderWorkspaceContext, renderContinuityIndex } from "../continuity/render.js";
-import { runVerification } from "../verification/engine.js";
-import { renderRun, renderReport } from "../verification/render.js";
 import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -386,58 +382,9 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     if (!l.ok || !l.link) return scrubFinal(RECALL_PREFIX + "[InteractionLink Rejected] " + l.reason + flushWarn);
     return scrubFinal(RECALL_PREFIX + renderLink(l.link) + flushWarn);
   }
-  // v1.0.1 Observer Continuity Storage Boundary：Global(observer 层)/Workspace(world 层) 双层，不可混合。
-  // 关系 Constraint ⊃ Context，非 Memory Union；全局只存 config/boundary/recall-index/lineage。
-  const obsRoot = String(deps.config.observerGlobalRoot || "") ? String(deps.config.observerGlobalRoot) : DEFAULT_OBSERVER_ROOT;
-  if (String(args?.mode) === "observer-config") {
-    const c = buildObserverConfig(args);
-    if (!c.ok || !c.config) return scrubFinal(RECALL_PREFIX + "[ObserverConfig Rejected] " + c.reason + flushWarn);
-    await writeObserverConfig(fs, obsRoot, c.config);
-    return scrubFinal(RECALL_PREFIX + `[Observer Config] ${c.config.interactionStyle} · ${c.config.outputPreference} · ${c.config.defaultProtocol}` + flushWarn);
-  }
-  if (String(args?.mode) === "observer-boundary") {
-    const b = buildObserverBoundary(args);
-    if (!b.ok || !b.boundary) return scrubFinal(RECALL_PREFIX + "[ObserverBoundary Rejected] " + b.reason + flushWarn);
-    await writeObserverBoundary(fs, obsRoot, b.boundary);
-    return scrubFinal(RECALL_PREFIX + `[Observer Boundary] planningNoObjective ${b.boundary.planningCannotCreateObjective} · recallNoKnowledge ${b.boundary.recallCannotCreateKnowledge} · adaptNoAuthority ${b.boundary.adaptationCannotIncreaseAuthority}` + flushWarn);
-  }
-  if (String(args?.mode) === "recall-index") {
-    const i = buildRecallIndex(args);
-    if (!i.ok || !i.index) return scrubFinal(RECALL_PREFIX + "[RecallIndex Rejected] " + i.reason + flushWarn);
-    await writeRecallIndex(fs, obsRoot, i.index);
-    return scrubFinal(RECALL_PREFIX + renderContinuityIndex(i.index) + flushWarn);
-  }
-  if (String(args?.mode) === "observer-lineage") {
-    const l = buildLineage(args);
-    if (!l.ok || !l.record) return scrubFinal(RECALL_PREFIX + "[ObserverLineage Rejected] " + l.reason + flushWarn);
-    await writeLineage(fs, obsRoot, l.record);
-    return scrubFinal(RECALL_PREFIX + `[Observer Lineage] observer ${l.record.observerId} · ref ${l.record.continuityRef}` + flushWarn);
-  }
-  if (String(args?.mode) === "workspace-record") {
-    const r = buildWorkspaceRecord(args);
-    if (!r.ok || !r.record) return scrubFinal(RECALL_PREFIX + "[WorkspaceRecord Rejected] " + r.reason + flushWarn);
-    await writeWorkspaceRecord(fs, ws, r.record);
-    return scrubFinal(RECALL_PREFIX + `[Workspace Record] ${r.record.kind} · ${r.record.content} · ws ${r.record.workspace}` + flushWarn);
-  }
-  if (String(args?.mode) === "observer-context") {
-    const ctx = await readObserverContext(fs, obsRoot);
-    return scrubFinal(RECALL_PREFIX + renderContinuityObserverContext(ctx) + flushWarn);
-  }
-  if (String(args?.mode) === "workspace-context") {
-    const rows = await readWorkspaceContext(fs, String(args?.workspace || ws));
-    return scrubFinal(RECALL_PREFIX + renderWorkspaceContext(rows) + flushWarn);
-  }
-  if (String(args?.mode) === "continuity-index") {
-    const ri = await readContinuityIndex(fs, obsRoot);
-    return scrubFinal(RECALL_PREFIX + renderContinuityIndex(ri) + flushWarn);
-  }
-  // v1.0.2 Observer Runtime Verification Foundation：VerificationRun / InvariantCheck / DriftReport。
-  // 验证只读只报；Verification≠Optimization（237）/不可改authority(238)/不可改identity(239)/DriftReport≠RealityClaim(240)。
-  if (String(args?.mode) === "verify") {
-    const v = await runVerification(fs, obsRoot, args);
-    if (!v.ok || !v.run || !v.report) return scrubFinal(RECALL_PREFIX + "[Verification Rejected] " + v.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderRun(v.run) + "\n" + renderReport(v.report) + flushWarn);
-  }
+  // v1.0.1/1.0.2 continuity+verify 族已迁入 query/contverify.ts（Observer Continuity + Runtime Verification 双层边界）。
+  const viaContVerify = await runContVerify(deps, args, { fs, ws, flushWarn });
+  if (viaContVerify !== undefined) return viaContVerify;
   const recallCfg = deps.config.recall ?? {};
   const retentionCfg = deps.config.retention ?? {};
   if (args?.soul) {
