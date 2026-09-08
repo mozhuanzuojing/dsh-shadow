@@ -10,6 +10,7 @@ import { readMeta, writeMeta } from "../persistence/meta.js";
 import { extractMessage, goalText, classifyUser, extractDecisionStatement, extractReason } from "./collect.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
+import { streamText, textMessage } from "./writer-llm.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
@@ -142,35 +143,16 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   };
   const summarizeTurn = async (agent: any, body: unknown) => {
     if (summaryCfg.enabled === false) return "";
-    const llm = context.get("llm");
-    if (!llm) return "";
     const route = routeFor();
     if (!route) return "";
     const maxTokens = Math.max(1, Number(summaryCfg.maxTokens) || 80);
     const timeoutMs = Math.max(1, Number(summaryCfg.timeoutMs) || 8000);
     const system = "用一句话概括给定内容（这轮对话/动作的要点）。只用中文，不超过 40 个字；只输出这一句话，不加解释、引号、Markdown 或任何前缀。";
     const framed = String(body || "").trim().slice(0, 2000) || "（无正文）";
-    const messages = [{ id: `shadow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role: "user", content: [{ type: "text", text: framed }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      let text = "";
-      for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
-        if (!chunk) continue;
-        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
-        else if (chunk.type === "finish") {
-          if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return "";
-          break;
-        }
-      }
-      const one = String(text || "").replace(/\s+/g, " ").trim();
-      return one ? one.slice(0, 120) : "";
-    } catch (e: any) {
-      console.log("[dsh-shadow] summarize skipped:", e && e.message);
-      return "";
-    } finally {
-      clearTimeout(timer);
-    }
+    const messages = [textMessage(`shadow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, framed)];
+    const text = await streamText(context, route, { label: "summarize", system, messages, maxTokens, timeoutMs });
+    const one = String(text || "").replace(/\s+/g, " ").trim();
+    return one ? one.slice(0, 120) : "";
   };
 
   const buildIndexText = (ws: string, memories: any[], topicFiles: Record<string, string[]>, todayInfo: { count: number; topics: string[] }) => {
@@ -448,33 +430,14 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
 
   const expandTerms = async (topic: string) => {
     if (recallCfg.enabled !== true) return [];
-    const llm = context.get("llm");
-    if (!llm) return [];
     const route = routeFor(recallCfg);
     if (!route) return [];
     const maxTokens = Math.max(1, Number(recallCfg.maxTokens) || 60);
     const timeoutMs = Math.max(1, Number(recallCfg.timeoutMs) || 6000);
     const system = "你是检索扩词助手。给定一个主题/入口，输出 5~10 个最相关的检索词，每行一个，只输出词本身，不要编号、解释或标点。";
-    const messages = [{ id: `shadow-r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role: "user", content: [{ type: "text", text: topic }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      let text = "";
-      for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
-        if (!chunk) continue;
-        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
-        else if (chunk.type === "finish") {
-          if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return [];
-          break;
-        }
-      }
-      return tokenize(text).slice(0, 10);
-    } catch (e: any) {
-      console.log("[dsh-shadow] recall expand skipped:", e && e.message);
-      return [];
-    } finally {
-      clearTimeout(timer);
-    }
+    const messages = [textMessage(`shadow-r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, topic)];
+    const text = await streamText(context, route, { label: "recall expand", system, messages, maxTokens, timeoutMs });
+    return tokenize(text).slice(0, 10);
   };
 
   const getFlushWarn = () =>
@@ -487,32 +450,17 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const recallSelect = async (query: string, candidates: RecallCandidate[]) => {
     const cfg = config.llmRecall ?? {};
     if (cfg.enabled !== true || !candidates.length) return [];
-    const llm = context.get("llm");
-    if (!llm) return [];
     const route = routeFor(cfg);
     if (!route) return [];
     const maxTokens = Math.max(4, Number(cfg.maxTokens) || 12);
     const timeoutMs = Math.max(1, Number(cfg.timeoutMs) || 6000);
     const system = "你是记忆检索规划器。给定用户查询与候选任务列表，选出最相关任务的编号（从 0 开始）。只输出一个整数，不要解释、标点或 Markdown。";
     const framed = `查询：${query}\n候选任务：\n` + candidates.map((c, i) => `${i}. ${c.title}${c.objective ? " — " + c.objective : ""}${c.summary ? " — " + c.summary : ""}`).join("\n");
-    const messages = [{ id: `shp-${Date.now()}`, role: "user", content: [{ type: "text", text: framed }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      let text = "";
-      for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
-        if (!chunk) continue;
-        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
-        else if (chunk.type === "finish") { if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return []; break; }
-      }
-      const m = String(text || "").match(/\d+/);
-      if (m) { const idx = Number(m[0]); if (idx >= 0 && idx < candidates.length) return [idx]; }
-      return [];
-    } catch {
-      return [];
-    } finally {
-      clearTimeout(timer);
-    }
+    const messages = [textMessage(`shp-${Date.now()}`, framed)];
+    const text = await streamText(context, route, { label: "", system, messages, maxTokens, timeoutMs });
+    const m = String(text || "").match(/\d+/);
+    if (m) { const idx = Number(m[0]); if (idx >= 0 && idx < candidates.length) return [idx]; }
+    return [];
   };
 
   // v1.10.0 Knowledge Engine 的 LLM 树上导航（PageIndex `chat=` 步，ADR-0047 思想）：
@@ -521,31 +469,16 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   const knowledgeNavigate = async (query: string, candidates: { id: string; title: string; content: string }[]) => {
     const cfg = config.knowledgeEngine?.llmNavigate ?? {};
     if (cfg.enabled !== true || !candidates.length) return [];
-    const llm = context.get("llm");
-    if (!llm) return [];
     const route = routeFor({ provider: cfg.provider, model: cfg.model });
     if (!route) return [];
     const maxTokens = Math.max(4, Number(cfg.maxTokens) || 12);
     const timeoutMs = Math.max(1, Number(cfg.timeoutMs) || 6000);
     const system = "你是知识树检索规划器（像人翻长文档定位正确章节）。给定查询与候选章节，选出最相关章节的编号（逗号分隔，从 0 开始，可多选）。只输出编号，不要解释、标点或 Markdown。";
     const framed = `查询：${query}\n候选章节：\n` + candidates.map((c, i) => `${i}. ${c.title}${c.content ? " — " + c.content : ""}`).join("\n");
-    const messages = [{ id: `shk-${Date.now()}`, role: "user", content: [{ type: "text", text: framed }], source: { kind: "plugin", plugin: "dsh-shadow" } }];
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      let text = "";
-      for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages, system, maxTokens, signal: controller.signal })) {
-        if (!chunk) continue;
-        if (chunk.type === "text-delta" && chunk.text) text += chunk.text;
-        else if (chunk.type === "finish") { if (chunk.reason?.kind === "error" || chunk.reason?.kind === "aborted") return []; break; }
-      }
-      const idxs = (String(text || "").match(/\d+/g) || []).map(Number).filter((i) => i >= 0 && i < candidates.length);
-      return Array.from(new Set(idxs)).slice(0, 6);
-    } catch {
-      return [];
-    } finally {
-      clearTimeout(timer);
-    }
+    const messages = [textMessage(`shk-${Date.now()}`, framed)];
+    const text = await streamText(context, route, { label: "", system, messages, maxTokens, timeoutMs });
+    const idxs = (String(text || "").match(/\d+/g) || []).map(Number).filter((i) => i >= 0 && i < candidates.length);
+    return Array.from(new Set(idxs)).slice(0, 6);
   };
 
   // 懒构建索引：flush 只置 dirty（不重建）；这里才在「确实要读索引」时构建/落盘。
