@@ -1,6 +1,5 @@
 // dsh-shadow —— security/scrub.ts：安全清洗（密钥打码 / 控制与双向字符 / 系统脚手架标签 / 注入短语）。
 // **只改 Presentation，不改 Canonical Evidence**（v0.14 边界）。全部纯函数，从 index.ts 迁出。
-// 规则参考 claude-mem tag-stripping。
 
 export const SECRET_PATTERNS = [/sk-[A-Za-z0-9]{16,}/, /ghp_[A-Za-z0-9]{30,}/, /AKIA[0-9A-Z]{16}/, /AIza[0-9A-Za-z_-]{30,}/, /xox[baprs]-[A-Za-z0-9-]{10,}/, /-----BEGIN [A-Z ]+ PRIVATE KEY-----/];
 export const UNSAFE_CONTROL = /[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/;
@@ -17,7 +16,7 @@ export const isUnsafe = (line: unknown) => UNSAFE_CONTROL.test(String(line));
 export const scrubUnsafe = (s: unknown) => String(s || "").replace(/[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g, "");
 
 // 系统脚手架标签块：/workspace 指令、runtime context、skill 目录等以 <system-reminder>…</system-reminder> 成对注入。
-export const SYSTEM_TAG_NAMES = ["system-reminder", "system-instruction", "system_instruction", "claude-mem-context", "persisted-output", "private"];
+export const SYSTEM_TAG_NAMES = ["system-reminder", "system-instruction", "system_instruction", "persisted-output", "private"];
 export const SYSTEM_TAG_RE = new RegExp(`<(${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, "gi");
 export const SYSTEM_TAG_RESIDUE_RE = new RegExp(`<\\/?(?:${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>`, "gi");
 export const stripSystemScaffold = (s: unknown) => {
