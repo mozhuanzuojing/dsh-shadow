@@ -1,10 +1,21 @@
 // dsh-shadow —— query/reads.ts：ReadQuery 深 seam（候选 1，方案 A）。
-// 目标：把「read 概念」从 query.ts 的 61 分支 god monolith 里立成满足同一 seam 的深模块。
-//   每个读概念一个 handler：mode 命中 -> run(view/args/ctx) -> 派生+渲染（带 RECALL_PREFIX+flushWarn）。
-// 共享的「物化原子」由 query/materialize.ts 提供（唯一定义），不再在各分支复制脚手架。
+// 把「read 概念」从 query.ts 的 61 分支 god monolith 立成满足同一 seam 的深模块。
+//   每个读概念一个 ReadQuery handler：mode 命中 -> run(deps,args,exec,ctx) -> 派生+渲染（带 RECALL_PREFIX+flushWarn）。
+// 共享物化由 query/materialize.ts 提供（`materializeAtoms` 唯一定义，收敛重复脚手架）。
 import {
-  loadOrBuildProjection,
-} from "../core/projection-store.js";
+  deriveEpisodes, renderEpisodes, deriveDecisions, renderDecisions,
+} from "../core/episode.js";
+import { deriveTasks, renderTasks } from "../core/task.js";
+import { deriveContextReferences, renderContextRefs } from "../core/context.js";
+import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
+import { createIndexEngine } from "../core/index-engine.js";
+import {
+  createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge,
+  renderKnowledgeRetrieval, sectionPath, flattenSections,
+} from "../core/knowledge-engine.js";
+import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
+import { readManifest, renderManifest } from "../core/manifest.js";
+import { loadOrBuildProjection } from "../core/projection-store.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
@@ -22,7 +33,67 @@ export interface ReadQuery {
   run(deps: any, args: any, exec: any, ctx: ReadCtx): Promise<string>;
 }
 
-// ── shadow_query：统一 ShadowNode View + 跨类型上下文 + 旁路观测 + 可选 Projection 缓存（最深的一个读）──
+// ── episode / decision：连续任务关系层 + 决策血统 ──
+const episodeDecision: ReadQuery = {
+  modes: ["episode", "decision"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const { parsed } = await materializeAtoms(fs, ws, deps.config);
+    if (String(args?.mode) === "episode") {
+      const eps = deriveEpisodes(parsed, { gapMinutes: Math.max(0, Number(deps.config.episodes?.gapMinutes) || 60) });
+      return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
+    }
+    const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
+    return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + flushWarn);
+  },
+};
+
+// ── task：任务生命周期一等视图（ADR-0039）──
+const task: ReadQuery = {
+  modes: ["task"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const { parsed } = await materializeAtoms(fs, ws, deps.config);
+    const tasks = deriveTasks(parsed);
+    return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
+  },
+};
+
+// ── context：ContextReference（当前是否还能用，ADR-0040）──
+const context: ReadQuery = {
+  modes: ["context"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const { parsed } = await materializeAtoms(fs, ws, deps.config);
+    const mappings = (deps.config.context && deps.config.context.mappings) || [];
+    const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
+    return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
+  },
+};
+
+// ── recall：Task Recovery Bundle + Active Context（LLM 只导航/排序，内容仍派生）──
+const recall: ReadQuery = {
+  modes: ["recall"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const { parsed } = await materializeAtoms(fs, ws, deps.config);
+    const tasks = deriveTasks(parsed);
+    const mappings = (deps.config.context && deps.config.context.mappings) || [];
+    const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
+    const llmCfg = deps.config.llmRecall ?? {};
+    let out: string;
+    if (llmCfg.enabled === true && deps.recallSelect) {
+      const candidates = tasks.map((t, i) => ({ id: String(i), title: t.title, objective: t.objective, summary: (t.decisions[0] && t.decisions[0].text) || t.outcomes[0] || "" }));
+      const idx = await deps.recallSelect(String(args?.topic || "").trim(), candidates);
+      out = (idx.length && idx[0] < tasks.length) ? renderRecoveryFor(String(args?.topic || "").trim(), tasks[idx[0]], refs) : renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+    } else {
+      out = renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+    }
+    return scrubFinal(RECALL_PREFIX + out + flushWarn);
+  },
+};
+
+// ── shadow_query：统一 ShadowNode View + 跨类型上下文 + 旁路观测 + 可选 Projection 缓存 ──
 const shadowQuery: ReadQuery = {
   modes: ["query"],
   run: async (deps, args, _exec, ctx) => {
@@ -53,12 +124,88 @@ const shadowQuery: ReadQuery = {
   },
 };
 
-export const readQueries: ReadQuery[] = [shadowQuery];
+// ── knowledge：保留树 + 树上推理检索（带引用）─- LLM 只导航 ──
+const knowledge: ReadQuery = {
+  modes: ["knowledge"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const parsedK = (await materializeAtoms(fs, ws, deps.config)).parsed;
+    const tree = await createKnowledgeEngine(deps.config).build(parsedK);
+    const topicK = String(args?.topic || "").trim();
+    if (topicK) {
+      let hits = retrieveKnowledge(tree, topicK);
+      const cited = hits.map((h) => ({ ...h, __path: sectionPath(tree, h) }));
+      if (deps.knowledgeNavigate) {
+        const sections = flattenSections(tree);
+        const picks = await deps.knowledgeNavigate(topicK, sections.map((s) => ({ id: s.id, title: s.title, content: s.content })));
+        if (picks.length) {
+          const picked = picks.map((i) => sections[i]).filter(Boolean).map((s) => ({ ...s, __path: s.summary || "" }));
+          return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, picked, topicK) + "\n\n（v1.10.0 LLM 树上导航：LLM 只选章节编号，事实仍从树派生；未纳入生成）" + flushWarn);
+        }
+      }
+      return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, cited, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航未启用/失败 → 确定性检索）" + flushWarn);
+    }
+    const corpus = buildCorpusTree(parsedK);
+    const corpusTree = { provider: "tree", root: corpus, sourceCount: corpus.length };
+    return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(corpusTree) + "\n\n（ADR-0047：免向量保留树；不转 vector/chunk）" + flushWarn);
+  },
+};
+
+// ── index：Index Engine 候选生成（fs 默认全量 | zg 复用 provider）──
+const index: ReadQuery = {
+  modes: ["index"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const engine = createIndexEngine(deps.config);
+    const r = await engine.generateCandidates(String(args?.topic || "").trim(), { ws, workspace: ws });
+    const lines = [`# Index Engine · provider=${r.provider}${r.unavailable ? " · unAvailable(未装，勿当 verified)" : ""}`, ""];
+    if (r.refs.length) for (const ref of r.refs) lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
+    else lines.push(`- ${r.provider === "zg" ? "（zg 未产出候选：未装或未命中）" : "（fs: 全量扫描，无候选预筛）"}`);
+    return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
+  },
+};
+
+// ── query-log：Shadow Query Observatory 汇总（命中/证据/关系/类型分布 + 稳定性）──
+const queryLog: ReadQuery = {
+  modes: ["query-log"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const s = await summarizeQueryLog(fs, ws);
+    return scrubFinal(RECALL_PREFIX + renderQueryLogSummary(s, String(args?.topic || "").trim()) + flushWarn);
+  },
+};
+
+// ── shadow-report：Shadow Fitness Report（诊断而非增强；生成 .shadow/shadow-report.md）──
+const shadowReport: ReadQuery = {
+  modes: ["shadow-report"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const agg = await summarizeQueryLog(fs, ws);
+    let parsedForReport: any[] = [];
+    if (agg.total > 0) parsedForReport = (await materializeAtoms(fs, ws, deps.config)).parsed;
+    const report = buildFitnessReport(agg, parsedForReport);
+    const text = renderFitnessReport(report);
+    await writeShadowReport(fs, ws, scrubFinal(text));
+    return scrubFinal(RECALL_PREFIX + text + flushWarn);
+  },
+};
+
+// ── shadow-manifest：索引投影元数据 + 诊断（ADR-0048⑧）──
+const shadowManifest: ReadQuery = {
+  modes: ["shadow-manifest"],
+  run: async (deps, args, _exec, ctx) => {
+    const { fs, ws, flushWarn } = ctx;
+    const m = await readManifest(fs, ws);
+    return scrubFinal(RECALL_PREFIX + renderManifest(m) + flushWarn);
+  },
+};
+
+export const readQueries: ReadQuery[] = [episodeDecision, task, context, recall, shadowQuery, knowledge, index, queryLog, shadowReport, shadowManifest];
 
 const modeOf = (args: any) => String(args?.mode || "");
 export const findReadQuery = (args: any): ReadQuery | undefined => {
   const m = modeOf(args);
-  return readQueries.find((q) => q.modes.includes(m) || (m === "query" && args?.shadowQuery));
+  return readQueries.find((q) => q.modes.includes(m) || (m === "query" && args?.shadowQuery) || (m === "recall" && args?.recall));
 };
 
 /** 若 mode 命中某 ReadQuery，则交给它并返回；否则返回 undefined（交由 runReadShadow 继续走内联分支）。 */

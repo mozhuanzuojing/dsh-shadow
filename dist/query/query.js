@@ -7,16 +7,7 @@ import { readMeta, writeMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
-import { deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../core/episode.js";
-import { deriveTasks, renderTasks } from "../core/task.js";
-import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections } from "../core/knowledge-engine.js";
-import { readManifest, renderManifest } from "../core/manifest.js";
-import { materializeAtoms } from "./materialize.js";
 import { dispatchReadQuery } from "./reads.js";
-import { createIndexEngine } from "../core/index-engine.js";
-import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
-import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -109,111 +100,8 @@ export async function runReadShadow(deps, args, exec) {
         const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
         return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
     }
-    // Episode/Decision Lineage（派生关系层）：把 Event/Turn 级记忆原子串成连续任务（Episode），
-    // 并把「决策」提升为可追踪血缘。只读记忆树派生，不写回记忆文件（与 Experience/Judgment 同模式）。
-    if (String(args?.mode) === "episode" || String(args?.mode) === "decision") {
-        const { parsed } = await materializeAtoms(fs, ws, deps.config); // 唯一一次「物化」（收敛重复脚手架）
-        if (String(args?.mode) === "episode") {
-            const eps = deriveEpisodes(parsed, { gapMinutes: Math.max(0, Number(deps.config.episodes?.gapMinutes) || 60) });
-            return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
-        }
-        const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
-        return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + flushWarn);
-    }
-    // ADR-0039 Task Lifecycle：把记忆派生为「任务生命周期」一等视图（title/trigger/objective/
-    // constraints/status/decisions/outcomes）。派生式投影；Outcome 只记观察，不做成/败判断。
-    if (String(args?.mode) === "task") {
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
-        const tasks = deriveTasks(parsed);
-        return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
-    }
-    // ADR-0040 Context Recovery：把证据路径派生成 ContextReference（P0 复核/P1 来源/P2 转换痕迹）。
-    // Context = 当前是否还能用（validated|stale|unknown）；Mapping≠Source Fact，转换标注规则。
-    if (String(args?.mode) === "context") {
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
-        const mappings = (deps.config.context && deps.config.context.mappings) || [];
-        const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
-        return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
-    }
-    // v1.5 Shadow Usability：人类友好的"记忆恢复"统一入口（Task Recovery Bundle）。
-    // 一切内容来自派生数据（task/decisions/evidence/outcomes/constraints），不 LLM 补写。
-    if (String(args?.mode) === "recall" || args?.recall) {
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
-        const tasks = deriveTasks(parsed);
-        const mappings = (deps.config.context && deps.config.context.mappings) || [];
-        const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
-        // v1.6：LLM 推理导航（可选）——只让 LLM 选任务编号（意图/排序），Bundle 内容仍全来自派生数据。
-        const llmCfg = deps.config.llmRecall ?? {};
-        let out;
-        if (llmCfg.enabled === true && deps.recallSelect) {
-            const candidates = tasks.map((t, i) => ({ id: String(i), title: t.title, objective: t.objective, summary: (t.decisions[0] && t.decisions[0].text) || t.outcomes[0] || "" }));
-            const idx = await deps.recallSelect(String(args?.topic || "").trim(), candidates);
-            out = (idx.length && idx[0] < tasks.length) ? renderRecoveryFor(String(args?.topic || "").trim(), tasks[idx[0]], refs) : renderRecovery(String(args?.topic || "").trim(), tasks, refs);
-        }
-        else {
-            out = renderRecovery(String(args?.topic || "").trim(), tasks, refs);
-        }
-        return scrubFinal(RECALL_PREFIX + out + flushWarn);
-    }
-    // Phase 2 Index Engine（候选生成）：fs 默认（空=全量扫描）| zg 复用 provider（未装→unavailable，不 fallback）。gated 读面。
-    if (String(args?.mode) === "index") {
-        const engine = createIndexEngine(deps.config);
-        const r = await engine.generateCandidates(String(args?.topic || "").trim(), { ws, workspace: ws });
-        const lines = [`# Index Engine · provider=${r.provider}${r.unavailable ? " · unAvailable(未装，勿当 verified)" : ""}`, ""];
-        if (r.refs.length)
-            for (const ref of r.refs)
-                lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
-        else
-            lines.push(`- ${r.provider === "zg" ? "（zg 未产出候选：未装或未命中）" : "（fs: 全量扫描，无候选预筛）"}`);
-        return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
-    }
-    // Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk；纯派生、不新增事实）。默认 off。
-    if (String(args?.mode) === "knowledge") {
-        const parsedK = (await materializeAtoms(fs, ws, deps.config)).parsed;
-        const tree = await createKnowledgeEngine(deps.config).build(parsedK);
-        const topicK = String(args?.topic || "").trim();
-        if (topicK) {
-            // v1.10.0：LLM 树上导航（PageIndex `chat=` 步，ADR-0047）：LLM 只选章节编号，事实仍从树派生。
-            let hits = retrieveKnowledge(tree, topicK);
-            const cited = hits.map((h) => ({ ...h, __path: sectionPath(tree, h) })); // ADR-0048④ 引用（节路径溯源）
-            if (deps.knowledgeNavigate) {
-                const sections = flattenSections(tree);
-                const picks = await deps.knowledgeNavigate(topicK, sections.map((s) => ({ id: s.id, title: s.title, content: s.content })));
-                if (picks.length) {
-                    const picked = picks.map((i) => sections[i]).filter(Boolean).map((s) => ({ ...s, __path: s.summary || "" }));
-                    return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, picked, topicK) + "\n\n（v1.10.0 LLM 树上导航：LLM 只选章节编号，事实仍从树派生；未纳入生成）" + flushWarn);
-                }
-            }
-            return scrubFinal(RECALL_PREFIX + renderKnowledgeRetrieval(tree, cited, topicK) + "\n\n（ADR-0047：树上推理检索；LLM 导航未启用/失败 → 确定性检索）" + flushWarn);
-        }
-        // 无 topic → corpus 级 file 树（PageIndex File System：模块→文件→章节）
-        const corpus = buildCorpusTree(parsedK);
-        const corpusTree = { provider: "tree", root: corpus, sourceCount: corpus.length };
-        return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(corpusTree) + "\n\n（ADR-0047：免向量保留树；不转 vector/chunk）" + flushWarn);
-    }
-    // Phase 3/ADR-0048⑧：Shadow Manifest（可观测：索引投影元数据 + 诊断）。只读，不增强。
-    if (String(args?.mode) === "shadow-manifest") {
-        const m = await readManifest(fs, ws);
-        return scrubFinal(RECALL_PREFIX + renderManifest(m) + flushWarn);
-    }
-    // Phase 1A.5 Shadow Query Observatory：以只读方式观看 query-log 聚合（命中/证据/关系/类型分布 + 重复查询的 Node 稳定性）。
-    if (String(args?.mode) === "query-log") {
-        const s = await summarizeQueryLog(fs, ws);
-        return scrubFinal(RECALL_PREFIX + renderQueryLogSummary(s, String(args?.topic || "").trim()) + flushWarn);
-    }
-    // Phase 1A.6 Shadow Fitness Report：把 query-log 变成「是否升级索引层」的客观依据。
-    // 只读 query-log 聚合 + 扫记忆原子做 missing-types 启发式，生成 .shadow/shadow-report.md（系统派生，rm -rf 可重建）。
-    if (String(args?.mode) === "shadow-report") {
-        const agg = await summarizeQueryLog(fs, ws);
-        let parsedForReport = [];
-        if (agg.total > 0)
-            parsedForReport = (await materializeAtoms(fs, ws, deps.config)).parsed; // 共享物化
-        const report = buildFitnessReport(agg, parsedForReport);
-        const text = renderFitnessReport(report);
-        await writeShadowReport(fs, ws, scrubFinal(text));
-        return scrubFinal(RECALL_PREFIX + text + flushWarn);
-    }
-    // (mode:"query" 已由 query/reads.ts 的 ReadQuery 处理，见上方 dispatchReadQuery)
+    // 其余读族（episode/decision、task、context、recall、index、knowledge、shadow-manifest、
+    // query-log、shadow-report、query）已全部迁入 query/reads.ts 的 ReadQuery seam（见上方 dispatchReadQuery）。
     // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
     if (String(args?.mode) === "identity") {
         const current = await readCurrentIdentity(fs, ws, agent?.id);
