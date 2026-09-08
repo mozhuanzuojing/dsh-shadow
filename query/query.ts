@@ -10,6 +10,8 @@ import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/ut
 import { scoreMemory, breakdownOf, tierFor } from "../retrieval/rank.js";
 import { dispatchReadQuery } from "./reads.js";
 import { runContVerify } from "./contverify.js";
+import { runObserverKernel } from "./observer-kernel.js";
+import { runValidation } from "./validation.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
@@ -26,19 +28,6 @@ import { experienceOf, renderExperience } from "../core/experience.js";
 import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
-import { reflectOf, renderReflection } from "../reflection/engine.js";
-import { readCurrentIdentity } from "../identity/timeline.js";
-import { advanceIdentity, renderEvaluator } from "../identity/evaluator.js";
-import { buildTemporalGraph } from "../temporal/builder.js";
-import { writeTemporalGraph } from "../temporal/persistence.js";
-import { queryTemporal, renderTemporalGraph, renderReplay, renderCompare } from "../temporal/query.js";
-import { buildSleepWindow, renderSleepWindow } from "../dream/sleep.js";
-import { offlineCompression, buildDreamArtifact, renderDreamResult } from "../dream/compress.js";
-import { writeDream } from "../dream/persist.js";
-import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../validation/evidence.js";
-import { validateHypothesis, toArtifact, renderValidation } from "../validation/validate.js";
-import { writeValidation } from "../validation/persist.js";
-import { appendValidationEvent, readTimeline, renderTimeline } from "../validation/history.js";
 import { packetOf, renderPacket, assertPacketBarrier } from "../federation/contract.js";
 import { compareProjections, renderDistortion } from "../federation/guard.js";
 import { perspectiveOf, renderPerspective, perspectiveIsClean } from "../federation/perspective.js";
@@ -77,7 +66,6 @@ import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
 import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../long-horizon/render/render.js";
 import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../long-horizon/engine/interaction.js";
 import { writeInteractionContext, writeHistorySummary } from "../long-horizon/persistence/persist.js";
-import { renderNodePerception, renderNodeIdentityContext } from "../temporal/render.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
@@ -92,65 +80,12 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   // 候选 1 深 seam：把「读概念」路由到 query/reads.ts 的 ReadQuery 模块（先接 shadow_query，其余同类继续迁）。
   const viaRead = await dispatchReadQuery(deps, args, exec, { fs, ws, flushWarn, agent });
   if (viaRead !== undefined) return viaRead;
-  // v0.24 Reflection：旁支（不是 Memory 查询），用 mode:"reflection" 而非 reflect:true 布尔。
-  if (String(args?.mode) === "reflection") {
-    const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
-    return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
-  }
-  // 其余读族（episode/decision、task、context、recall、index、knowledge、shadow-manifest、
-  // query-log、shadow-report、query）已全部迁入 query/reads.ts 的 ReadQuery seam（见上方 dispatchReadQuery）。
-  // v0.25 Identity Continuity：读反思→Candidate→三道闸门→接受者推进 timeline（不自动改 soul.json）。
-  if (String(args?.mode) === "identity") {
-    const current = await readCurrentIdentity(fs, ws, agent?.id);
-    const { model, decisions } = await advanceIdentity(fs, ws, current, {
-      minCount: Math.max(1, Number(args?.minCount) || 5),
-      minRecency: Number(args?.minRecency) || 0.4,
-      maxContradiction: Number(args?.maxContradiction) || 0.3,
-      halfLifeDays: Math.max(1, Number(args?.halfLifeDays) || 90),
-    });
-    return scrubFinal(RECALL_PREFIX + renderEvaluator(decisions, model) + flushWarn);
-  }
-  // v0.26 Observer Temporal Kernel：建 Temporal Graph（时间坐标系，独立于 Dream）；at→replay / from+to→compare。
-  if (String(args?.mode) === "temporal") {
-    const graph = await buildTemporalGraph(fs, ws, { from: String(args?.from || ""), to: String(args?.to || "") });
-    await writeTemporalGraph(fs, ws, graph);
-    if (args?.perceptionOnly || args?.identityContext) {
-      const node = graph.nodes.find((n) => !args?.at || String(n.timestamp).slice(0, 10) === String(args.at).slice(0, 10)) || graph.nodes[0];
-      if (!node) return scrubFinal(RECALL_PREFIX + "（无 Temporal 节点）" + flushWarn);
-      return scrubFinal(RECALL_PREFIX + (args?.identityContext ? renderNodeIdentityContext(node) : renderNodePerception(node)) + flushWarn);
-    }
-    if (args?.at) return scrubFinal(RECALL_PREFIX + renderReplay(queryTemporal(graph, { type: "replay", at: String(args.at) })) + flushWarn);
-    if (args?.from && args?.to) return scrubFinal(RECALL_PREFIX + renderCompare(queryTemporal(graph, { type: "compare", from: String(args.from), to: String(args.to) })) + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderTemporalGraph(graph) + flushWarn);
-  }
-  // v0.27 Observer Sleep Kernel：SleepWindow → Offline Compression → DreamArtifact + Hypothesis(pending)。
-  if (String(args?.mode) === "offline") {
-    const sw = buildSleepWindow({ observerId: agent?.id || "unknown", from: String(args?.from || ""), to: String(args?.to || today()), trigger: (args?.trigger as any) || "scheduled" });
-    const result = await offlineCompression(fs, ws, { observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to });
-    const artifact = await buildDreamArtifact(fs, ws, { id: sw.id, observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to }, result);
-    await writeDream(fs, ws, { artifact, result });
-    for (const h of result.hypotheses) await writeHypothesis(fs, ws, h);
-    return scrubFinal(RECALL_PREFIX + renderSleepWindow(sw) + "\n" + renderDreamResult(result) + flushWarn);
-  }
-  // v0.28 Hypothesis Validation：注册 FutureEvidence（未来事实，单向）；validate 与替代解释竞争 → Artifact（不覆盖 Hypothesis）。
-  if (String(args?.mode) === "evidence") {
-    const ev = await registerFutureEvidence(fs, ws, { hypothesisId: String(args?.hypothesisId || ""), observedAt: String(args?.observedAt || today()), actualOutcome: String(args?.actualOutcome || ""), observationType: String(args?.observationType || "observation") });
-    return scrubFinal(RECALL_PREFIX + `[Evidence] registered ${ev.id} · hypothesis ${ev.hypothesisId} · outcome ${ev.actualOutcome}` + flushWarn);
-  }
-  if (String(args?.mode) === "validate") {
-    const hid = String(args?.hypothesisId || "");
-    const h = await readHypothesis(fs, ws, hid);
-    if (!h) return scrubFinal(RECALL_PREFIX + `（无 hypothesis ${hid}：请先 mode:offline 生成假设）` + flushWarn);
-    const evidences = await readFutureEvidence(fs, ws, hid);
-    const result = validateHypothesis(h, evidences);
-    await writeValidation(fs, ws, toArtifact(h, result, evidences.map((e) => e.id), today()));
-    await appendValidationEvent(fs, ws, hid, { evidenceIds: evidences.map((e) => e.id), result: result.outcome, alternativeWinner: result.alternativeEvaluation.find((a) => a.supported)?.alternative || null, perceptionDelta: `支持${result.applied.support}/反例${result.applied.contradiction}` });
-    return scrubFinal(RECALL_PREFIX + renderValidation(result) + flushWarn);
-  }
-  if (String(args?.mode) === "timeline") {
-    const tl = await readTimeline(fs, ws, String(args?.hypothesisId || ""));
-    return scrubFinal(RECALL_PREFIX + renderTimeline(tl) + flushWarn);
-  }
+  // v0.24–v0.27 observer-kernel（reflection/identity/temporal/offline）与 v0.28 validation
+  // （evidence/validate/timeline）已迁入 query/observer-kernel.ts / query/validation.ts。
+  const viaObserverKernel = await runObserverKernel(deps, args, { fs, ws, flushWarn, agent });
+  if (viaObserverKernel !== undefined) return viaObserverKernel;
+  const viaValidation = await runValidation(deps, args, { fs, ws, flushWarn });
+  if (viaValidation !== undefined) return viaValidation;
   // v0.28.1 Epistemic Kernel：Federation 只交换 ObservationClaim（投影契约，非权限）。
   if (String(args?.mode) === "federation") {
     const p = packetOf({ sourceObserverId: String(args?.sourceObserverId || agent?.id || "unknown"), observationClaim: String(args?.obsClaim || ""), lens: args?.lens as string, visible: args?.visible || [], hidden: args?.hidden || [], distortion: args?.distortion || [] });
