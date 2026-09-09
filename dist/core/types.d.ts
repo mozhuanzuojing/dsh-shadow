@@ -118,6 +118,7 @@ export interface EvidenceResult {
     provenance: {
         provider: string;
         at?: string;
+        reason?: string;
     };
 }
 export interface EvidenceProvider {

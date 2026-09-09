@@ -64,7 +64,7 @@ export interface EvidenceResult {
   matches: EvidenceMatch[];
   confidence: number;
   freshness: EvidenceFreshness;
-  provenance: { provider: string; at?: string };
+  provenance: { provider: string; at?: string; reason?: string };
 }
 export interface EvidenceProvider {
   /** 找证据：可能相关的候选。 */
