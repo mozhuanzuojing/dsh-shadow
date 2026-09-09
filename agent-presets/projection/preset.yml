@@ -1,3 +1,3 @@
 name: 投影模式
-description: 完整编码 Agent，外加「投影模式」：agent 作为独立思维意识体，思维/上下文/决策主动沉淀进 shadow 记忆树，可用 read_shadow / recall_shadow 回望；并自带「按任务类型派子代理专家」的工作方式（①–⑤）与「契约与根因卫生」（⑥：根因三部曲、禁止生造词、结论进 memory、交手前/改口径后四查）。
+description: 完整编码 Agent，外加「投影模式」：agent 作为独立思维意识体，思维/上下文/决策主动沉淀进 shadow 记忆树，可用 read_shadow / recall_shadow 回望；并自带「按任务类型派子代理专家」的工作方式（①–⑤）与「契约与根因卫生」（⑥：根因三部曲、禁止生造词、结论进 shadow/项目文档、交手前/改口径后四查）。
 order: 20

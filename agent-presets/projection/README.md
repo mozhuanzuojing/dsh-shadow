@@ -43,7 +43,8 @@ triad → plain language / `CONTEXT.md` terms → write key findings into shadow
 docs → four checks (易误解 / 遗漏 / 因果跌倒 / 注释断链) before handoff **and** after
 changing modes/APIs/terms/doc contracts. This is a **projection-session reinforcement**,
 not a full copy of global AGENTS (DSH already aggregates those into `~/.dsh/AGENTS.md`
-via `sync-rules`).
+via `sync-rules`). Wording in the persona uses「shadow / 项目文档」for the global
+AGENTS「memory 存档」habit, so it stays executable in projection mode.
 
 ## Boundaries (mirrors Observer Runtime)
 

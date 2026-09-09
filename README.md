@@ -238,7 +238,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 `dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`agent-presets/projection/`）：
 
 - 包内位置：`agent-presets/projection/`（`agent.cordis.yml` + `preset.yml` + `README.md`），是**生产包构成**，随包发布。
-- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9：①–⑤ 先分活 → 准确激活专家 → 提示词七要素 → 派了必须验收 → 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）与 **⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 memory、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）。
+- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9：①–⑤ 先分活 → 准确激活专家 → 提示词七要素 → 派了必须验收 → 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）与 **⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）。
 - **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（三个文件），或在 DSH 部署脚本中引用包内该目录。
 - 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过；改动后按 `copy → standingKeyFor(新 id) → remove` 做一次**全新挂载校验**（`projection` 已挂载时 `standingKeyFor` 返回既有世代，不会重读文件）。
 - 注意：预设引用 DSH 标准内置插件（`@deepseek-ai/dsh-*`）与 `{{model}}/{{cwd}}` 模板变量，不依赖用户机器专属配置；`dsh-shadow` 本身在 host 常开，预设只在 persona 里指引 agent 使用 `read_shadow`。
@@ -251,7 +251,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 | 版本 | 主题 |
 |------|------|
-| v1.13.1 | 投影模式预设增补 ⑥：根因三部曲 + 禁止生造词 + 结论进 memory + 四查（交手前/改口径后）；`recall_shadow` 正名短句；与全局 `~/.agents/AGENTS.md` 去重说明 |
+| v1.13.1 | 投影模式预设增补 ⑥：根因三部曲 + 禁止生造词 + 结论进 shadow/项目文档 + 四查（交手前/改口径后）；`recall_shadow`→`mode:recovery`；与全局 `~/.agents/AGENTS.md` 去重说明 |
 | v1.13.0 | API 正名硬切：`recovery` / `identity-advance` / `verifyEvidence` / `real-evidence` / `AtomEvidenceRef`；旧名显式拒绝（ADR-0050） |
 | v1.12.9 | 投影模式预设的 persona 增补「工作方式」五条（先分活 / 准确激活专家 / 提示词七要素 / 派了必须验收 / 并行与扇出），随包发布、不依赖用户级规则目录；预设/主 README 同步，安装副本已同步并做过全新挂载校验 |
 | v1.12.8 | ① **缺件不静默**提成全插件纪律（ADR-0049：只降级/必须可见/绝不冒充成功/只陈述事实），顺带修 `routeVerify` 未知 provider 静默退回 fs 的反例 ② **召回路由评测**（正/负样本 + rank-1 棘轮 + 主题键碰撞检测，回归门槛）③ `references.md` 三处更正（OpenAI 两条路线/hyperframes 安装坑/状态方向写反） |
