@@ -93,6 +93,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `verify` | VerificationRun（只读只报；禁改 authority/identity） |
 
 ## 关联
+- **缺件不静默（ADR-0049，v1.12.8）**：可选增强缺依赖时**只降级到确定性路径 + 必须可见**（`unavailable`/warn/debug 之一），**绝不**把缺件说成「已验证/已存在/已完成」，也不凭记忆里的流程继续。provider 名拼错 → `unavailable / provider_unknown`。
 - **召回信封（v1.12.6/1.12.7）**：`read_shadow(topic)` 结果末尾的 `> 未返回的命中：N 条（命中 M · 本次返回 K）` 是**披露**不是指令；`N = M − K`（预算 / `limit` / 冷却都算），空命中给「下一步 + 近似候选（标未验证）」。
 - **`recall.deprioritize`（v1.12.6，默认空）**：命中路径/入口**含**这些子串时打分 ×0.4——**只降权不移除**（仍可搜到），用来压 `references-agents/`、`_reports/` 这类通用命名抢排位。
 - `read_shadow` 无参数 = 读「目录」；带 `topic`/`entry` = 按入口点/主题加权召回命中记忆（返回摘要行+命中片段+相关度，非整篇全文）。
