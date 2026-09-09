@@ -37,6 +37,14 @@ lenses (correctness vs. contract/docs) are required for review work. Full text:
 `~/.agents/rules/moe-subagent-dispatch.md` (user-level) — this preset ships the
 self-contained short form, so it works on a machine without that rules directory.
 
+From v1.13.1 the persona also carries **⑥ 契约与根因卫生** (compressed from
+`~/.agents/AGENTS.md` global work conventions + the ADR-0050 clarify audit): root-cause
+triad → plain language / `CONTEXT.md` terms → write key findings into shadow or project
+docs → four checks (易误解 / 遗漏 / 因果跌倒 / 注释断链) before handoff **and** after
+changing modes/APIs/terms/doc contracts. This is a **projection-session reinforcement**,
+not a full copy of global AGENTS (DSH already aggregates those into `~/.dsh/AGENTS.md`
+via `sync-rules`).
+
 ## Boundaries (mirrors Observer Runtime)
 
 ```

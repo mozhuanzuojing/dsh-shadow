@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.13.1] 投影模式预设集成「契约与根因卫生」
+
+把用户级全局约定（`~/.agents/AGENTS.md` 前半：根因三部曲、禁止生造词、结论进 memory）与 ADR-0050 澄清检查经验（四查）压短写进**投影模式 persona ⑥**——随包发布；完整全局条文仍以 `~/.agents/AGENTS.md` / DSH 聚合的 `~/.dsh/AGENTS.md` 为准（⑥ = 投影侧常驻强化，非全文拷贝）。
+
+- **persona 增补**（`agent-presets/projection/agent.cordis.yml`）：⑥ 契约与根因卫生；回望句补 `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）。
+- **同步面**：`preset.yml` 描述、预设 `README.md`、主 `README.md`「投影模式」节与版本表。
+- **安装副本已同步**：`~/.dsh/.agent-presets/projection/` 三文件与包内 SHA-256 一致；改前备份带时间戳 `.bak-YYYYMMDD_HHMMSS`。
+- **验证**：包内 ↔ 安装副本 SHA 一致；persona 含 ⑥ 关键词（根因/禁止生造/CONTEXT/四查/recall_shadow/mode:recovery/写入 shadow/交手前）+ ①–⑤ 保留；`- id:` 行仍 16；`~/.dsh/.agent-presets/` 无 `projection-probe` 残留。`standingKeyFor` 须在 DSH host 挂载时校验（本机 CLI 未在 PATH；与 MEMORY 记载一致——改后以全新挂载为准）。
+- **边界**：只改预设人格与说明；**不改**插件运行时 mode/API；不把本仓「commit 后必须 push」写进通用人格。
+
+
 ## [v1.13.0] API 正名硬切（ADR-0050）
 
 破坏性读侧入参/mode 正名：删旧名、无兼容别名；旧名显式拒绝（禁止落空进默认召回）。**不扩能力。**
