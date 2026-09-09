@@ -41,7 +41,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | ObservedOutcome（v1.3.0，ADR-0039） | **只记观察结果**（`{event, observation, evidenceRef}`），**禁 Success/Failure**；`测试通过 ≠ 方案正确`。mode:"task" 的"观测结果（非成/败判断）"即其呈现 |
 | 启发式状态（v1.3.0） | Task 的 `active/completed/abandoned` 是**启发式观测**（由"完成/通过/放弃"等信号派生），**不是"方案正确/已确认"判断**（呼应 ADR-0037/0039） |
 | ContextReference（v1.4.0，ADR-0040 实现） | `{subject, value, source: MemoryAtom[], status: validated\|stale\|unknown}`——**不是 Memory**（Memory=曾经观察到；ContextReference=**当前是否还能用**）。答"以前知道的东西现在还能不能作为行动依据"。P0 Candidate+Revalidate（fs 复核）/ P1 Evidence Pointer / P2 Transformation Trace（`Mapping≠Source Fact`，如 `D:\ → /mnt/d/`） |
-| 记忆恢复（v1.5.0，recall_shadow） | **人类友好统一入口**：一句自然查询 → **Task Recovery Bundle**（任务/状态/启发式观测/关键决定(含理由)/证据(当前是否有效)/观测结果/当前注意/未明确理由决策）。内容全来自派生数据，**不 LLM 补写 Reason/事实/判断**；LLM 只在意图/排序参与（确定性评分默认）。底层合成 read_shadow 的 episode/decision/task/context |
+| 记忆恢复（v1.5.0，recall_shadow；v1.13.0 正名 `mode:"recovery"`） | **人类友好统一入口**：一句自然查询 → **Task Recovery Bundle**（任务/状态/启发式观测/关键决定(含理由)/证据(当前是否有效)/观测结果/当前注意/未明确理由决策）。内容全来自派生数据，**不 LLM 补写 Reason/事实/判断**；LLM 只在意图/排序参与（确定性评分默认）。底层合成 read_shadow 的 episode/decision/task/context。**废止** `mode:"recall"`（与 Recall Continuity / 主题召回撞名，见 ADR-0050） |
 | Active Context（v1.5.1） | 恢复包里的"**现在继续要记住什么**"段：`已完成/已决定`/`未完成待厘清`/`约束`/`最近决策`/`入口位置`——**全部派生**（Decision/Outcome/未明确理由决策/Constraint/任务状态/入口），**不是建议、不是推理、只是恢复**，不 LLM 生成。补上 Cursor 式"Continue where you left off" |
 | LLM 推理导航（v1.6，llmRecall） | `recall_shadow` 的 **LLM 选中任务**（意图识别+排序）：给候选任务列表，LLM **只输出编号**；Bundle 内容仍全派生。**LLM 只做导航/选择（Context Planning）**，不补 Reason/事实/判断；关/失败回退确定性 `bestTask`。取舍对应 PageIndex（`similarity≠relevance，relevance 需 reasoning`） |
 | Shadow Knowledge Graph（提议，ADR-0042，未实现） | 把 **zg（Index Engine，代码/工作区索引）** 与 **PageIndex（Document Tree Model，文档理解）** **移植进 shadow 内部**（非外部插件），统一 `ShadowNode{id,type:memory|code|document|decision|concept,content,relations:depends|references|caused_by|implements,index:keyword|tree|vector}`——三大 Engine：Memory(经历)/Index(代码搜索)/Knowledge(文档理解)。目标是 **Agent Cognitive Layer**（认知层）。**边界**：Memory Atom=source、Node 为派生投影、relations 只派生不 LLM 创造、index 为可重建派生索引、经验闭环（搜索→理解→修改→总结→下次用）、每次查询可指证据来源 |
@@ -58,14 +58,15 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## mode 参考（`read_shadow` 的 mode 串）
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
-> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verify`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
+> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
+> **正名硬切（ADR-0050 / v1.13.0）**：废止 `mode:"recall"`→`recovery`；`mode:"identity"`（推进）→`identity-advance`（读锚仍用 `args.identity`）；`args.verify`→`verifyEvidence`（`mode:"verify"`=VerificationRun 不动）；`mode:"reality"`→`real-evidence`。旧名显式拒绝，不落空进默认召回。lineage 侧证据类型正名为 `AtomEvidenceRef`（Gateway 仍叫 `EvidenceRef`）。
 
 | 族（源码） | mode | 一句话语义 |
 |------------|------|-----------|
 | 核心读 `query/reads.ts` | `episode` / `decision` | Episode Lineage（按「项目/会话+时间间隔」串连续任务）/ Decision Lineage（goal 事件 + 用户拍板，按入口聚合） |
 | | `task` | Task Lifecycle（ADR-0039：title/trigger/objective/constraints/status/决策链/观测结果） |
 | | `context` | Context Recovery（ADR-0040：ContextReference `subject/value/source/status`，答「以前知道的还能不能用」） |
-| | `recall` | Task Recovery Bundle（人类友好恢复包；`recall_shadow` 内部即此） |
+| | `recovery` | Task Recovery Bundle（人类友好恢复包；`recall_shadow` 内部即此；**废止**旧名 `recall`） |
 | | `query` | Shadow Projection（ShadowNode 跨类型查询，带 evidence；`shadow_query` 内部即此） |
 | | `query-log` | Shadow Query Observatory（查询观测汇总 + 重复查询的 Node 稳定性） |
 | | `shadow-report` | Shadow Fitness Report（Evidence Density / 类型分布 / 潜在缺失类型） |
@@ -73,11 +74,11 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `index` | Index Engine 候选生成（配合 `projectionStore`） |
 | | `knowledge` | Knowledge Engine 规范/文档树（**不转 vector**） |
 | Observer 时间/梦核 `query/observer-kernel.ts` | `reflection` | 从 ObservationTrace 发现候选规律（旁支；`from`/`to` 限周期） |
-| | `identity` | Identity 主体锚（`minCount`/`minRecency`/`maxContradiction`/`halfLifeDays` 闸门） |
+| | `identity-advance` | Identity Continuity 推进（闸门 `minCount`/`minRecency`/`maxContradiction`/`halfLifeDays`；读 curated 锚用 `args.identity`，**废止**旧名 `mode:"identity"`） |
 | | `temporal` | 时间坐标系重放（`at`） |
 | | `offline` | SleepWindow → 压缩 → DreamArtifact + Hypothesis（`trigger`） |
 | 假设验证 `query/validation.ts` | `evidence` / `validate` / `timeline` | FutureEvidence 注册 / 假设竞争验证 / 验证历史 |
-| Epistemic `query/federation.ts` | `federation` / `federation-perspective` / `federation-diff` / `distortion` / `stability` / `reality` / `real-refer` | 投影契约交换 / 视角 / 差异 / 失真 / 稳定性 / RealityEvidence 注册 / 引用 |
+| Epistemic `query/federation.ts` | `federation` / `federation-perspective` / `federation-diff` / `distortion` / `stability` / `real-evidence` / `real-refer` | 投影契约交换 / 视角 / 差异 / 失真 / 稳定性 / RealityEvidence 注册（**废止**旧名 `reality`）/ 引用 |
 | Reality Model `query/reality-model.ts` | `model` / `model-claim` / `model-observation` | 查一条 RealityClaim + 它的 Lineage / 由 RealityObservation 生成 RealityClaim（predicate 必须可观察）/ RealityObservation 弱事实注册 |
 | World `query/world.ts` | `world` / `world-relation` / `world-represent` | Graph 可重建 / RelationHypothesis / RepresentationObject（只接受 supported） |
 | Simulation + Action `query/sim-action.ts` | `simulate` / `candidate` / `execute` / `feedback` | 反事实模拟 / 候选 / 执行 / 反馈（Simulation≠Action≠Reality） |
@@ -93,6 +94,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `verify` | VerificationRun（只读只报；禁改 authority/identity） |
 
 ## 关联
+- **API 正名硬切（ADR-0050，v1.13.0）**：同名双义硬删旧名；旧名返回「已废止：X → 请用 Y」；`AtomEvidenceRef` ≠ Gateway `EvidenceRef`。
 - **缺件不静默（ADR-0049，v1.12.8）**：可选增强缺依赖时**只降级到确定性路径 + 必须可见**（`unavailable`/warn/debug 之一），**绝不**把缺件说成「已验证/已存在/已完成」，也不凭记忆里的流程继续。provider 名拼错 → `unavailable / provider_unknown`。
 - **召回信封（v1.12.6/1.12.7）**：`read_shadow(topic)` 结果末尾的 `> 未返回的命中：N 条（命中 M · 本次返回 K）` 是**披露**不是指令；`N = M − K`（预算 / `limit` / 冷却都算），空命中给「下一步 + 近似候选（标未验证）」。
 - **`recall.deprioritize`（v1.12.6，默认空）**：命中路径/入口**含**这些子串时打分 ×0.4——**只降权不移除**（仍可搜到），用来压 `references-agents/`、`_reports/` 这类通用命名抢排位。

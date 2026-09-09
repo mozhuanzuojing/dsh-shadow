@@ -3,6 +3,24 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.13.0] API 正名硬切（ADR-0050）
+
+破坏性读侧入参/mode 正名：删旧名、无兼容别名；旧名显式拒绝（禁止落空进默认召回）。**不扩能力。**
+
+| 废止 | 正名 |
+|------|------|
+| `mode:"recall"` | `mode:"recovery"`（`recall_shadow` 内部跟改） |
+| `mode:"identity"`（推进 timeline） | `mode:"identity-advance"`（读 curated 锚仍用 `args.identity`） |
+| `args.verify` | `args.verifyEvidence`（`mode:"verify"`=VerificationRun 不动；带 `verify` 键即废止） |
+| `mode:"reality"`（federation 注册） | `mode:"real-evidence"` |
+| lineage `EvidenceRef` | `AtomEvidenceRef`（Gateway `EvidenceRef{path}` 不动） |
+| `args.recall` 旁路 | 删除并纳入废止表 |
+
+- **实现**：`query/query.ts` `retiredApiMessage` 早退；`reads`/`observer-kernel`/`federation` 正名；`core/lineage.ts` 类型重命名；`core/intent.ts` 布尔旗标跟 `verifyEvidence`（审查补洞）。
+- **文档**：ADR-0050；CONTEXT.md mode 表 + 术语；README 路由表；ADR-0023 勘误行；schema `model-observation` 措辞。
+- **验证**：棘轮仍 61 mode；`test/recall-envelope.test.ts` 旧名拒绝 + 保留面（`identity` / `verifyEvidence` / `mode:verify`）成对断言；归因/episode/缺件回归 ALL PASS。
+
+
 ## [v1.12.9] 投影模式预设集成「子代理分工」纪律
 
 把用户 2026-09-08 对 v4.1f 的建议（多用子代理、父代理要会写「激活专家」的提示词、做好任务划分、别让一个代理干所有任务类型的活）落进**插件自带的投影模式预设**——随包发布，不依赖某台机器的用户级规则目录。

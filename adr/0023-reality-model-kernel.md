@@ -1,5 +1,7 @@
 # ADR-0023 · Observer Reality Model Kernel Protocol（v0.30 前置协议，先于实现）
 
+> **勘误（v1.13.0 / ADR-0050）**：正文里的 `mode:"reality"` 查询 RealityClaim **已过时**。现码：Reality Model 用 `model` / `model-claim` / `model-observation`；federation 注册 RealityEvidence 用 `real-evidence`（废止旧名 `reality`）。见 `CONTEXT.md` mode 参考与 ADR-0050。
+
 > 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.30 实现） ｜ 版本：v0.30.0
 > 前置：ADR-0022（v0.29.1 Integrity Review，7 条 Invariant 冻结）。定位：
 > **Reality Model 不是世界知识库，而是 Observer 群体基于共享证据、验证历史和时间上下文形成的稳定现实描述层。**
