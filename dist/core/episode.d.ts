@@ -1,4 +1,4 @@
-import type { AtomKind, AtomLineage, CreatedBy, EvidenceRef } from "./lineage.js";
+import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "./lineage.js";
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
     rel: string;
@@ -48,7 +48,7 @@ export interface Episode {
     }[];
     materials: string[];
 }
-export declare const materialsToEvidence: (materials: string[]) => EvidenceRef[];
+export declare const materialsToEvidence: (materials: string[]) => AtomEvidenceRef[];
 export declare const deriveCreatedBy: (p: {
     decisionEvents: DecisionEvent[];
     userMessages: string[];

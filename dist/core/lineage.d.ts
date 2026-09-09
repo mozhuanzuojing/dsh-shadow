@@ -4,8 +4,8 @@ export type CreatedBy = "user" | "agent" | "tool";
 export type AtomKind = "experience" | "metadata" | "session" | "task" | "artifact";
 /** ShadowNode 的投影类型。来自 lineage.ts 而非 node.ts，避免 lineage-validator ↔ node 类型循环。 */
 export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
-/** 一条证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
-export interface EvidenceRef {
+/** 一条 Atom 证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
+export interface AtomEvidenceRef {
     type: "file" | "conversation" | "document" | "commit" | "url";
     locator: string;
     fragment?: {
@@ -18,7 +18,7 @@ export interface EvidenceRef {
 export interface AtomLineage {
     source: string;
     createdBy: CreatedBy;
-    evidence: EvidenceRef[];
+    evidence: AtomEvidenceRef[];
     createdAt: string;
 }
 /** 判断一个 Atom 是否允许成为 ShadowNode（memory metadata 排除 / decision 无证据排除；Atom 仍存在）。 */

@@ -51,9 +51,9 @@ const context = {
         return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
     },
 };
-// ── recall：Task Recovery Bundle + Active Context（LLM 只导航/排序，内容仍派生）──
-const recall = {
-    modes: ["recall"],
+// ── recovery：Task Recovery Bundle + Active Context（LLM 只导航/排序，内容仍派生）──
+const recovery = {
+    modes: ["recovery"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
         const { parsed } = await materializeAtoms(fs, ws, deps.config);
@@ -178,11 +178,11 @@ const shadowManifest = {
         return scrubFinal(RECALL_PREFIX + renderManifest(m) + flushWarn);
     },
 };
-export const readQueries = [episodeDecision, task, context, recall, shadowQuery, knowledge, index, queryLog, shadowReport, shadowManifest];
+export const readQueries = [episodeDecision, task, context, recovery, shadowQuery, knowledge, index, queryLog, shadowReport, shadowManifest];
 const modeOf = (args) => String(args?.mode || "");
 export const findReadQuery = (args) => {
     const m = modeOf(args);
-    return readQueries.find((q) => q.modes.includes(m) || (m === "query" && args?.shadowQuery) || (m === "recall" && args?.recall));
+    return readQueries.find((q) => q.modes.includes(m) || (m === "query" && args?.shadowQuery));
 };
 /** 若 mode 命中某 ReadQuery，则交给它并返回；否则返回 undefined（交由 runReadShadow 继续走内联分支）。 */
 export const dispatchReadQuery = async (deps, args, exec, ctx) => {

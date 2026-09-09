@@ -19,8 +19,8 @@ const p = parseMemory(SAMPLE, ".shadow/2026-09-08/2026-09-08--110404-io-backend.
 assert.ok(p.lineage, "应派生 lineage");
 assert.equal(p.lineage.source, "session-abc", "source 来自「> 来源会话」");
 assert.equal(p.lineage.evidence.length, 2, "证据 = 材料条数");
-assert.equal(p.lineage.evidence[0].type, "file", "EvidenceRef.type=file");
-assert.ok(p.lineage.evidence[0].locator.includes("DeptMapService"), "EvidenceRef.locator=路径");
+assert.equal(p.lineage.evidence[0].type, "file", "AtomEvidenceRef.type=file");
+assert.ok(p.lineage.evidence[0].locator.includes("DeptMapService"), "AtomEvidenceRef.locator=路径");
 assert.equal(p.lineage.evidence.length, p.materials.length, "evidence 与 materials 一一对应");
 assert.equal(p.lineage.createdBy, "tool", "有材料(tool 触达)→tool");
 assert.equal(p.kind, "experience", "有材料、无决策→experience");

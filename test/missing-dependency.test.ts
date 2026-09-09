@@ -97,12 +97,12 @@ const rIndex = await host.read({});
 assert.ok(rIndex.length > 0 && !rIndex.startsWith("ERR"), "缺 llm 时读索引仍可用");
 const rKnowledge = await host.read({ mode: "knowledge", topic: "JwtFilter" });
 assert.ok(!rKnowledge.startsWith("ERR") && rKnowledge.length > 0, "缺 llm 时 knowledge 模式仍走确定性路径");
-const rRecall = await host.read({ mode: "recall", topic: "JwtFilter" });
+const rRecall = await host.read({ mode: "recovery", topic: "JwtFilter" });
 assert.ok(rRecall.includes("JwtFilter"), `缺 llm 时恢复包仍应命中：\n${rRecall}`);
 console.log("✔ ③ 全增强打开 + llm 缺失：topic/index/knowledge/recall 全部走确定性路径且不抛错");
 
 // ── ④ 证据校验：缺件只报事实（not_found），不冒充 verified ──
-const rVerify = await host.read({ topic: "JwtFilter", verify: true, max_tokens: 4096 });
+const rVerify = await host.read({ topic: "JwtFilter", verifyEvidence: true, max_tokens: 4096 });
 assert.ok(rVerify.includes("not_found"), `路径不存在应 not_found：\n${rVerify}`);
 assert.ok(!/verified\s+D:\/ws\/src\/missing\.ts/.test(rVerify), "不得把缺失路径报成 verified");
 assert.ok(rVerify.includes("provider=fs"), "应披露用的哪个 provider");

@@ -41,6 +41,26 @@ import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
+/** ADR-0050：废止旧名 → 正名。命中则早退，禁止落空进默认召回。 */
+const RETIRED_MODES: Record<string, string> = {
+  recall: "recovery",
+  identity: "identity-advance",
+  reality: "real-evidence",
+};
+
+export function retiredApiMessage(args: any): string | null {
+  const mode = String(args?.mode || "").trim();
+  if (mode && RETIRED_MODES[mode]) {
+    return `已废止：mode:"${mode}" → 请用 mode:"${RETIRED_MODES[mode]}"（ADR-0050）`;
+  }
+  if (args && Object.prototype.hasOwnProperty.call(args, "verify")) {
+    return `已废止：verify → 请用 verifyEvidence:true（Evidence Gateway；mode:"verify" 仍为 VerificationRun）`;
+  }
+  if (args?.recall) {
+    return `已废止：args.recall → 请用 mode:"recovery"（或工具 recall_shadow）`;
+  }
+  return null;
+}
 
 export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any): Promise<string> {
   const agent: AgentLike | undefined = exec?.agent;
@@ -49,10 +69,12 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const fs = deps.fs;
   if (!fs) return "（fs 服务不可用）";
   const flushWarn = deps.getFlushWarn();
+  const retired = retiredApiMessage(args);
+  if (retired) return scrubFinal(RECALL_PREFIX + retired + flushWarn);
   // 候选 1 深 seam：把「读概念」路由到 query/reads.ts 的 ReadQuery 模块（先接 shadow_query，其余同类继续迁）。
   const viaRead = await dispatchReadQuery(deps, args, exec, { fs, ws, flushWarn, agent });
   if (viaRead !== undefined) return viaRead;
-  // v0.24–v0.27 observer-kernel（reflection/identity/temporal/offline）与 v0.28 validation
+  // v0.24–v0.27 observer-kernel（reflection/identity-advance/temporal/offline）与 v0.28 validation
   // （evidence/validate/timeline）已迁入 query/observer-kernel.ts / query/validation.ts。
   const viaObserverKernel = await runObserverKernel(deps, args, { fs, ws, flushWarn, agent });
   if (viaObserverKernel !== undefined) return viaObserverKernel;
@@ -178,7 +200,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     }
     return scrubFinal(RECALL_PREFIX + renderJudgments(js) + flushWarn);
   }
-  if (args?.verify) {
+  if (args?.verifyEvidence) {
     const texts: any[] = [];
     for (const mm of memories) {
       const text = await readRel(fs, ws, mm.rel);

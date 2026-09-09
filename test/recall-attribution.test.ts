@@ -1637,7 +1637,7 @@ const todayStr = todayLocal();
 }
 
 // ─────────────────────────────────────────────
-// 场景 41：Evidence Gateway（v0.14）· fs Provider 默认 —— read_shadow(topic, {verify:true})
+// 场景 41：Evidence Gateway（v0.14）· fs Provider 默认 —— read_shadow(topic, {verifyEvidence: true})
 //           对匹配记忆的证据路径逐个 verifyEvidence：存在的 → verified，缺失 → not_found。
 // ─────────────────────────────────────────────
 {
@@ -1665,13 +1665,13 @@ const todayStr = todayLocal();
     "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js、acshModel/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store41.set("D:/ws/acshModel/entry.js", "export {}"); // 现存
   // acshModel/gone.js 缺失 → not_found
-  const r41 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verify: true, max_tokens: 4096 }, { agent: agentsById.get("T41") });
+  const r41 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verifyEvidence: true, max_tokens: 4096 }, { agent: agentsById.get("T41") });
   assert.ok(!String(r41).startsWith("ERR"), "verify 模式不应报错");
   assert.ok(String(r41).includes("[Evidence Verify]"), "应输出 Evidence Verify 段");
   assert.ok(String(r41).includes("verified  acshModel/entry.js"), "存在的路径应 verified");
   assert.ok(String(r41).includes("not_found  acshModel/gone.js"), "缺失的路径应 not_found");
   assert.ok(String(r41).includes("provider=fs"), "默认 provider 应为 fs");
-  console.log("✔ 场景41 Evidence Gateway(fs 默认)：verify:true 对证据路径反馈 verified/not_found");
+  console.log("✔ 场景41 Evidence Gateway(fs 默认)：verifyEvidence: true 对证据路径反馈 verified/not_found");
 }
 
 // ─────────────────────────────────────────────
@@ -1690,7 +1690,7 @@ const todayStr = todayLocal();
   store42.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-zg.md",
     "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store42.set("D:/ws/acshModel/entry.js", "export {}"); // 磁盘存在，但 zg provider 不查 fs
-  const r42 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verify: true, max_tokens: 4096 }, { agent: agentsById.get("T42") });
+  const r42 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verifyEvidence: true, max_tokens: 4096 }, { agent: agentsById.get("T42") });
   assert.ok(!String(r42).startsWith("ERR"), "zg unavailable 不应报错");
   assert.ok(String(r42).includes("unavailable"), "zg 未装应报 unavailable，绝不静默 fallback 成 verified");
   assert.ok(String(r42).includes("provider=zg"), "应标明 provider=zg");
@@ -2060,7 +2060,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   const P55 = { name, inject, apply };
   P55.apply(ctx55, { summary: { enabled: false }, recall: {} });
   putReflection(store55, "r55", { statement: "一次失败不生成原则", evidenceCount: 1, corr: [{ decision: "过早优化", outcome: "复杂性增加", count: 1, successRate: 0 }] });
-  const r55 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T55") });
+  const r55 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096 }, { agent: agentsById.get("T55") });
   assert.ok(!String(r55).startsWith("ERR"), "identity 不应报错");
   assert.ok(String(r55).includes("version v1"), "一次失败不应推进 identity（仍 v1）");
   assert.ok(!String(r55).includes("version v2"), "不应推进到 v2");
@@ -2081,7 +2081,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   const P56 = { name, inject, apply };
   P56.apply(ctx56, { summary: { enabled: false }, recall: {} });
   putReflection(store56, "r56", { statement: "设计前先验证需求", evidenceCount: 10, corr: [{ decision: "边界隔离", outcome: "维护成本下降", count: 10, successRate: 0.9 }] });
-  const r56 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, minCount: 20 }, { agent: agentsById.get("T56") });
+  const r56 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096, minCount: 20 }, { agent: agentsById.get("T56") });
   assert.ok(String(r56).includes("add_principle"), "多次一致应形成候选（add_principle）");
   assert.ok(String(r56).includes("设计前先验证需求"), "候选内容应为可验证规则（非人格结论）");
   assert.ok(String(r56).includes("重复性不足"), "minCount=20 时重复性不足→candidate");
@@ -2102,7 +2102,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   const P57 = { name, inject, apply };
   P57.apply(ctx57, { summary: { enabled: false }, recall: {} });
   putReflection(store57, "r57", { statement: "架构优先", evidenceCount: 10, corr: [{ decision: "架构优先", outcome: "稳定", count: 10, successRate: 0.8 }], deviations: ["低估/漏看X", "低估/漏看Y", "低估/漏看Z", "低估/漏看W", "低估/漏看V"] });
-  const r57 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, maxContradiction: 0.3 }, { agent: agentsById.get("T57") });
+  const r57 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096, maxContradiction: 0.3 }, { agent: agentsById.get("T57") });
   assert.ok(String(r57).includes("contradiction=0.50"), "反证应映射到 confidence.contradiction");
   assert.ok(String(r57).includes("反证过多"), "超过反证上限应拒绝");
   assert.ok(!String(r57).includes("version v2"), "反证过多不应推进 v2");
@@ -2122,7 +2122,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   const P58 = { name, inject, apply };
   P58.apply(ctx58, { summary: { enabled: false }, recall: {} });
   putReflection(store58, "r58", { statement: "在大型系统设计前优先建立验证闭环", evidenceCount: 12, corr: [{ decision: "验证闭环", outcome: "返工下降", count: 12, successRate: 0.92 }] });
-  const r58 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T58") });
+  const r58 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096 }, { agent: agentsById.get("T58") });
   assert.ok(String(r58).includes("version v2"), "过三道闸门应推进 identity(t1)=v2");
   assert.ok(String(r58).includes("accepted"), "应标记 accepted");
   assert.ok(String(r58).includes("在大型系统设计前优先建立验证闭环"), "learned 应含新原则");
@@ -2145,7 +2145,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   const P59 = { name, inject, apply };
   P59.apply(ctx59, { summary: { enabled: false }, recall: {} });
   putReflection(store59, "r59", { statement: "久远的原则", evidenceCount: 12, corr: [{ decision: "老决策", outcome: "收益明显", count: 12, successRate: 0.9 }], periodTo: "2024-01-01" });
-  const r59 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096, halfLifeDays: 90 }, { agent: agentsById.get("T59") });
+  const r59 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096, halfLifeDays: 90 }, { agent: agentsById.get("T59") });
   assert.ok(String(r59).includes("时间稳定不足"), "久远观察应被时间衰减闸门拦截");
   assert.ok(!String(r59).includes("version v2"), "时间衰减不应推进 v2");
   console.log("✔ 场景59 Identity：时间衰减（period.to 久远→recency 低→confidence 下降）");
@@ -2165,7 +2165,7 @@ const putReflection = (store: Map<string, string>, id: string, opts: { type?: st
   P60.apply(ctx60, { summary: { enabled: false }, recall: {} });
   putReflection(store60, "r60a", { statement: "偏好快速验证", evidenceCount: 10, corr: [{ decision: "快速验证", outcome: "返工下降", count: 10, successRate: 0.9 }] });
   putReflection(store60, "r60b", { statement: "偏好架构稳定", evidenceCount: 10, corr: [{ decision: "架构稳定", outcome: "维护成本下降", count: 10, successRate: 0.9 }] });
-  const r60 = await toolRegistry.get("read_shadow").execute({ mode: "identity", max_tokens: 4096 }, { agent: agentsById.get("T60") });
+  const r60 = await toolRegistry.get("read_shadow").execute({ mode: "identity-advance", max_tokens: 4096 }, { agent: agentsById.get("T60") });
   assert.ok(String(r60).includes("learned 2"), "两条不同原则应共存（learned 2）");
   assert.ok(String(r60).includes("偏好快速验证"), "应保留原则1");
   assert.ok(String(r60).includes("偏好架构稳定"), "应保留原则2（context-dependent，不覆盖）");
@@ -2761,7 +2761,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", observedAt: "2026-09-01", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "real-evidence", sourceObserverId: "A", observation: "2026-09-01 API latency increased", observedAt: "2026-09-01", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   const rk = [...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"));
   const rid = JSON.parse(store.get(rk!)).id;
   const before = store.get(rk!);
@@ -2792,7 +2792,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "某事件在某时间被观察到", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "real-evidence", sourceObserverId: "A", observation: "某事件在某时间被观察到", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   const rid = JSON.parse(store.get([...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"))!)).id;
   const s1 = await toolRegistry.get("read_shadow").execute({ mode: "stability", realityId: rid, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(s1).includes("state isolated"), "单 Observer 应 isolated");
@@ -2826,7 +2826,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 // Invariant-1 Observer≠Reality（95）：RealityEvidence 是弱事实，不声明世界规律。
 {
   const { fs, store } = mkV(new Map());
-  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "2026-09-01 API latency increased", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "real-evidence", sourceObserverId: "A", observation: "2026-09-01 API latency increased", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   const rk = [...store.keys()].find((k) => k.includes(".shadow/reality/") && k.endsWith(".json"));
   const ev = JSON.parse(store.get(rk!));
   assert.ok(ev.observation.includes("API latency increased"), "弱事实：只记录观察到");
@@ -2847,7 +2847,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 // Invariant-3 Evidence≠Knowledge（97）：Reality Evidence 不进入 knowledge 库。
 {
   const { fs, store } = mkV(new Map());
-  await toolRegistry.get("read_shadow").execute({ mode: "reality", sourceObserverId: "A", observation: "observed fact", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  await toolRegistry.get("read_shadow").execute({ mode: "real-evidence", sourceObserverId: "A", observation: "observed fact", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   const knows = [...store.keys()].filter((k) => k.includes(".shadow/knowledge") || k.includes(".shadow/fact") || k.includes(".shadow/world"));
   assert.ok(knows.length === 0, "Evidence 不进入 knowledge/world 库");
   console.log("✔ Invariant-3(97) Evidence≠Knowledge：弱事实不进入 knowledge 库");
@@ -2899,7 +2899,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 }
 
 // ─────────────────────────────────────────────
-// v0.30 Reality Model Kernel：Observation → Claim(带 lineage) → mode:"reality" 查询。无 truth/知识库/World Model。
+// v0.30 Reality Model Kernel：Observation → Claim(带 lineage) → mode:"model" 查询。无 truth/知识库/World Model。
 // ─────────────────────────────────────────────
 const obs = async (fs: any, ws: string, opts: { subject: string; observation: string; perspectives: string[] }) => toolRegistry.get("read_shadow").execute({ mode: "model-observation", subject: opts.subject, observation: opts.observation, sourcePerspectives: opts.perspectives, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
 const mkClaim = async (fs: any, ws: string, subject: string) => toolRegistry.get("read_shadow").execute({ mode: "model-claim", subject, max_tokens: 4096 }, { agent: agentsById.get("T-val") });

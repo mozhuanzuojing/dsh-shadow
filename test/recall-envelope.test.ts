@@ -1,4 +1,4 @@
-// dsh-shadow —— v1.12.6/1.12.7 回归（mock host，驱动真实插件代码）：
+﻿// dsh-shadow —— v1.12.6/1.12.7 回归（mock host，驱动真实插件代码）：
 //   ① mode 描述下沉：工具 schema 变短 + 指针；CONTEXT.md「mode 参考」表覆盖源码里的**全部 61 个** mode（棘轮）。
 //   ② 召回信封：截断自报家门（总数 = 命中 − 返回，冷却也算在内）+ 空命中给可执行下一步与近似候选（标「未验证」）。
 //   ③ deprioritize：只降权、不移除（被降权的树仍可搜到，只是排名靠后，且 debug 能解释）。
@@ -161,7 +161,7 @@ assert.ok(rNone.includes("alpha"), "近似候选应命中词形相近的入口")
 assert.ok(!rNone.includes("可作指令"), "不得把无匹配说成可作指令");
 
 // recall 恢复包的空分支也要给下一步
-const rRec = await host.read({ mode: "recall", topic: "完全不相干-zzz" });
+const rRec = await host.read({ mode: "recovery", topic: "完全不相干-zzz" });
 assert.ok(rRec.includes("> 下一步："), `恢复包空命中应给下一步：\n${rRec}`);
 
 // 近似候选：对称归一化 + hit≥2，单 bigram 噪声不得混入
@@ -191,5 +191,34 @@ const rDbg = await withDp.read({ topic: "alpha", debug: true, max_tokens: 4096 }
 assert.ok(rDbg.includes("降权(deprioritize)"), `debug 应逐条解释降权原因：\n${rDbg}`);
 assert.ok(rDbg.includes("降权·deprioritize"), "debug 应有降权汇总行");
 console.log("✔ ③ deprioritize：只降权不移除（排序变化 + debug 可解释 + 默认空不生效 + 字符串容错）");
+
+// ─────────────────────────────────────────────
+// ④ ADR-0050：旧名显式拒绝（禁止落空进默认召回）
+// ─────────────────────────────────────────────
+const hostRetire = makeHost(baseCfg, seeds);
+const rOldRecall = await hostRetire.read({ mode: "recall", topic: "alpha" });
+assert.ok(rOldRecall.includes("已废止"), `mode:recall 应显式拒绝：\n${rOldRecall}`);
+assert.ok(rOldRecall.includes("recovery"), "应指向 recovery");
+assert.ok(!rOldRecall.includes("一手代码"), "不得落空进主题召回");
+const rOldId = await hostRetire.read({ mode: "identity" });
+assert.ok(rOldId.includes("已废止") && rOldId.includes("identity-advance"), `mode:identity 应指向 identity-advance：\n${rOldId}`);
+const rOldReality = await hostRetire.read({ mode: "reality", observation: "x" });
+assert.ok(rOldReality.includes("已废止") && rOldReality.includes("real-evidence"), `mode:reality 应指向 real-evidence：\n${rOldReality}`);
+const rOldVerify = await hostRetire.read({ topic: "alpha", verify: true });
+assert.ok(rOldVerify.includes("已废止") && rOldVerify.includes("verifyEvidence"), `verify:true 应显式拒绝：\n${rOldVerify}`);
+const rOldArgsRecall = await hostRetire.read({ recall: true, topic: "alpha" });
+assert.ok(rOldArgsRecall.includes("已废止") && rOldArgsRecall.includes("recovery"), `args.recall 应显式拒绝：\n${rOldArgsRecall}`);
+const rNewRecovery = await hostRetire.read({ mode: "recovery", topic: "完全不相干-zzz" });
+assert.ok(!rNewRecovery.includes("已废止"), "正名 recovery 不得被拒");
+const rKeepIdentity = await hostRetire.read({ identity: true });
+assert.ok(!rKeepIdentity.includes("已废止"), `args.identity 保留：不得废止\n${rKeepIdentity}`);
+assert.ok(rKeepIdentity.includes("Identity") || rKeepIdentity.includes("Soul") || rKeepIdentity.includes("主体"), `args.identity 应返回主体锚或配置提示：\n${rKeepIdentity}`);
+const rKeepVerifyEv = await hostRetire.read({ topic: "alpha", verifyEvidence: true, max_tokens: 4096 });
+assert.ok(!rKeepVerifyEv.includes("已废止"), `verifyEvidence 正名不得被拒：\n${rKeepVerifyEv}`);
+assert.ok(rKeepVerifyEv.includes("Evidence") || rKeepVerifyEv.includes("verified") || rKeepVerifyEv.includes("not_found") || rKeepVerifyEv.includes("unavailable") || rKeepVerifyEv.includes("证据"), `verifyEvidence 应走 Gateway：\n${rKeepVerifyEv}`);
+const rKeepModeVerify = await hostRetire.read({ mode: "verify", evidenceRefs: ["evt-1"] });
+assert.ok(!rKeepModeVerify.includes("已废止"), `mode:verify（VerificationRun）保留：不得废止\n${rKeepModeVerify}`);
+assert.ok(modeDesc.includes("recovery") && modeDesc.includes("identity-advance"), "schema 常用 mode 应含正名");
+console.log("✔ ④ ADR-0050 旧名显式拒绝 + 保留面仍可用（identity / verifyEvidence / mode:verify / recovery）");
 
 console.log("ALL PASS ✅");

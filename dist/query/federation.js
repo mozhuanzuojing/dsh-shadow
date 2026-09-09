@@ -1,6 +1,6 @@
 // dsh-shadow —— query/federation.ts：Observer Federation / Epistemic Kernel seam（v0.28.1–v0.29）。
 // 从 query/query.ts 迁出：federation（投影契约交换）、distortion（视角失真）、federation-perspective、
-// reality（RealityEvidence 注册/引用）、federation-diff、stability。Federation 只交换 ObservationClaim（投影契约，非权限）。
+// real-evidence（RealityEvidence 注册/引用）、federation-diff、stability。Federation 只交换 ObservationClaim（投影契约，非权限）。
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runFederation(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
@@ -10,7 +10,7 @@ import { perspectiveOf, renderPerspective, perspectiveIsClean } from "../federat
 import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../federation/reality.js";
 import { differenceOf, renderDifference } from "../federation/difference.js";
 import { perspectiveStateOf, renderStability } from "../federation/stability.js";
-const MODES = new Set(["federation", "distortion", "federation-perspective", "reality", "real-refer", "federation-diff", "stability"]);
+const MODES = new Set(["federation", "distortion", "federation-perspective", "real-evidence", "real-refer", "federation-diff", "stability"]);
 /** Returns the rendered body for a federation mode, or undefined if not one of this family. */
 export async function runFederation(deps, args, ctx) {
     const mode = String(args?.mode || "");
@@ -31,7 +31,7 @@ export async function runFederation(deps, args, ctx) {
         const clean = perspectiveIsClean(p);
         return scrubFinal(RECALL_PREFIX + renderPerspective(p) + (clean.ok ? "\n（perspective OK：不携带 Memory/Identity/Dream/Knowledge，confidence 已拆分）" : `\n（perspective FAIL: ${clean.reasons.join("、")}）`) + flushWarn);
     }
-    if (mode === "reality") {
+    if (mode === "real-evidence") {
         const ev = await registerRealityEvidence(fs, ws, { observedAt: String(args?.observedAt || today()), source: String(args?.sourceObserverId || "unknown"), observation: String(args?.observation || ""), linkedHypothesis: args?.linkedHypothesis || [] });
         return scrubFinal(RECALL_PREFIX + renderRealityEvidence(ev) + flushWarn);
     }

@@ -3,8 +3,8 @@
 // 契约：
 //   - lineage 是 event-sourced：只记录「产生 Atom 那一刻可观察到的」来源/材料，绝不 LLM 补写/推断。
 //   - source ≠ evidence：source=Atom 从哪产生（会话）；evidence=支撑材料（spec/代码/adr 路径）。
-//   - evidence 用 EvidenceRef[]（而非 string[]）：为 zg(文件+行号)/PageIndex(文档+页)/Git(commit+diff) 预留统一抽象，
-//     避免接入时再迁移。类型仅声明，无运行时依赖。
+//   - evidence 用 AtomEvidenceRef[]（而非 string[]）：为 zg(文件+行号)/PageIndex(文档+页)/Git(commit+diff) 预留统一抽象，
+//     避免接入时再迁移。类型仅声明，无运行时依赖。与 Gateway 的 EvidenceRef{path} 区分（ADR-0050）。
 //   - kind 是 memory 的二级属性（避免 type 爆炸）：只影响「是否进入默认认知查询」，不新增 NodeType。
 
 /** Atom 的产生者。 */
@@ -16,8 +16,8 @@ export type AtomKind = "experience" | "metadata" | "session" | "task" | "artifac
 /** ShadowNode 的投影类型。来自 lineage.ts 而非 node.ts，避免 lineage-validator ↔ node 类型循环。 */
 export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
 
-/** 一条证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
-export interface EvidenceRef {
+/** 一条 Atom 证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
+export interface AtomEvidenceRef {
   type: "file" | "conversation" | "document" | "commit" | "url";
   locator: string;                                // 路径 / 会话 id / commit sha / url
   fragment?: { start?: number; end?: number; page?: number };
@@ -27,7 +27,7 @@ export interface EvidenceRef {
 export interface AtomLineage {
   source: string;            // 从哪产生（session/<date>-<id>）
   createdBy: CreatedBy;
-  evidence: EvidenceRef[];   // 支撑材料
+  evidence: AtomEvidenceRef[];   // 支撑材料
   createdAt: string;         // YYYY-MM-DD HH:MM:SS
 }
 

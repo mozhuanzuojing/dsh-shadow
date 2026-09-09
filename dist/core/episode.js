@@ -15,7 +15,7 @@ import { scrubUnsafe } from "../security/scrub.js";
 const fieldOf = (text, key) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
 const stripPrompt = (s) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
 // ── v1.8.0 Evidence Lineage：派生读侧（纯函数、无 LLM、只读可观察信号）──
-// materials → EvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
+// materials → AtomEvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
 export const materialsToEvidence = (materials) => materials.map((m) => ({ type: "file", locator: scrubUnsafe(String(m || "")).slice(0, 200) }));
 // createdBy：优先决策源（user 早于 agent），其次用户消息→user，材料→tool，兜底 agent。
 export const deriveCreatedBy = (p) => {

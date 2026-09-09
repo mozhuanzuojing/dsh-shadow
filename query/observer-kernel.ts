@@ -1,5 +1,5 @@
 // dsh-shadow —— query/observer-kernel.ts：Observer 时间/梦核 seam（v0.24–v0.27）。
-// 从 query/query.ts 迁出：reflection（旁支）、identity（主体锚+三道闸门）、temporal（时间坐标系）、
+// 从 query/query.ts 迁出：reflection（旁支）、identity-advance（Identity Continuity+三道闸门）、temporal（时间坐标系）、
 // offline（SleepWindow→压缩→DreamArtifact+Hypothesis）。只读记忆树/时间边派生，不覆盖源事实。
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runObserverKernel(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
@@ -20,7 +20,7 @@ import type { AgentLike } from "../core/types.js";
 
 export interface ObserverCtx { fs: any; ws: string; flushWarn: string; agent?: AgentLike }
 
-const MODES = new Set(["reflection", "identity", "temporal", "offline"]);
+const MODES = new Set(["reflection", "identity-advance", "temporal", "offline"]);
 
 /** Returns the rendered body for an observer-kernel mode, or undefined if not one of this family. */
 export async function runObserverKernel(deps: ShadowQueryDeps, args: any, ctx: ObserverCtx): Promise<string | undefined> {
@@ -31,7 +31,7 @@ export async function runObserverKernel(deps: ShadowQueryDeps, args: any, ctx: O
     const r = await reflectOf(fs, ws, { observerId: agent?.id || "unknown", period: { from: String(args?.from || ""), to: String(args?.to || today()) } });
     return scrubFinal(RECALL_PREFIX + renderReflection(r) + flushWarn);
   }
-  if (mode === "identity") {
+  if (mode === "identity-advance") {
     const current = await readCurrentIdentity(fs, ws, agent?.id);
     const { model, decisions } = await advanceIdentity(fs, ws, current, {
       minCount: Math.max(1, Number(args?.minCount) || 5),

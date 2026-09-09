@@ -12,7 +12,7 @@
 // 数据流：Events → Trace → Memory Atom → Episode/Decision（派生）→ 可穿透 Recall。
 
 import { scrubUnsafe } from "../security/scrub.js";
-import type { AtomKind, AtomLineage, CreatedBy, EvidenceRef } from "./lineage.js";
+import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "./lineage.js";
 
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
@@ -70,8 +70,8 @@ const fieldOf = (text: string, key: string) => (text.match(new RegExp(`^> ${key}
 const stripPrompt = (s: string) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
 
 // ── v1.8.0 Evidence Lineage：派生读侧（纯函数、无 LLM、只读可观察信号）──
-// materials → EvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
-export const materialsToEvidence = (materials: string[]): EvidenceRef[] =>
+// materials → AtomEvidenceRef（type=file，locator=路径）。zg 页/行号、Git commit 未来可在此扩展。
+export const materialsToEvidence = (materials: string[]): AtomEvidenceRef[] =>
   materials.map((m) => ({ type: "file", locator: scrubUnsafe(String(m || "")).slice(0, 200) }));
 
 // createdBy：优先决策源（user 早于 agent），其次用户消息→user，材料→tool，兜底 agent。
