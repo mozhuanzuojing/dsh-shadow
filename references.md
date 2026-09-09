@@ -52,11 +52,12 @@
 ### 1. OpenAI《Computer use》工具指南
 
 - 链接：https://developers.openai.com/api/docs/guides/tools-computer-use
-- **是什么**：官方讲「让模型操作浏览器/桌面」的集成指南。两条接入路径——让模型写代码（Playwright / PyAutoGUI）来操作界面，或让模型返回结构化鼠标键盘动作、由宿主应用执行；配套讲保持会话状态、把观察结果回传、以及安全边界。
+- **是什么**：官方讲「让模型操作浏览器/桌面」的集成指南。**不是两条并列路线**：主线是 Responses API 的 `computer` 工具（旧 `computer-use-preview` 仍受支持，但要按迁移指南过渡），实现上有三种 harness 形态——①宿主执行模型给的结构化 UI 动作（hosted `computer` 循环，模型出动作、后端执行后回传截图）②自定义 `function` 工具包一层（Playwright/Selenium/VNC/业务 API，通常是最稳的生产默认）③让模型写短脚本在沙箱里跑（code-execution harness，适合 DOM + 视觉混合流程）。配套讲保持会话状态、把观察回传、以及安全边界。
+  > 出处说明：本项目 2026-09-08 研究（§六）读的是官方 `.md` 版并记录了「推荐 + 兼容」这层演进；2026-09-08 复核时 `developers.openai.com` 对本机返回 403，未能二次核对原文，故此处按研究记录 + 第三方镜像（同一指南的三种 harness 表述）校正。
 - **值得借鉴**：
   - **安全四条**：①限制环境（隔离浏览器/虚拟机 + 站点与动作白名单）；②**把屏幕内容当不可信**——页面、文档、工具结果里的文字**不能授权、不能覆盖用户指令**；③有后果的动作（付款、外发数据、破坏性变更、把敏感信息填进表单）要用户确认；④给运行设步数/时间/花费上限 + 支持取消 + **看真实结果，不要只信模型自述**。
   - **文档形态**：页面 URL 加 `.md` 即得机器可读版本，另有 `llms.txt` 索引——说明「给 agent 读的文档」值得单独留一个机器可读入口。
-  - **状态与观察**：跨调用保持环境、把观察回传，是「多轮记忆」在工具层的同构做法。
+  - **状态与观察（原文方向常被写反）**：API 会话状态与执行环境状态是**分开**的——「继续一个 response **不会**恢复浏览器会话、登录态或运行时变量」（原文：*Continuing a response does not restore a browser session, login state, or runtime variables*）；要续接，得把观察结果回传。这条恰好是 `Memory ≠ Evidence`（ADR-0002 / 0044）的**外部正例**，不是「多轮记忆的同构做法」。
 - **与 dsh-shadow 的关系**：第②条与读侧「数据非指令」前缀 + `scrubFinal` 同构，可作为护栏写法的**外部权威参照**；第④条「看真实结果」对应本项目的证据裁决 / `verify`。**不引入其代码或依赖**。
 
 ### 2. browser-use/browser-use
@@ -77,6 +78,7 @@
   - **「先用 agent」的快速开始**：一条安装命令 + 一句示例提示；
   - **路由器技能 + 领域技能表**：一张表用「**Use when**」列说清「什么情况下用哪个」，比按主题罗列能力更好用；
   - **安装克制**：核心集常驻、其余按需装，并明确「不会在背后偷偷拉全套」。
+  - **安装克制要补一个坑**（按本机 hyperframes 技能文档核实）：CLI 的**裸 `skills` 会显式装全量已发布技能集**；走 `npx skills add` 时必须 `--skill <workflow>`（只装一个）或 `--all`（全量），**不给就是「一锅端」**。`skills check` 在技能陈旧/核心集不全时非零退出；刷新要用 `skills update`（`npx skills add` 走 registry，可能滞后）。**且缺件时不许照记忆里的流程往下走**——原文：*Treat a failed update as a visible tool failure; do not continue from a remembered workflow contract*（正是 dsh-shadow「缺件不静默」纪律的外部来源，见 ADR-0049）。
 - **与 dsh-shadow 的关系**：dsh-shadow 的读侧同样模式很多（`read_shadow` 的 episode / decision / task / context / query / observation…），目前 README 是**按主题罗列能力**，缺一张「什么情况用哪个模式」的路由表——这是最值得抄的一条。
 
 ### 4. mattpocock/skills

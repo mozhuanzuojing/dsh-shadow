@@ -1,3 +1,5 @@
 node_modules/
 *.log
 .DS_Store
+# archify 视觉自检产物（可重出，不进版本库）
+docs/*.visual-check.*
