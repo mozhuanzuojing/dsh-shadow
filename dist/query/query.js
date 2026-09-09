@@ -38,7 +38,8 @@ import { judgmentOf, renderJudgment } from "../core/judgment.js";
 import { projectContext, renderProjection } from "../observer/projection.js";
 import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
 import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
-/** ADR-0050：废止旧名 → 正名。命中则早退，禁止落空进默认召回。 */
+/** ADR-0050：废止旧名 → 正名。命中则早退，禁止落空进默认召回。
+ *  工具名 recall_shadow 仍合法（内部 mode:recovery）；废止的是 mode:"recall" 整串，不是工具。 */
 const RETIRED_MODES = {
     recall: "recovery",
     identity: "identity-advance",
@@ -53,7 +54,7 @@ export function retiredApiMessage(args) {
         return `已废止：verify → 请用 verifyEvidence:true（Evidence Gateway；mode:"verify" 仍为 VerificationRun）`;
     }
     if (args?.recall) {
-        return `已废止：args.recall → 请用 mode:"recovery"（或工具 recall_shadow）`;
+        return `已废止：args.recall → 请用 mode:"recovery"（或工具 recall_shadow）。语义扩词是宿主 config.recall，勿塞进工具参数`;
     }
     return null;
 }

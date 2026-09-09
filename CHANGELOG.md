@@ -18,6 +18,7 @@
 
 - **实现**：`query/query.ts` `retiredApiMessage` 早退；`reads`/`observer-kernel`/`federation` 正名；`core/lineage.ts` 类型重命名；`core/intent.ts` 布尔旗标跟 `verifyEvidence`（审查补洞）。
 - **文档**：ADR-0050；CONTEXT.md mode 表 + 术语；README 路由表；ADR-0023 勘误行；schema `model-observation` 措辞。
+- **澄清补丁（同版跟进）**：CONTEXT 去掉「mode 串不变」假表述；ADR-0015 勘误；`intentOf` 认 `mode:recovery|identity-advance` 等；recovery/Continuity/文件名注释桥；systemPrompt + schema 消歧；`args.recall` 废止文案区分 `config.recall`。
 - **验证**：棘轮仍 61 mode；`test/recall-envelope.test.ts` 旧名拒绝 + 保留面（`identity` / `verifyEvidence` / `mode:verify`）成对断言；归因/episode/缺件回归 ALL PASS。
 
 

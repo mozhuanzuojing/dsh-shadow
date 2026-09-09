@@ -8,6 +8,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as mod from "../dist/index.js";
 import { deprioritizeFactor, DEPRIORITIZE_FACTOR, approxEntries } from "../dist/retrieval/rank.js";
 import { truncationNote } from "../dist/retrieval/render.js";
+import { intentOf } from "../dist/core/intent.js";
 
 const { apply, name, inject } = mod;
 const WS = "D:/ws";
@@ -207,7 +208,7 @@ assert.ok(rOldReality.includes("已废止") && rOldReality.includes("real-eviden
 const rOldVerify = await hostRetire.read({ topic: "alpha", verify: true });
 assert.ok(rOldVerify.includes("已废止") && rOldVerify.includes("verifyEvidence"), `verify:true 应显式拒绝：\n${rOldVerify}`);
 const rOldArgsRecall = await hostRetire.read({ recall: true, topic: "alpha" });
-assert.ok(rOldArgsRecall.includes("已废止") && rOldArgsRecall.includes("recovery"), `args.recall 应显式拒绝：\n${rOldArgsRecall}`);
+assert.ok(rOldArgsRecall.includes("已废止") && rOldArgsRecall.includes("recovery") && rOldArgsRecall.includes("config.recall"), `args.recall 应显式拒绝并区分 config.recall：\n${rOldArgsRecall}`);
 const rNewRecovery = await hostRetire.read({ mode: "recovery", topic: "完全不相干-zzz" });
 assert.ok(!rNewRecovery.includes("已废止"), "正名 recovery 不得被拒");
 const rKeepIdentity = await hostRetire.read({ identity: true });
@@ -220,5 +221,14 @@ const rKeepModeVerify = await hostRetire.read({ mode: "verify", evidenceRefs: ["
 assert.ok(!rKeepModeVerify.includes("已废止"), `mode:verify（VerificationRun）保留：不得废止\n${rKeepModeVerify}`);
 assert.ok(modeDesc.includes("recovery") && modeDesc.includes("identity-advance"), "schema 常用 mode 应含正名");
 console.log("✔ ④ ADR-0050 旧名显式拒绝 + 保留面仍可用（identity / verifyEvidence / mode:verify / recovery）");
+
+// ─────────────────────────────────────────────
+// ⑤ intentOf：mode 串不得错挂「召回相关记忆」
+// ─────────────────────────────────────────────
+assert.equal(intentOf({ mode: "recovery" }, "x").goal, "恢复任务记忆包");
+assert.equal(intentOf({ mode: "identity-advance" }, "x").goal, "推进身份时间线");
+assert.equal(intentOf({ identity: true }, "x").goal, "确认主体");
+assert.equal(intentOf({}, "topic").goal, "召回相关记忆");
+console.log("✔ ⑤ intentOf mode/旗标 goal 消歧");
 
 console.log("ALL PASS ✅");

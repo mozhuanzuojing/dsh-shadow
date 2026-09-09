@@ -1,4 +1,5 @@
-const MODE_GOAL = {
+/** 布尔旗标 → 默认 goal（ADR-0050：verify→verifyEvidence；废止 args.recall）。 */
+const FLAG_GOAL = {
     judgment: "形成判断",
     project: "投影当前任务",
     experience: "回顾经历",
@@ -7,15 +8,31 @@ const MODE_GOAL = {
     identity: "确认主体",
     context: "观察上下文",
 };
-/** 布尔旗标优先级（ADR-0050：verify→verifyEvidence；废止 args.recall，默认目标仍为主题召回文案）。 */
-const MODE_ORDER = ["identity", "context", "observer", "project", "experience", "judgment", "verifyEvidence"];
+/** mode 串 → 默认 goal（布尔未命中时；避免 recovery/identity-advance 错挂「召回相关记忆」）。 */
+const MODE_GOAL = {
+    recovery: "恢复任务记忆包",
+    "identity-advance": "推进身份时间线",
+    verify: "运行验证",
+    episode: "展开连续任务",
+    decision: "展开决策血缘",
+    task: "展开任务生命周期",
+    context: "恢复上下文引用",
+    reflection: "反思规律",
+    temporal: "时间坐标重放",
+    offline: "离线压缩",
+};
+/** 布尔旗标优先级。 */
+const FLAG_ORDER = ["identity", "context", "observer", "project", "experience", "judgment", "verifyEvidence"];
 const DEFAULT_GOAL = "召回相关记忆";
 export const intentOf = (args, topic) => {
     const explicit = args?.intent;
     const question = String(explicit?.question || explicit?.query || args?.topic || topic || "").trim();
     const goal = String(explicit?.goal || args?.goal || "").trim();
-    const activeMode = MODE_ORDER.find((m) => args?.[m]);
-    const modeGoal = activeMode ? MODE_GOAL[activeMode] : DEFAULT_GOAL;
+    const activeFlag = FLAG_ORDER.find((m) => args?.[m]);
+    const modeStr = String(args?.mode || "").trim();
+    const modeGoal = (activeFlag && FLAG_GOAL[activeFlag]) ||
+        (modeStr && MODE_GOAL[modeStr]) ||
+        DEFAULT_GOAL;
     const desiredOutcome = explicit?.desiredOutcome ? String(explicit.desiredOutcome) : (goal ? `推进 ${goal}` : undefined);
     const constraints = Array.isArray(explicit?.constraints)
         ? explicit.constraints.map(String)

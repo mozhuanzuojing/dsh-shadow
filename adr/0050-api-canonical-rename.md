@@ -7,15 +7,15 @@
 
 ## Context
 
-`read_shadow` 上出现多组同名双义，调用方与模型易调错入口却不报错：
+`read_shadow` 上曾出现多组同名双义（下表为**改名前**撞车面；正名见 Decision）：
 
-| 撞车 | A | B |
-|------|---|---|
-| `identity` | `args.identity` → curated Identity（soul） | `mode:"identity"` → Identity Continuity 推进 |
-| `recall` | `mode:"recall"` → Task Recovery Bundle | `recall-*` → Recall Continuity；无 mode 带 topic → 主题召回 |
-| `verify` | `args.verify` → Evidence Gateway 路径核实 | `mode:"verify"` → VerificationRun |
-| `EvidenceRef` | Gateway `{path}`（`core/types.ts`） | Lineage `{type,locator}`（`core/lineage.ts`） |
-| `reality` | federation `mode:"reality"` 注册 RealityEvidence | Reality Model 已用 `model-*`（CONTEXT）；ADR-0023 旧文仍写 `mode:"reality"` 查 Claim |
+| 撞车 | A（改名前） | B（改名前） |
+|------|-------------|-------------|
+| `identity` | `args.identity` → curated Identity（soul）——**保留** | `mode:"identity"` → Identity Continuity 推进 → **正名 `identity-advance`** |
+| `recall` | `mode:"recall"` → Task Recovery Bundle → **正名 `recovery`** | `recall-*` → Recall Continuity（**保留**）；无 mode 带 topic → 主题召回（**保留**）；工具名 `recall_shadow`（**保留**，内部走 `recovery`） |
+| `verify` | `args.verify` → Evidence Gateway → **正名 `verifyEvidence`** | `mode:"verify"` → VerificationRun（**保留**） |
+| `EvidenceRef` | Gateway `{path}`（`core/types.ts`）——**保留名** | Lineage `{type,locator}` → **正名 `AtomEvidenceRef`** |
+| `reality` | federation `mode:"reality"` 注册 RealityEvidence → **正名 `real-evidence`** | Reality Model 已用 `model-*`（CONTEXT）；ADR-0023 旧文曾写 `mode:"reality"` 查 Claim |
 
 硬删后若仍 fallthrough 进默认主题召回，会出现「看起来成功、语义已错」。故必须**显式拒绝**旧名。
 
@@ -41,5 +41,6 @@
 ## Consequences
 
 - 外部提示词 / 预设若仍传旧 mode，会收到可见废止提示（不再静默错答）。
-- 历史 ADR 正文保留原措辞；ADR-0023 顶加勘误指针。
+- 历史 ADR 正文保留原措辞；ADR-0023 / ADR-0015 顶加勘误指针。
 - 测试与棘轮集合同步改名；新增废止拒绝用例。
+- 「recall」一词仍多义（工具名 / Continuity `recall-*` / `config.recall` / 主题召回）——靠 mode 正名 `recovery` + 注释桥消歧，不改工具名。

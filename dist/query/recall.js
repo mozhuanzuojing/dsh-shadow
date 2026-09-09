@@ -2,6 +2,8 @@
 // 从 query/query.ts 迁出：recall-forget / recall-event / recall-validation。
 // Recall = Access Transition（恢复访问路径），不是 Reality Reconstruction；不为 Memory Kernel。
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runRecall(deps,args,ctx)；返回 undefined 表示非本族 mode。
+// ADR-0050 消歧：本族是 Continuity（mode 前缀 recall-*），不是 Task Recovery（mode:"recovery" / core/recall.ts），
+//               不是主题召回，不是 config.recall。废止的是旧 mode:"recall"（整串），不是本族。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
 import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../recall/render/render.js";

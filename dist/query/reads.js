@@ -52,6 +52,9 @@ const context = {
     },
 };
 // ── recovery：Task Recovery Bundle + Active Context（LLM 只导航/排序，内容仍派生）──
+// ADR-0050：正名 mode:"recovery"；废止 mode:"recall"。
+// 易混：≠ Continuity 的 recall-*（query/recall.ts）；≠ 主题召回（无 mode + topic）；≠ config.recall（语义扩词）。
+// 工具名 recall_shadow 仍合法，内部即本 handler。
 const recovery = {
     modes: ["recovery"],
     run: async (deps, args, _exec, ctx) => {

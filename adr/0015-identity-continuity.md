@@ -4,6 +4,8 @@
 > 前置：ADR-0014（v0.24 Reflection）。定位：**Identity 不是"总结出来的人格"，而是 Observer 在时间轴上的稳定约束**。
 > 关键：变的是"当前时间切片中，观察者对自身规律的认识"，不是灵魂；否则 v0.25 退化成 `过去行为→总结→改人格→影响未来`。
 > 建议改名：**Observer Identity Continuity / Observer Self-Model Evolution**（避免误解成模型人格变化）。
+>
+> **勘误（ADR-0050 / v1.13.0）**：正文与附录仍写 `read_shadow({mode:"identity"})` 指 **Identity Continuity 推进**；正名已改为 `mode:"identity-advance"`。读 curated 主体锚仍用 `args.identity:true`（与推进 mode 不同）。
 
 ## 1. 核心不变量
 
@@ -73,6 +75,6 @@ Observer → Observe → Experience → Reflection → Candidate Self Model → 
 1. **Identity Timeline 是一等对象**：`shadow/identity/<at>-v<N>.json`（不可变版本切片）+ `timeline.md`。**不覆盖 soul.json**——Core 来自 soul.json（curated 稳定锚），Learned/CurrentModel 由 approval 推进的派生切片承载。`identity/timeline.ts`：`identityV1Of/readIdentityVersions/readCurrentIdentity/writeIdentityVersion/nextVersion/renderIdentityModel`。
 2. **CandidateIdentityChange 不含人格结论**：`proposal { type, content }` 只允许 `add_principle/remove_principle/change_decision_style/add_boundary`，content 来自 Reflection.learning.statement（重复行为→决策规律→原则），**无 personality 字段**。`identity/candidate.ts`：`candidateOf`（learning.type→proposal type，unknown→不成候选）、`identityConfidenceOf`、`renderCandidate`。
 3. **confidence 多维度**：`IdentityConfidence { frequency, recency, consistency, contradiction, overall }`（Identity ≠ Assertion）；反证 = reflection.deviationPatterns 数量 ×0.1。
-4. **Evaluator（非 Gate）**：`identity/evaluator.ts` `evaluateCandidate`（重复性 minCount / 时间稳定 minRecency+halfLifeDays 衰减 / 反证 maxContradiction → `IdentityChangeDecision{status, reasons}`）+ `advanceIdentity`（读反思→候选→三道闸门→接受者推进 identity(t0)→t1）。`read_shadow({mode:"identity"})`。
+4. **Evaluator（非 Gate）**：`identity/evaluator.ts` `evaluateCandidate`（重复性 minCount / 时间稳定 minRecency+halfLifeDays 衰减 / 反证 maxContradiction → `IdentityChangeDecision{status, reasons}`）+ `advanceIdentity`（读反思→候选→三道闸门→接受者推进 identity(t0)→t1）。对外调用：`read_shadow({mode:"identity-advance"})`（ADR-0050；旧文 `mode:"identity"` 已废止）。
 
 实现为 3 个逻辑步（Identity Model → Candidate → Evaluator），因模块相互依赖合并为一个可编译提交；每步语义独立。mock 55–60 验证：一次失败不改 Identity / 多次一致→candidate / 冲突证据降 confidence / 确认后进 timeline / 时间衰减 / 两候选共存（context-dependent 不覆盖）。

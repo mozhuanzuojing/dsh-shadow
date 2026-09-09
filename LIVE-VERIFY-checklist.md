@@ -1,5 +1,7 @@
-# dsh-shadow · live 复验清单（v0.13.0）
+# dsh-shadow · live 复验清单（历史稿 · 原标注 v0.13.0）
 
+> **口径提示（2026-09-09）**：下列步骤多写旧版工具/参数口径。当前包版本见 `package.json`（≥1.13.0）；读侧正名见 **ADR-0050** / CONTEXT「mode 参考」——`mode:recall`→`recovery`，`args.verify`→`verifyEvidence`，推进身份用 `mode:identity-advance`。本清单未逐条改写，执行时以现行 schema 为准。
+>
 > 预检（本文件由重启前会话完成）：dist 已建/node --check 过；profile bundles 含 `dsh-shadow`；dump-config 无 Error；
 > 探针遗留 `shadowRoot=D:\dsh-probe\csh-sandbox` 已去（走 session cwd）；`sandbox-policy.mode`/`permission.defaultPreset` 已还原 `workspace-write`。
 > 用法：重启 web profile 后，在**新会话**里按顺序执行；每项记录结果（✅/⚠️/❌）。

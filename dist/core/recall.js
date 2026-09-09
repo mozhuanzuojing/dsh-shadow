@@ -1,8 +1,10 @@
-// dsh-shadow —— core/recall.ts：Shadow Usability Layer（v1.5，"记忆恢复"统一入口）。
+// dsh-shadow —— core/recall.ts：Shadow Usability Layer（v1.5，「记忆恢复」统一入口）。
 // 目的：把 read_shadow 的 episode/decision/task/context 派生视图，合成一个【人类友好】的
 //      Task Recovery Bundle——用户只给一句自然查询（如"Todo清理"），系统给出"找到历史任务"。
 // 原则：一切内容来自派生数据（task/decisions/evidence/outcomes/constraints），绝不 LLM 补写
 //      Reason/事实/判断/完成（呼应 ADR-0037/0039）。LLM 只在【意图/排序】参与（外部可选）。
+// ADR-0050：对外正名 mode:"recovery"（工具 recall_shadow 内部同）；本文件名「recall」为历史遗留，
+//          ≠ query/recall.ts（Recall Continuity / recall-*），≠ 主题召回，≠ config.recall。
 import { scrubUnsafe } from "../security/scrub.js";
 import { tokenize } from "./util.js";
 const D = (s, n = 64) => scrubUnsafe(String(s || "")).slice(0, n);

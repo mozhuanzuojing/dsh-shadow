@@ -51,7 +51,8 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | 穿透 | 从「缺上下文 → 给出入口点/主题 → 命中该主题的记忆文件」的定位过程 |
 | 穿透的关键索引 | `_index.md` 里的「入口点/主题 → 记忆文件」映射，支撑入口按主题穿透 |
 | 召回 | `read_shadow(topic)` 按命题找出相关记忆的过程：A 档=加权关键词+标签+路径+时间衰减；B 档=先 `llm.stream` 扩词再打分（`rawConfig.recall.enabled` 开启） |
-| ReadQuery seam（v1.12.1 重构） | 读侧深 seam：每个 read 概念（Episode/Decision/Task/ShadowNode/Knowledge/…）一个模块，`mode` 命中 → `run(view,args,ctx)` 派生+渲染。共享 `materializeAtoms`（listMemories→过滤遗忘/收口→parseMemory 的**唯一定义**）收敛 query.ts 里重复 7–12 次的脚手架；`MaterializedView`=物化结果（memories/parsed/meta）。public 契约（read_shadow/recall_shadow/shadow_query + mode 串）不变 |
+| ReadQuery seam（v1.12.1 重构） | 读侧深 seam：每个 read 概念（Episode/Decision/Task/ShadowNode/Knowledge/…）一个模块，`mode` 命中 → `run(view,args,ctx)` 派生+渲染。共享 `materializeAtoms`（listMemories→过滤遗忘/收口→parseMemory 的**唯一定义**）收敛 query.ts 里重复 7–12 次的脚手架；`MaterializedView`=物化结果（memories/parsed/meta）。工具入口名（`read_shadow`/`recall_shadow`/`shadow_query`）稳定；**mode/参数名以 CONTEXT「mode 参考」+ ADR-0050 为准**（v1.13.0 硬切旧名，非「mode 串永远不变」） |
+| AtomEvidenceRef（v1.13.0，ADR-0050） | Memory Atom lineage 上的证据指针 `{type,locator}`（`core/lineage.ts`）。**≠** Gateway `EvidenceRef{path}`（`core/types.ts`）。旧名 lineage `EvidenceRef` 已废止 |
 | 命中片段 | 召回时从记忆正文抽出的、最相关的一行（优先非纯动作行），用于节约上下文而非整篇全文 |
 | 摘要 | 每回合记忆落盘后由 `llm.stream` 生成的一句中文概括，回填记忆文件头（`> 摘要：…`）；失败/超时则不写 |
 
