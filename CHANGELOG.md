@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.12.8] 缺件不静默纪律（ADR-0049）+ 召回路由评测（C6）+ references.md 三处更正
+
+接 2026-09-08 参考材料研究（§二 2.5 与 §三 3.6）与 §六 的待办，落两件 + 清一批小账。**无 LLM、无新依赖、不引向量库（ADR-0001）。**
+
+- **① 缺件不静默升为统一纪律（ADR-0049）**：把此前只写在 Evidence Provider 的「未装 → `unavailable`，绝不静默 fallback」提成**全插件纪律**，冻结四条规则——只降级不抛错 / 必须可见 / 绝不冒充成功 / 缺件只陈述事实；并逐条盘点 9 条可选增强的缺件行为（摘要、语义召回 B 档、推理导航、知识树导航、`zg`、Projection Store、`retention`/`forget`/`compact`、`verify`，表见 ADR-0049）。**顺带修一个反例**：`evidence/gateway.ts` 的 `routeVerify` 在 provider 名不存在时**静默退回 fs**（`evidenceProvider` 拼错就会把「查不到这个 provider」说成「fs 已核实」）——v1.12.8 起改为 `status:"unavailable"` + `provenance.reason:"provider_unknown"`（`core/types.ts` 的 provenance 增可选 `reason`）。新增 `test/missing-dependency.test.ts` 锁住回归。
+- **② 召回路由评测（C6，agent-skills 思路）**：新增 `test/recall-routing-eval.test.ts`——**正样本** 7 条（query → 期望 rank-1 一手入口）+ **负样本** 3 条（不得窜位：代码查询不得窜到 `references-agents/`、云函数 ≠ 页面、文档查询不得窜到通用工具类）+ **无匹配** 1 条 + **rank-1 棘轮**（排序快照钉住，改动排序必须显式更新期望）+ **主题键碰撞检测**（同一 `# 入口` 被不同记忆复用 → 报出；只算记忆原子，排除 `_index.md` / observer trace）。纯确定性；这是**回归门槛**，不是新功能。
+- **③ `references.md` 三处更正**（研究 §六 提出、此前未落地）：OpenAI《Computer use》指南**不是两条并列路线**（主线是 Responses API `computer` 工具 + 旧预览迁移，实现上有三种 harness 形态）；「跨调用保持环境」方向写反了（原文是*续对话不恢复浏览器会话/登录态/运行时变量*，恰是 `Memory ≠ Evidence` 的正例）；hyperframes 补安装坑（裸 `skills` 装全量、`npx skills add` 必须 `--skill`/`--all`，且*缺件不许照记忆里的流程继续*——正是 ADR-0049 的外部来源）。出处说明写在该文件内（OpenAI 原文 2026-09-08 复核时站点对本机返回 403，按研究记录 + 第三方镜像校正）。
+- **④ 杂项**：`.gitignore` 收掉 `docs/*.visual-check.*`（archify 视觉自检产物，可重出）。
+- **验证**：`npx tsc --noEmit` exit 0；`npm run build` exit 0（`dist` 同步）；**20 个测试全 `ALL PASS ✅`**（18 既有 + 新增 missing-dependency / recall-routing-eval）；路由评测 rank-1 准确率 1.0；`dsh --profile web --dump-config` exit 0 且无 `Error:`。
+
+
 ## [v1.12.7] 代码审查修复：读侧换行根因 / 信封计数自洽 / 棘轮补齐 plan + 文档口径校正
 
 对 v1.12.6 做了一轮独立代码审查（两个审查 agent，只读），逐条复核后修复。**其中 ① 是 v0.5 起就存在的读侧缺陷（不是 v1.12.6 引入），另修 6 处自检发现的问题。**
