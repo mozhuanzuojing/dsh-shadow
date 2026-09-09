@@ -27,6 +27,16 @@ auto-persisted into the shadow memory tree by the `dsh-shadow` plugin, and it
 should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
 a host bundle and is always on; this preset only steers how the agent uses it.
 
+The persona also carries the **delegation discipline** (v1.12.9): the agent acts as
+an orchestrator rather than doing every kind of work itself — split the task by type
+(implement / debug / review / research / docs / test / config), activate the matching
+subagent expert with a self-contained prompt, dispatch independent work in one batch,
+and **verify every expert claim itself** (run the command, write a probe, read the
+code) instead of trusting an unverified assertion. Two reviewers with different
+lenses (correctness vs. contract/docs) are required for review work. Full text:
+`~/.agents/rules/moe-subagent-dispatch.md` (user-level) — this preset ships the
+self-contained short form, so it works on a machine without that rules directory.
+
 ## Boundaries (mirrors Observer Runtime)
 
 ```
