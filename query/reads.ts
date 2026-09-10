@@ -10,7 +10,7 @@ import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { unavailableHint } from "../core/toolset.js";
-import { surveyCapabilities, renderSurvey, installCapability, renderInstall } from "../core/toolset-exec.js";
+import { surveyCapabilities, renderSurvey, installCapability, renderInstall, type SurveyOptions } from "../core/toolset-exec.js";
 import {
   createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge,
   renderKnowledgeRetrieval, sectionPath, flattenSections,
@@ -179,7 +179,7 @@ const index: ReadQuery = {
   },
 };
 
-// ── toolset：可选外部 CLI 的能力台账（只读巡检）+ 显式安装（审批门）──
+// ── toolset：工具集台账（只读巡检）+ 显式安装（审批门）──
 // 巡检是只读的；安装只在显式传 `install:"<id>"` 时发生，且**一律先要审批**、
 // 拿不到 `allowed-once` 就不装（见 core/toolset-exec.ts 的权限模型注释）。
 const toolset: ReadQuery = {
@@ -191,8 +191,12 @@ const toolset: ReadQuery = {
       const o = await installCapability(installId, { approval: deps.approval, agent: exec?.agent });
       return scrubFinal(RECALL_PREFIX + renderInstall(o) + flushWarn);
     }
-    const rows = await surveyCapabilities();
-    return scrubFinal(RECALL_PREFIX + renderSurvey(rows) + flushWarn);
+    const opts: SurveyOptions = {
+      survey: args?.survey === "all" ? "all" : "providers",
+      category: args?.category ? String(args.category) : undefined,
+    };
+    const rows = await surveyCapabilities(opts);
+    return scrubFinal(RECALL_PREFIX + renderSurvey(rows, opts) + flushWarn);
   },
 };
 

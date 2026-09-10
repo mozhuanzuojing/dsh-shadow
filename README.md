@@ -286,8 +286,10 @@ uv tool install semble
 如果你不想手动跑命令，插件提供了一个**显式**入口：
 
 ```text
-read_shadow({ mode: "toolset" })                      # 只读巡检：每一项可用/缺件 + 处置
-read_shadow({ mode: "toolset", install: "zg" })       # 显式安装 zg（会先向你申请审批）
+read_shadow({ mode: "toolset" })                             # 只读巡检：按分类列出全部条目 + provider 实时状态
+read_shadow({ mode: "toolset", survey: "all" })              # 并行探测全部 44 项（实测约 1.5s）
+read_shadow({ mode: "toolset", category: "GNU 工具链" })      # 只看某一分类
+read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某一项（会先向你申请审批）
 ```
 
 安装走的是**宿主自己的审批服务**（`ctx.approval.request`），只有拿到 `allowed-once` 才执行：
@@ -298,7 +300,24 @@ read_shadow({ mode: "toolset", install: "zg" })       # 显式安装 zg（会先
 | `rejected` / `cancelled` | **不安装**，明说原因 |
 | `unavailable` / 审批服务缺失 / 审批抛错 | **一律不安装**（fail closed），改为打印可自行执行的命令 |
 
-已可用的能力会**幂等短路**（不申请审批、不做任何改动）。未登记的能力**不编造命令**。
+已可用的条目会**幂等短路**（不申请审批、不做任何改动）。未登记的条目**不编造命令**。
+
+### 工具集台账：两级（v1.15.10）
+
+台账是**单一来源**（`core/toolset.ts`），分两级，**边界必须分清**：
+
+| 级 | 是什么 | 缺它会怎样 | 例子 |
+|---|---|---|---|
+| **`provider`** | **插件内接线**的可选增强 | 对应能力**降级**（读侧会出现处置行） | `zg`、`semble` |
+| **`reference`** | **通用开发 CLI 目录**（44 项 / 13 分类） | **不影响插件行为**；只是 agent 需要时能查到「装什么、怎么装」 | `rg`、`fd`、`jq`、`jadx`、`coreutils`… |
+
+目录覆盖：GNU 工具链（3 选 1）、搜索与查找、文本与数据、目录与浏览、Shell 与终端、Git、磁盘与系统、网络与下载、版本与包管理、构建与任务、归档、逆向与二进制分析。
+
+**人读版**在 `docs/toolchain-windows.md`（Windows 口径，含 winget ID 实测、Windows 特有陷阱与「未核实」标注）与 `docs/toolchain-wsl.md`（Linux/WSL 口径）。这两份文档**随包发布**，并受 `test/toolset-catalog.test.ts` 的**双向棘轮**保护——台账与文档任一侧漂移都会测试失败（该棘轮首次运行即抓出一个写错的 winget ID）。
+
+**探测的两条诚实纪律**：
+- **探测失败只说「未检出」，不说「未装」**（探测方式可能不适用，如该工具没有版本旗标）；
+- 宿主进程的 **PATH 是启动时快照**——宿主起来之后装的工具，要**重启宿主**才可见。
 
 ## 安装（持久化）
 
@@ -345,11 +364,12 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.9`（一键装入口：显式调用 + 宿主审批门）** —— 最新几版摘要：
+**当前版本：`v1.15.10`（工具集台账扩为两级：provider + 通用 CLI 目录，双向棘轮守护）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
-| v1.15.9 | **一键装入口 `mode:"toolset"`**：`read_shadow({mode:"toolset"})` = 只读巡检；`{mode:"toolset", install:"<id>"}` = **显式安装**。授权走**宿主自己的审批服务**（`ctx.approval.request`），**只有 `allowed-once` 才执行**；`rejected`/`cancelled`/`unavailable`/无通道/无 agent/审批抛错/非词表返回值 → **一律不安装**（fail closed），改为打印可自行执行的命令。已可用 → 幂等短路（不申请审批）；装完**重探**才报结果（不凭退出码宣称成功）。顺带解掉与 `zg` 同类的 Windows 陷阱：**`npm` 也是 `.cmd`**，故 `npm-global` 配方运行时解析为 `node <npm-cli.js> install -g <pkg>`。mode 总数 61 → **62**（棘轮同步）；全量回归 26/26 |
+| v1.15.10 | **工具集台账扩为两级**（ADR-0055）：`kind:"provider"`（插件内接线：zg/semble）与 **`kind:"reference"`（通用 CLI 目录，44 项 / 13 分类）**。新增 `docs/toolchain-windows.md`（Windows 口径，winget ID 全部本机实测）与 `docs/toolchain-wsl.md`，**随包发布**；`test/toolset-catalog.test.ts` 做**双向棘轮**（台账↔文档漂移即红，首次运行即抓出一个写错的 ID）。巡检支持 `survey:"all"`（并行探测全部，实测 44 项 **1.5s**）与 `category` 过滤；默认只探 provider（不白跑 40+ 外部进程）。探测口径收紧为诚实的「**未检出 ≠ 未安装**」+ 明示「宿主 PATH 是启动时快照」。全量回归 27/27 |
+| v1.15.9 | **一键装入口 `mode:"toolset"`**：`read_shadow({mode:"toolset"})` = 只读巡检；`{mode:"toolset", install:"<id>"}` = **显式安装**。授权走**宿主自己的审批服务**（`ctx.approval.request`），**只有 `allowed-once` 才执行**；`rejected`/`cancelled`/`unavailable`/无通道/无 agent/审批抛错/非词表返回值 → **一律不安装**（fail closed）。已可用 → 幂等短路；装完**重探**才报结果。顺带解掉与 `zg` 同类的 Windows 陷阱：**`npm` 也是 `.cmd`**，故解析为 `node <npm-cli.js> install -g <pkg>`。mode 总数 61 → **62** |
 | v1.15.8 | **缺件处置（工具集台账）**：新增 `core/toolset.ts` 声明式台账（`zg` / `semble`：`provides` / `degradesTo` / `remedy` / `doc`），并在 `mode:"index"` 与 `verifyEvidence` 两处缺件出口接上**可执行的确切命令**；`CandidateResult` 增 `reason`，顺带补上 `verifyEvidence` 此前不显示 `reason` 的缺口 |
 | v1.15.7 | **zg 集成三处修复 + 安装指南**（用户指出「不然没用」）：① **spawn 硬阻断**——Windows 上 `execFile("zg")` 必 ENOENT（Node 不解析 npm 的 `.cmd`）、`execFile("zg.cmd")` 必 EINVAL（CVE-2024-27980 缓解），于是「zg 装好、手动跑得通、插件恒 unavailable」→ 改为定位包内 `dist/cli/index.js` 用 `node` 起它；② **输出解析**——zg 0.2.2 的 `--rg` 是「路径单独一行 + 缩进 `起-止 [heading 面包屑] 行号:内容`」，不是 `path:line:text` → 改状态机，并**删掉两个会制造证据的兜底**（「stdout 出现 ref.path」会把 zg 的 `missing: <路径>` 误判成 verified）；③ **裁决语义**——`verify` 必须按 `ref.path` 限定搜索（工作区级搜索 + 全局 top-N 会把目标路径截掉：实测一次查询 40 条命中/16 文件，目标排第 7 个文件），不存在的路径 → `not_found`/`stale`；另把失败原因写进 `provenance.reason`（ADR-0049）。README 新增「可选外部 CLI（zg / Semble）」安装与自检指南 |
 | v1.15.6 | **Semble 接为 Index Engine 的候选 provider**（ADR-0054）：`indexEngine.provider = "semble"`（本地 CLI，`uv tool install semble`）。**它是检索层、不是裁决层**——只产候选 → `rankRefs` → `authorizeScope` → 交回 Shadow Core；默认仍 `fs`（行为不变）。**为什么不进裁决面**：实测 Semble **无阈值、无负信号**（4 次查询分数三元组完全相同；「量子纠缠/哈勃常数」这类语料里没有的话题照样返回最高分；CLI 无 `--threshold`），交它 `verify` 会违反 ADR-0043「无证据不返回」与 ADR-0049。**两处实现约束**：① spawn 时必须清洗 `NO_PROXY`——本机 ambient 的 `[::1]` 会让其 httpx 抛 `Invalid port ':1]'`（模型已缓存也照崩），故剔掉带方括号的条目；② Semble 返回**相对路径**，必须先绝对化——否则 `authorizeScope`（绝对前缀匹配）会把候选**整批滤掉**（此坑由测试暴露）。端到端实测：`generateCandidates` 返回 20 条绝对路径候选并命中 `core/resource.ts:173-186` |

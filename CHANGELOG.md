@@ -3,6 +3,55 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.10] 工具集台账扩为两级（provider + 通用 CLI 目录）+ 文档纳入仓库与双向棘轮
+
+用户 2026-09-10：「类似 `wsl-cli-tools.md` 这种你都要分类收集，以及 windows 的 uutils/coreutils、skylot/jadx」→ 随后**「全部纳入，这都是保障任务的」**（即推翻 v1.15.8 时定的「台账只收 dsh-shadow 自己的 zg/semble」那条边界）。
+
+### 做了什么
+
+1. **台账扩为两级**（`core/toolset.ts`）——这是本轮的核心，边界必须分清：
+   | 级 | 含义 | 缺它 | 例子 |
+   |---|---|---|---|
+   | `kind:"provider"` | **插件内接线**的可选增强 | 对应能力**降级**，读侧出现处置行 | `zg`、`semble` |
+   | `kind:"reference"` | **通用开发 CLI 目录** | **不影响插件行为**；只是查得到「装什么、怎么装」 | `rg`/`fd`/`jq`/`jadx`/`coreutils`… |
+   新增字段：`kind` / `category` / `winget`（结构化，供棘轮比对）/ `note`；`install` 转**可选**（没有可靠装法就**不给**，宁缺勿编）。
+
+2. **目录内容：44 项 / 13 分类**——插件内接线 2、GNU 工具链 3、搜索与查找 4、文本与数据 6、目录与浏览 2、Shell 与终端 8、Git 3、磁盘与系统 4、网络与下载 4、版本与包管理 2、构建与任务 4、归档 1、逆向与二进制分析 1。
+   - **winget ID 与版本全部本机实测核对**（`winget search`/`show`），不是照抄文档。
+   - 逆向类含 **jadx**（`Skylot.jadx` 1.5.6，50,406 ⭐，Apache-2.0）。
+   - GNU 工具链给出**三选一**并写明事实：**`Microsoft.Coreutils`**（5,155 ⭐，MIT，2026-05 新建、**preview**）README 原文是 *"A Microsoft-maintained build of uutils/coreutils, findutils, and grep packaged as a single multi-call binary for Windows"* ⇒ **它不是 uutils 的竞品而是微软对它的打包**，且多了 findutils/grep；另有上游 `uutils.coreutils`（24,062 ⭐，自 Ubuntu 25.10 起随发行）与 `frippery.busybox-w32`。
+
+3. **文档纳入仓库**：`docs/toolchain-windows.md`（Windows 口径）与 `docs/toolchain-wsl.md`（用户原始 WSL 文档）→ 写进 `package.json` 的 `files`，**随包发布**。
+
+4. **双向棘轮**（新 `test/toolset-catalog.test.ts`，6 项断言）：
+   - 正向：台账每个 reference 的 `winget` ID 必须出现在 `docs/toolchain-windows.md`；
+   - 反向：文档里 `winget install` **实际安装**的包必须在台账里 —— 按**命令参数语法**解析（跳过 `--id`/`-e` 等旗标，遇非包 ID token 即停），而不是全文扫「含点号的 token」（那样会把 `Apache-2.0`、版本号误收）；
+   - **该棘轮首次运行即抓出我自己写错的一个 winget ID**：台账写的 `pvolkov.mprocs`，实测应为 **`pvolok.mprocs`**（文档是对的）。这正是它的价值。
+
+5. **巡检增强**：`survey:"all"`（并行探测全部）/ `category:"…"`（单分类）；默认**只探 provider**（不白跑 40+ 外部进程）。真机实测：**44 项并行探测 1480 ms**，本机检出 7 项（`zg`/`semble`/`fzf`/`zoxide`/`gh`/`ffmpeg`/`uv`）。
+
+6. **探测口径收紧为诚实表述**：只说「**未检出**」（`false`）或「**未探测**」（`null`），**不说「未装」**——探测方式可能不适用（该工具没有版本旗标），且**宿主进程的 PATH 是启动时快照**（宿主起来之后装的工具要重启才可见）。渲染里明写这条，并加测试断言**输出不得出现「未装」措辞**。
+
+7. `index.ts` 工具 schema 增 `install` / `survey` / `category` 三个参数，并写明「安装仅用户显式要求」。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 27/27 `ALL PASS ✅`**（新增 `test/toolset-catalog.test.ts`）。
+- 新测试覆盖：台账结构自洽（44 项、id 唯一、分类已登记、`probe` 非空且**不含空参数**）+ 双向棘轮 + 巡检渲染（分类分组/区分未探测与未检出/含「探测失败≠未安装」/无「未装」措辞）+ 未登记条目不编造 + **reference 条目安装同样受审批门保护且拒绝后确实未安装**（用本机确实缺件的 `rg` 验，并复探确认没被偷偷装上）。
+- 修一处自己引入的 bug：`7zip` 的版本旗标留空会变成 `7z ""`（传空路径）→ `probe` 构造改为「空旗标就不带参数」，并加断言禁止 `probe` 含空串。
+- 修一处自己引入的语法错：`renderSurvey` 里双引号串内又用双引号（`mode:"toolset"`）→ 改模板串。
+
+### 边界与未验证
+
+- **`allowed-once` → 真正执行安装器 → 重探** 这条**执行**路径仍未在单测中跑（会真装软件、改动机器）；安全门与 argv 解析分别由测试 ⑥ 与 `resolveInstall` 覆盖。
+- **各 reference 条目 probe 旗标的正确性未逐项验证**——某工具若不支持该旗标，只会显示「未检出」（不会误报可用），口径已由新增的诚实表述兜住。
+- `Microsoft.Coreutils` **未实际安装实测**（只核对了 winget 元数据与 README）；其 **preview** 状态未评估。
+- Ghidra **winget 无包**（实测），未验 scoop/choco；`tmux` 无官方 Windows 包；`viddy` 无 winget 结果；`dive` 搜到的是同名无关工具（已在文档标注，勿混装）。
+- 台账分类与 `docs/toolchain-wsl.md` **未做棘轮**（那份是 Debian 包名口径，与 winget 无对应关系）。
+
+
+
+
 ## [v1.15.9] 一键装入口（显式调用 + 宿主审批门）—— mode:"toolset"
 
 承接 v1.15.8 的用户决定：**「加『一键装』入口（显式调用）」**。v1.15.8 只做到「报缺件 + 给命令」，本版补上可执行的安装入口——**但把授权交给宿主，而不是插件自己扩权**。

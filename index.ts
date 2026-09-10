@@ -277,6 +277,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             content: { type: "string", description: "WorkspaceRecord content（world 层项目内容；与 mode:workspace-record 配合）。" },
             evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verification 配合）。" },
             runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verification 配合）。" },
+            // 工具集台账（mode:"toolset"）：巡检只读；安装**仅用户显式要求**且**一律先经宿主审批**。
+            install: { type: "string", description: "工具集台账（mode:toolset）：**显式安装**某个条目的 CLI（传 id，如 \"rg\"/\"jadx\"/\"coreutils-ms\"）。有后果动作——会先向用户申请审批，只有获批（allowed-once）才执行，装完重新探测再报结果。默认不传=只读巡检。仅用户显式要求时使用。" },
+            survey: { type: "string", description: "工具集台账（mode:toolset）：\"providers\"（默认，只探测插件内接线的 zg/semble）或 \"all\"（并行探测全部通用工具，约 40 项）。" },
+            category: { type: "string", description: "工具集台账（mode:toolset）：只列某个分类（如 \"GNU 工具链\" / \"搜索与查找\" / \"逆向与二进制分析\"）。" },
           },
         },
         output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },

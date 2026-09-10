@@ -1,6 +1,6 @@
 import { type Capability } from "./toolset.js";
 /**
- * 探测一项能力是否可用。
+ * 探测一项。
  * zg 走包内 CLI 入口解析（与 provider 同一套逻辑，避免「装了但起不来」的假阴性）；
  * 其余走 PATH 上的可执行文件。
  */
@@ -36,21 +36,28 @@ export interface InstallOptions {
     timeoutMs?: number;
 }
 /**
- * 显式安装一项能力。**唯一的成功路径**：探测缺件 → 审批得 `allowed-once` → 执行 → 重探通过。
+ * 显式安装一项。**唯一的成功路径**：探测缺件 → 审批得 `allowed-once` → 执行 → 重探通过。
  * 任一环节不满足都返回对应状态，**绝不在未验证的情况下宣称已装好**。
  */
 export declare const installCapability: (id: string, opts?: InstallOptions) => Promise<InstallOutcome>;
-/** 台账巡检（**只读**）：逐项探测 + 给处置。 */
-export declare const surveyCapabilities: () => Promise<{
+export interface SurveyRow {
     capability: Capability;
-    available: boolean;
+    /** true=检出；false=未检出；**null=本次未探测**（区别于「未装」）。 */
+    available: boolean | null;
     detail: string;
-}[]>;
-/** 渲染巡检结果（读侧输出）。 */
-export declare const renderSurvey: (rows: {
-    capability: Capability;
-    available: boolean;
-    detail: string;
-}[]) => string;
+}
+export interface SurveyOptions {
+    /** "providers"（默认，只探测 2 个）｜"all"（并行探测全部）。 */
+    survey?: "providers" | "all";
+    /** 只列某一分类。 */
+    category?: string;
+}
+/**
+ * 台账巡检。默认：provider **实时探测**，reference **只列不探**（省 40+ 次外部进程）。
+ * `survey:"all"` → 全部并行探测（短超时）。
+ */
+export declare const surveyCapabilities: (opts?: SurveyOptions) => Promise<SurveyRow[]>;
+/** 渲染巡检结果（按分类分组）。 */
+export declare const renderSurvey: (rows: SurveyRow[], opts?: SurveyOptions, platform?: string) => string;
 /** 渲染一次安装结果。 */
 export declare const renderInstall: (o: InstallOutcome) => string;

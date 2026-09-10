@@ -76,7 +76,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `shadow-report` | Shadow Fitness Report（Evidence Density / 类型分布 / 潜在缺失类型） |
 | | `shadow-manifest` | Shadow Manifest（记忆树清单/可观测） |
 | | `index` | Index Engine 候选生成（provider `fs`（默认）/ `zg` / `semble`；`semble` 见 ADR-0054） |
-| 工具台账 `query/reads.ts` | `toolset` | 可选外部 CLI 的能力台账：无 `install` = **只读巡检**；`install:"<id>"` = **显式安装**（先经宿主审批，只有 `allowed-once` 才执行，装完**重探**再报结果） |
+| 工具台账 `query/reads.ts` | `toolset` | **工具集台账**（ADR-0055，v1.15.10）：两级 —— `kind:"provider"`（插件内接线：zg/semble）与 `kind:"reference"`（通用 CLI 目录）。无参 = 只读巡检（默认只探 provider）；`survey:"all"` = 并行探测全部；`category:"…"` = 单分类；`install:"<id>"` = **显式安装**（先经宿主审批，只有 `allowed-once` 才执行，装完**重探**再报结果） |
 | | `knowledge` | Knowledge Engine 规范/文档树（**不转 vector**） |
 | Observer 时间/梦核 `query/observer-kernel.ts` | `reflection` | 从 ObservationTrace 发现候选规律（旁支；`from`/`to` 限周期） |
 | | `identity-advance` | Identity Continuity 推进（闸门 `minCount`/`minRecency`/`maxContradiction`/`halfLifeDays`；读 curated 锚用 `args.identity`，**废止**旧名 `mode:"identity"`） |
@@ -101,6 +101,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## 关联
 - **`resource` 是第 6 个 NodeType（ADR-0051，v1.14.0）**：卡片=source、节点=投影；无 `source` 的卡片不上投影；不新增 mode（仍 61）。
 - **Semble 是 Index Engine 的第 3 个候选 provider（ADR-0054，v1.15.6）**：`indexEngine.provider = "semble"`（本地语义检索 CLI）。**它是检索层，不是裁决层**——只产候选，从不 `verify`；实测它**无阈值、无负信号**（无关查询同样返回最高分），故**不得**进 Evidence Gateway 的裁决面。未装 → `unavailable`，调用方回退 `fs` 全量扫描。
+- **工具集台账两级（ADR-0055，v1.15.10）**：`kind:"provider"`（插件内接线，缺它 = 能力降级）与 `kind:"reference"`（**通用 CLI 目录**，插件不接线，只做检测 + 装法提示）。目录文档在 `docs/toolchain-windows.md`（Windows 口径，winget ID 实测）与 `docs/toolchain-wsl.md`，由 `test/toolset-catalog.test.ts` **双向棘轮**保护（台账↔文档漂移即红）。**插件绝不代装**：安装仅显式调用 + 宿主审批（`allowed-once` 才执行），这是 inv 178 `Authority ≠ Ownership` / inv 182「scope 不可隐式扩大」的落点。
 - **命名口径（ADR-0050，v1.13.0；ADR-0053，v1.15.5）**：同名双义硬切，不保留兼容别名；旧 mode 返回「已废止：X → 请用 Y」。现行类型名：lineage 侧 `AtomEvidenceRef`、Gateway 侧 `GatewayEvidenceRef`（两者不可混用）。
 - **缺件不静默（ADR-0049，v1.12.8）**：可选增强缺依赖时**只降级到确定性路径 + 必须可见**（`unavailable`/warn/debug 之一），**绝不**把缺件说成「已验证/已存在/已完成」，也不凭记忆里的流程继续。provider 名拼错 → `unavailable / provider_unknown`。
 - **召回信封（v1.12.6/1.12.7）**：`read_shadow(topic)` 结果末尾的 `> 未返回的命中：N 条（命中 M · 本次返回 K）` 是**披露**不是指令；`N = M − K`（预算 / `limit` / 冷却都算），空命中给「下一步 + 近似候选（标未验证）」。
