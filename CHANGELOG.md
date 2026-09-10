@@ -3,6 +3,62 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.7] zg 集成修复（装了也用不了）三处 + 可选外部 CLI 安装指南
+
+用户指出「不然没用」——本轮把 `zg`/`Semble` 从「插件里有分支、机器上不可用」修到**端到端可用**，并补上安装指南。`zg` 在本机**装了但插件一律报 unavailable**，根因有三个，逐个实测定位：
+
+### ① spawn（硬阻断）：`execFile("zg")` 在 Windows 必然失败
+
+| 调用 | 实测结果 |
+|------|----------|
+| `execFile("zg")` | **ENOENT** —— Node 不解析 npm 的 `.cmd` shim |
+| `execFile("zg.cmd")` | **EINVAL** —— Node 自 2024 起禁止无 `shell:true` 执行 `.bat/.cmd`（CVE-2024-27980 缓解） |
+
+所以「zg 装好、手动跑 exit 0，插件恒 unavailable」。**修法**：新增 `resolveZgInvocation()` —— 扫 PATH 定位包内 `node_modules/@zvec/zvec-grep/dist/cli/index.js`（含 Unix 的 `../lib/node_modules/...` 布局），用 `process.execPath` 起它；找不到才回退裸 `zg`（Unix 可执行符号链接）。显式覆盖 `DSH_SHADOW_ZG_CLI` **不做存在性检查**——配置写错应「可见地失败」，不得静默回退到另一个 zg。
+
+### ② 解析：zg 0.2.2 的输出不是 ripgrep 格式
+
+实测 stdout（精确形态）：
+
+```text
+CHANGELOG.md
+  223-240 [heading Changelog > [v1.14.0] 新增第 6 个 NodeType `resource`] 231:	- **证据门同门**…
+```
+
+「**文件路径单独一行** + 缩进的 `起-止 [heading 面包屑] 行号:\t内容`」。旧 `parseZgMatches` 期望 `path:line:text`，于是**路径全丢**、行号取错。**修法**：改成状态机（不缩进行 = 路径，缩进行 = 命中），`startLine` 取**命中行号**（`231:`）而非分块范围。
+
+**同时删掉两个兜底，它们是误报源**：旧代码在「stdout 出现 ref.path」时造一条命中——而 zg 对**不存在**的路径会打印 `missing: <路径>`，于是「路径不存在」被判成 **verified**（本机实测复现）；另一个「stdout 出现 query 就造命中」更直接，且因运算符优先级 bug 在已有命中时也会重复 push。两者都是**仅凭文本出现制造证据**，违反 ADR-0043「无证据不返回」。另修 maxBuffer 8MB（旧值 1MB 会被大仓库输出撑爆，报错看起来像「zg 坏了」）。
+
+### ③ 语义：verify 必须按 `ref.path` 裁决，且不能用全局 top-N
+
+`fsEvidenceProvider.verify` 的语义是「**这条路径**还在不在」。而 `zgVerify` 跑的是**工作区级**搜索、不按路径过滤 → 「别的文件命中」会冒充「该路径 verified」，把 **stale 证据判成 fresh**。
+
+首次修法（搜完再过滤）**实测不可行并暴露第二个问题**：一次真实查询返回 **40 条命中 / 16 个文件**，`limit: 8` 会把目标路径**截掉**——目标 `core/lineage-validator.ts` 排在第 7 个文件，8 条上限下根本轮不到（实测从 verified 掉成 not_found）。**最终修法**：`ref.path` 非空时**把路径作为位置参数交给 zg 限定搜索**（`zg query --rg … <path>`），实测精确返回该文件的命中；zg 对不存在的路径返回 exit 0 + `No searchable files.` + 0 命中 → 自然落到 `not_found`/`stale`，语义正确。`ref.path` 为空（index-engine 的工作区级候选发现）时保持发现语义。
+
+### ④ ADR-0049：失败原因原本被吞掉
+
+`zgVerify` 把 `runZg` 的 `reason` 丢了，真机只看到一句 `unavailable`、无从排查 → 现在写进 `provenance.reason`（`zg_not_installed` / `timeout` / `index_missing` / `error`）。
+
+### ⑤ 安装指南（README 新增「可选外部 CLI（zg / Semble）」）
+
+- **zg**：`npm install -g @zvec/zvec-grep`（Node ≥ 22；验证版本 **0.2.2**）。写明「`zg --version` 能跑 ≠ 插件能用」及原因；写明**插件只用 `--rg`、不需要建索引**，故 npm 被拦下的 5 个原生依赖不影响本插件用法；要用 `zg index` 才需要 `--allow-scripts=…` 放开；自检走 `verifyEvidence: true`。
+- **Semble**：`uv tool install semble`（验证版本 **0.5.6**）；首次检索需一次网络下模型、之后离线可用；`NO_PROXY` 方括号条目由插件自动清洗；默认只 `--content code`；要用 `.sembleignore` 才能覆盖 `.gitignore`；自检走 `mode:"index"`。
+- 「都没装会怎样」：默认 `fs` 完全不碰这两条路径；配了没装 → 明确 `unavailable` + 原因，绝不冒充 verified。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 24/24 `ALL PASS ✅`**（新增 `test/zg-provider.test.ts`）。
+- 新测试覆盖：真实两行格式解析（路径切换/命中行号/无面包屑）、`missing:` 误报回归、空/垃圾输入不编造、spawn 覆盖走 `node`（锁 ENOENT/EINVAL 根因）、覆盖写错不静默回退且不报 verified、路径语义（别处命中不冒充 / path 空保持发现语义 / 绝对相对后缀匹配）、**真机端到端两条**（存在路径 → `verified` 且 `core/lineage-validator.ts:17`；不存在路径 → `not_found`/`stale`）。
+- 本机真机 zg 结果：`status=verified，1 条命中，首条 core/lineage-validator.ts:17`。
+
+### 边界与未验证
+
+- `zg` 与 `Semble` 仍是**可选**：不配 provider 则零行为变化。`evidenceProvider` 默认仍是 `fs`。
+- **未验证**：① 本机 npm 全局安装时 5 个原生依赖的 install 脚本被拦，故 `zg index`（语义/混合检索）**未实测**——插件只用 `--rg` 不受影响，但 `zg index` 是否可用未验证；② Semble 的大仓库首次索引耗时；③ macOS/Linux 上的 zg 路径定位（`../lib/node_modules` 分支）**仅按布局推断，未在那些平台实测**；④ `dist` 运行时端到端未做（本会话载入的是重启前的 dist）。
+
+
+
+
 ## [v1.15.6] Semble 接为 Index Engine 第 3 个候选 provider（ADR-0054）
 
 用户 2026-09-10 问「能否把 Semble 集成到 shadow」，选定 **A + S1**：接**候选生成**层、语料是**工作区代码**；并同意**新立 ADR 承接 ADR-0001 的口子**（不改其正文）。

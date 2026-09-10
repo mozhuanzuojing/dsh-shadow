@@ -231,6 +231,46 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 - 通过 `systemPrompt.context(...)` 注入一句——缺上下文时先调 `read_shadow` 再回答（用 context 而非 section，避免被 complete-section replacement 覆盖）。
 
+## 可选外部 CLI（zg / Semble）
+
+插件里两类**可选增强**由外部 CLI 提供。**不装不会报错**，但对应能力恒为 `unavailable` —— 所以要用就先按下面装。只有显式配置了 `evidenceProvider` / `indexEngine.provider` 才会走到它们。
+
+| 增强 | CLI | 装法 | 本仓验证过的版本 | 开启方式 |
+|------|-----|------|------------------|----------|
+| 证据验证 + 候选生成 | **zg**（`@zvec/zvec-grep`） | `npm install -g @zvec/zvec-grep`（需 **Node ≥ 22**） | **0.2.2** | `evidenceProvider: "zg"` / `indexEngine.provider: "zg"` |
+| 语义候选生成 | **Semble** | `uv tool install semble`（需 [uv](https://docs.astral.sh/uv/)） | **0.5.6** | `indexEngine.provider: "semble"` |
+
+### zg（`@zvec/zvec-grep`）
+
+```sh
+npm install -g @zvec/zvec-grep
+```
+
+- **「`zg --version` 能跑」不等于「插件能用」。** Windows 上 npm 只生成 `zg`(sh) / `zg.cmd` / `zg.ps1`，而 Node 的 `execFile` **不解析 `.cmd`**（报 `ENOENT`），显式传 `zg.cmd` 又会被 Node 以 `EINVAL` 拒绝（CVE-2024-27980 缓解）。**v1.15.7 起插件自行定位包内 `dist/cli/index.js` 并用 `node` 起它**（`evidence/zg.ts` 的 `resolveZgInvocation`），你不需要做任何事。若要指向别的安装位置，设环境变量 `DSH_SHADOW_ZG_CLI=<…>/@zvec/zvec-grep/dist/cli/index.js`（写错会**可见地失败**，不会被静默回退）。
+- **插件只用 `--rg`（托管 ripgrep）路由，不需要建索引**，因此 npm 安装时被拦下的原生依赖（`@zvec/zvec`、`node-llama-cpp`、`onnxruntime-node`、`sharp`、`protobufjs`）**不影响本插件的 zg 用法**。只有在你想用 zg 自己的语义/混合检索（`zg index`）时才需要放开这些脚本：
+
+  ```sh
+  npm install -g --allow-scripts=@zvec/zvec,node-llama-cpp,onnxruntime-node,sharp,protobufjs @zvec/zvec-grep
+  ```
+
+- **裁决是对「那条路径」的**（与 `fs` provider 同义）：插件把搜索**限定到该路径**，而不是「工作区搜一遍再挑」。不存在的路径 → `not_found` / `stale`（zg 对缺失路径返回 exit 0 + 0 命中，不报错）。
+- **自检**：`read_shadow(<topic>, { verifyEvidence: true })`。返回里 `provider=zg` 且带 `unavailable` 就是没装好；`provenance.reason` 会给出 `zg_not_installed` / `timeout` / `error`。
+
+### Semble
+
+```sh
+uv tool install semble
+```
+
+- 首次检索会下载嵌入模型（`minishlab/potion-code-16M-v2`，缓存在 `~/.cache/huggingface`），**需要一次网络**；之后离线可用（实测 `uvx --offline` 可解析）。
+- **`NO_PROXY` 里的方括号 IPv6 条目（如 `[::1]`）会让 Semble 的 httpx 抛 `Invalid port ':1]'`**（与网络、模型是否已缓存无关）。插件在拉起子进程时**自动剔掉带方括号的条目**（`core/semble.ts` 的 `stripBracketedNoProxy`），无需手动改环境变量。
+- 默认只索引 `--content code`（嵌入模型是代码专用）。要让 Semble 也索引被 `.gitignore` 忽略的目录，在目标仓库加 `.sembleignore`（例如 `!.shadow/` + `!.shadow/**`）。
+- **自检**：`read_shadow({ mode: "index", topic: "<查询词>" })` → 输出 `# Index Engine · provider=semble` 与候选路径列表。
+
+### 都没装会怎样
+
+不配 `evidenceProvider` / `indexEngine.provider` 就**完全不碰**这两条路径（默认 `fs`，行为不变）。配了却没装：`mode:"index"` 打印 `unAvailable(未装，勿当 verified)`，证据验证返回 `unavailable` 并在 `provenance.reason` 里给出原因（`zg_not_installed` / `semble_not_installed` / `timeout` / `error`）——**不会**把缺件说成 verified（缺件不静默，ADR-0049）。
+
 ## 安装（持久化）
 
 本地包以 `link:` 引入 profile（与 `cc-kit-dsh` 同法）：
@@ -276,10 +316,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.6`（Semble 接为 Index Engine 第 3 个候选 provider）** —— 最新几版摘要：
+**当前版本：`v1.15.7`（zg 集成修复 + 可选外部 CLI 安装指南）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.7 | **zg 集成三处修复 + 安装指南**（用户指出「不然没用」）：① **spawn 硬阻断**——Windows 上 `execFile("zg")` 必 ENOENT（Node 不解析 npm 的 `.cmd`）、`execFile("zg.cmd")` 必 EINVAL（CVE-2024-27980 缓解），于是「zg 装好、手动跑得通、插件恒 unavailable」→ 改为定位包内 `dist/cli/index.js` 用 `node` 起它；② **输出解析**——zg 0.2.2 的 `--rg` 是「路径单独一行 + 缩进 `起-止 [heading 面包屑] 行号:内容`」，不是 `path:line:text` → 改状态机，并**删掉两个会制造证据的兜底**（「stdout 出现 ref.path」会把 zg 的 `missing: <路径>` 误判成 verified）；③ **裁决语义**——`verify` 必须按 `ref.path` 限定搜索（工作区级搜索 + 全局 top-N 会把目标路径截掉：实测一次查询 40 条命中/16 文件，目标排第 7 个文件），不存在的路径 → `not_found`/`stale`；另把失败原因写进 `provenance.reason`（ADR-0049）。README 新增「可选外部 CLI（zg / Semble）」安装与自检指南 |
 | v1.15.6 | **Semble 接为 Index Engine 的候选 provider**（ADR-0054）：`indexEngine.provider = "semble"`（本地 CLI，`uv tool install semble`）。**它是检索层、不是裁决层**——只产候选 → `rankRefs` → `authorizeScope` → 交回 Shadow Core；默认仍 `fs`（行为不变）。**为什么不进裁决面**：实测 Semble **无阈值、无负信号**（4 次查询分数三元组完全相同；「量子纠缠/哈勃常数」这类语料里没有的话题照样返回最高分；CLI 无 `--threshold`），交它 `verify` 会违反 ADR-0043「无证据不返回」与 ADR-0049。**两处实现约束**：① spawn 时必须清洗 `NO_PROXY`——本机 ambient 的 `[::1]` 会让其 httpx 抛 `Invalid port ':1]'`（模型已缓存也照崩），故剔掉带方括号的条目；② Semble 返回**相对路径**，必须先绝对化——否则 `authorizeScope`（绝对前缀匹配）会把候选**整批滤掉**（此坑由测试暴露）。端到端实测：`generateCandidates` 返回 20 条绝对路径候选并命中 `core/resource.ts:173-186` |
 | v1.15.5 | **旧协议约定全面删除（A/B/C/D）**：**A** 删 `core/` 里 4 处旧数据格式兼容兜底（`> 用户提示/决策：`〔decision〕 的 legacy 决策解析、`decisions` 回退、`node.ts` 的 `materials` 回退、`kind`/`lineage` 可选性），`ParsedMemory.kind`/`lineage` 转必填；**B** 修正 **23 个 ADR** 陈旧的「协议（提案，待 vX 实现）」状态（对应实现目录与 CHANGELOG 条目均已存在）；**C** ADR-0053 再正名 3 项同名双义（`mode:"verify"`→`verification`、Gateway `EvidenceRef`→`GatewayEvidenceRef`、`realityEvidenceRef`→`realEvidenceRef`），并**判定保留** 2 项并写明理由（`config.recall` 含管线级旋钮，改名会与语义不符；`args.identity` 再改就要生造词）；**D** 当前文档不再登记废止名（README / CONTEXT / LIVE-VERIFY / 工具 schema / 注入提示），映射与理由只留 ADR。**顺带修一个真 bug**：`core/experience.ts` 的决策一直在读**旧** `> 用户提示/决策：` 提示头（等于把任意用户消息当决策）→ 改读现行 `> 决策：` 并剥离 `〔source〕` |
 | v1.15.4 | **投影模式预设「team 优先」**（只改 persona 与文档）：默认先判该不该派；该派时优先官方 **Agent Teams**（`spawn_teammate` / `send_message` / `team_task_*`），复用同一具名 teammate 而不是反复新开一次性 `subagent`，只在「一次性、无后续」时用 `subagent` / `subagent_fork`。**前置与已知边界**：Team 域服务 `ctx.agentTeams` 必须由 **host 组合**提供（`@deepseek-ai/dsh-experimental-agent-team`，实验包无稳定性承诺）；预设只挂工具包 `@deepseek-ai/dsh-experimental-tool-agent-team`。**缺 host 行时预设仍报 `standingKeyFor` 挂载成功，但 9 个 Team 工具静默不出现**——与 ADR-0049「缺件不静默」相悖，是本版已知缺口。另：`send_message` / `list_agents` / `interrupt_agent` 三个名字被 Team 版**作用域内遮蔽**，Lead 不再能用它们直接指挥非 Team 的 continuable 子代理 |
