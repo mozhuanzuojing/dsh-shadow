@@ -3,6 +3,78 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.11] 委派规模与复用优先（teammate 名额硬上限 4 + 往返纪律）+ 补写漏掉的 ADR-0055
+
+用户 2026-09-10：**「投影模式中的 Agent Team 一定要控制子代理的规模，因为 token 消费太大」**。本轮按 `/grill-with-docs` 逐层追问定案（先查代码再问、一次一个问题）。
+
+### 逐层定案的结论
+
+「规模」一词被拆成四个互不相同的量（成员数 / 往返轮数 / 提示词规模 / 并行度），用户选定 **A 成员数 + B 往返轮数**。
+
+**先纠正一个前提**：v1.15.4 写的「**优先 Agent Team**」是**错的**——同版已核实「换 Teams 更省」不成立（`fresh`/`fork` 两轴同构，而 Teams **多付** `team:policy` + 9 个工具 schema，**每成员每请求**）。故「优先 Team」在**只用一次**时是**净亏**。判据改为「**复用优先**」。
+
+### A. 成员数硬闸门：host 行 `maxMembers: 4`
+
+**查实它是「per-session 终身累计」上限，不是并发上限**（读上游代码，非文档）：
+
+| 证据（`dsh-experimental-agent-team/lib/index.js`） | 含义 |
+|---|---|
+| `L564` `state.members.length >= this.maxMembers` → `TEAM_MEMBER_LIMIT`，**在创建时检查** | 数的是**曾经创建过**的成员 |
+| `L1244` 只 `push`（新）/ `L1245` 就地更新 | — |
+| **`members.splice/pop/shift/filter/delete` → 0 处** | **无任何移除路径**，roster 只增不减 |
+| `L563` 重名抛错 + README「即使**创建失败**的 teammate 也保留其名字」 | **失败也吃名额，名字永久占用** |
+
+⇒ 4 = **该会话最多只能创建 4 个 teammate，永久不能释放**。取 4 的依据：覆盖本预设自己的最大显式需求（① 审查 2 视角 + 实现 1 + 调研 1）；撑爆时**降级优雅**（抛错 → Lead 自己做），不是卡死。
+**已知残余风险**：4 对失败创建**无余量**，实测过紧就调 6。
+
+### B. 往返纪律（写入 persona ②，无硬闸门）
+
+| 纪律 | 依据 |
+|---|---|
+| **一次委派 = 一条消息**（做什么/约束/验收/输出一次给全） | 每条 peer 消息**永久进对方历史**，此后每次请求重发 |
+| 同一委派往返 **≤2 轮**（首发 + 纠正），超出自己接手 | 防无限 ping-pong；与 ④「零分栏退回重派」相容 |
+| 优先唤醒 `running`/`idle`，**避免 inactive 冷恢复** | 冷恢复先复用持久对话再追加，**等于重付整段历史** |
+
+### 名额耗尽不是死路（写进 ②，避免 Lead 误判）
+
+`dsh-tool-workflow` / `dsh-workflow-worker-thread` / `dsh-tool-subagent` 三包对 `agentTeams` 引用均为 **0 处** ⇒ **不吃名额**。故仍有三条路：自己做 / `subagent` / `workflow` 扇出。
+
+### 补写 ADR-0055（缺陷修复）
+
+v1.15.10 在 `CONTEXT.md`（×2）、`README.md`、`core/toolset.ts` 共 **4 处**引用了 `ADR-0055`，**但该文件当时漏写**——悬空引用。本轮补写 `adr/0055-toolset-ledger.md`（工具集台账两级 / 文档棘轮 / 不做代装 / 探测三态）。这正是本仓 ⑥「四查」要防的「遗漏 + 注释断链」。
+
+### 落地
+
+| 文件 | 改动 |
+|------|------|
+| profile `cordis.patch.yml`（**部署面，不在本包**） | `agent-team` 行加 `config: { maxMembers: 4 }` + 写明「终身累计而非并发」的依据与残余风险 |
+| `agent-presets/projection/agent.cordis.yml` | ② 重写为「规模与复用」 |
+| `agent-presets/projection/preset.yml` / `README.md` | 描述与「Agent Teams first」节 → 「Reuse first, with a hard teammate budget」 |
+| **新** `adr/0056-delegation-scale-budget.md` | 本决策的取舍与未验证项 |
+| **新** `adr/0055-toolset-ledger.md` | 补上漏写的 ADR（修复悬空引用） |
+| `README.md` / `CONTEXT.md` / `package.json` | 同步；版本 → **1.15.11** |
+
+### 验证
+
+- host 行：`dump-config` **exit 0 / 570 行**，`config: maxMembers: 4` **已被读到**，严格错误扫描 0 命中。
+- persona：② 八个关键判据全中、旧句「优先 Agent Team」**残留 0**、顶层 `- id:` 仍 **16**。
+- `npx tsc --noEmit` / `npm run build` exit 0；**全量回归 27/27 `ALL PASS ✅`**（本轮未改 TS 逻辑，分布不变）。
+
+### 代价如实记账
+
+persona **2394 → 2629 字符（+235 常驻；YAML 解析值 = 真正进 prompt 的长度）**。这是为「防止无界委派开销」付的**永久成本**——只有因为它防的是**复利式**增长才值得。已写进预设 README 与本 ADR。
+> 口径说明：v1.15.4 的历史条目写的是「2053 → 2380」，那是**逐行 trim 后拼接**的旧量法；同一内容按 YAML 解析值是 2394。两条**增量都是 +235**，故结论不受量法影响。
+
+### 边界与未验证
+
+- **`maxMembers: 4` 的实际拦截行为未在真机触发过**（要真创建第 5 个 teammate 才能验）；`dump-config` 只证明值被读到。
+- **改 host 行 config 是否需要重启**未单独验过（v1.15.4 加该行时是热生效，但「改 config」这条路径未验）。
+- `maxMembers` 是 **host 级、全局生效**（作用于所有会话/所有预设）；**投影模式自己设不了**这个闸门——preset 平面只能写纪律。若将来要按预设分档，需要宿主的 per-agent team 配置（当前不存在）。
+- **B 无硬闸门**：若 Lead 不遵守往返纪律，复利式烧 token 仍可能。
+
+
+
+
 ## [v1.15.10] 工具集台账扩为两级（provider + 通用 CLI 目录）+ 文档纳入仓库与双向棘轮
 
 用户 2026-09-10：「类似 `wsl-cli-tools.md` 这种你都要分类收集，以及 windows 的 uutils/coreutils、skylot/jadx」→ 随后**「全部纳入，这都是保障任务的」**（即推翻 v1.15.8 时定的「台账只收 dsh-shadow 自己的 zg/semble」那条边界）。

@@ -94,19 +94,54 @@ over the other's job:
 The card format and the `resource` NodeType are plugin-side (ADR-0051, v1.14.0); this preset
 only steers how the agent uses them.
 
-### Agent Teams first, subagents last (v1.15.4)
+### Reuse first, with a hard teammate budget (v1.15.11 — corrects v1.15.4)
 
-The persona's dispatch discipline is **team-first**: decide whether to delegate at all, and when
-it does delegate, prefer a named long-lived teammate over opening a fresh one-shot subagent every
-time. The stated reason is reuse, not magic: a new subagent pays the system prompt + tool-schema
-prefix again, while an existing teammate keeps a reusable prefix and only receives the new message.
-`subagent` / `subagent_fork` remain, but only for work that is genuinely one-shot with no follow-up.
+v1.15.4 said **team-first**. That was wrong, and this version corrects it. The same release that
+introduced the wording also recorded the finding that contradicts it: the `fresh`/`fork` axis is
+**identical** on both surfaces, while Teams **adds** a fixed cost — a `team:policy` section plus
+**nine** tool schemas carried by *every* member on *every* request. So "prefer Teams" is a **net
+loss when the member is used once**. The corrected rule is:
+
+> Decide by **how many times the member will be reused** — not by which mechanism feels more modern.
+
+**Judgement:** use a teammate only when it will serve **≥ 2 dispatches** (or the shared task board is
+genuinely needed); for a single one-shot use `subagent` / `subagent_fork`.
+
+**The budget is a per-session lifetime cap, not a concurrency limit.** This is read off upstream
+code (`dsh-experimental-agent-team/lib/index.js`), not documentation:
+
+| Evidence | Consequence |
+|---|---|
+| `L564` checks `state.members.length >= this.maxMembers` at **create** time (`TEAM_MEMBER_LIMIT`) | counts every teammate **ever created** |
+| `L1244` only `push`es; `L1244/1245` push-or-update in place | — |
+| **`members.splice/pop/shift/filter/delete` → 0 hits** | **no removal path at all** — the roster only grows |
+| `L563` rejects duplicate names + README「即使创建失败的 teammate 也保留其名字」 | **a failed spawn keeps its name AND consumes its slot** |
+
+The host row is configured to **`maxMembers: 4`** (upstream default is 8). Four covers this
+preset's own largest explicit demand — two reviewers with different lenses (①) + one implementer +
+one researcher — and beyond that the Lead should do the work itself or serialize it.
+**Residual risk:** 4 leaves no headroom for failed spawns; raise to 6 if that proves too tight.
+
+**Exhausting the budget is not a dead end.** `workflow`, `workflow-worker-thread` and `subagent`
+contain **zero** references to `agentTeams`, so they do **not** consume slots: the Lead can always
+fall back to doing it itself, to one-shot `subagent`, or to `workflow` fan-out.
+
+**Round-trip discipline** (the compounding half — there is no hard gate for this one): every peer
+message **permanently appends to the target's history** and is re-sent on every later request. So:
+one dispatch = **one** message (task / constraints / acceptance / output format all at once);
+**≤ 2 round-trips** per dispatch (initial + one correction), beyond which the Lead takes over; and
+prefer waking a `running` / `idle` member over an `inactive` one, because **cold-resume replays the
+whole persisted conversation**.
+
+> **Cost note, stated honestly:** this discipline costs **+235 characters** of always-on persona
+> (2394 → 2629, YAML-parsed length — what actually enters the prompt). That is a real, permanent cost paid to prevent unbounded delegation spend —
+> the trade is only worth it because the failure mode it guards against is a compounding one.
 
 What this preset adds in the composition, and what it requires:
 
 | Piece | Plane | Row |
 |---|---|---|
-| Team domain service `ctx.agentTeams` | **host** (profile `cordis.patch.yml`) | `@deepseek-ai/dsh-experimental-agent-team` |
+| Team domain service `ctx.agentTeams` | **host** (profile `cordis.patch.yml`) | `@deepseek-ai/dsh-experimental-agent-team` with `config: { maxMembers: 4 }` |
 | Nine model-facing Team tools | **preset** (this file) | `@deepseek-ai/dsh-experimental-tool-agent-team` |
 
 The nine tools are `spawn_teammate`, `send_message`, `list_agents`, `wait_agent`,
