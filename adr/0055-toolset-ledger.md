@@ -68,7 +68,7 @@ v1.15.8–v1.15.9 让 dsh-shadow 能**检测缺件并给出可执行命令**，v
 
 - **正**：agent 需要某类工具时不必重新研究「装什么、怎么装」；人读文档与机器台账**不会漂移**（棘轮保证）；边界清楚（provider 影响行为、reference 不影响）。
 - **负**：目录需人工维护（`winget` ID 与版本会变）；chocolatey / scoop 渠道**未核实**；`Microsoft.Coreutils` 的**实际安装行为未实测**（只核对了元数据与 README，且其自述为 **preview**）。
-- **已知缺口**：`docs/toolchain-wsl.md` 是 Debian 包名口径，与 winget **无对应关系**，故**未做棘轮**。
+- **已知缺口（v1.15.12 已闭合）**：`docs/toolchain-wsl.md` 是 Debian 包名口径，与 winget **无对应关系**，故初版**未做棘轮**。已在 v1.15.12 补上：棘轮只扫该文档的**「工具映射总表」**段（其余表格如「国内镜像」第 2 列是 URL，误扫会假阳性），按**命令名**匹配台账的 bin/id/label/provides 并带别名表（`fdfind→fd`/`batcat→bat`/`z→zoxide`/`sg→ast-grep`）；为此补登 7 个台账条目（含 Windows 无可靠包的 `tmux`/`viddy`/`tig`/`ip`，其 `install` 留空、只陈述事实）。
 
 ## 自检
 

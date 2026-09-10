@@ -16,6 +16,7 @@ import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
 import { routeFor } from "./writer-core.js";
+import { invalidateProjection } from "./projection-store.js";
 export function makeMaterialize(core, hooks) {
     const cacheFor = (ws) => { let c = core.indexCache.get(ws); if (!c) {
         c = new Map();
@@ -232,6 +233,10 @@ export function makeMaterialize(core, hooks) {
             return;
         await rebuildIndex(fsI, ws);
         core.indexDirty.delete(ws);
+        // v1.15.12：索引重建 = **记忆集已变** → 投影缓存必须一并失效，
+        // 否则 shadow_query 会读陈旧投影（此前 invalidate 零调用点，只能手动删 nodes.jsonl）。
+        if (core.config.projectionStore?.enabled === true)
+            await invalidateProjection(fsI, ws);
     };
     return { flush, rebuildIndex, ensureIndex };
 }

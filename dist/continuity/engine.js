@@ -67,14 +67,22 @@ export const readObserverContext = async (fs, root) => {
     return { boundary, lineage, index };
 };
 // 读取当前 workspace（ws）的 world 层记录；只返回 workspace===ws 的记录（235 隔离：不跨项目、不落全局）。
+// v1.15.12 修正：listDir 必须收 **resolve() 产出的 FsTarget**。
+//   旧写法字面构造 `{ targetKey: base, displayPath: base }` 违反 dsh-fs 书面契约
+//   （`resolve()` 的注释：*returns the stable target; the same file yields the same `targetKey`*）——
+//   `targetKey` 是 branded 值，**不是随便写的路径字符串**。local 后端恰好拿路径当 key 才没炸；
+//   **sandbox / 隔离后端下 key 不是路径**，会静默失败，而下面的 `catch` 把它吞成「无记录」。
+//   同一函数第 66 行本来就用对了 `fs.resolve(...)`，这次把不一致消掉。
 export const readWorkspaceContext = async (fs, ws) => {
     const rows = [];
     try {
         const base = `${ws}/${WORKSPACE_SHADOW_ROOT}`;
-        const dirs = (await fs.listDir({ targetKey: base, displayPath: base })) || [];
+        const baseTarget = await fs.resolve(base, { cwd: ws });
+        const dirs = (await fs.listDir(baseTarget)) || [];
         for (const d of dirs) {
             const kindBase = `${base}/${d.name}`;
-            const files = (await fs.listDir({ targetKey: kindBase, displayPath: kindBase })) || [];
+            const kindTarget = await fs.resolve(kindBase, { cwd: ws });
+            const files = (await fs.listDir(kindTarget)) || [];
             for (const f of files) {
                 const p = `${kindBase}/${f.name}`;
                 const t = await fs.resolve(p, { cwd: ws });

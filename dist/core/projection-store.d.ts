@@ -13,8 +13,46 @@ export declare const projectionIndexRel: () => string;
 export declare const createJsonlProjectionStore: (fs: any, ws: string) => ShadowProjectionStore;
 /** 工厂：取本项目 store（当前仅 JsonlProjectionStore；将来加 sqlite/embedded 在此路由）。 */
 export declare const getProjectionStore: (fs: any, ws: string) => ShadowProjectionStore;
-/** 取「加载或派生」：store 命中直接回缓存，未命中/坏则派生并回写；配置关闭则恒直接派生（行为不变）。 */
-export declare const loadOrBuildProjection: (fs: any, ws: string, cfg: any, derive: () => Promise<ShadowNode[]>) => Promise<{
+/**
+ * 让投影缓存失效（best-effort）。**这是 `invalidate()` 的生产调用点**。
+ *
+ * 修复的缺陷（v1.15.12）：`invalidate` / `invalidateFor` 此前**零调用点** —— 接口与实现都在，
+ * 但没人调，于是「开了 `projectionStore` 之后，记忆变了、`shadow_query` 仍读陈旧投影」，
+ * 实际只能靠手动删 `.shadow/shadow-index/nodes.jsonl` 才能刷新。
+ *
+ * 触发时机：**写侧索引重建后**（`writer-materialize.ts` 的 `ensureIndex`）——那是「记忆集已变」的
+ * 权威信号（记忆是插件自己写的）。资源卡是人/agent 手写的，不在插件写路径上，
+ * 由 `loadOrBuildProjection` 的**源指纹**覆盖（见下）。
+ * 仅当 `projectionStore.enabled === true` 时调用（默认关，保证默认路径零额外 I/O）。
+ */
+export declare const invalidateProjection: (fs: any, ws: string) => Promise<void>;
+/** 源指纹落盘位置（与缓存同目录，同属可重建派生）。 */
+export declare const fingerprintRel: () => string;
+/**
+ * 计算投影**权威源**的指纹：`.shadow/<date>/*.md`（记忆原子）+ `.shadow/resources/*.md`（资源卡）。
+ *
+ * 两条纪律：
+ *   1. **只覆盖权威源**：刻意**不**纳入 `_meta.json` / `_index.md` / `query-log/` / `shadow-index/` ——
+ *      读操作会写 meta（hits）与 query-log，纳入它们会让「读一次就失效」自激，缓存永不命中。
+ *   2. **用 FsDirEntry 的官方字段**：`target` 是 resolve 产出的子 target（用它 listDir），
+ *      `size` / `version` 是后端给的廉价元数据（`version` 是 freshness token，可能不提供 → 记 `?`）。
+ *      同尺寸内容修改若后端不给 `version`，则指纹相同、缓存不失效 —— 这是**已知降级**，
+ *      与「缓存是性能特性不是真相」一致（需要绝对新鲜时删 `nodes.jsonl` 或关 `projectionStore`）。
+ * 返回 undefined = 源目录不可读（调用方据此保守重建）。
+ */
+export declare const shadowSourcesFingerprint: (fs: any, ws: string) => Promise<string | undefined>;
+/**
+ * 取「加载或派生」：store 命中直接回缓存，未命中/坏则派生并回写；配置关闭则恒直接派生（行为不变）。
+ *
+ * v1.15.12 修一缺陷：此前**命中缓存后不检查源是否变化**，于是「新增/修改资源卡（`.shadow/resources/`）
+ * 或新记忆落盘后，`shadow_query` 仍读陈旧投影」，只能手动删 `nodes.jsonl`。
+ * 现在由调用方提供 `sourceFingerprint`（读一次 `listDir` 级成本）：
+ *   - **未提供指纹** → 保持**旧行为**（命中即用）——不能因为不传指纹就永不命中；
+ *   - 提供了且两侧**都可判定且一致** → 用缓存；
+ *   - 提供了但不一致 / 任一侧不可判定（旧缓存无指纹、后端不报 size/version） → **保守重建**。
+ *   理由：缓存是**性能特性不是真相**（ADR-0046），宁可重建也不返回陈旧投影。
+ */
+export declare const loadOrBuildProjection: (fs: any, ws: string, cfg: any, derive: () => Promise<ShadowNode[]>, sourceFingerprint?: () => Promise<string | undefined>) => Promise<{
     nodes: ShadowNode[];
     cached: boolean;
 }>;

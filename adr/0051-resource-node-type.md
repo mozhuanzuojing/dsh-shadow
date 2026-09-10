@@ -45,6 +45,6 @@ ADR-0043（Shadow Contract）要求先回答分类：它算 **Atom（source，hu
 - **content 顺序固定为「投影段在前、固有层在后」**：读侧 `queryShadow` 只取前 6 行，倒过来会让「结论 / 引用证据」永远不可见。**取值上限由读侧决定，投影层必须保证高价值行在前**。
 - **证据不二次截断**：卡片字段值在解析层已限 200 字，节点 `evidence` 直接沿用——截短会让来源不可回查。
 - **别名口径**：`出处` 归 `source`（不是 `authority`）；卡片文件的扩展名匹配不区分大小写。
-- **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录的变化——新增/修改卡片后需 `invalidate`/`rebuild` 才能进投影。默认关闭，故不影响默认路径。
+- **已知边界（v1.15.12 已修）**：`projectionStore` 开启且缓存命中时，缓存**不感知**资源目录的变化——新增/修改卡片后需 `invalidate`/`rebuild` 才能进投影，而当时 `invalidate` **零调用点**，实际只能删 `.shadow/shadow-index/nodes.jsonl`。现由两处覆盖：① 写侧索引重建后自动 `invalidateProjection`（「记忆集已变」的权威信号）；② `loadOrBuildProjection` 的**源指纹**（`.shadow/<date>/` + `resources/` 的 name/size/version）不一致即重建。默认关闭，故此前不影响默认路径。**降级点**：同尺寸内容修改且后端不报 `version` 时指纹不变（需要绝对新鲜时删 `nodes.jsonl`）。
 - 卡片的活跃度等属性是**原文快照**：过期由人或 agent 改卡片，系统不自动重抓（与「不 LLM 补写」一致）。
 - 投影模式预设里「资源侦察员 / 创意专家」的**工作方式**不属本 ADR（那是预设平面），本 ADR 只冻结插件的类型与门。

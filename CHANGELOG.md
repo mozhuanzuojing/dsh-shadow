@@ -3,6 +3,87 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.12] 缺陷清扫：修 5 项真缺陷 + 2 处记账勘误（其中 1 项既有 bug 被本轮激活）
+
+用户 2026-09-10：**「所有发现的缺陷都要fix」**。先把散落在 CHANGELOG / ADR / 代码注释里的「记账未修 / 已知缺口」逐条**查证当前是否仍存在**（不凭记账动手），再分类处置。
+
+### 查证结果（16 条候选 → 5 真缺陷 + 2 记账勘误 + 若干设计取舍）
+
+| # | 记账 | 查证结论 | 处置 |
+|---|------|----------|------|
+| A1 | `continuity/engine.ts` 自造 `FsTarget` | **真缺陷**（仍在） | ✅ 修 |
+| A2 | `projectionStore.invalidate` 零调用点 | **真缺陷**（仍在） | ✅ 修 |
+| A3 | `fs.writeText` 只传 2 参 | **非缺陷**（契约允许省略） | 📝 勘误 |
+| A4 | Team 工具静默缺口 | **真缺陷**（结构性，仍存在） | ⚠️ 部分修 + 待决策 |
+| A5 | `HOST_BASELINE` 与 `package.json` 双源 | **真风险**（可漂移） | ✅ 加棘轮 |
+| B6 | `docs/toolchain-wsl.md` 未做棘轮 | **真缺口** | ✅ 修 |
+| C7 | `delegation/guard/revocation-guard.*` 「孤儿文件」 | **记账错误**（测试在用） | 📝 勘误 |
+
+### A1. `continuity/engine.ts` 自造 FsTarget（真缺陷）
+
+`readWorkspaceContext` 里 `fs.listDir({ targetKey: base, displayPath: base })` —— **字面构造**违反 dsh-fs 契约（`resolve()` 注释：*"returns the stable target; the same file yields the same `targetKey`"*；`targetKey` 是 branded 值，不是随手写的路径字符串）。同一函数第 66 行本来就用对了 `fs.resolve(...)`，这次把不一致消掉。
+**为何此前没炸**：local 后端恰好拿路径当 key；**sandbox / 隔离后端下 key 不是路径**，会静默失败，而该函数的 `catch` 把它吞成「无记录」。
+
+### A2. 投影缓存不感知源变化（真缺陷）+ 一个被激活的既有 bug
+
+两处修复：
+
+1. **`invalidate` 零调用点** → 在 `ensureIndex`（写侧索引重建后，= 「记忆集已变」的权威信号）调用新增的 `invalidateProjection()`。
+2. **`shadow_query` 不经过 `ensureIndex`**（已核实：`ensureIndex` 只在读无 topic 索引时触发）→ 给 `loadOrBuildProjection` 加**源指纹**参数：`shadowSourcesFingerprint()` 用 `FsDirEntry` 的 `size`/`version` 对「记忆日期目录 + `resources/`」取指纹，写进 `.shadow/shadow-index/sources.fingerprint`，两侧可判定且一致才用缓存，否则保守重建。**刻意不纳入 `_meta.json`/`_index.md`/`query-log`**——读操作会写它们，纳入会「读一次就自激失效」。
+
+**顺带修掉一个既有真 bug（本轮激活的）**：`createJsonlProjectionStore` 的 `abs()` 返回 **`.displayPath` 字符串**，却被当 `FsTarget` 传给 `writeText`/`readText`。该 bug 长期隐藏（`invalidate` 零调用点）；一旦写侧开始调用它，mock/沙箱后端上就炸成 `undefined.displayPath` → 污染 fs 层 → **`listDir` 抛错 → `listMemories` 被自己的 catch 吞成空** → 测试立刻变红（`missing-dependency` 的「路径不存在应 not_found」失败正是这条链）。改为返回 `resolve()` 产出的对象。
+
+> **自我批评**：本轮 A2 的第一版还写错了语义 —— 让「不传指纹的调用方」**永不命中缓存**，把性能特性变成纯开销（`projection-store.test.ts` 当场变红）。已修：**不传指纹 = 保持旧行为**。这两次都是**测试先红、再定位**，不是靠读代码看出来的。
+
+### A3. `fs.writeText` 只传 2 参 —— **不是缺陷**（勘误）
+
+契约原文（`dsh-fs-sandbox` 的 `writeText` JSDoc）：
+
+- `expected … **omit for unconditional**`
+- `sandboxPolicy … **omit to use the deployment fallback**`
+
+⇒ 省略是契约允许的；省略 = 用部署 fallback（当前会话策略）。失败会抛**结构化 `FS_SANDBOX_DENIED`**，且本项目已有可见信号（`lastFlushError` → `flushWarn` → `read_shadow` 显示「落盘失败」）。**故 v1.15.1 / v1.15.3 把它记成「记账未修」属措辞不当**，本轮更正为「已核实非缺陷」。
+
+### A4. Team 工具静默缺口（真缺陷，**结构性**）
+
+`tool-agent-team` 行 `inject: [..., "agentTeams"]`，host 未提供该服务时该行停在 PENDING，**9 个工具静默不出现**，而 `standingKeyFor` 仍报挂载成功（与 ADR-0049 相悖）。
+
+**可靠修复只有两条**，都超出本轮可擅自决定的范围：
+- (a) 把 `agent-team` host 行纳入 **dsh-shadow 自己的 bundle patch** → 缺包会在 bundle 加载时**报错**（可见）。**代价**：dsh-shadow 从此依赖一个**实验包**，改变其「零宿主依赖」定位。
+- (b) upstream 改进 `inject` 语义（我们无法控制）。
+
+⇒ 本轮做**能立即做的实质缓解**：preset ② 明写「**若 `spawn_teammate` / `send_message` 不在你的工具表里**，说明宿主未提供 Team —— 直接改用 subagent / subagent_fork / workflow，**别等也别硬找**」，把「静默卡住」变成「agent 可感知的降级」。(a) 待用户决策。
+
+### A5. `HOST_BASELINE` 双源 → 加防漂移棘轮
+
+`index.ts` 的 `HOST_BASELINE` 常量与 `package.json` 的 `engines.dsh` 是两处独立来源。本轮**不改结构**（读 package.json 需 ESM import attributes，风险大于收益），改为**棘轮锁一致性**：`host-probe.test.ts` 新增 ⑥，两处不一致即红。
+
+### B6. `docs/toolchain-wsl.md` 纳入棘轮（补 ADR-0055 的已知缺口）
+
+新增棘轮 ⑦：解析 WSL 文档**「工具映射总表」**（**只扫该段**——文档里还有「国内镜像」表，第 2 列是 URL，第一版误扫导致 8 个假阳性），提取工具名，要求**每个都能在台账找到条目**（按 bin/id/label/provides 词边界匹配 + 别名表 `fdfind→fd`/`batcat→bat`/`z→zoxide`/`sg→ast-grep`）。
+
+为此**补登 7 个台账条目**（44 → 50）：`tldr`(`tldr-pages.tlrc`)、`lazydocker`(`JesseDuffield.Lazydocker`)、以及 **Windows 无可靠包的 4 个**（`tmux`/`viddy`/`tig`/`ip`+`ss`）——后者的 `install` **留空**、`remedy` 只陈述事实（**宁缺勿编**，并已在 Windows 文档标注平台差异）。
+
+### C7. 更正：`revocation-guard` 不是孤儿（勘误）
+
+v1.15.3 记「`dist/delegation/guard/revocation-guard.*` 两个孤儿文件」。查证：**`test/concept-guards.test.ts` 在导入它**（`notRevoked` / `notExpired`）。当时的 grep 只扫了源码、漏了测试。**不是孤儿，不该删**。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 27/27 `ALL PASS ✅`**。
+- 新回归锁：`projection-store.test.ts` 增块 5（**FsTarget 契约**：save/load/invalidate 一律传 `resolve()` 产出的对象）+ 块 6（源指纹：一致→命中 / 变化→重建 / 取不到→保守重建 / **不传→旧行为**）；`host-probe.test.ts` 增 ⑥（HOST_BASELINE 防漂移）；`toolset-catalog.test.ts` 增 ⑦（WSL 清单棘轮，37 个工具全覆盖）。
+- 台账 50 项（provider 2 + reference 48）；棘轮 7 项全通过。
+
+### 边界与未验证
+
+- **A4 未彻底修**（见上，需决策）：静默缺口在「host 无 agentTeams」时**仍然静默**，本轮只让 agent 可感知降级。
+- **源指纹的降级点**：同尺寸内容修改且后端不报 `version` 时，指纹不变、缓存不失效（已在代码注释与 ADR 注明）。需要绝对新鲜时删 `nodes.jsonl` 或关 `projectionStore`。
+- 本轮**未**真机验证 `projectionStore` 开/关下的真机行为（本机无 `.shadow/`；验的是测试与 mock）。
+- 台账各 reference 条目的 probe 旗标正确性仍未逐项验证（失败只会显示「未检出」，不误报可用）。
+
+
+
+
 ## [v1.15.11] 委派规模与复用优先（teammate 名额硬上限 4 + 往返纪律）+ 补写漏掉的 ADR-0055
 
 用户 2026-09-10：**「投影模式中的 Agent Team 一定要控制子代理的规模，因为 token 消费太大」**。本轮按 `/grill-with-docs` 逐层追问定案（先查代码再问、一次一个问题）。

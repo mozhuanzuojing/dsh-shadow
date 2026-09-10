@@ -78,6 +78,58 @@ const NODE = (id) => ({ id, type: "code", source: `.shadow/x/${id}.md`, title: i
   assert.equal(left[0].id, "b", "保留未变更节点");
 }
 
+// —— 块 5：FsTarget 契约（v1.15.12 回归锁）——
+// 曾经：`abs()` 返回 `.displayPath` **字符串**，却当作 FsTarget 传给 writeText/readText。
+// 该 bug 长期隐藏，因为 `invalidate()` **零调用点**；一旦写侧开始调用它就会在 mock/sandbox 后端上炸
+// （`undefined.displayPath` → 污染 fs 层 → `listDir` 抛错 → `listMemories` 被自己的 catch 吞成空）。
+// 这里锁住：**传给 fs 的一律是 `resolve()` 产出的对象**。
+{
+  const seen: [string, any][] = [];
+  const files = new Map<string, string>();
+  const fs = {
+    async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+    async readText(t: any) { seen.push(["read", t]); return files.get(t.displayPath) ?? ""; },
+    async writeText(t: any, c: string) { seen.push(["write", t]); files.set(t.displayPath, c); return { version: "v1" }; },
+    async listDir() { return []; },
+  };
+  const store = createJsonlProjectionStore(fs, WS);
+  await store.save([NODE("a")]);
+  await store.invalidate();
+  await store.load();
+  assert.ok(seen.length > 0, "应有 fs 调用");
+  for (const [op, t] of seen) {
+    assert.equal(typeof t, "object", `${op} 的 target 必须是对象（实际 ${typeof t}）`);
+    assert.ok(t && typeof t.displayPath === "string", `${op} 的 target 应带 displayPath`);
+  }
+  console.log("✔ 场景 Projection-Store-4 FsTarget 契约：save/load/invalidate 一律传 resolve() 产出的对象");
+}
+
+// —— 块 6：源指纹（v1.15.12 修「缓存不感知源变化」）——
+{
+  const { fs } = makeFs();
+  const cfgOn = { projectionStore: { enabled: true } };
+  let derives = 0;
+  const derive = async () => { derives++; return [NODE("h")]; };
+  let fp = "v1";
+  const fpFn = async () => fp;
+  assert.equal((await loadOrBuildProjection(fs, WS, cfgOn, derive, fpFn)).cached, false, "首次 → 派生");
+  assert.equal((await loadOrBuildProjection(fs, WS, cfgOn, derive, fpFn)).cached, true, "源未变 → 命中缓存");
+  assert.equal(derives, 1, "源未变不重派生");
+  fp = "v2";
+  assert.equal((await loadOrBuildProjection(fs, WS, cfgOn, derive, fpFn)).cached, false, "源指纹变化 → 必须重建");
+  assert.equal(derives, 2, "指纹变化触发一次重建");
+  assert.equal((await loadOrBuildProjection(fs, WS, cfgOn, derive, async () => undefined)).cached, false, "指纹取不到 → 保守重建");
+  // **不传指纹**必须保持旧行为（命中即用）——否则「不传指纹的调用方」永不命中，把性能特性变成纯开销
+  const { fs: fs2 } = makeFs();
+  let d2 = 0;
+  const rb2 = async () => { d2++; return [NODE("i")]; };
+  await loadOrBuildProjection(fs2, WS, cfgOn, rb2);
+  const noFp = await loadOrBuildProjection(fs2, WS, cfgOn, rb2);
+  assert.equal(noFp.cached, true, "不传指纹 → 保持旧行为（命中即用）");
+  assert.equal(d2, 1, "不传指纹不应导致重复派生");
+  console.log("✔ 场景 Projection-Store-5 源指纹：一致→命中 / 变化→重建 / 取不到→保守重建 / 不传→旧行为");
+}
+
 console.log("✔ 场景 Projection-Store-1 save/load/invalidate/rebuild");
 console.log("✔ 场景 Projection-Store-2 loadOrBuild：store 关闭恒派生 / 开启首次派生+再次命中缓存");
 console.log("✔ 场景 Projection-Store-3 invalidateFor change-aware：只移除变更 rel 节点（ADR-0048⑤）");

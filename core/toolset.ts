@@ -70,6 +70,14 @@ const wingetRemedy = (pkg: string, note?: string): Record<string, CapabilityReme
   default: { cmd: "（本表为 Windows 口径）", note: "非 Windows：用系统包管理器或官方 release" },
 });
 
+/**
+ * **无可靠安装方式**时的处置（v1.15.12）：只陈述事实，**不编造命令**。
+ * 用于：Windows 上确实没有官方包的工具（`tmux` / `viddy` / `tig`）、或平台专属（`ip`/`ss` 属 Linux iproute2）。
+ */
+const noInstallRemedy = (note: string): Record<string, CapabilityRemedy> => ({
+  default: { cmd: "（未登记可靠安装方式）", note },
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 通用 CLI 目录（reference）。列序固定：id, 二进制, 显示名, 分类, winget 包 ID, 实测版本, 版本旗标, 用途, 替代对象, 备注
 // winget ID 与版本均为 **2026-09-10 本机实测核对**；版本会随时间变化，ID 稳定。
@@ -85,20 +93,32 @@ const tool = (
   provides: string,
   replaces: string,
   note?: string,
-): Capability => ({
-  id,
-  label,
-  kind: "reference",
-  category,
-  provides: `${provides}${replaces && replaces !== "—" ? `（替代：${replaces}）` : ""}`,
-  degradesTo: "无（通用工具，不影响插件行为）",
-  remedy: wingetRemedy(pkg, note),
-  install: wingetRecipe(pkg),
-  winget: pkg,
-  probe: flag ? [bin, flag] : [bin],
-  note: note ? `winget ${pkg} · 实测 ${ver}` : `winget ${pkg} · 实测 ${ver}`,
-  doc: "docs/toolchain-windows.md",
-});
+): Capability => {
+  const providesText = `${provides}${replaces && replaces !== "—" ? `（替代：${replaces}）` : ""}`;
+  // pkg 为空 → **无可靠安装方式**：只陈述事实，不给命令（宁缺勿编）。
+  if (!pkg) {
+    return {
+      id, label, kind: "reference", category,
+      provides: providesText,
+      degradesTo: "无（通用工具，不影响插件行为）",
+      remedy: noInstallRemedy(note || "本表未登记可靠安装方式"),
+      probe: flag ? [bin, flag] : [bin],
+      note: note ? `无 winget 包 · ${note}` : "无 winget 包",
+      doc: "docs/toolchain-windows.md",
+    };
+  }
+  return {
+    id, label, kind: "reference", category,
+    provides: providesText,
+    degradesTo: "无（通用工具，不影响插件行为）",
+    remedy: wingetRemedy(pkg, note),
+    install: wingetRecipe(pkg),
+    winget: pkg,
+    probe: flag ? [bin, flag] : [bin],
+    note: `winget ${pkg} · 实测 ${ver}`,
+    doc: "docs/toolchain-windows.md",
+  };
+};
 
 const REFERENCE_TOOLS: Capability[] = [
   // ── GNU 工具链（Windows 原本没有 grep/find/sed/awk…，最高优先级；三选一，勿全装）──
@@ -137,6 +157,14 @@ const REFERENCE_TOOLS: Capability[] = [
   tool("nushell", "nu", "nushell", "Shell 与终端", "Nushell.Nushell", "0.114.1", "--version", "结构化 Shell", "PowerShell（另一种选择）", "二进制名是 nu"),
   tool("direnv", "direnv", "direnv", "Shell 与终端", "direnv.direnv", "2.37.1", "version", "目录局部环境", "手动 source .env", "版本子命令是 `direnv version`，不是 --version"),
   tool("zellij", "zellij", "zellij", "Shell 与终端", "Zellij.Zellij", "0.45.1", "--version", "终端复用", "tmux", "**Windows 无官方 tmux winget 包**，用 zellij 替代"),
+  // v1.15.12 补：WSL 清单（docs/toolchain-wsl.md）提到、但台账此前漏登的条目。
+  // **Windows 无可靠包的不编造命令**（pkg 留空 → 只说事实）。
+  tool("tmux", "tmux", "tmux", "Shell 与终端", "", "", "-V", "终端复用", "screen", "Windows 无官方包；用 zellij，或直接在 WSL 里用 tmux"),
+  tool("tldr", "tldr", "tldr（tlrc）", "Shell 与终端", "tldr-pages.tlrc", "1.13.1", "--version", "精简帮助（社区示例）", "man"),
+  tool("viddy", "viddy", "viddy", "构建与任务", "", "", "--version", "更现代的 watch", "watch", "winget 无结果（实测）；走 cargo install 或 release"),
+  tool("tig", "tig", "tig", "Git 与版本控制", "", "", "--version", "Git TUI（轻量）", "git log", "winget 搜到的 DoD.STIGViewer 是**无关工具**（勿混装）；走 scoop/choco 或 release"),
+  tool("lazydocker", "lazydocker", "lazydocker", "构建与任务", "JesseDuffield.Lazydocker", "0.25.2", "--version", "Docker TUI", "docker ps"),
+  tool("ip", "ip", "iproute2（ip / ss）", "网络与下载", "", "", "-V", "网络配置与 socket 查看", "ifconfig / netstat", "**Linux 专属**（iproute2）；Windows 用 Get-NetIPAddress / netstat"),
   tool("wezterm", "wezterm", "WezTerm", "Shell 与终端", "wez.wezterm", "20240203", "--version", "终端模拟器", "Windows Terminal（自带）"),
   tool("nvim", "nvim", "Neovim", "Shell 与终端", "Neovim.Neovim", "0.12.5", "--version", "编辑器", "notepad / VS Code"),
 

@@ -17,7 +17,7 @@ import {
 } from "../core/knowledge-engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
-import { loadOrBuildProjection } from "../core/projection-store.js";
+import { loadOrBuildProjection, shadowSourcesFingerprint } from "../core/projection-store.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { listResourceCards, deriveResourceNodes } from "../core/resource.js";
 import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
@@ -111,7 +111,7 @@ const shadowQuery: ReadQuery = {
       // 记忆原子投影 + 资源卡投影（.shadow/resources/，无证据的卡片不上投影）
       const cards = await listResourceCards(fs, ws);
       return [...deriveShadowNodes(parsed), ...deriveResourceNodes(cards)];
-    });
+    }, () => shadowSourcesFingerprint(fs, ws));
     const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept", "resource"].includes(t)) : [];
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
     const items = queryShadow(nodes, topicQ, scope, limit);

@@ -211,7 +211,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 - **两层分开**（ADR-0051）：卡片 = **source**（删了就丢事实）；`resource` 节点 = **Projection**（派生、可重建）。一张卡片 → 一个节点，`evidence` = 卡片里的 `source`（不二次截断，来源可回查），`relations` 只派生 `references`，`createdBy:"tool"`，不设 `kind`；节点 id 由**文件名**派生（`sr-<slug>`），两张同名标题的卡不会撞。**content 里投影段排在固有层之前**——读侧只取前几行，结论与引用证据必须先出现。
 - **证据门**：卡片没写 `source` → **不上投影**（卡片保留在磁盘）；解析不出来也不猜（无 LLM、不推断）。
 - **怎么查**：`shadow_query("关键词")`（全部类型）或 `shadow_query("…", { scope: ["resource"] })`（只查资源）；`read_shadow({ mode: "shadow-report" })` 的类型分布里会出现 `resource`。
-- **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 rebuild）；卡片属性是原文快照，系统不自动重抓。
+- **已知边界（v1.15.12 已修）**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 rebuild）；卡片属性是原文快照，系统不自动重抓。**现已两处覆盖**：写侧索引重建后自动失效 + 读侧**源指纹**（记忆日期目录 + `resources/`）不一致即重建。
 - **不属本轮**：投影模式预设里「资源侦察员 / 创意专家」的**工作方式**（那是预设平面），本版只做插件的类型与门——`agent-presets/` 本轮无改动。
 
 ### 护栏（读侧 + 写侧）
@@ -364,11 +364,12 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.11`（委派规模与复用优先：teammate 名额硬上限 4 + 往返纪律）** —— 最新几版摘要：
+**当前版本：`v1.15.12`（缺陷清扫：5 项真缺陷 + 2 处记账勘误）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
-| v1.15.11 | **派活判据由「team 优先」修正为「复用优先」+ 委派规模控制**（ADR-0056）：**判据**——会复用 ≥2 次（或需共享任务板）才用 teammate，只用一次用 `subagent`（用一次时 teammate **更贵**：多背 `team:policy` + 9 schema，每成员每请求）。**成员数硬闸门**——host 行设 `maxMembers: 4`（原默认 8）；经**代码核实**它是**per-session 终身累计**上限而非并发上限：创建时检查（`L564`）、`members` 只增不减（**无任何移除路径**）、**失败的创建也永久占名额**（名字不复用）。**往返纪律**——一次委派 = 一条消息、同一委派往返 **≤2 轮**、优先唤醒 running/idle（**冷恢复会重放整段持久历史**）。**名额耗尽不是死路**——`workflow`/`subagent` 对 `agentTeams` 引用 **0 处** ⇒ 不吃名额。**代价如实记账**：persona **+235 字符**常驻（YAML 解析值 2394 → 2629）。另补写漏掉的 **ADR-0055**（此前 CONTEXT/README/源码 4 处引用了不存在的 ADR） |
+| v1.15.12 | **缺陷清扫**（用户「所有发现的缺陷都要 fix」）：先**逐条查证** 16 条记账/缺口是否仍存在，再分类处置。**修 5 项真缺陷**——① `continuity/engine.ts` 自造 `FsTarget`（违反 dsh-fs 契约，sandbox 下静默失败）；② **投影缓存不感知源变化**（`invalidate` 零调用点 → 写侧 `ensureIndex` 挂钩 + 读侧**源指纹**，并**顺带修掉一个被激活的既有 bug**：`abs()` 把 `displayPath` 字符串当 `FsTarget` 传）；③ 台账补登 7 条（44→50）+ `docs/toolchain-wsl.md` 纳入**棘轮**；④ `HOST_BASELINE` 双源加**防漂移棘轮**；⑤ Team 工具静默缺口的**可感知降级**（①为待决策的结构性项）。**2 处记账勘误**：`fs.writeText` 省略 `expected`/`sandboxPolicy` 是契约允许的（**非缺陷**）；`revocation-guard` **不是孤儿**（测试在用）。**自曝**：第一版把「不传指纹」写成永不命中缓存（测试当场变红）。全量回归 **27/27**，新增 3 处回归锁 |
+| v1.15.11 | **派活判据由「team 优先」修正为「复用优先」+ 委派规模控制**（ADR-0056）：会复用 ≥2 次才用 teammate；host 行 `maxMembers: 4`（经代码核实是 **per-session 终身累计**上限，**非并发**；无移除路径、失败也占名额）；往返 **≤2 轮**、一次委派一条消息、避免冷恢复；`workflow`/`subagent` **不吃名额**。代价：persona **+235 字符**常驻 |
 | v1.15.10 | **工具集台账扩为两级**（ADR-0055）：`kind:"provider"`（插件内接线：zg/semble）与 **`kind:"reference"`（通用 CLI 目录，44 项 / 13 分类）**。新增 `docs/toolchain-windows.md`（Windows 口径，winget ID 全部本机实测）与 `docs/toolchain-wsl.md`，**随包发布**；`test/toolset-catalog.test.ts` 做**双向棘轮**（台账↔文档漂移即红，首次运行即抓出一个写错的 ID）。巡检支持 `survey:"all"`（并行探测全部，实测 44 项 **1.5s**）与 `category` 过滤。探测口径收紧为诚实的「**未检出 ≠ 未安装**」。全量回归 27/27 |
 | v1.15.9 | **一键装入口 `mode:"toolset"`**：`read_shadow({mode:"toolset"})` = 只读巡检；`{mode:"toolset", install:"<id>"}` = **显式安装**。授权走**宿主自己的审批服务**（`ctx.approval.request`），**只有 `allowed-once` 才执行**；`rejected`/`cancelled`/`unavailable`/无通道/无 agent/审批抛错/非词表返回值 → **一律不安装**（fail closed）。已可用 → 幂等短路；装完**重探**才报结果。顺带解掉与 `zg` 同类的 Windows 陷阱：**`npm` 也是 `.cmd`**，故解析为 `node <npm-cli.js> install -g <pkg>`。mode 总数 61 → **62** |
 | v1.15.8 | **缺件处置（工具集台账）**：新增 `core/toolset.ts` 声明式台账（`zg` / `semble`：`provides` / `degradesTo` / `remedy` / `doc`），并在 `mode:"index"` 与 `verifyEvidence` 两处缺件出口接上**可执行的确切命令**；`CandidateResult` 增 `reason`，顺带补上 `verifyEvidence` 此前不显示 `reason` 的缺口 |

@@ -68,7 +68,7 @@ Recall = Past Observation Reintroduced Into Present Context For Re-evaluation
   - **AbortController + setTimeout**：host 侧用 Node 原生计时器 + AbortController 做超时取消（动态 cordis 不可用全局计时器，但本包是 host bundle 插件，Node 全局可用）。
 
 **不能 / 边界**
-- **`resource` 的两条已知边界**：① 卡片没写 `source` → 不上投影（卡片保留在磁盘，不进认知查询）——「收进库 ≠ 有出处」；解析不出来（无标题/无 source）直接不投影，**不猜一个**（无 LLM 补写）。② `projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 `invalidate`/`rebuild`）；卡片属性是原文快照，系统不自动重抓。
+- **`resource` 的两条已知边界**：① 卡片没写 `source` → 不上投影（卡片保留在磁盘，不进认知查询）——「收进库 ≠ 有出处」；解析不出来（无标题/无 source）直接不投影，**不猜一个**（无 LLM 补写）。② `projectionStore` 缓存**曾**不感知资源目录变化（**v1.15.12 已修**：写侧索引重建后自动失效 + 读侧**源指纹**不一致即重建）；卡片属性是原文快照，系统不自动重抓。
 - **不记录模型内部链式推理**——只记 agent **表达出来**的结论/分析，不是 COT 全程。
 - **`session/event` 载荷已按类型契约核实并修正（2026-09-05）**：`SessionEvent = { type, seq, time, data }`；`user/message` → `data` 即 UserMessage（`data.content[]`），`assistant/message` → `data.message` 即 AssistantMessage（`data.message.content[]`）。`extractMessage` 只取 `type==="text"` 块，跳过 reasoning/tool-call。已用真实导出记录核对形状成立，此前"静默为空"的最大不确定点已解除。
 - **`fs/observed` 曾误用 `target.path/uri`**：`FsTarget` 实际是 `{ targetKey, displayPath }`，会拿不到路径 → 入口点（客观锚）静默丢失。已改读 `target.displayPath`。

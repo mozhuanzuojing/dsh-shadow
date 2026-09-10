@@ -82,8 +82,10 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 | 终端复用 | `zellij` | `Zellij.Zellij` | 0.45.1 | **tmux**（见下） |
 | 终端模拟器 | `wezterm` | `wez.wezterm` | 20240203 | Windows Terminal（自带） |
 | 编辑器 | `nvim` | `Neovim.Neovim` | 0.12.5 | notepad / VS Code |
+| 精简帮助（社区示例） | `tldr` | `tldr-pages.tlrc` | 1.13.1 | `man` |
 
 > **tmux 在 Windows 上没有官方 winget 包**（实测搜到的 `Helvesec.RMUX` 是第三方重写）。要 tmux 语义请用 `zellij`，或直接在 WSL 里用 tmux。
+> `tldr` 用的是 `tlrc` 实现（`tldr-pages.tlrc`，Moniker 即 `tldr`）。
 
 ### 2.5 Git 与版本控制
 
@@ -91,7 +93,10 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 |------|------|-----------|------|----------|
 | diff 美化 | `delta` | `dandavison.delta` | 0.19.2 | `diff` |
 | Git TUI | `lazygit` | `JesseDuffield.lazygit` | 0.64.1 | `git log` 手敲 |
+| Git TUI（轻量） | `tig` | ❌ **无 winget 包** | — | `git log` |
 | GitHub CLI | `gh` | `GitHub.cli` | 2.100.0 | 网页操作 |
+
+> **`tig` 没有 winget 包**（实测搜 `tig` 命中的 `DoD.STIGViewer` 是**完全无关的工具**，勿混装）。走 scoop / choco 或官方 release；只想看历史用 `lazygit`。
 
 ### 2.6 磁盘与系统
 
@@ -110,6 +115,9 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 | 多线程下载 | `aria2c` | `aria2.aria2` | 1.37.0 | `wget` |
 | 图形化 ping | `gping` | `orf.gping` | 1.21.0 | `ping` |
 | 媒体处理 | `ffmpeg` | `Gyan.FFmpeg` | 9.0.1 | — |
+| 网络配置 / socket 查看 | `ip` / `ss` | ❌ **Linux 专属** | — | `ifconfig` / `netstat` |
+
+> `ip` 与 `ss` 属 Linux 的 **iproute2**，Windows 上不存在对应命令（用 `Get-NetIPAddress` / `netstat`）。它们登记在台账里是为了对齐 WSL 清单，**Windows 上不提供安装方式**。
 
 ### 2.8 版本与包管理
 
@@ -126,6 +134,10 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 | 多进程管理 | `mprocs` | `pvolok.mprocs` | 0.9.6 | `parallel` |
 | 基准测试 | `hyperfine` | `sharkdp.hyperfine` | 1.20.0 | `time` |
 | 日志分析 | `lnav` | `tstack.lnav` | 0.14.1-rc1 | `tail -f` |
+| Docker TUI | `lazydocker` | `JesseDuffield.Lazydocker` | 0.25.2 | `docker ps` |
+| 更现代的 watch | `viddy` | ❌ **无 winget 包** | — | `watch` |
+
+> `viddy` 实测 winget 无结果；走 `cargo install viddy` 或官方 release。
 
 ### 2.10 归档
 

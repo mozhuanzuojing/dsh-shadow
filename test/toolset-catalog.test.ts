@@ -74,6 +74,42 @@ assert.equal(unregistered.length, 0, `文档用到但这些包未登记进台账
 console.log(`✔ ③ 棘轮反向：文档里 ${docWinget.size} 个 winget 包 ID 全部已在台账登记（按参数语法解析，未误收许可证号）`);
 
 // ─────────────────────────────────────────────
+// ⑦ 棘轮（WSL 清单）：docs/toolchain-wsl.md 的「工具映射总表」提到的工具，台账必须有对应条目
+//    （v1.15.12 补上 ADR-0055 记为「已知缺口」的这一条：此前只有 Windows 文档受棘轮保护。）
+//    WSL 用的是 Debian 命令名，与 winget 包名无对应关系 ⇒ 按**命令名**匹配台账的 bin / id / label / provides。
+//    别名表收 Debian 包名与命令名不一致的那几个（fd-find→fdfind、bat→batcat）与常见缩写（z→zoxide）。
+// ─────────────────────────────────────────────
+const WSL = readFileSync(join(repoRoot, "docs", "toolchain-wsl.md"), "utf8");
+// 只扫**「工具映射总表」**这一段：文档里还有「国内镜像」等表格，第 2 列是 URL，误扫会假阳性。
+const wslStart = WSL.indexOf("## 工具映射总表");
+assert.ok(wslStart >= 0, "docs/toolchain-wsl.md 应有「工具映射总表」小节");
+const wslEnd = WSL.indexOf("\n## ", wslStart + 1);
+const WSL_TABLE = WSL.slice(wslStart, wslEnd > wslStart ? wslEnd : undefined);
+const ALIAS: Record<string, string> = { fdfind: "fd", batcat: "bat", z: "zoxide", sg: "ast-grep" };
+// 台账可匹配面：probe[0]（二进制名）/ id / label / provides
+const ledgerText = referenceCapabilities().map((c) => [c.probe[0], c.id, c.label, c.provides].join(" ")).join("\n");
+const hasTool = (token: string): boolean => {
+  const t = ALIAS[token] || token;
+  if (!t || t.length < 2) return false;
+  return new RegExp(`(^|[^A-Za-z0-9_-])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9_-]|$)`, "i").test(ledgerText);
+};
+const wslTools = new Set<string>();
+for (const line of WSL_TABLE.split("\n")) {
+  if (!line.trim().startsWith("|")) continue;                 // 只扫表格行
+  const cells = line.split("|").map((s) => s.trim());
+  if (cells.length < 4) continue;
+  const toolCell = cells[2];                                  // 第 2 列 = 现代工具
+  for (const m of toolCell.matchAll(/`([^`]+)`/g)) {
+    const head = m[1].trim().split(/\s+/)[0];                 // `eza --icons` → eza
+    if (head) wslTools.add(head);
+  }
+}
+assert.ok(wslTools.size >= 20, `WSL 工具表应能解析出 ≥20 个工具（实际 ${wslTools.size}）`);
+const wslMissing = [...wslTools].filter((t) => !hasTool(t));
+assert.equal(wslMissing.length, 0, `docs/toolchain-wsl.md 提到但这些工具未登记进台账：${wslMissing.join(", ")}`);
+console.log(`✔ ⑦ 棘轮 WSL：文档里 ${wslTools.size} 个工具全部能在台账找到条目（含别名 fdfind/batcat/z 与词边界匹配）`);
+
+// ─────────────────────────────────────────────
 // ④ 巡检渲染：分类分组 + 「未探测」与「未检出」必须可区分
 // ─────────────────────────────────────────────
 const rows = await surveyCapabilities({ survey: "providers" });

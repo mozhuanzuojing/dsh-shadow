@@ -15,7 +15,7 @@
 //   ④ 缺框架接口 ctx.on / ctx.inject / ctx.get → 报 error 且不抛异常
 //   ⑤ 真实 cordis 端到端（找不到宿主 cordis 时明确跳过，不静默）
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as mod from "../dist/index.js";
 const { apply } = mod;
@@ -198,6 +198,28 @@ const fireTurn = async (listeners: Map<string, Function>, turn = 1) => {
     );
     console.log("✔ ⑤ 真实 cordis 端到端：缺 tools → 首个 turn-stopping 报 error");
   }
+}
+
+// ── ⑥ HOST_BASELINE 与 package.json engines.dsh 防漂移（v1.15.12）──
+// 此前两处是**双源**：`index.ts` 的 HOST_BASELINE 常量与 `package.json` 的 `engines.dsh`。
+// 双源的风险是漂移（改了包版本忘了改常量，或反之），报给用户的版本号就会说谎。
+// 这里用棘轮锁住一致性——与仓库既有的「mode 棘轮」「winget 棘轮」同一手法。
+{
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const enginesDsh = String(pkg?.engines?.dsh ?? "");
+  assert.ok(enginesDsh, "package.json 应有 engines.dsh");
+  const src = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+  const m = src.match(/const HOST_BASELINE = "([^"]+)"/);
+  assert.ok(m, "index.ts 应有 HOST_BASELINE 常量");
+  const baseline = m[1];
+  // engines.dsh 形如 ">=0.1.5-rc.1"，取其版本部分与常量比对
+  const versionPart = enginesDsh.replace(/^[^\d]*/, "");
+  assert.equal(
+    baseline,
+    versionPart,
+    `HOST_BASELINE（${baseline}）必须与 package.json engines.dsh（${enginesDsh} → ${versionPart}）一致：两处是双源，漂移就会把版本号报错`,
+  );
+  console.log(`✔ ⑥ HOST_BASELINE = ${baseline} 与 package.json engines.dsh = ${enginesDsh} 一致（双源防漂移棘轮）`);
 }
 
 console.log("ALL PASS ✅");
