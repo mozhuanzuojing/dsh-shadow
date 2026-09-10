@@ -16,6 +16,7 @@
 - **验证**：新增 `test/resource-node.test.ts`（解析 / 投影 / 无 source 不上投影 / 证据门两个方向 / scope 过滤 / 中文键名 / 脏值截断 / id 不撞）→ `ALL PASS ✅`；回归 `test/recall-attribution.test.ts`、`recall-envelope`、`recall-routing-eval`、`evidence-gate`、`atom-kind`、`lineage`、`query-observatory`、`concept-guards`、`missing-dependency` 全 `ALL PASS ✅`；`npx tsc --noEmit` 与 `npm run build` 均 exit 0。
 - **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 `invalidate`/`rebuild`）；默认关闭，不影响默认路径。卡片属性是原文快照，系统不自动重抓（与「不 LLM 补写」一致）。
 - **不属本轮**：投影模式预设里「资源侦察员 / 创意专家」的工作方式（那是预设平面），本版只做插件的类型与门。
+- **待实测（需重启 web profile）**：改的是源码 + `dist`，本会话用的是**重启前载入的 dist**——所以「在真会话里 `shadow_query(..., { scope: ["resource"] })` 能查到卡」这条**尚未真机闭环**，重启后按 §上「验证」的同一份数据复核。重启前预检已过：`dsh --profile web --dump-config` exit 0、无 `Error:`，`- id: dsh-shadow` 在册、`shadowRoot: D:\project\dsh1`。
 
 
 ## [v1.13.2] 投影模式：「编排者与专家不重做同一件事」（④ 由「逐条复核」改为「只验一错就要返工的那几条」）
