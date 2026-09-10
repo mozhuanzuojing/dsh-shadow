@@ -43,6 +43,58 @@ export function apply(ctx, rawConfig = {}) {
         catch {
             return {};
         } })() ?? {};
+    // ---- 宿主绑定探测（能力探测，不是版本比较）----
+    // 为什么不做版本闸门：宿主与 pnpm 都不读 `engines.dsh`（对 @deepseek-ai/* 全量编译产物检索 `engines` 零命中；
+    // `dsh plugin` 只转发 pnpm 并按「装了什么」同步 bundles 层），所以「仅支持 DSH >= X」在宿主层无法强制。
+    // 插件真正能观测到的事实是「我需要的宿主接口在不在」——缺哪个就报哪个，比「版本低于 X」精确。
+    // 分两档：硬依赖（缺了插件等于没装）报 error；可选依赖（缺了只少一项增强）报一条 warn。
+    // 时机：不在 apply() 里探测服务——Cordis 的服务是异步挂载的，apply 时可能尚未 provide
+    //（见下方 queryDeps.fs 的懒解析注释：急切快照会拿到 undefined 并永久固化），那时探测会误报。
+    // 可靠时机有两处：Cordis 保证服务就绪的 inject 回调，以及首个 agent/turn-stopping。
+    const HOST_BASELINE = "0.1.5-rc.1";
+    const reportHostGap = (kind, lines) => {
+        if (!lines.length)
+            return;
+        const head = kind === "error"
+            ? "[dsh-shadow] 当前 DSH 缺少必需的宿主接口，插件无法正常工作："
+            : "[dsh-shadow] 部分宿主服务不可用，以下能力降级：";
+        const tail = `本插件的验证基线是 DSH ${HOST_BASELINE}（package.json engines.dsh）；更早版本未经验证，不承诺可用。自查当前版本：dsh --version`;
+        const text = [head, ...lines.map((line) => `  · ${line}`), `  ${tail}`].join("\n");
+        if (kind === "error")
+            console.error(text);
+        else
+            console.warn(text);
+    };
+    const missingServices = (names) => names.filter((n) => { try {
+        return context.get(n) === undefined;
+    }
+    catch {
+        return true;
+    } });
+    /** 可选服务缺失时的一句话影响说明（按服务名取）。 */
+    const SOFT_IMPACT = {
+        llm: "llm 服务 —— 不生成每回合摘要、不做召回扩词",
+        agents: "agents 服务 —— 采集不到发起者与工作目录",
+        agentDefaultModel: "agentDefaultModel 服务 —— 不注入默认模型",
+    };
+    // 框架级接口先查（最确定、最早）：ctx.on / ctx.inject 都没有，整个插件无从工作。
+    if (typeof context.on !== "function" || typeof context.inject !== "function") {
+        reportHostGap("error", ["ctx.on / ctx.inject（订阅事件与注入服务的框架接口）不存在"]);
+        return () => { };
+    }
+    // 首个 turn-stopping 时补查一次服务面：此时宿主已完全挂载，探测可靠，且只报一次。
+    let hostProbed = false;
+    const probeHostOnFirstTurn = () => {
+        if (hostProbed)
+            return;
+        hostProbed = true;
+        const hard = missingServices(["fs"]);
+        if (hard.length)
+            reportHostGap("error", hard.map((n) => `${n} 服务 —— 记忆文件的读写全靠它`));
+        const soft = missingServices(Object.keys(SOFT_IMPACT));
+        if (soft.length)
+            reportHostGap("warn", soft.map((n) => SOFT_IMPACT[n] || `${n} 服务`));
+    };
     const getAgentById = (id) => {
         if (!id)
             return undefined;
@@ -59,7 +111,12 @@ export function apply(ctx, rawConfig = {}) {
     context.on("tools/result", collector.onToolsResult);
     context.on("goal/changed", collector.onGoalChanged);
     context.on("session/event", collector.onSessionEvent);
-    context.on("agent/turn-stopping", collector.onTurnStopping);
+    context.on("agent/turn-stopping", (payload) => {
+        probeHostOnFirstTurn();
+        // 必须透传返回值：onTurnStopping 是 async，宿主（与测试）会 await 这个 handler 的返回值来等落盘完成；
+        // 包装时丢掉 return 会让等待方提前继续（此时尚未落盘），表现为「flush 失败信号消失」（场景13 回归）。
+        return collector.onTurnStopping(payload);
+    });
     context.on("session/flush", collector.onSessionFlush);
     // zg 是「眼睛/Evidence Sensor」；Arbitration(它意味着什么) 留在 Shadow Core。zg 未装 → 明确 unavailable，绝不静默 fallback。
     const verifyEvidence = (ref, ctx) => routeVerify(ref, ctx, config.evidenceProvider || "fs", config.evidenceProviders);
@@ -81,8 +138,10 @@ export function apply(ctx, rawConfig = {}) {
     if (typeof context.inject === "function") {
         context.inject(["tools"], (toolsCtx) => {
             const toolsService = toolsCtx.get("tools");
-            if (!toolsService)
+            if (!toolsService) {
+                reportHostGap("error", ["tools 服务 —— read_shadow / recall_shadow / shadow_query 靠它注册，缺它这三个工具都不会出现"]);
                 return;
+            }
             toolsService.register({
                 name: "read_shadow",
                 description: "读取 agent 的记忆树（shadow）。无参数返回目录与索引；带 topic/entry 按入口或主题穿透到具体记忆文件。穿透按分层召回（先精后深、预算内返回）：低分记忆只给摘要，高分记忆给摘要+命中片段+正文骨架。当判断上下文不足、需要回忆最近想过/决定过什么时调用。",
@@ -253,8 +312,10 @@ export function apply(ctx, rawConfig = {}) {
     if (typeof context.inject === "function") {
         context.inject(["systemPrompt"], (promptCtx) => {
             const systemPrompt = promptCtx.get("systemPrompt");
-            if (!systemPrompt)
+            if (!systemPrompt) {
+                reportHostGap("warn", ["systemPrompt 服务 —— 不向系统提示追加 shadow 使用说明（记忆读写不受影响）"]);
                 return;
+            }
             systemPrompt.context({
                 name: "dsh-shadow",
                 order: 40,

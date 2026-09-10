@@ -3,6 +3,30 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.0] 兼容性口径落地：验证基线声明（`engines.dsh`）+ 宿主绑定能力探测
+
+用户 2026-09-10 要求「检查 dsh-shadow 对 DSH 0.1.5-rc.1 的支持，而且仅支持该版本以上」。经三轮追问定下口径（下详），本轮落地。**只加声明与可见性，不改任何 mode / API / 读侧语义。**
+
+- **先查证三条事实（决定了做法，不是假设）**：
+  1. **宿主与 pnpm 都不读 `engines.dsh`** —— 对 `@deepseek-ai/*` 全量编译产物（links 下所有版本目录）检索 `engines` **零命中**；`dsh plugin`（`lib/plugin-*.js`）只转发 pnpm、按「装了什么」同步 `dsh.profile.bundles`，无版本校验；profile 启动链（`lib/profile-boot-*.js` → `dsh-app-boot`）只管 patch 层叠加与挂载，同样无校验；pnpm 只校验 `engines.node` / `engines.pnpm`，未知键忽略。⇒ **`engines.dsh` 是声明，不是闸门**（`dsh-wechat` 已有的 `engines.dsh: ">=0.1.2-rc.1"` 同为此性质）。
+  2. **宿主不向插件暴露自身版本号** —— 未找到任何把 DSH 版本暴露成服务 / 环境变量的位置；唯一的插件清单服务（`dsh-plugin-package-inventory-deepseek`）只读**插件**的 `name` + `version` 上报 UI，`engines` 同样不读。⇒ 插件无法在运行时自检版本。
+  3. **兼容性对照** —— 本插件用到的契约面（`fs` / `llm` / `agents` / `agentDefaultModel`（含 `.currentSelection()`）/ `tools` / `systemPrompt` 六个服务 + `session/event` / `agent/turn-stopping` 两个事件）在 **`0.1.0-rc.7` 起即全部存在**。⇒ **没有已知的不兼容点**，「仅支持 0.1.5-rc.1 以上」据此**定性为「验证基线」而非「技术兼容边界」**，文档**不写「不兼容」**（无证据）。
+- **落地 1（声明层）**：`package.json` 加 `engines.dsh: ">=0.1.5-rc.1"`（对齐 `dsh-wechat` 先例）+ description 同步；README 新增「兼容性（验证基线）」节（含「是声明不是闸门」与基线理由）；`CONTEXT.md` 术语表加「验证基线」条目；版本 1.14.1 → 1.15.0。
+- **落地 2（能力层 = 真防线）**：`index.ts` 加宿主绑定探测，把原先的**静默降级**改成可见：
+  - **硬依赖报 error**：`ctx.on` / `ctx.inject`（框架接口；缺失时报告后直接返回空 disposer，不再继续挂）、`tools`（原 `if (!toolsService) return;` —— 缺它三个工具一个都不出现且无声，是「低版本不兼容」最危险的呈现方式）、`fs`。
+  - **可选依赖报一条 warn**：`llm`（不生成摘要 / 不扩词）、`agents`（采集不到发起者与工作目录）、`agentDefaultModel`（不注入默认模型）、`systemPrompt`（不追加常驻提示）。
+  - **时机刻意避开 `apply()`**：Cordis 服务是异步挂载的，`apply()` 时探测会误报（`index.ts` 的 `queryDeps.fs` 懒解析注释记录过同类坑）；改在 Cordis 保证就绪的 `inject(["tools"])` / `inject(["systemPrompt"])` 回调内，以及**首个 `agent/turn-stopping`**（补查 `fs` / `llm` / `agents` / `agentDefaultModel`；`hostProbed` 保证只报一次）。
+  - **事件本身不做存在性断言**：Cordis 事件松耦合、注册监听无需事件已存在、无可查询的事件注册表；写侧已有 pending 超阈值兜底落盘（`writer-capture.ts`），即使 `turn-stopping` 缺失也不会永久积压 —— **不谎称能探测事件**。
+- **不做的事（有意为之）**：不做硬闸门（宿主层做不到；`process.argv[1]` 反推宿主安装路径读 `package.json` 的野路子跨平台脆弱、且与「零宿主依赖」设计相悖，未采用）；不把服务写进 `inject`（会让插件在缺服务时**静默等待**，比现状更隐蔽）；不套用 ADR-0049 的 `unavailable` 语义（那是给**可选增强**的；宿主核心服务缺失属**硬依赖**，该响亮说挂不起来）。
+- **开发中真实踩到的坑（已修 + 已锁）**：包装 `agent/turn-stopping` 时**丢了返回值** —— `onTurnStopping` 是 async，宿主与测试都靠 `await` 这个 handler 的返回值来等落盘完成；包装返回 `undefined` 会让等待方提前继续，`read_shadow` 里「flush 失败可见」的信号随之消失（场景13 回归失败）。**回档复验**：stash 本轮改动 → 重编译 → `recall-attribution.test.ts` **ALL PASS**；恢复即 **FAIL** ⇒ 证实为本轮引入。修法：包装内 `return collector.onTurnStopping(payload)`。
+- **验证**：
+  - ① `npx tsc --noEmit` **exit 0**；`npm run build` **exit 0**，`dist/index.js` 与源码同步重建；
+  - ② **全量回归 22/22 `ALL PASS ✅`**（原 21 个 + 新增 `test/host-probe.test.ts`）；其中 `recall-attribution.test.ts`（含场景13 flush 失败可见）在修复后回到 PASS；
+  - ③ **新增 `test/host-probe.test.ts`（5 组断言）锁住本轮行为**：缺 `tools` 报 error；`tools` 可用时三个工具都注册；可选服务缺失只报一次 warn（第二次 turn-stopping 不再报）；**包装 handler 必须透传 Promise**（本轮 bug 的回归锁）；缺 `ctx.on` / `ctx.inject` 报 error 且不抛异常；
+  - ④ 回档复验（stash → 重编译 → 跑测试）见上「坑」一条，用于区分「本轮引入」与「既有缺陷」。
+- **待实测（需重启 web profile）**：本轮改的是源码 + `dist`，本会话用的是重启前载入的 dist —— 探测输出（正常挂载时应当**一条都不打印**）要在重启后真机确认；记为待实测，不伪称已验。
+
+
 ## [v1.14.1] 投影模式预设固化 ⑦「创意与资源」（资源侦察员 → 创意专家）
 
 用户 2026-09-10 决定把设计稿（`_reports/2026-09-10-投影模式-创意专家与资源侦察员-设计稿.md` §7）的 ⑦ 固化进投影模式预设。**只改 persona 文本与文档，不动插件运行时**（`resource` 类型与资源卡格式是 v1.14.0/ADR-0051 的事，本版只教 agent 怎么用）。
