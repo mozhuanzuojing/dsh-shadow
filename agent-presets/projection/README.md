@@ -27,15 +27,37 @@ auto-persisted into the shadow memory tree by the `dsh-shadow` plugin, and it
 should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
 a host bundle and is always on; this preset only steers how the agent uses it.
 
-The persona also carries the **delegation discipline** (v1.12.9): the agent acts as
-an orchestrator rather than doing every kind of work itself — split the task by type
-(implement / debug / review / research / docs / test / config), activate the matching
-subagent expert with a self-contained prompt, dispatch independent work in one batch,
-and **verify every expert claim itself** (run the command, write a probe, read the
-code) instead of trusting an unverified assertion. Two reviewers with different
-lenses (correctness vs. contract/docs) are required for review work. Full text:
-`~/.agents/rules/moe-subagent-dispatch.md` (user-level) — this preset ships the
-self-contained short form, so it works on a machine without that rules directory.
+The persona also carries the **delegation discipline** (v1.12.9, boundary tightened in
+v1.13.2): the agent acts as an orchestrator rather than doing every kind of work itself
+— split the task by type (implement / debug / review / research / docs / test / config),
+activate the matching subagent expert with a self-contained prompt, and dispatch
+independent work in one batch. Two reviewers with different lenses (correctness vs.
+contract/docs) are required for review work.
+
+**v1.13.2 draws the boundary between the orchestrator and its experts**, so neither side
+redoes the other's work:
+
+- **Decide whether to delegate at all** — work you can state in one sentence, that
+  touches a single place and needs no second opinion, you do yourself. Reconnaissance
+  (listing directories, searching code, reading key files) in order to split the work is
+  *not* duplication; producing the deliverable first and then dispatching an expert to
+  redo it *is*.
+- **Do not paste the same source text into two experts' prompts** — give the others a
+  summary plus the exact path, to read themselves if they need to check. Exception:
+  reviewers with deliberately different lenses read the source themselves; that spends
+  tokens to buy independence, which is not waste.
+- **Verify only the claims that would force rework if wrong.** The dispatch prompt asks
+  each expert to split its conclusions into "wrong ⇒ rework" and "the rest"; the
+  orchestrator checks only the first group, accepts the rest **as unverified**, and must
+  list them in the deliverable as「未复核：N 条」. An output that splits nothing is
+  rejected and re-dispatched.
+
+This replaces the earlier "verify every expert claim itself" rule (run every command,
+read every file it mentioned): verifying every single claim meant redoing the expert's
+reasoning, and that cost scaled with the number of experts.
+
+Full text: `~/.agents/rules/moe-subagent-dispatch.md` (user-level) — this preset ships
+the self-contained short form, so it works on a machine without that rules directory.
 
 From v1.13.1 the persona also carries **⑥ 契约与根因卫生** (compressed from
 `~/.agents/AGENTS.md` global work conventions + the ADR-0050 clarify audit): root-cause

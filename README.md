@@ -238,7 +238,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 `dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`agent-presets/projection/`）：
 
 - 包内位置：`agent-presets/projection/`（`agent.cordis.yml` + `preset.yml` + `README.md`），是**生产包构成**，随包发布。
-- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9：①–⑤ 先分活 → 准确激活专家 → 提示词七要素 → 派了必须验收 → 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）与 **⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）。
+- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9 立、**v1.13.2 补"编排者与专家不重做同一件事"**：① 先分活（不值得派的自己做、不许先做出成果再派）→ ② 准确激活专家 → ③ 提示词七要素（同一段原文只进一个专家的提示词，审查等要独立判断的场景例外）→ ④ **只验一错就要返工的那几条、其余按未复核处理并列出**（原「逐条复核」已废止）→ ⑤ 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）与 **⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）。
 - **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（三个文件），或在 DSH 部署脚本中引用包内该目录。
 - 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过；改动后按 `copy → standingKeyFor(新 id) → remove` 做一次**全新挂载校验**（`projection` 已挂载时 `standingKeyFor` 返回既有世代，不会重读文件）。
 - 注意：预设引用 DSH 标准内置插件（`@deepseek-ai/dsh-*`）与 `{{model}}/{{cwd}}` 模板变量，不依赖用户机器专属配置；`dsh-shadow` 本身在 host 常开，预设只在 persona 里指引 agent 使用 `read_shadow`。
@@ -247,10 +247,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.13.1`（投影模式 persona ⑥ 契约与根因卫生）** —— 最新几版摘要：
+**当前版本：`v1.13.2`（投影模式：编排者与专家不重做同一件事）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.13.2 | 投影模式划清"编排者与专家不重做同一件事"（用户 2026-09-10 提的"子 Agent 与主 Agent 不重叠、不重复推理、降低 Token 冗余"）：① 增补**该不该派**（一句话说得清、只动一处、不需要旁人视角的自己做；切活的侦察不算重做，不许先做出成果再派）② ③ 增补**同一段原文只进一个专家的提示词**（其余给摘要 + 原位路径；要独立判断的审查例外）③ ④ 由「逐条复核 / 专家声称的事实自己跑一遍」改为**只验一错就要返工的那几条、其余按未复核处理并列出、零分栏退回**④ ⑤ 补"各干各的那一份"；用户级规则 `moe-subagent-dispatch` 同步改，**规则为源**（聚合 `~/.dsh/AGENTS.md` + WSL 镜像） |
 | v1.13.1 | 投影模式预设增补 ⑥：根因三部曲 + 禁止生造词 + 结论进 shadow/项目文档 + 四查（交手前/改口径后）；`recall_shadow`→`mode:recovery`；与全局 `~/.agents/AGENTS.md` 去重说明 |
 | v1.13.0 | API 正名硬切：`recovery` / `identity-advance` / `verifyEvidence` / `real-evidence` / `AtomEvidenceRef`；旧名显式拒绝（ADR-0050） |
 | v1.12.9 | 投影模式预设的 persona 增补「工作方式」五条（先分活 / 准确激活专家 / 提示词七要素 / 派了必须验收 / 并行与扇出），随包发布、不依赖用户级规则目录；预设/主 README 同步，安装副本已同步并做过全新挂载校验 |
