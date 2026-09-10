@@ -73,9 +73,9 @@ export interface ShadowConfig {
     projectionStore?: {
         enabled?: boolean;
     };
-    /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback)。 */
+    /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback) | semble(本地语义检索 CLI，ADR-0054；同不 fallback)。 */
     indexEngine?: {
-        provider?: "fs" | "zg";
+        provider?: "fs" | "zg" | "semble";
     };
     /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）：provider 仅占位，默认 off。 */
     knowledgeEngine?: {

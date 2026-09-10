@@ -135,7 +135,7 @@ const knowledge = {
         return scrubFinal(RECALL_PREFIX + renderKnowledgeTree(corpusTree) + "\n\n（ADR-0047：免向量保留树；不转 vector/chunk）" + flushWarn);
     },
 };
-// ── index：Index Engine 候选生成（fs 默认全量 | zg 复用 provider）──
+// ── index：Index Engine 候选生成（fs 默认全量 | zg 复用 provider | semble 本地语义检索）──
 const index = {
     modes: ["index"],
     run: async (deps, args, _exec, ctx) => {
@@ -147,7 +147,7 @@ const index = {
             for (const ref of r.refs)
                 lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
         else
-            lines.push(`- ${r.provider === "zg" ? "（zg 未产出候选：未装或未命中）" : "（fs: 全量扫描，无候选预筛）"}`);
+            lines.push(r.provider === "fs" ? "- （fs: 全量扫描，无候选预筛）" : `- （${r.provider} 未产出候选：未装、超时或未命中）`);
         return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
     },
 };

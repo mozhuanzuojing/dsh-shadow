@@ -31,8 +31,8 @@ export interface ShadowConfig {
   queryLog?: { enabled?: boolean };
   /** Phase 1B Projection Store（Performance Feature，默认关）：把 Atom→ShadowNode 派生结果缓存成可重建投影（.shadow/shadow-index/nodes.jsonl），避免每次全量重取。只在「Node 稳定+query 稳定+rebuild 成本明显」时启用。 */
   projectionStore?: { enabled?: boolean };
-  /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback)。 */
-  indexEngine?: { provider?: "fs" | "zg" };
+  /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback) | semble(本地语义检索 CLI，ADR-0054；同不 fallback)。 */
+  indexEngine?: { provider?: "fs" | "zg" | "semble" };
   /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）：provider 仅占位，默认 off。 */
   knowledgeEngine?: { enabled?: boolean; provider?: string; llmNavigate?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number } };
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */

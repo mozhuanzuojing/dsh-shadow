@@ -3,6 +3,56 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.6] Semble 接为 Index Engine 第 3 个候选 provider（ADR-0054）
+
+用户 2026-09-10 问「能否把 Semble 集成到 shadow」，选定 **A + S1**：接**候选生成**层、语料是**工作区代码**；并同意**新立 ADR 承接 ADR-0001 的口子**（不改其正文）。
+
+### 为什么只能接候选层（实测，不是推断）
+
+用 4 个中文记忆夹具（模拟 `.shadow/` 真实头部格式）跑 4 次查询：
+
+| 查询 | #1 | #2 | #3 |
+|---|---|---|---|
+| 登录无状态的理由 | `auth` **0.009836** | `_index` 0.009677 | `db` 0.009524 |
+| 订单索引 migration | `db` **0.009836** | `_index` 0.009677 | `auth` 0.009524 |
+| 支付退款（语料里没有） | `db` **0.009836** | `auth` 0.009677 | `_index` 0.009524 |
+| 量子纠缠/哈勃常数（无关） | `db` **0.009836** | `auth` 0.009677 | `ui` 0.009524 |
+
+- 分数三元组**逐次完全相同**（`3/305`、`3/310`、`3/315`）⇒ 分数**不可跨查询比较**；
+- **语料中不存在的话题照样返回最高分** ⇒ **无负信号**；
+- `semble search --help` 只有 `-k/--top-k`、`--max-snippet-lines`、`--content`、`--include-text-files` ⇒ **无 `--threshold`/`--min-score`**。
+
+而 ADR-0043 要求「**无证据不返回**」。**Semble 给不出「空」这个答案** ⇒ 它**不能**承担 `verify()`。这与本仓对 zg 的既有定位逐字同构：**Semble 是检索层，不是裁决层**。
+
+（顺带修正上一轮的一处「未验证」：**中文散文检索可用**——第一行查询确实把 `auth` 排到第 1；但分差极窄，判别力弱。本轮按 S1 只索引**代码**，S2（`.shadow/` 语料）留作后续独立决策。）
+
+### 落地
+
+- **新** `core/semble.ts`：`stripBracketedNoProxy` / `absolutizeLocator` / `runSemble` / `parseSembleRefs` / `sembleCandidates`。**不实现 `EvidenceProvider`**（刻意：挡住「被当裁决层用」这条路）。
+- `core/index-engine.ts`：`provider` 联合加 `"semble"`，新增分支（形参与 zg 并列，第三形参供测试注入）；候选流程 = `sembleCandidates` → `rankRefs` → `authorizeScope`。
+- `core/types.ts`：`indexEngine.provider?: "fs" | "zg" | "semble"`。
+- `query/reads.ts`：`mode:"index"` 的渲染对非 `fs` provider 统一措辞（原为 zg 专用三元判断）。
+- `test/index-engine.test.ts`：新增场景 Index-Engine-2（未装 `unavailable` 不 fallback / 可用给 refs+rankRefs+**授权过滤** / `stripBracketedNoProxy` 4 例 / `parseSembleRefs` 绝对化与 4 类容错）。
+- `adr/0054-semble-index-engine-provider.md`（新）；`CONTEXT.md`「关联」加一条、`index` mode 行补 provider；`README.md` 版本表；`package.json` → 1.15.6。
+
+### 两处由实测逼出来的实现约束（都不是可选项）
+
+1. **必须清洗子进程 env**：`execFile` 默认继承父进程 env，而本机 ambient `NO_PROXY` 结尾是 `[::1]` → Semble 的 httpx 构造 Client 时抛 `InvalidURL: Invalid port ':1]'`（**模型已缓存也照崩**，实测 `exit 1`）。故 spawn 时剔掉**带方括号**的条目（通用处理「形状」，不硬编码某台机器的值）。
+2. **必须把候选路径绝对化**：Semble 返回**相对 repo 的路径**（如 `core\resource.ts`），而 `authorizeScope` 是**绝对前缀匹配** ⇒ 不绝对化会把候选**整批滤掉**（本地测试先失败、实测 0 条暴露）。修后同一次真实调用返回 **20 条绝对路径候选**。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 23/23 `ALL PASS ✅`**。
+- **真机端到端**（用真 Semble CLI，非 mock）：`generateCandidates("parse resource card fields and projection sections", {ws, workspace})` → `provider=semble`、`unavailable=undefined`、**refs=20**、全部为 `G:/project/dsh1/dsh-shadow/...` 绝对路径、命中 **`core/resource.ts:173-186`**（即 `deriveResourceNodes` 的投影段）。同时打印出 `ambient NO_PROXY` 含 `[::1]` 而 `cleaned` 已剔除 —— 证明 env 清洗是这次能跑通的前提。
+
+### 边界与未验证
+
+- **默认路径不变**：`indexEngine.provider` 默认仍是 `fs`，不显式开启则**零行为变化**。
+- 新增一个**外部 CLI 依赖**（未装 → `unavailable` + 可见标注，绝不 fallback 成 verified）。
+- **未验证**：① `--content code` 在**大仓库**的首次索引耗时（本机模型已缓存、dsh-shadow 单仓已可用）；② **S2（`.shadow/` 记忆语料）未接**；③ **zg 路径疑似同源问题**（它的候选也可能是相对/空 locator，同样过不了 `authorizeScope`），但 **zg 未安装、无法实测**，故本轮**只修 semble、未动 zg**，仅在此记账。
+- 本轮**未改** `Evidence Gateway`（`builtinEvidenceProviders` 不含 semble —— 刻意）。
+
+
 ## [v1.15.5] 旧协议约定全面删除（A/B/C/D）+ 同名双义第二轮正名 + references 补 OpenViking
 
 用户 2026-09-10 指示两项：「添加资料 `volcengine/OpenViking`」与「**旧协议约定全面删除**」。本轮按四项执行（A 代码兼容兜底 / B ADR 陈旧状态 / C 同名双义 / D 现行文档口径），并**顺带修掉一个被 A 暴露的真 bug**。

@@ -1,5 +1,6 @@
 import { authorizeScope } from "./authorization.js";
 import { zgEvidenceProvider } from "../evidence/zg.js";
+import { sembleCandidates } from "./semble.js";
 const toRefs = (matches) => (matches || []).slice(0, 20).map((m) => ({ type: "file", locator: String(m.path || ""), fragment: m.startLine ? { start: Number(m.startLine) } : undefined }));
 // zg 思想（ADR-0047）：rank 步——按 query 词在候选中命中数排序（锚定精确标识/路径）。纯函数。
 export const rankRefs = (refs, query) => {
@@ -12,8 +13,9 @@ export const rankRefs = (refs, query) => {
     };
     return [...refs].sort((a, b) => score(b) - score(a));
 };
-/** 工厂：按 config.indexEngine.provider 路由。fs=默认（空候选，走全量内存扫描）；zg=复用 zg provider。 */
-export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider) => {
+/** 工厂：按 config.indexEngine.provider 路由。
+ *  fs=默认（空候选，走全量内存扫描）；zg=复用 zg provider；semble=本地语义检索（ADR-0054，第三形参供测试注入）。 */
+export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider, sembleRun = sembleCandidates) => {
     const provider = config?.indexEngine?.provider || "fs";
     if (provider === "zg") {
         return {
@@ -26,6 +28,18 @@ export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider)
                 const matches = await evidenceProvider.discover(ref, ctx);
                 const refs = rankRefs(toRefs(matches), query); // zg 思想：语义发现→词汇级排序锚定
                 return { provider: "zg", refs: authorizeScope(refs, { workspace: ctx?.workspace }) }; // ADR-0048⑥ 授权范围
+            },
+        };
+    }
+    if (provider === "semble") {
+        return {
+            async generateCandidates(query, ctx) {
+                // ADR-0054：只产候选。未装/超时 → unavailable（调用方回退 fs），**绝不**冒充有候选。
+                const r = await sembleRun(query, ctx);
+                if (r.unavailable)
+                    return { provider: "semble", unavailable: true, refs: [] };
+                // 与 zg 同法：语义发现 → 词汇级重排（rankRefs 锚定精确标识/路径）→ 授权范围过滤。
+                return { provider: "semble", refs: authorizeScope(rankRefs(r.refs, query), { workspace: ctx?.workspace }) };
             },
         };
     }
