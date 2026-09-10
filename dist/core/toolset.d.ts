@@ -3,6 +3,20 @@ export interface CapabilityRemedy {
     cmd: string;
     note?: string;
 }
+/**
+ * 安装配方（声明式）。**为什么不能只存一条命令字符串**：
+ *   - `npm-global` 在 Windows 上 npm 只是 `npm.cmd`，而 Node 的 execFile 既不能起 `.cmd`（ENOENT）
+ *     也不能显式起 `.cmd`（EINVAL，CVE-2024-27980 缓解）→ 必须改走 `node <npm-cli.js>`；
+ *   - `argv` 用于本身就是可执行文件的工具（如 uv.exe）。
+ * 故存**结构**、由 `core/toolset-exec.ts` 在运行时按平台解析成真实 argv。
+ */
+export type InstallRecipe = {
+    kind: "npm-global";
+    pkg: string;
+} | {
+    kind: "argv";
+    argv: string[];
+};
 /** 一项可选能力（由某个外部 CLI 提供）。 */
 export interface Capability {
     id: string;
@@ -13,6 +27,10 @@ export interface Capability {
     degradesTo: string;
     /** 按 `process.platform` 给处置；`default` 兜底。 */
     remedy: Record<string, CapabilityRemedy>;
+    /** 安装配方（供显式调用的「一键装」使用）。 */
+    install: InstallRecipe;
+    /** 探测 argv（显示用；执行侧另有按平台的解析，见 toolset-exec）。 */
+    probe: string[];
     /** 文档锚（README 章节名）。 */
     doc: string;
 }

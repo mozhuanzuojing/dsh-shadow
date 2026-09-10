@@ -139,6 +139,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
     recallSelect: collector.recallSelect,
     knowledgeNavigate: collector.knowledgeNavigate,
     ensureIndex: (ws: string) => collector.ensureIndex(ws),
+    // 懒取审批服务（与 fs 同法：apply() 时可能尚未就绪；缺它时安装 fail closed，不代装）。
+    get approval() { return context.get("approval"); },
   };
   if (typeof context.inject === "function") {
     context.inject(["tools"], (toolsCtx: CtxLike) => {

@@ -24,6 +24,8 @@ export const CAPABILITIES = [
                 note: "需 Node ≥ 22；插件只用 --rg 路由，不必放开被拦下的原生依赖 install 脚本",
             },
         },
+        install: { kind: "npm-global", pkg: "@zvec/zvec-grep" },
+        probe: ["zg", "--version"],
         doc: "README「可选外部 CLI（zg / Semble）」",
     },
     {
@@ -37,6 +39,8 @@ export const CAPABILITIES = [
                 note: "需 uv；首次检索会下载一次嵌入模型，之后离线可用",
             },
         },
+        install: { kind: "argv", argv: ["uv", "tool", "install", "semble"] },
+        probe: ["semble", "--version"],
         doc: "README「可选外部 CLI（zg / Semble）」",
     },
 ];

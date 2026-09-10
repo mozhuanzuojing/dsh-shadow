@@ -3,6 +3,80 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.9] 一键装入口（显式调用 + 宿主审批门）—— mode:"toolset"
+
+承接 v1.15.8 的用户决定：**「加『一键装』入口（显式调用）」**。v1.15.8 只做到「报缺件 + 给命令」，本版补上可执行的安装入口——**但把授权交给宿主，而不是插件自己扩权**。
+
+### 机制：审批门（这版存在的全部理由）
+
+宿主提供了正确的机制，插件可以直接用：
+
+```ts
+ctx.approval.request({ agent, toolName, reason, signal })
+  → 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'      // 只有 allowed-once 是授予
+```
+
+（宿主组合里已挂 `- id: approval` → `@deepseek-ai/dsh-user-approval`。）于是：
+
+| 审批结果 | 行为 |
+|---|---|
+| `allowed-once` | 执行安装 → **重新探测** → 按真实结果报告 |
+| `rejected` / `cancelled` | **不安装**，明说原因 |
+| `unavailable` / 无 approval 服务 / 无 agent / 审批抛错 | **一律不安装**（fail closed），改为打印可自行执行的命令 |
+| 非词表返回值（如 `"yes-please"`） | 归一为未授予，**不安装** |
+
+这与 `approval` 服务自身的语义一致（它把异常返回值也归一为 `unavailable`）。**插件从不自行扩权**：inv 178 `Authority ≠ Ownership` / inv 182「scope 不可在执行中隐式扩大」的落点就是这里的「只有外部授予才动手」。
+
+### 入口
+
+```text
+read_shadow({ mode: "toolset" })                  # 只读巡检：每项可用/缺件 + 处置（模型可自动调用）
+read_shadow({ mode: "toolset", install: "zg" })   # 显式安装（仅用户显式要求；先申请审批）
+```
+
+- **只读巡检**与**安装**共用 `mode`、由是否传 `install` 区分，因而权限轴清楚：巡检可自动调用，安装不可。
+- 已可用 → **幂等短路**（不申请审批、不做改动）；未登记能力 → **不编造命令**；装完**重探**才报结果（绝不凭退出码宣称成功，ADR-0049）。
+
+### 落地
+
+| 文件 | 改动 |
+|------|------|
+| `core/toolset.ts` | 台账加 `install`（**声明式配方**）与 `probe`：`npm-global` / `argv` |
+| **新** `core/toolset-exec.ts` | `probeCapability` / `resolveInstall` / `installCapability`（审批门）/ `surveyCapabilities` / `renderSurvey` / `renderInstall` |
+| `query/types.ts` + `index.ts` | deps 加**懒取** `get approval()`（与 `fs` 同法；缺失 → fail closed） |
+| `query/reads.ts` | 新 `mode:"toolset"`（巡检 / 安装） |
+| `test/toolset-exec.test.ts`（新） | 26 → 见「验证」 |
+| `CONTEXT.md` | mode 表加 `toolset`；mode 总数 **61 → 62**（棘轮同步） |
+| `test/recall-envelope.test.ts` | 棘轮 61 → 62 |
+| `README.md` | 「谁能调用」权限轴加两行；「可选外部 CLI」补「一键装（显式调用 + 审批门）」节 |
+
+### 又一个 Windows 陷阱：`npm` 也是 `.cmd`
+
+`resolveInstall` 不能只存一条命令字符串——**`npm` 在 Windows 上只是 `npm.cmd`**，与 `zg` 完全同一类：
+
+| 调用 | 结果 |
+|------|------|
+| `execFile("npm", …)` | **ENOENT** |
+| `execFile("npm.cmd", …)` | **EINVAL** |
+
+故 `npm-global` 配方在运行时解析成 `node <nodeDir>/node_modules/npm/bin/npm-cli.js install -g <pkg>`（实测 `node npm-cli.js --version` → `11.19.0`，exit 0）。`uv` 是真 `.exe`（54 MB），`argv` 配方直传即可。测试专门锁住 `zg.args[0]` 以 `npm-cli.js` 结尾。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 26/26 `ALL PASS ✅`**（新增 `test/toolset-exec.test.ts`）。
+- 新测试覆盖：`resolveInstall` 三态（npm-global 走 node+npm-cli.js / argv 直传 / 未登记报 error）；未登记能力的探测与安装均不编造；**已可用幂等短路且不申请审批**（本机 semble 0.5.6 真实路径，断言 `asked === 0`）；**审批门六种非授予结果全部不安装**（无通道 / 缺 agent / rejected / cancelled / unavailable / 非词表值）+ 审批抛错不安装、原因可见。
+- **真机只读巡检**：`surveyCapabilities()` → zg `0.2.2` ✅、Semble `0.5.6` ✅，输出「全部可用，无需处置」。
+
+### 边界与未验证
+
+- **`allowed-once` → 真正执行安装器 → 重探** 这条**执行**路径**未在单测中跑**：跑它会在本机真的安装、改动机器。其机械部分（argv 解析）由新测试 ① 覆盖、安全门由 ④⑤ 覆盖；**端到端执行仍属真机验收，尚未做**。
+- `remedy[platform]` 与 `install` 配方目前都走 `default`，未在 macOS/Linux 实测。
+- 台账仍只登记 dsh-shadow **自己的**可选外部 CLI（`zg` / `semble`）；通用开发工具（jadx 等）属另一平面，未纳入（用户 2026-09-10 确认）。
+- 本机会话的审批提示是关闭的；真实审批交互（UI 呈现、`allowed-once` 的实际授予）**未在真机观察过**。
+
+
+
+
 ## [v1.15.8] 缺件处置：从「一句 unavailable」到「一条可执行命令」（工具集台账）
 
 用户 2026-09-10 提「你要有一个工具集编排，以方便使用，没有就安装，顺便给用户提醒即可」。本轮**只落地其中零风险的一半**（检测 + 提示），并把不做「代装」的理由写成可引用的条文。

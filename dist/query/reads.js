@@ -8,6 +8,7 @@ import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { unavailableHint } from "../core/toolset.js";
+import { surveyCapabilities, renderSurvey, installCapability, renderInstall } from "../core/toolset-exec.js";
 import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections, } from "../core/knowledge-engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
@@ -157,6 +158,22 @@ const index = {
                 lines.push("", hint);
         }
         return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
+    },
+};
+// ── toolset：可选外部 CLI 的能力台账（只读巡检）+ 显式安装（审批门）──
+// 巡检是只读的；安装只在显式传 `install:"<id>"` 时发生，且**一律先要审批**、
+// 拿不到 `allowed-once` 就不装（见 core/toolset-exec.ts 的权限模型注释）。
+const toolset = {
+    modes: ["toolset"],
+    run: async (deps, args, exec, _ctx) => {
+        const flushWarn = deps.getFlushWarn();
+        const installId = String(args?.install || "").trim();
+        if (installId) {
+            const o = await installCapability(installId, { approval: deps.approval, agent: exec?.agent });
+            return scrubFinal(RECALL_PREFIX + renderInstall(o) + flushWarn);
+        }
+        const rows = await surveyCapabilities();
+        return scrubFinal(RECALL_PREFIX + renderSurvey(rows) + flushWarn);
     },
 };
 // ── query-log：Shadow Query Observatory 汇总（命中/证据/关系/类型分布 + 稳定性）──

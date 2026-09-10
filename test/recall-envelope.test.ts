@@ -1,5 +1,5 @@
 // dsh-shadow —— v1.12.6/1.12.7 回归（mock host，驱动真实插件代码）：
-//   ① mode 描述下沉：工具 schema 变短 + 指针；CONTEXT.md「mode 参考」表覆盖源码里的**全部 61 个** mode（棘轮）。
+//   ① mode 描述下沉：工具 schema 变短 + 指针；CONTEXT.md「mode 参考」表覆盖源码里的**全部 62 个** mode（棘轮）。
 //   ② 召回信封：截断自报家门（总数 = 命中 − 返回，冷却也算在内）+ 空命中给可执行下一步与近似候选（标「未验证」）。
 //   ③ deprioritize：只降权、不移除（被降权的树仍可搜到，只是排名靠后，且 debug 能解释）。
 //   ④ v1.12.7 修复：scrubFinal 不再把整篇读侧输出压成一行（保留 \t\n\r）。
@@ -93,7 +93,7 @@ grab(/modes:\s*\[([\s\S]*?)\]/g);
 for (const m of src.matchAll(/mode\s*[!=]==\s*"([a-z][a-z0-9-]*)"/g)) modes.add(m[1]);
 // planning.ts 用 `String(args?.mode || "") !== "plan"` 这种写法，上面的正则抓不到
 for (const m of src.matchAll(/mode\s*\|\|[^)]*\)\s*[!=]==\s*"([a-z][a-z0-9-]*)"/g)) modes.add(m[1]);
-assert.equal(modes.size, 61, `源码声明的 mode 应正好 61 个，实际 ${modes.size}：缺 ${[...modes].length ? "" : ""}`);
+assert.equal(modes.size, 62, `源码声明的 mode 应正好 62 个，实际 ${modes.size}：缺 ${[...modes].length ? "" : ""}`);
 const contextMd = readFileSync(new URL("CONTEXT.md", repoRoot), "utf8");
 const tblStart = contextMd.indexOf("## mode 参考");
 const tblEnd = contextMd.indexOf("## 关联", tblStart);

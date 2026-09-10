@@ -62,7 +62,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## mode 参考（`read_shadow` 的 mode 串）
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
-> 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
+> 共 **62 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
 > **命名口径（ADR-0050 / ADR-0053）**：读侧 mode 名与参数名以本表 + 工具 schema 为唯一现行口径；被取代的旧名不在本文档登记（映射与理由见 ADR-0050 / ADR-0053），调用旧名会返回「已废止：X → 请用 Y」，不落空进默认召回。
 
 | 族（源码） | mode | 一句话语义 |
@@ -76,6 +76,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `shadow-report` | Shadow Fitness Report（Evidence Density / 类型分布 / 潜在缺失类型） |
 | | `shadow-manifest` | Shadow Manifest（记忆树清单/可观测） |
 | | `index` | Index Engine 候选生成（provider `fs`（默认）/ `zg` / `semble`；`semble` 见 ADR-0054） |
+| 工具台账 `query/reads.ts` | `toolset` | 可选外部 CLI 的能力台账：无 `install` = **只读巡检**；`install:"<id>"` = **显式安装**（先经宿主审批，只有 `allowed-once` 才执行，装完**重探**再报结果） |
 | | `knowledge` | Knowledge Engine 规范/文档树（**不转 vector**） |
 | Observer 时间/梦核 `query/observer-kernel.ts` | `reflection` | 从 ObservationTrace 发现候选规律（旁支；`from`/`to` 限周期） |
 | | `identity-advance` | Identity Continuity 推进（闸门 `minCount`/`minRecency`/`maxContradiction`/`halfLifeDays`；读 curated 锚用 `args.identity`，**废止**旧名 `mode:"identity"`） |
