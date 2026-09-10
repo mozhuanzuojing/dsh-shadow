@@ -555,7 +555,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   assert.equal(resolveWorkspace({ session: { header: { cwd: "D:/project" } } } as any, cwdEmpty, { projectRoot: "C:/proj" }), "C:/proj", "①显式 projectRoot 也生效");
   assert.equal(resolveWorkspace({ session: { header: { cwd: "D:/dsh1" } } } as any, cwdEmpty, {}), "D:/dsh1", "②无显式 scope 回退 session cwd");
   const cmap = new Map<string, string>([["S1", "C:/cachedA"]]);
-  assert.equal(resolveWorkspace({ id: "S1", session: { header: { cwd: "" } } } as any, cmap, {}), "C:/cachedA", "③空串(session.cwd=空) 回退 cwdBySession");
+  assert.equal(resolveWorkspace({ id: "S1", session: { header: { cwd: "" } } } as any, cmap, {}), "C:/cachedA", "③空串(header.cwd=空) 回退 cwdBySession");
   assert.equal(resolveWorkspace({ id: "S2", session: { header: { cwd: "D:/other" } } } as any, cmap, {}), "D:/other", "③非空 cwd 优先于缓存");
   assert.equal(firstNonEmpty("", "   ", "C:/x"), "C:/x", "firstNonEmpty 视空串为无效");
   const done0: any = resolveShadowScope({ session: { header: { cwd: "D:/dsh1" } } } as any, cwdEmpty, {});
@@ -720,6 +720,10 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const fname15 = keys15[0].replace(/\\/g, "/");
   assert.ok(!fname15.includes("pwsh") && !fname15.includes("edit"), `entry 不应是工具名（防串线）：${fname15}`);
   assert.ok(fname15.includes("proj"), `entry 应为语义路径域：${fname15}`);
+  // 正向断言：工具名必须从宿主真字段 `exec.name` 读到（旧名 `exec.tool?.name` 已删，
+  // 若有人改回去，这里会失败 —— 上面那条是否定断言，对字段读错零覆盖）。
+  const text15 = String(store15.get(keys15[0]) ?? "");
+  assert.ok(text15.includes("调用 pwsh"), `工具名应从 exec.name 读到（正向断言）：\n${text15.slice(0, 400)}`);
   console.log("✔ 场景15 入口/主题切分：语义路径域作 entry，工具名不作入口（防跨事务串线）");
 }
 

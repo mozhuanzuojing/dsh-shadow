@@ -3,6 +3,25 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.3] 审查修复：能力探测在真机不生效（inject 回调语义）+ 残留旧名与半修状态
+
+用户 2026-09-10 要求 review。派两位独立审查（① 正确性/回归；② 文档/发版一致性），父代理逐条复现验收，本条记录修复。**本轮修的全是 v1.15.0～v1.15.2 自身留下的漏洞。**
+
+- **根因（高）：v1.15.0 的「硬依赖报 error」在真机不可达。** Cordis 的 `ctx.inject(deps, cb)` **只在依赖就绪时才回调**（依赖缺失时子 fiber 停在 PENDING，回调根本不执行）—— 把「缺 tools」的报错写在 inject 回调里，等于「缺了就不报」，**仍是静默**。父代理用**真实 cordis** 端到端复现：不提供 `tools` 跑 `dist/index.js`，`apply()` 之后**日志 0 条**。
+  - 修：`tools` 与 `systemPrompt` 一并纳入 `probeHostOnFirstTurn` 的依赖检查（走 `fs` 那条已证可行的路径）；硬依赖（`fs`/`tools`）报 error，可选（`llm`/`agents`/`agentDefaultModel`/`systemPrompt`）报一条 warn；inject 回调内只留**不可达的防御性判断**并注明原因；框架接口检查补上 `ctx.get`。
+- **测试假通过（高）：`host-probe.test.ts` 的 mock `inject` 无条件回调**，与真语义不符 ⇒ 断言①在 mock 恒真、在真机永不可能通过。
+  - 修：mock 改为**保真**（依赖全部就绪才回调），新增断言①c 锁住该语义；断言①挪到「首个 `turn-stopping` 报 error」；**新增 ⑤ 用真实 cordis 端到端**（找不到宿主 cordis 时明确打印跳过，不静默冒充通过）。
+- **残留旧名（低，但直接违反「过期旧名直接删除」）**：`core/types.ts` 的 `AgentLike.session` 仍声明 `cwd?: string`（宿主从来没有该字段，与 `scope.ts` 的注释直接矛盾）→ 删除。
+- **半修状态（中）：`clear` 不清 `goalByAgent`。** `operation` 读对之后才暴露：clear 之后的新记忆仍带上一回合的 `> 目标：`（父代理实测复现）→ `clear`（或载荷不带 `goal`）时 `delete`。
+- **静默兜底（低）**：`goalText()` 的 `change.operation || "decision"` 会把「operation 缺失」伪装成正常标签 → 改为 `|| ""`，与 v1.15.2「不留兜底」同一口径。
+- **补正向锁（中）**：`writer-capture` 的 `exec.name` 此前只有**否定**断言（工具名不作 entry），把读取改回旧名照样全绿 → 场景15 增加正向断言（记忆正文含「调用 pwsh」）。
+- **文档措辞精度（审查员 B）**：①「检索 `engines` **零命中**」字面不成立（实测有散文注释提及，只是**无任何代码读取**）→ README / CONTEXT / CHANGELOG 统一改为「无任何代码读取」；② README「**真正的**防线是能力探测」偏强（探测只报告、不拦截）→ 改为「**能观测到的**防线」；③ README 同节「插件在挂载时探测」与「探测不放在 `apply()`」易被读成自相矛盾 → 明确写清「不放在 `apply()`、也不放在 `inject` 回调」；④ CHANGELOG v1.15.1 的「宿主自身 71 处第一方使用」无法核实 → 改为「在宿主多个包中被广泛第一方使用」。
+- **记账未修（审查员报，父代理裁决为非本轮返工面）**：`fs.writeText` 两参（触发条件=兜底工作区+沙箱生效，且写失败**有可见信号**）；`continuity/engine.ts` 自造 `FsTarget`；`clear` 会落一条内容较空的记忆（属产品取舍，非缺陷 —— `goal-operation.test.ts` 已把「带 `〔clear〕` 标签」固化为期望）；`HOST_BASELINE` 与 `package.json` 双源（已加同步维护注释）；`dist/delegation/guard/revocation-guard.*` 两个孤儿文件（源自早前提交 `6e952f2`，非本区间）。
+- **验证**：`tsc --noEmit` exit 0；`tsc` build exit 0；**全量回归 23/23 `ALL PASS ✅`**（含 ⑤ 真实 cordis 端到端）；另用真实 cordis 探针确认：**服务齐全时 `apply()` 后零输出**（v1.15.0 遗留的「待实测」项就此闭环）。
+- **边界**：不动 API / mode / 读侧语义；不改既有测试的断言意图（只补正向锁、保真 mock 与真机端到端）。
+- **待实测（需重启 web profile）**：改动在源码 + `dist`，本会话用的是重启前载入的 dist。
+
+
 ## [v1.15.2] 过期旧名直接删除：不留兼容兜底（ADR-0050 口径）
 
 用户 2026-09-10 指示「**过期的旧名直接删除**」。v1.15.1 修 `goal/changed` 时把不存在的旧字段名留在了末位做兜底（`change.operation || change.action || change.phase || change.kind`），本轮按本仓 ADR-0050「正名硬切、不留兼容别名」的口径把全部已确认过期的旧名删净。
@@ -33,7 +52,7 @@
 - **回归锁**：新增 `test/goal-operation.test.ts`（3 组）：用**宿主真实载荷形状**驱动插件，断言 create 带 `〔create〕` + objective 且**不再出现** `〔decision〕`；clear（无 goal 字段）带 `〔clear〕`；七种 operation 全覆盖。
 - **父代理裁决（推翻/修正子代理的两条结论）**：
   1. **撤销「`systemPrompt` 契约冲突」**：两个子代理一个说 `context(...)`、一个说 `section(...)`。实测 0.1.5-rc.1 二者**并存且用途不同** —— `section()` 插静态有序段（`layer.sections`），`context()` 插动态运行时上下文（`layer.contexts`），均为公开方法（0.1.2-rc.1 起即如此）。插件用 `context()` **正确，不是缺陷**。
-  2. **修正「`agent.session` 是未声明字段」**：子代理 B 定位到根因 —— 它在 TS 类型（`runtime-types.ts` 的 `declare module` 增强）与官方文档里**是公开契约**，只因契约生成器只索引顶层 `export` 声明而**不在机器可读目录（Inspect）里**，且宿主自身 71 处第一方使用（含 `tool-fs/src/session-cwd.ts` 注释直接指名该路径）。⇒ 属「公开但 Inspect 看不到」，非「未承诺」。
+  2. **修正「`agent.session` 是未声明字段」**：子代理 B 定位到根因 —— 它在 TS 类型（`runtime-types.ts` 的 `declare module` 增强）与官方文档里**是公开契约**，只因契约生成器只索引顶层 `export` 声明而**不在机器可读目录（Inspect）里**，且在宿主多个包中被广泛第一方使用（含 `tool-fs/src/session-cwd.ts` 注释直接指名该路径）。⇒ 属「公开但 Inspect 看不到」，非「未承诺」。
 - **记账未修（父代理裁决为非本轮返工面）**：① `fs.writeText` 只传 2 参（无 `expected` / `signal` / `sandboxPolicy`）—— 已核实组合**确挂 `fs-sandbox`**，但触发条件是「解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow`」，且写失败**有可见信号**（场景13 测的正是它，`read_shadow` 会暴露「落盘失败」），故非「静默」；② `core/scope.ts` 的 `agent.session.cwd` 是死分支（宿主只有 `header.cwd`）；③ `continuity/engine.ts` 自造 `FsTarget`，违反 dsh-fs 书面契约（key 只能来自 `resolve()`），本地/沙箱后端今天可用；④ 工具名四级兜底里 `exec.tool` / `toolName` / `tool` 在 `ToolExecution` 上不存在，末位 `exec.name` 命中。
 - **验证**：`tsc --noEmit` exit 0；`tsc` build exit 0；**全量回归 23/23 `ALL PASS ✅`**（21 原有 + `host-probe` + 新增 `goal-operation`）。
 - **边界**：只改 `core/collect.ts` 一处字段名 + 新增一个测试；不动 API / mode / 读侧语义；**已落盘的历史记忆文本不回填**（重算属单独决策，未做）。
@@ -45,7 +64,7 @@
 用户 2026-09-10 要求「检查 dsh-shadow 对 DSH 0.1.5-rc.1 的支持，而且仅支持该版本以上」。经三轮追问定下口径（下详），本轮落地。**只加声明与可见性，不改任何 mode / API / 读侧语义。**
 
 - **先查证三条事实（决定了做法，不是假设）**：
-  1. **宿主与 pnpm 都不读 `engines.dsh`** —— 对 `@deepseek-ai/*` 全量编译产物（links 下所有版本目录）检索 `engines` **零命中**；`dsh plugin`（`lib/plugin-*.js`）只转发 pnpm、按「装了什么」同步 `dsh.profile.bundles`，无版本校验；profile 启动链（`lib/profile-boot-*.js` → `dsh-app-boot`）只管 patch 层叠加与挂载，同样无校验；pnpm 只校验 `engines.node` / `engines.pnpm`，未知键忽略。⇒ **`engines.dsh` 是声明，不是闸门**（`dsh-wechat` 已有的 `engines.dsh: ">=0.1.2-rc.1"` 同为此性质）。
+  1. **宿主与 pnpm 都不读 `engines.dsh`** —— 对 `@deepseek-ai/*` 全量编译产物（links 下所有版本目录）检索 `engines`：**无任何代码读取**（仅有散文注释提及）；`dsh plugin`（`lib/plugin-*.js`）只转发 pnpm、按「装了什么」同步 `dsh.profile.bundles`，无版本校验；profile 启动链（`lib/profile-boot-*.js` → `dsh-app-boot`）只管 patch 层叠加与挂载，同样无校验；pnpm 只校验 `engines.node` / `engines.pnpm`，未知键忽略。⇒ **`engines.dsh` 是声明，不是闸门**（`dsh-wechat` 已有的 `engines.dsh: ">=0.1.2-rc.1"` 同为此性质）。
   2. **宿主不向插件暴露自身版本号** —— 未找到任何把 DSH 版本暴露成服务 / 环境变量的位置；唯一的插件清单服务（`dsh-plugin-package-inventory-deepseek`）只读**插件**的 `name` + `version` 上报 UI，`engines` 同样不读。⇒ 插件无法在运行时自检版本。
   3. **兼容性对照** —— 本插件用到的契约面（`fs` / `llm` / `agents` / `agentDefaultModel`（含 `.currentSelection()`）/ `tools` / `systemPrompt` 六个服务 + `session/event` / `agent/turn-stopping` 两个事件）在 **`0.1.0-rc.7` 起即全部存在**。⇒ **没有已知的不兼容点**，「仅支持 0.1.5-rc.1 以上」据此**定性为「验证基线」而非「技术兼容边界」**，文档**不写「不兼容」**（无证据）。
 - **落地 1（声明层）**：`package.json` 加 `engines.dsh: ">=0.1.5-rc.1"`（对齐 `dsh-wechat` 先例）+ description 同步；README 新增「兼容性（验证基线）」节（含「是声明不是闸门」与基线理由）；`CONTEXT.md` 术语表加「验证基线」条目；版本 1.14.1 → 1.15.0。

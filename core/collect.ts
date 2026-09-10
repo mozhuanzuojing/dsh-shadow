@@ -33,7 +33,9 @@ export const goalText = (change: any) => {
   // `change.change?.objective` 在任何版本都不存在（`phase` 只存在于 `change.goal.phase`）；
   // 留着它们只会把「字段读错」掩盖成静默回退 —— 与本仓 ADR-0050「正名硬切、不留兼容别名」同一口径。
   const obj = change.goal?.objective || "";
-  const act = change.operation || "decision";
+  // operation 缺失时不编造标签（不留静默兜底，避免把「字段缺失」伪装成正常标签）；
+  // 与 obj 皆空时，由末尾的「（决策）」兜住。
+  const act = change.operation || "";
   const parts: string[] = [];
   if (obj) parts.push(String(obj).slice(0, 160));
   if (act) parts.push(`〔${act}〕`);

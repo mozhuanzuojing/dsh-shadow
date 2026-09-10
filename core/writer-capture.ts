@@ -86,9 +86,13 @@ export function makeCapture(core: WriterCore, hooks: WriterHooks): CaptureResult
 
   const onGoalChanged = (payload: any) => {
     const gid = payload?.agent?.id;
+    const change = payload?.change;
     // 只读真字段 `change.goal.objective`（`change.objective` 在任何版本都不存在）。
-    const obj = payload?.change?.goal?.objective || "";
-    if (gid && obj) core.goalByAgent.set(String(gid), String(obj).slice(0, 120));
+    const obj = change?.goal?.objective || "";
+    // `clear`（或载荷不带 goal）= 「目标没了」：必须清掉缓存，否则后续记忆仍带旧 `> 目标：`。
+    // 这是 operation 读对之后才暴露出来的「半修」状态。
+    if (gid && (change?.operation === "clear" || change?.goal === undefined)) core.goalByAgent.delete(String(gid));
+    else if (gid && obj) core.goalByAgent.set(String(gid), String(obj).slice(0, 120));
     // Decision Capture：goal 事件 = 明确决策（一等事件），statement 与 source 入内供血缘派生。
     push(gid, { kind: "decision", text: `决定 ${goalText(payload?.change)}`, statement: goalText(payload?.change), source: "goal" });
     return undefined;

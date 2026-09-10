@@ -73,11 +73,37 @@ const run = async (change: any) => {
   console.log("✔ ① goal/changed(create) → 落盘记忆带 〔create〕 + objective（不再是 〔decision〕）");
 }
 
-// ── ② clear：无 goal 字段时也要带操作标签 ──
+// ── ② clear：带 〔clear〕 标签，且必须清掉上一回合的旧目标 ──
 {
-  const text = await run({ operation: "clear", ref: { id: "g1", revision: 5 } });
-  assert.ok(text.includes("〔clear〕"), `clear 应带 〔clear〕，实际：\n${text.slice(0, 400)}`);
-  console.log("✔ ② goal/changed(clear，无 goal 字段) → 带 〔clear〕 标签");
+  const store = new Map<string, string>();
+  const services: Record<string, any> = {
+    fs: mkFs(store),
+    tools: mkTools(),
+    systemPrompt: { context: () => {} },
+    agents: { get: (id: string) => (id === "S1" ? AG : undefined), currentInitiator: () => AG },
+    llm: undefined,
+    agentDefaultModel: undefined,
+  };
+  const { ctx, listeners } = mkHost(services);
+  apply(ctx, { shadowRoot: "C:/p", summary: { enabled: false } });
+  const onGoal: any = listeners.get("goal/changed");
+  const turn = async (n: number) => (listeners.get("agent/turn-stopping") as any)({ agent: AG, turn: n, signal: undefined });
+
+  onGoal({ agent: AG, change: { operation: "create", ref: { id: "g1", revision: 1 }, goal: { objective: "把 P99 降下来" } } });
+  await turn(1);
+  const first = [...store.values()].join("\n");
+  assert.ok(first.includes("把 P99 降下来"), `第一回合应带目标：\n${first.slice(0, 300)}`);
+
+  store.clear();
+  onGoal({ agent: AG, change: { operation: "clear", ref: { id: "g1", revision: 5 } } });
+  await turn(2);
+  const second = [...store.values()].join("\n");
+  assert.ok(second.includes("〔clear〕"), `clear 应带 〔clear〕 标签：\n${second.slice(0, 300)}`);
+  assert.ok(
+    !second.includes("把 P99 降下来"),
+    `clear 后不应再带上一回合的旧目标（说明 goalByAgent 没清）：\n${second.slice(0, 300)}`,
+  );
+  console.log("✔ ② goal/changed(clear) → 带 〔clear〕 且清掉旧目标（不再复用上一回合的 > 目标：）");
 }
 
 // ── ③ 七种 operation 全覆盖 ──

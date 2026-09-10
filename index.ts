@@ -49,14 +49,14 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       : (() => { try { return (ctx?.config ?? {}) as ShadowConfig; } catch { return {}; } })() ?? {};
 
   // ---- 宿主绑定探测（能力探测，不是版本比较）----
-  // 为什么不做版本闸门：宿主与 pnpm 都不读 `engines.dsh`（对 @deepseek-ai/* 全量编译产物检索 `engines` 零命中；
+  // 为什么不做版本闸门：宿主与 pnpm 都不读 `engines.dsh`（对 @deepseek-ai/* 全量编译产物检索 `engines`：无任何代码读取，仅散文注释提及；
   // `dsh plugin` 只转发 pnpm 并按「装了什么」同步 bundles 层），所以「仅支持 DSH >= X」在宿主层无法强制。
   // 插件真正能观测到的事实是「我需要的宿主接口在不在」——缺哪个就报哪个，比「版本低于 X」精确。
   // 分两档：硬依赖（缺了插件等于没装）报 error；可选依赖（缺了只少一项增强）报一条 warn。
   // 时机：不在 apply() 里探测服务——Cordis 的服务是异步挂载的，apply 时可能尚未 provide
   //（见下方 queryDeps.fs 的懒解析注释：急切快照会拿到 undefined 并永久固化），那时探测会误报。
   // 可靠时机有两处：Cordis 保证服务就绪的 inject 回调，以及首个 agent/turn-stopping。
-  const HOST_BASELINE = "0.1.5-rc.1";
+  const HOST_BASELINE = "0.1.5-rc.1"; // 与 package.json 的 engines.dsh 同步维护
   const reportHostGap = (kind: "error" | "warn", lines: string[]): void => {
     if (!lines.length) return;
     const head = kind === "error"
@@ -69,24 +69,33 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   };
   const missingServices = (names: string[]): string[] =>
     names.filter((n) => { try { return context.get(n) === undefined; } catch { return true; } });
-  /** 可选服务缺失时的一句话影响说明（按服务名取）。 */
+  /** 硬依赖：缺了插件等于没装 → 报 error。 */
+  const HARD_IMPACT: Record<string, string> = {
+    fs: "fs 服务 —— 记忆文件的读写全靠它",
+    tools: "tools 服务 —— read_shadow / recall_shadow / shadow_query 靠它注册，缺它这三个工具都不会出现",
+  };
+  /** 可选依赖：缺了只少一项增强 → 报一条 warn。 */
   const SOFT_IMPACT: Record<string, string> = {
     llm: "llm 服务 —— 不生成每回合摘要、不做召回扩词",
-    agents: "agents 服务 —— 采集不到发起者与工作目录",
+    agents: "agents 服务 —— 采集不到发起者（工作目录仍可从 session.header.cwd 得到）",
     agentDefaultModel: "agentDefaultModel 服务 —— 不注入默认模型",
+    systemPrompt: "systemPrompt 服务 —— 不向系统提示追加 shadow 使用说明（记忆读写不受影响）",
   };
-  // 框架级接口先查（最确定、最早）：ctx.on / ctx.inject 都没有，整个插件无从工作。
-  if (typeof context.on !== "function" || typeof context.inject !== "function") {
-    reportHostGap("error", ["ctx.on / ctx.inject（订阅事件与注入服务的框架接口）不存在"]);
+  // 框架级接口先查（最确定、最早）：ctx.on / ctx.inject / ctx.get 缺任一，整个插件无从工作。
+  if (typeof context.on !== "function" || typeof context.inject !== "function" || typeof context.get !== "function") {
+    reportHostGap("error", ["ctx.on / ctx.inject / ctx.get（订阅事件、注入与读取服务的框架接口）不存在"]);
     return () => {};
   }
-  // 首个 turn-stopping 时补查一次服务面：此时宿主已完全挂载，探测可靠，且只报一次。
+  // 服务面统一在**首个 agent/turn-stopping** 探测。
+  // ⚠️ 不能把「缺 X」的检查写进 inject 回调：Cordis 的 `ctx.inject(deps, cb)` 只在依赖**就绪**时才回调
+  //（依赖缺失时子 fiber 停在 PENDING，回调根本不执行）——写在里面等于「缺了就不报」，仍是静默。
+  // 实测（真实 cordis 宿主、不提供 tools）：apply 之后一条日志都没有。故硬/软依赖都在这里查。
   let hostProbed = false;
   const probeHostOnFirstTurn = (): void => {
     if (hostProbed) return;
     hostProbed = true;
-    const hard = missingServices(["fs"]);
-    if (hard.length) reportHostGap("error", hard.map((n) => `${n} 服务 —— 记忆文件的读写全靠它`));
+    const hard = missingServices(Object.keys(HARD_IMPACT));
+    if (hard.length) reportHostGap("error", hard.map((n) => HARD_IMPACT[n] || `${n} 服务`));
     const soft = missingServices(Object.keys(SOFT_IMPACT));
     if (soft.length) reportHostGap("warn", soft.map((n) => SOFT_IMPACT[n] || `${n} 服务`));
   };
@@ -133,11 +142,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   };
   if (typeof context.inject === "function") {
     context.inject(["tools"], (toolsCtx: CtxLike) => {
+      // 防御性判断：Cordis 只在 tools 就绪时才回调，故此处理论上必存在。
+      // 真正的「缺 tools」报告在 probeHostOnFirstTurn —— 依赖缺失时这个回调根本不会执行。
       const toolsService = toolsCtx.get("tools");
-      if (!toolsService) {
-        reportHostGap("error", ["tools 服务 —— read_shadow / recall_shadow / shadow_query 靠它注册，缺它这三个工具都不会出现"]);
-        return;
-      }
+      if (!toolsService) return;
       toolsService.register({
         name: "read_shadow",
         description: "读取 agent 的记忆树（shadow）。无参数返回目录与索引；带 topic/entry 按入口或主题穿透到具体记忆文件。穿透按分层召回（先精后深、预算内返回）：低分记忆只给摘要，高分记忆给摘要+命中片段+正文骨架。当判断上下文不足、需要回忆最近想过/决定过什么时调用。",
@@ -308,11 +316,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
 
   if (typeof context.inject === "function") {
     context.inject(["systemPrompt"], (promptCtx: CtxLike) => {
+      // 防御性判断：Cordis 只在 systemPrompt 就绪时才回调，故此处理论上必存在。
+      // 真正的「缺 systemPrompt」报告在 probeHostOnFirstTurn。
       const systemPrompt = promptCtx.get("systemPrompt");
-      if (!systemPrompt) {
-        reportHostGap("warn", ["systemPrompt 服务 —— 不向系统提示追加 shadow 使用说明（记忆读写不受影响）"]);
-        return;
-      }
+      if (!systemPrompt) return;
       systemPrompt.context({
         name: "dsh-shadow",
         order: 40,

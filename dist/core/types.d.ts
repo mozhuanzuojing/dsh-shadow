@@ -127,14 +127,13 @@ export interface EvidenceProvider {
     /** 验证证据：给出 EvidenceResult。 */
     verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
 }
-/** 兼容 DSH Agent / Session 的最小形状（只读 id 与 cwd 相关字段）。 */
+/** 兼容 DSH Agent / Session 的最小形状（只读 id 与 header.cwd）。 */
 export interface AgentLike {
     id?: string;
     session?: {
         header?: {
             cwd?: string;
         };
-        cwd?: string;
     };
 }
 /** recall_shadow 的 LLM 导航候选任务（v1.6）——只给标题/目标/摘要，让 LLM 选编号。 */

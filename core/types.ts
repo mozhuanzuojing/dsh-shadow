@@ -73,10 +73,11 @@ export interface EvidenceProvider {
   verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
 }
 
-/** 兼容 DSH Agent / Session 的最小形状（只读 id 与 cwd 相关字段）。 */
+/** 兼容 DSH Agent / Session 的最小形状（只读 id 与 header.cwd）。 */
 export interface AgentLike {
   id?: string;
-  session?: { header?: { cwd?: string }; cwd?: string };
+  // 宿主 Session 只有 `header.cwd`（无 Session 级 `cwd`）—— 旧名 `cwd?: string` 已于 v1.15.3 删除。
+  session?: { header?: { cwd?: string } };
 }
 
 /** recall_shadow 的 LLM 导航候选任务（v1.6）——只给标题/目标/摘要，让 LLM 选编号。 */

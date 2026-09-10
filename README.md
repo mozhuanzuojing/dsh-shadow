@@ -14,14 +14,14 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | 声明 | `package.json` → `engines.dsh: ">=0.1.5-rc.1"` |
 | 更早版本 | **未经验证，不承诺可用** |
 
-**这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines` 零命中；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**真正的防线是能力探测**——插件在挂载时探测自己需要的宿主接口，缺哪个就报哪个：
+**这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：**无任何代码读取**，仅散文注释提及；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**能观测到的防线是能力探测**——它只**报告**、不拦截：插件探测自己需要的宿主接口，缺哪个就报哪个：
 
 | 档位 | 缺什么 | 表现 |
 |---|---|---|
-| 硬依赖 | `ctx.on` / `ctx.inject` / `fs` / `tools` | 控制台 **error**，写出缺哪一项、影响什么 |
+| 硬依赖 | `ctx.on` / `ctx.inject` / `ctx.get` / `fs` / `tools` | 控制台 **error**，写出缺哪一项、影响什么 |
 | 可选依赖 | `llm` / `agents` / `agentDefaultModel` / `systemPrompt` | 控制台**一条 warn**，说明降级了哪项能力 |
 
-探测**不放在 `apply()`**：Cordis 的服务是异步挂载的，`apply()` 时可能尚未 provide，那时探测会误报；改在 Cordis 保证就绪的 `inject` 回调、以及首个 `agent/turn-stopping`（此时宿主已完全挂载，且只报一次）。
+探测**不放在 `apply()`、也不放在 `inject` 回调**：Cordis 的服务是异步挂载的，`apply()` 时可能尚未 provide（会误报）；而 `ctx.inject(deps, cb)` **只在依赖就绪时才回调** —— 依赖缺失时回调根本不执行，把「缺 X」写进去等于「缺了就不报」（v1.15.3 修正的正是这一点）。故服务面检查**统一在首个 `agent/turn-stopping`**（此时宿主已完全挂载，且只报一次）。
 
 **为什么基线是 0.1.5-rc.1 而不是更早**：对照宿主包，本插件用到的接口（`fs` / `llm` / `agents` / `agentDefaultModel.currentSelection()` / `tools` / `systemPrompt` 六个服务，`session/event` / `agent/turn-stopping` 两个事件）在 `0.1.0-rc.7` 起就已存在——**这里没有已知的不兼容点**，基线表达的是「只在 0.1.5-rc.1 上验过」，不是「更早版本不兼容」。
 
@@ -276,13 +276,14 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.2`（过期旧名直接删除：不留兼容兜底，并暴露 5 处假形状测试）** —— 最新几版摘要：
+**当前版本：`v1.15.3`（审查修复：能力探测在真机不生效）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.3 | **审查修复（review 发现 → 父代理逐条复现 → 修根因）**：v1.15.0 的「硬依赖报 error」在真机**不可达** —— `ctx.inject(deps, cb)` 只在依赖**就绪**时回调，把检查写在回调里等于「缺了就不报」；已把 `tools`/`systemPrompt` 纳入首个 `turn-stopping` 的检查（并补 `ctx.get`），新增**真实 cordis 端到端测试**（原先 mock 无条件回调 ⇒ 断言①是假通过）。另修：`core/types.ts` 残留旧名 `session.cwd`、`clear` 不清缓存致新记忆带旧 `> 目标：`、`goalText` 的 `\|\| "decision"` 伪装兜底；补 `exec.name` 正向断言 |
 | v1.15.2 | **过期旧名删净（ADR-0050 口径）**：`collect.ts`/`writer-capture.ts` 里 `change.objective`/`change.action`/`change.phase`/`change.kind`/`change.change?.objective`/`exec.tool?.name`/`exec.toolName`/`exec.tool` 全部删除（宿主任何版本都不存在），`scope.ts` 删掉恒 undefined 的 `agent.session.cwd` 候选并修正过期注释。**删旧名的价值当场兑现**：暴露 5 处建在编造形状上的测试（4 处 goal 载荷 + 4 处 tools/result），已全部改用宿主真实形状，断言意图不变；代码层旧名 grep 0 残留，回归 23/23 |
 | v1.15.1 | **会话/agent 接口核对 → 根因修复**：宿主 `GoalChanged` 恒为 `{operation, ref, goal?}`（`0.1.0-rc.7` 起四版逐字相同 + 运行时 Inspect 一致），插件却读 `action`/`phase`/`kind` → `act` 恒回退 `"decision"`，**goal 操作语义永久丢失**；新增 `test/goal-operation.test.ts`（真实载荷形状 + 七种 operation 全覆盖）。同时**撤销**两条子代理误报：`systemPrompt.context()` 与 `section()` 是并存的两个不同用途方法（插件用对了）、`agent.session` 是公开契约（只是 Inspect 目录看不到） |
-| v1.15.0 | **兼容性口径落地**：`package.json` 加 `engines.dsh: ">=0.1.5-rc.1"`（**验证基线声明，非闸门**——宿主与 pnpm 都不读 `engines`，已对全量编译产物检索零命中核实）；真防线是新增的**宿主绑定能力探测**（硬依赖 `ctx.on`/`ctx.inject`/`fs`/`tools` 报 error，可选 `llm`/`agents`/`agentDefaultModel`/`systemPrompt` 报一条 warn；时机避开 `apply()`，改在 `inject` 回调与首个 `turn-stopping`）；README 新增「兼容性（验证基线）」节；**0.1.5-rc.1 以下未发现不兼容点**（六服务两事件自 `0.1.0-rc.7` 起即在），故**不写「不兼容」** |
+| v1.15.0 | **兼容性口径落地**：`package.json` 加 `engines.dsh: ">=0.1.5-rc.1"`（**验证基线声明，非闸门**——宿主与 pnpm 都不读 `engines`，已核实**无任何代码读取**；**能观测到的**防线是**宿主绑定能力探测**（硬依赖 `ctx.on`/`ctx.inject`/`ctx.get`/`fs`/`tools` 报 error，可选 `llm`/`agents`/`agentDefaultModel`/`systemPrompt` 报一条 warn；**v1.15.3 修正**：探测统一在首个 `turn-stopping`，原先放在 `inject` 回调里的那半在真机不可达）；README 新增「兼容性（验证基线）」节；**0.1.5-rc.1 以下未发现不兼容点**（六服务两事件自 `0.1.0-rc.7` 起即在），故**不写「不兼容」** |
 | v1.14.1 | 投影模式预设加 **⑦ 创意与资源**（设计稿 §7 固化）：创意类问题先派**资源侦察员**（查库 → 命中跳过外搜 → 八类词 + 反向词、每类 ≤5 两轮无新资源即停 → 评价 → 写卡进 `.shadow/resources/`；不解题不评方案）再派**创意专家**（只发散、不检索）；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据；② 的专家枚举同步补一句。只改 persona 与文档 |
 | v1.14.0 | 新增 `resource` NodeType（ADR-0051）：`.shadow/resources/<name>.md` 资源卡（固有层 + 按问题的投影段）→ 派生 `ShadowNode{type:"resource"}`，`shadow_query` 的 `scope` 可收 `resource`；**无 `source` 的卡片不上投影**（收进库 ≠ 有出处）；纯派生、无 LLM；不新增 mode、不引向量库、不做 Store |
 | v1.13.2 | 投影模式划清"编排者与专家不重做同一件事"（用户 2026-09-10 提的"子 Agent 与主 Agent 不重叠、不重复推理、降低 Token 冗余"）：① 增补**该不该派**（一句话说得清、只动一处、不需要旁人视角的自己做；切活的侦察不算重做，不许先做出成果再派）② ③ 增补**同一段原文只进一个专家的提示词**（其余给摘要 + 原位路径；要独立判断的审查例外）③ ④ 由「逐条复核 / 专家声称的事实自己跑一遍」改为**只验一错就要返工的那几条、其余按未复核处理并列出、零分栏退回**④ ⑤ 补"各干各的那一份"；用户级规则 `moe-subagent-dispatch` 同步改，**规则为源**（聚合 `~/.dsh/AGENTS.md` + WSL 镜像） |

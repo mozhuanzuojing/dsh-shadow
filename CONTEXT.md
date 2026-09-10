@@ -57,7 +57,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | AtomEvidenceRef（v1.13.0，ADR-0050） | Memory Atom lineage 上的证据指针 `{type,locator}`（`core/lineage.ts`）。**≠** Gateway `EvidenceRef{path}`（`core/types.ts`）。旧名 lineage `EvidenceRef` 已废止 |
 | 命中片段 | 召回时从记忆正文抽出的、最相关的一行（优先非纯动作行），用于节约上下文而非整篇全文 |
 | 摘要 | 每回合记忆落盘后由 `llm.stream` 生成的一句中文概括，回填记忆文件头（`> 摘要：…`）；失败/超时则不写 |
-| 验证基线（v1.15.0） | 插件声明「**只在哪个 DSH 版本上验过**」的下限：`package.json` → `engines.dsh: ">=0.1.5-rc.1"`。**是声明不是闸门**——宿主与 pnpm 都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines` 零命中），拦不住低版本 DSH；同批加入的**能力探测**才是真防线：挂载时探测所需的宿主接口，硬依赖（`ctx.on`/`ctx.inject`/`fs`/`tools`）报 error，可选依赖（`llm`/`agents`/`agentDefaultModel`/`systemPrompt`）报一条 warn。基线之下 = **未验证、不承诺**，**不写作「不兼容」**（无证据）。探测时机避开 `apply()`（Cordis 服务异步挂载，会误报），改在 `inject` 回调与首个 `agent/turn-stopping` |
+| 验证基线（v1.15.0，v1.15.3 修正探测） | 插件声明「**只在哪个 DSH 版本上验过**」的下限：`package.json` → `engines.dsh: ">=0.1.5-rc.1"`。**是声明不是闸门**——宿主与 pnpm 都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：无任何代码读取，仅散文注释提及），拦不住低版本 DSH；同批加入的**能力探测**是能观测到的防线（只报告、不拦截）：硬依赖（`ctx.on`/`ctx.inject`/`ctx.get`/`fs`/`tools`）报 error，可选依赖（`llm`/`agents`/`agentDefaultModel`/`systemPrompt`）报一条 warn。基线之下 = **未验证、不承诺**，**不写作「不兼容」**（无证据）。探测时机避开 `apply()`（Cordis 服务异步挂载，会误报），**统一在首个 `agent/turn-stopping`**——v1.15.3 修正：原先放在 `inject` 回调里的那半在真机不可达（`ctx.inject` 只在依赖就绪时回调，依赖缺失时回调根本不执行） |
 
 ## mode 参考（`read_shadow` 的 mode 串）
 
