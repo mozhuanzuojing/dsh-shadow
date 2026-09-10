@@ -33,7 +33,10 @@ const fire = (e, ...a) => { const fn = listeners.get(e); assert.ok(fn, `missing 
 const flushAgent = async (sid) => fire("agent/turn-stopping", { agent: agentsById.get(sid), turn: 1, signal: undefined });
 
 // 同回合：决策（goal/changed）+ 材料（fs/observed）
-fire("goal/changed", { agent: { id: "AG" }, change: { objective: "采用 RSA 签名方案", act: "decision" } });
+// goal/changed 用宿主真实形状 GoalChanged = { operation, ref, goal? }。
+// （旧测试写的是 `{ objective, act }` —— 两个字段在宿主任何版本都不存在，是编造形状；
+//   v1.15.2 删掉旧名兜底后这类假形状不再被悄悄救回，必须用真字段。）
+fire("goal/changed", { agent: { id: "AG" }, change: { operation: "create", ref: { id: "g1", revision: 1 }, goal: { objective: "采用 RSA 签名方案" } } });
 fire("fs/observed", { targetKey: `${WS}/src/AuthFilter.java`, displayPath: `${WS}/src/AuthFilter.java` }, { kind: "present", version: "v1" }, { agent: { id: "AG" } });
 await flushAgent("AG");
 

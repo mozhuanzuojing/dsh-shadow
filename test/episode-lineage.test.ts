@@ -52,7 +52,8 @@ const toolRegistry = new Map<string, any>();
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   fire("fs/observed", { targetKey: `${WS}/pkg-a/util.js`, displayPath: `${WS}/pkg-a/util.js` }, { kind: "present", version: "v1" }, { agent: { id: "T1" } });
   fire("session/event", { id: "T1", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m1", role: "user", content: [{ type: "text", text: "就这么定了，按这个方案改成 bundle 模式。" }], source: { kind: "user" } } });
-  fire("goal/changed", { agent: { id: "T1" }, change: { action: "complete", objective: "把入口改造为 bundle" } });
+  // goal/changed 用宿主真实形状 GoalChanged = { operation, ref, goal? }（`action` 字段在宿主不存在）。
+  fire("goal/changed", { agent: { id: "T1" }, change: { operation: "complete", ref: { id: "g1", revision: 1 }, goal: { objective: "把入口改造为 bundle" } } });
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
   const memW = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
   assert.ok(memW, "T1 记忆应落盘");

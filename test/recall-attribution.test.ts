@@ -384,7 +384,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   // 材料 + 用户决策消息 + 一个 goal 决策
   fire8("fs/observed", { targetKey: `${WS}/docs/arch.md`, displayPath: `${WS}/docs/arch.md` }, { kind: "present", version: "v1" }, { agent: { id: "T8" } });
   fire8("session/event", { id: "T8", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-8", role: "user", content: [{ type: "text", text: "就这么定了，按这个方案做。" }], source: { kind: "user" } } });
-  fire8("goal/changed", { agent: { id: "T8" }, change: { action: "complete", objective: "测试完整线索头" } });
+  fire8("goal/changed", { agent: { id: "T8" }, change: { operation: "complete", ref: { id: "g1", revision: 1 }, goal: { objective: "测试完整线索头" } } });
   await fire8("agent/turn-stopping", { agent: agentsById.get("T8"), turn: 1, signal: undefined });
   const mem8 = [...files8.keys()].find((k) => k.includes(".shadow/") && files8.get(k)?.includes("就这么定了"));
   assert.ok(mem8, "T8 记忆应落盘");
@@ -706,10 +706,12 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const ag15 = { id: "T15", session: { header: { cwd: "C:/ws15" } } };
   agentsById.set("T15", ag15 as any);
   // 大量工具名动作（不应作为入口）
-  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
-  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
-  f15("tools/result", { agent: ag15, tool: { name: "pwsh" } });
-  f15("tools/result", { agent: ag15, tool: { name: "edit" } });
+  // 宿主真实形状 ToolExecution = { callId, name, arguments, agent?, … } —— 工具名在 `exec.name`。
+  // （旧测试写的是 `{ tool: { name } }`：`exec.tool` 在宿主类型上不存在，v1.15.2 删兜底后必须用真字段。）
+  f15("tools/result", { agent: ag15, name: "pwsh" });
+  f15("tools/result", { agent: ag15, name: "pwsh" });
+  f15("tools/result", { agent: ag15, name: "pwsh" });
+  f15("tools/result", { agent: ag15, name: "edit" });
   // 一个语义文件改动（应作为 entry）
   f15("fs/observed", { targetKey: "C:/ws15/proj/file.txt", displayPath: "C:/ws15/proj/file.txt" }, { kind: "present", version: "v1" }, { agent: { id: "T15" } });
   await f15("session/flush", { id: "T15" });
@@ -1383,7 +1385,7 @@ const todayStr = todayLocal();
   const P32 = { name, inject, apply };
   P32.apply(ctx32, { summary: { enabled: false }, recall: {} });
   const f32 = (ev, ...a) => { const fn = listeners32.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
-  f32("goal/changed", { agent: { id: "T32" }, change: { objective: "OpenAPI 改造：统一 API 错误处理" } });
+  f32("goal/changed", { agent: { id: "T32" }, change: { operation: "edit", ref: { id: "g1", revision: 1 }, goal: { objective: "OpenAPI 改造：统一 API 错误处理" } } });
   f32("fs/observed", { targetKey: `${WS}/src/api.js`, displayPath: `${WS}/src/api.js` }, { kind: "present", version: "v1" }, { agent: { id: "T32" } });
   f32("session/event", { id: "T32", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m32", role: "user", content: [{ type: "text", text: "统一 API 错误处理。" }], source: { kind: "user" } } });
   store32.set("D:/ws/src/api.js", "export {}"); // 证据路径存在，避免误判冲突

@@ -16,15 +16,15 @@ export const DEFAULT_SHADOW_ROOT = path.join(os.homedir(), OBSERVER_GLOBAL_ROOT,
 
 /**
  * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
- * 其次 session cwd 推导（含 session id → cwd 缓存）；都无 → **fallback 到 ~/.dsh-shadow**（兜底可写，不再 none/不写）。
+ * 其次 session cwd 推导（`agent.session.header.cwd` → session id 的 cwd 缓存）；都无 → **fallback 到 `DEFAULT_SHADOW_ROOT`**（兜底可写，不再 none/不写）。
  * 解析来源唯一，采集/读取共用，杜绝"同址但错项目"（O2）与"读不到写"（F1）。
  */
 export function resolveShadowScope(agent: AgentLike | undefined, cwdBySession: ReadonlyMap<string, string>, config: ShadowConfig = {}): ShadowScope {
   const explicit = firstNonEmpty(config.shadowRoot, config.projectRoot);
   if (explicit) return { scope: "explicit", ws: explicit };
+  // 不再候选 `agent.session.cwd`：宿主 Session 从来没有该字段（只有 `header.cwd`），该候选恒 undefined。
   const implicit = firstNonEmpty(
     agent?.session?.header?.cwd,
-    agent?.session?.cwd,
     agent?.id ? cwdBySession.get(String(agent.id)) : undefined,
   );
   if (implicit) return { scope: "implicit", ws: implicit };

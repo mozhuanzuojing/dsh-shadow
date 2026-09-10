@@ -3,6 +3,26 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.2] 过期旧名直接删除：不留兼容兜底（ADR-0050 口径）
+
+用户 2026-09-10 指示「**过期的旧名直接删除**」。v1.15.1 修 `goal/changed` 时把不存在的旧字段名留在了末位做兜底（`change.operation || change.action || change.phase || change.kind`），本轮按本仓 ADR-0050「正名硬切、不留兼容别名」的口径把全部已确认过期的旧名删净。
+
+- **删净的旧名（代码层 grep 复核 0 残留）**：
+  - `core/collect.ts` `goalText()`：`obj` 只留真字段 `change.goal?.objective`（删 `change.objective`、`change.change?.objective`）；`act` 只留 `change.operation`（删 `change.action` / `change.phase` / `change.kind`）。
+  - `core/writer-capture.ts` `onGoalChanged`：只读 `payload.change.goal?.objective`（删 `change.objective`）。
+  - `core/writer-capture.ts` `onToolsResult`：工具名只读宿主 `ToolExecution.name`（删 `exec.tool?.name` / `exec.toolName` / `exec.tool`）。
+  - `core/scope.ts` `resolveShadowScope`：删掉恒 undefined 的候选 `agent.session.cwd`（宿主 Session 只有 `header.cwd`）；顺手修正与代码不符的过期注释（`~/.dsh-shadow` → `DEFAULT_SHADOW_ROOT`）。
+- **删旧名的直接价值：暴露 5 处「假形状」测试** —— 旧名兜底一直在悄悄救回编造的载荷，把「字段读错」掩盖成绿色：
+  - `test/evidence-b2-write.test.ts`：`{ objective, act }` → `{ operation, ref, goal: { objective } }`
+  - `test/episode-lineage.test.ts`：`{ action, objective }` → `{ operation, ref, goal: { objective } }`
+  - `test/recall-attribution.test.ts` ×2：`{ action, objective }` / `{ objective }` → 真实形状
+  - `test/recall-attribution.test.ts` 场景15：`{ tool: { name } }` ×4 → `{ name }`（真实 `ToolExecution`）
+  全部改成宿主真实形状，**断言意图不变**（逐处核对：这些断言不依赖旧形状的精确文本）。
+- **验证**：`tsc --noEmit` exit 0；`tsc` build exit 0；**全量回归 23/23 `ALL PASS ✅`**；代码层旧名 grep **0 残留**（注释中保留「这些字段在宿主不存在、所以不读」的说明，防后人再加回来）。
+- **边界**：只删过期字段读取与假形状测试；不改 API / mode / 读侧语义；不引依赖。
+- **待实测（需重启 web profile）**：改动在源码 + `dist`，真机确认需重启。
+
+
 ## [v1.15.1] 会话/agent 接口核对后的根因修复：`goal/changed` 操作语义丢失（读错字段名）
 
 用户 2026-09-10 追加「检查 dsh-shadow 对 dsh 会话的接口」。派两个独立子代理（① 本机 0.1.5-rc.1 编译产物逐条对照；② GitHub `deepseek-ai/deepseek-harness` 官方源码 + 运行时 `cordis_inspect_query` 交叉验证），父代理逐条验收后裁决，本条记录修复。

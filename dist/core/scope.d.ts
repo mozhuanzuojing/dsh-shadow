@@ -6,7 +6,7 @@ export declare function firstNonEmpty(...values: unknown[]): string | undefined;
 export declare const DEFAULT_SHADOW_ROOT: string;
 /**
  * 解析 shadow 归属 scope：显式 project scope（config shadowRoot / projectRoot）**最高优先**；
- * 其次 session cwd 推导（含 session id → cwd 缓存）；都无 → **fallback 到 ~/.dsh-shadow**（兜底可写，不再 none/不写）。
+ * 其次 session cwd 推导（`agent.session.header.cwd` → session id 的 cwd 缓存）；都无 → **fallback 到 `DEFAULT_SHADOW_ROOT`**（兜底可写，不再 none/不写）。
  * 解析来源唯一，采集/读取共用，杜绝"同址但错项目"（O2）与"读不到写"（F1）。
  */
 export declare function resolveShadowScope(agent: AgentLike | undefined, cwdBySession: ReadonlyMap<string, string>, config?: ShadowConfig): ShadowScope;

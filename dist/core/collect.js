@@ -31,13 +31,13 @@ export const extractMessage = (event) => {
 export const goalText = (change) => {
     if (!change)
         return "";
-    const obj = change.objective || change.goal?.objective || change.change?.objective || "";
-    // 宿主 goal/changed 的 GoalChanged 形状（跨版本一致：0.1.0-rc.7 → 0.1.5-rc.1 的 Inspect 目录逐版核对，全同）：
-    //   { operation, ref, goal? }，operation ∈ create|edit|pause|resume|complete|block|clear
-    // 旧写法只读 action / phase / kind —— 这三个字段在任何版本都不存在（`phase` 只存在于 change.goal.phase），
-    // 于是 act 恒回退 "decision"，goal 的操作语义（create/edit/pause/complete/block/clear）永久丢失且不报错。
-    // 修法：operation 放首位（宿主真字段）；旧名留在末位兜底，兼容既有调用形态。
-    const act = change.operation || change.action || change.phase || change.kind || "decision";
+    // 只读宿主 `GoalChanged = { operation, ref, goal? }` 的真字段 —— `0.1.0-rc.7` → `0.1.5-rc.1` 四个版本的
+    // declaration 逐字相同，且与运行时 Inspect 一致。
+    // **不留旧名兜底**：`change.objective` / `change.action` / `change.phase` / `change.kind` /
+    // `change.change?.objective` 在任何版本都不存在（`phase` 只存在于 `change.goal.phase`）；
+    // 留着它们只会把「字段读错」掩盖成静默回退 —— 与本仓 ADR-0050「正名硬切、不留兼容别名」同一口径。
+    const obj = change.goal?.objective || "";
+    const act = change.operation || "decision";
     const parts = [];
     if (obj)
         parts.push(String(obj).slice(0, 160));

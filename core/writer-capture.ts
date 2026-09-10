@@ -77,14 +77,17 @@ export function makeCapture(core: WriterCore, hooks: WriterHooks): CaptureResult
 
   const onToolsResult = (exec: any) => {
     const id = exec?.agent?.id || initiatorId();
-    const tool = exec?.tool?.name || exec?.toolName || exec?.name || exec?.tool || "tool";
+    // 只读宿主 `ToolExecution.name`（ToolExecution = { callId, rootCallId?, name, arguments, agent?, parent?, signal }）。
+    // **不留旧名兜底**：`exec.tool?.name` / `exec.toolName` / `exec.tool` 在宿主类型上都不存在。
+    const tool = exec?.name || "tool";
     push(id, { kind: "action", text: `调用 ${tool}`, comp: tool, source: "tool" });
     return undefined;
   };
 
   const onGoalChanged = (payload: any) => {
     const gid = payload?.agent?.id;
-    const obj = payload?.change?.objective || payload?.change?.goal?.objective || "";
+    // 只读真字段 `change.goal.objective`（`change.objective` 在任何版本都不存在）。
+    const obj = payload?.change?.goal?.objective || "";
     if (gid && obj) core.goalByAgent.set(String(gid), String(obj).slice(0, 120));
     // Decision Capture：goal 事件 = 明确决策（一等事件），statement 与 source 入内供血缘派生。
     push(gid, { kind: "decision", text: `决定 ${goalText(payload?.change)}`, statement: goalText(payload?.change), source: "goal" });
