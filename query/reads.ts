@@ -17,6 +17,7 @@ import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFit
 import { readManifest, renderManifest } from "../core/manifest.js";
 import { loadOrBuildProjection } from "../core/projection-store.js";
 import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
+import { listResourceCards, deriveResourceNodes } from "../core/resource.js";
 import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
 import { today, stamp, RECALL_PREFIX } from "../core/util.js";
@@ -105,9 +106,11 @@ const shadowQuery: ReadQuery = {
     const qStart = Date.now();
     const { nodes, cached } = await loadOrBuildProjection(fs, ws, deps.config, async () => {
       const { parsed } = await materializeAtoms(fs, ws, deps.config);
-      return deriveShadowNodes(parsed);
+      // 记忆原子投影 + 资源卡投影（.shadow/resources/，无证据的卡片不上投影）
+      const cards = await listResourceCards(fs, ws);
+      return [...deriveShadowNodes(parsed), ...deriveResourceNodes(cards)];
     });
-    const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept"].includes(t)) : [];
+    const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept", "resource"].includes(t)) : [];
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
     const items = queryShadow(nodes, topicQ, scope, limit);
     const matchedNodes = matchShadowNodes(nodes, topicQ, scope).slice(0, limit);

@@ -3,6 +3,21 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.14.0] `resource` NodeType：资源卡（`.shadow/resources/`）成为第 6 个投影类型（ADR-0051）
+
+用户 2026-09-10 决定「给 dsh-shadow 加 `resource` 作为新 Node 类型」。落地时先做了**归类冻结**（ADR-0051）：资源卡是 **source**（tool/agent 写的普通文件），`resource` 节点是 **Projection**（派生、可重建）——两者分开，才不违反 Shadow Contract（ADR-0043）。**不新增 mode**（仍 61），**不引向量库**（ADR-0001），**不做 Store**。
+
+- **类型**：`NodeType` 增 `resource`（`memory|code|document|decision|concept|resource`）；`shadow_query` 的 `scope` 收 `resource`，工具描述同步（`index.ts`）。
+- **源层格式**：`.shadow/resources/<name>.md`——一级标题=名字；`- 键：值` 收固有层（`source/来源/链接`、`type/类型`、`authority/权威性`、`activity/活跃度`、`risk/风险`、`一句话`；中英键名都收）；`## 投影 @ <问题>` 段收按问题的投影（`相关性/新颖性/可用性/启发度/可复用性` + `引用证据` + `结论`）。
+- **派生**（`core/resource.ts`，纯函数 / 无 LLM / 不猜字段）：一张卡片 → 一个 `ShadowNode{type:"resource"}`，`source` 指向卡片文件，`evidence = [卡片的 source]`，`relations` 只派生 `references`；`createdBy:"tool"`；`kind` 不设（`kind` 是 memory 的二级属性）。
+- **证据门同门**（`core/lineage-validator.ts`）：`resource` 无 evidence（卡片没写 `source`）→ **不上投影**，卡片保留在磁盘。理由：**收进库 ≠ 有出处**。解析不出来（无标题/无 source）直接返回「不投影」，不猜。
+- **投影合并**（`query/reads.ts`）：`shadow_query` 的投影 = `deriveShadowNodes(记忆原子)` + `deriveResourceNodes(资源卡)`；资源目录不存在/不可读 = 「没有资源卡」，不是错误（ADR-0049 缺件不静默：不报错、也不冒充有）。
+- **id**：`sr-<slug(name)>`；非 ASCII 名字（中文）slug 会退化成 `mem`，改用短哈希兜底，避免同名互撞。
+- **验证**：新增 `test/resource-node.test.ts`（解析 / 投影 / 无 source 不上投影 / 证据门两个方向 / scope 过滤 / 中文键名 / 脏值截断 / id 不撞）→ `ALL PASS ✅`；回归 `test/recall-attribution.test.ts`、`recall-envelope`、`recall-routing-eval`、`evidence-gate`、`atom-kind`、`lineage`、`query-observatory`、`concept-guards`、`missing-dependency` 全 `ALL PASS ✅`；`npx tsc --noEmit` 与 `npm run build` 均 exit 0。
+- **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 `invalidate`/`rebuild`）；默认关闭，不影响默认路径。卡片属性是原文快照，系统不自动重抓（与「不 LLM 补写」一致）。
+- **不属本轮**：投影模式预设里「资源侦察员 / 创意专家」的工作方式（那是预设平面），本版只做插件的类型与门。
+
+
 ## [v1.13.2] 投影模式：「编排者与专家不重做同一件事」（④ 由「逐条复核」改为「只验一错就要返工的那几条」）
 
 用户 2026-09-10 提出：**子 Agent 应承担与主 Agent 不重叠的活，避免职责重叠与重复推理，降低 Token 的冗余消耗**；并要求**用平常中文，不造生僻词**。审查发现现有 ①–⑤ 只回答了**横向**（专家之间怎么切、怎么不撞车），对**纵向**（子 Agent 与主 Agent 之间）完全空白——而 `④` 恰恰明文要求父代理「专家声称的事实自己跑一遍」，等于把专家的推理重做一遍；这条同时存在于用户级规则 §四（经 `sync-rules.py` 聚合进 `~/.dsh/AGENTS.md`，**每个会话都背**）与本预设的压缩副本里。本轮把这一维补上，**不新增能力、不动插件运行时的任何 mode/API**。

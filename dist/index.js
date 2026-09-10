@@ -236,12 +236,12 @@ export function apply(ctx, rawConfig = {}) {
             // 内部 = read_shadow({mode:'query', topic, scope, limit})；Node 是派生投影（非事实源），可追溯。
             toolsService.register({
                 name: "shadow_query",
-                description: "跨类型的统一记忆查询（shadow.query）：给定查询词与可选 scope（memory/decision/code/document/concept），返回各组上下文的 ShadowNode 视图——每条带 evidence（指向源文件/文档/Atom），可追溯。Node 是派生投影，不是事实源。需要跨「历史决策+代码+规范+关系」地找上下文时用。",
+                description: "跨类型的统一记忆查询（shadow.query）：给定查询词与可选 scope（memory/decision/code/document/concept/resource），返回各组上下文的 ShadowNode 视图——每条带 evidence（指向源文件/文档/Atom），可追溯。Node 是派生投影，不是事实源。resource = `.shadow/resources/` 里的资源卡（外部资源/工具/论文/资料）。需要跨「历史决策+代码+规范+关系」地找上下文时用。",
                 parameters: {
                     type: "object",
                     properties: {
                         query: { type: "string", description: "查询词（如 'appid secret 认证'）" },
-                        scope: { type: "array", items: { type: "string" }, description: "限定类型：memory/decision/code/document/concept（不填=全部）" },
+                        scope: { type: "array", items: { type: "string" }, description: "限定类型：memory/decision/code/document/concept/resource（不填=全部）" },
                         limit: { type: "number", description: "最多返回 context 条数，默认 8" },
                     },
                 },

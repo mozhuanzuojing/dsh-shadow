@@ -56,6 +56,7 @@ Recall = Past Observation Reintroduced Into Present Context For Re-evaluation
 - `shadow/_index.md`：说明文档 + 今日摘要 + 近期记忆 + 主题索引 + 意识轨迹。
 - `read_shadow`：无参读索引；带 `topic` 穿透到记忆文件。
 - 按工作区隔离（`agent.session.header.cwd`，可 `shadowRoot` 覆盖）。
+- 资源卡与 `resource` 节点（v1.14.0，ADR-0051）：`.shadow/resources/<name>.md`（固有层 + `## 投影 @ <问题>` 段）→ 派生 `ShadowNode{type:"resource"}`（第 6 个 NodeType）；`shadow_query` 的 `scope` 可收 `resource`；一张卡片一个节点、`evidence` 取卡片的 `source`；**插件只读卡片、不写卡片**。
 
 **能（增强：一句话总结）**
 - 每一回合落盘后用 `llm.stream` 生成一两句中文摘要，回填记忆文件头（`> 摘要：…`），让纯聊天/无工具回合也沉淀成可读记忆。
@@ -67,6 +68,7 @@ Recall = Past Observation Reintroduced Into Present Context For Re-evaluation
   - **AbortController + setTimeout**：host 侧用 Node 原生计时器 + AbortController 做超时取消（动态 cordis 不可用全局计时器，但本包是 host bundle 插件，Node 全局可用）。
 
 **不能 / 边界**
+- **`resource` 的两条已知边界**：① 卡片没写 `source` → 不上投影（卡片保留在磁盘，不进认知查询）——「收进库 ≠ 有出处」；解析不出来（无标题/无 source）直接不投影，**不猜一个**（无 LLM 补写）。② `projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 `invalidate`/`rebuild`）；卡片属性是原文快照，系统不自动重抓。
 - **不记录模型内部链式推理**——只记 agent **表达出来**的结论/分析，不是 COT 全程。
 - **`session/event` 载荷已按类型契约核实并修正（2026-09-05）**：`SessionEvent = { type, seq, time, data }`；`user/message` → `data` 即 UserMessage（`data.content[]`），`assistant/message` → `data.message` 即 AssistantMessage（`data.message.content[]`）。`extractMessage` 只取 `type==="text"` 块，跳过 reasoning/tool-call。已用真实导出记录核对形状成立，此前"静默为空"的最大不确定点已解除。
 - **`fs/observed` 曾误用 `target.path/uri`**：`FsTarget` 实际是 `{ targetKey, displayPath }`，会拿不到路径 → 入口点（客观锚）静默丢失。已改读 `target.displayPath`。

@@ -2,8 +2,10 @@
 export type CreatedBy = "user" | "agent" | "tool";
 /** Atom 的二级分类（memory 专用；非新 type）。 */
 export type AtomKind = "experience" | "metadata" | "session" | "task" | "artifact";
-/** ShadowNode 的投影类型。来自 lineage.ts 而非 node.ts，避免 lineage-validator ↔ node 类型循环。 */
-export type NodeType = "memory" | "code" | "document" | "decision" | "concept";
+/** ShadowNode 的投影类型。来自 lineage.ts 而非 node.ts，避免 lineage-validator ↔ node 类型循环。
+ *  resource = 资源卡（tool/agent 写入 .shadow/resources/ 的源文件）的投影；卡片本身是 source（ADR-0043），
+ *  节点是派生投影，可重建。 */
+export type NodeType = "memory" | "code" | "document" | "decision" | "concept" | "resource";
 /** 一条 Atom 证据：指向哪里/哪个片段。type + locator + 可选 fragment（行号/页范围）。 */
 export interface AtomEvidenceRef {
     type: "file" | "conversation" | "document" | "commit" | "url";
