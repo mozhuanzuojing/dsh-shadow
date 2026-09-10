@@ -232,7 +232,7 @@ export function apply(ctx, rawConfig = {}) {
                 output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
                 execute: (args, exec) => runReadShadow(queryDeps, { mode: "recovery", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
             });
-            // Phase 1A Shadow Projection：跨类型统一查询（memory/decision/code/document），返回带 evidence 的 context。
+            // Phase 1A Shadow Projection：跨类型统一查询（memory/decision/code/document/concept/resource），返回带 evidence 的 context。
             // 内部 = read_shadow({mode:'query', topic, scope, limit})；Node 是派生投影（非事实源），可追溯。
             toolsService.register({
                 name: "shadow_query",

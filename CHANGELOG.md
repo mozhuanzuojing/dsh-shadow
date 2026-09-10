@@ -3,18 +3,20 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
-## [v1.14.0] `resource` NodeType：资源卡（`.shadow/resources/`）成为第 6 个投影类型（ADR-0051）
+## [v1.14.0] 新增第 6 个 NodeType `resource`：`.shadow/resources/` 资源卡 → 派生投影（ADR-0051）
 
 用户 2026-09-10 决定「给 dsh-shadow 加 `resource` 作为新 Node 类型」。落地时先做了**归类冻结**（ADR-0051）：资源卡是 **source**（tool/agent 写的普通文件），`resource` 节点是 **Projection**（派生、可重建）——两者分开，才不违反 Shadow Contract（ADR-0043）。**不新增 mode**（仍 61），**不引向量库**（ADR-0001），**不做 Store**。
 
 - **类型**：`NodeType` 增 `resource`（`memory|code|document|decision|concept|resource`）；`shadow_query` 的 `scope` 收 `resource`，工具描述同步（`index.ts`）。
-- **源层格式**：`.shadow/resources/<name>.md`——一级标题=名字；`- 键：值` 收固有层（`source/来源/链接`、`type/类型`、`authority/权威性`、`activity/活跃度`、`risk/风险`、`一句话`；中英键名都收）；`## 投影 @ <问题>` 段收按问题的投影（`相关性/新颖性/可用性/启发度/可复用性` + `引用证据` + `结论`）。
-- **派生**（`core/resource.ts`，纯函数 / 无 LLM / 不猜字段）：一张卡片 → 一个 `ShadowNode{type:"resource"}`，`source` 指向卡片文件，`evidence = [卡片的 source]`，`relations` 只派生 `references`；`createdBy:"tool"`；`kind` 不设（`kind` 是 memory 的二级属性）。
-- **证据门同门**（`core/lineage-validator.ts`）：`resource` 无 evidence（卡片没写 `source`）→ **不上投影**，卡片保留在磁盘。理由：**收进库 ≠ 有出处**。解析不出来（无标题/无 source）直接返回「不投影」，不猜。
-- **投影合并**（`query/reads.ts`）：`shadow_query` 的投影 = `deriveShadowNodes(记忆原子)` + `deriveResourceNodes(资源卡)`；资源目录不存在/不可读 = 「没有资源卡」，不是错误（ADR-0049 缺件不静默：不报错、也不冒充有）。
-- **id**：`sr-<slug(name)>`；非 ASCII 名字（中文）slug 会退化成 `mem`，改用短哈希兜底，避免同名互撞。
+- **源层格式**：`.shadow/resources/<name>.md`（`.md` 不区分大小写）——一级标题=名字；`- 键：值` 收固有层（`source/来源/链接/地址/出处`、`type/类型`、`authority/权威性`、`activity/活跃度`、`risk/风险`、`一句话`；中英键名都收）；`## 投影 @ <问题>` 段收按问题的投影（`相关性/新颖性/可用性/启发度/可复用性` + `引用证据` + `结论`）。**状态机**：一级标题=名字；标题含「投影」开一段投影；**其它标题一律回到固有层**（否则后面的固有层字段会被投影段吞掉——审查 A1）；投影段里写了固有层字段（如 `source`）时回落到固有层，不静默丢。
+- **派生**（`core/resource.ts`，纯函数 / 无 LLM / 不猜字段）：一张卡片 → 一个 `ShadowNode{type:"resource"}`，`source` 指向卡片文件，`evidence = [卡片的 source]`（**不做二次截断**——卡片是事实源，截短会让来源不可回查），`relations` 只派生 `references`；`createdBy:"tool"`（卡片由人或 agent 经工具写入，记录口径统一为 tool）；`kind` 不设（`kind` 是 memory 的二级属性）。**content 顺序：按问题的投影段在前**（分数 / 引用证据 / 结论），固有层在后——读侧 `queryShadow` 只取前 6 行，倒过来会让结论与引用证据永远看不见（审查 A2）。
+- **id**：以**文件名**为准 `sr-<slug(文件名)>`（同一资源目录内文件名天然唯一；非 ASCII 文件名 slug 会退化成 `mem`，改用短哈希兜底）——不用标题，因为两张卡可以同名。
+- **证据门同门**（两道：解析层先挡 + `core/lineage-validator.ts` 兜底）：卡片没写 `source` → `parseResourceCard` 直接不产出卡片（先挡）；万一有 resource 走到投影，`validateAtomProjection` 再挡一次 → **不上投影**，卡片保留在磁盘。理由：**收进库 ≠ 有出处**。解析不出来（无标题/无 source）直接返回「不投影」，不猜。
+- **投影合并**（`query/reads.ts`）：`shadow_query` 的投影 = `deriveShadowNodes(记忆原子)` + `deriveResourceNodes(资源卡)`；资源目录不存在/不可读 = 「没有资源卡」（**无数据，不是缺件**，故不适用 ADR-0049 的「降级必须可见」要求；也没有任何「已核实/已存在」的声称）。
+- **id**：见上（文件名派生的 `sr-<slug>`）。
 - **验证**：新增 `test/resource-node.test.ts`（解析 / 投影 / 无 source 不上投影 / 证据门两个方向 / scope 过滤 / 中文键名 / 脏值截断 / id 不撞）→ `ALL PASS ✅`；回归 `test/recall-attribution.test.ts`、`recall-envelope`、`recall-routing-eval`、`evidence-gate`、`atom-kind`、`lineage`、`query-observatory`、`concept-guards`、`missing-dependency` 全 `ALL PASS ✅`；`npx tsc --noEmit` 与 `npm run build` 均 exit 0。
-- **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 `invalidate`/`rebuild`）；默认关闭，不影响默认路径。卡片属性是原文快照，系统不自动重抓（与「不 LLM 补写」一致）。
+- **独立审查与修复（同日，两个不同视角）**：正确性/边界 + 契约/文档/发版各派一位独立审查，共报 3+2 条「一旦错了就得返工」，父代理逐条复核后修掉 —— (a) 解析状态机吞字段（投影段后再写固有层 → 字段被丢、整卡不上投影）→ 修：非投影标题复位 + 别名回落；(b) 结论/引用证据在真实 `shadow_query` 输出里被 `content.slice(0,6)` 截掉（测试只在 node 层断言 = 假通过）→ 修：content 改投影段优先，**测试断言移到渲染层**；(c) `出处` 被归成 authority 导致该卡不上投影 → 修：`出处`→source；(d) 大写 `.MD` 被跳过 → 修：大小写不敏感；(e) `resource` 证据门只判数组长度（空白 locator 也能过）→ 修：要求至少一个非空 locator。另修 id 由标题改为**文件名**（两张卡可同名）、证据不再二次截断。未改的记账项：非法 `scope` 值被滤空后退化为「全部类型」（既有行为，非本轮引入）、大目录串行 I/O、`projectionStore` 缓存无 `invalidate` 调用点（现在只能删 `shadow-index/nodes.jsonl`）。
+- **已知边界**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（`invalidate`/`invalidateFor` 目前**没有调用点**，实际只能删 `.shadow/shadow-index/nodes.jsonl` 触发重建）；默认关闭，不影响默认路径。卡片属性是原文快照，系统不自动重抓（与「不 LLM 补写」一致）。
 - **不属本轮**：投影模式预设里「资源侦察员 / 创意专家」的工作方式（那是预设平面），本版只做插件的类型与门。
 - **待实测（需重启 web profile）**：改的是源码 + `dist`，本会话用的是**重启前载入的 dist**——所以「在真会话里 `shadow_query(..., { scope: ["resource"] })` 能查到卡」这条**尚未真机闭环**，重启后按 §上「验证」的同一份数据复核。重启前预检已过：`dsh --profile web --dump-config` exit 0、无 `Error:`，`- id: dsh-shadow` 在册、`shadowRoot: D:\project\dsh1`。
 

@@ -29,6 +29,8 @@ ShadowNode:
   index:     [keyword | tree | (可选 vector)]
 ```
 
+> **勘误（ADR-0051 / v1.14.0）**：上面的 `type` 列表是本文（提议、未实现）当时的写法；v1.14.0 起**实现侧**的 `NodeType` 另有第 6 个 `resource`（资源卡投影）。本文其余提议（Projection Store / Graph 关系扩展）仍未实现。
+
 查询入口从 `read_shadow("xxx.md")` 演进为 `shadow.query("appid secret 认证在哪里设计")`，返回跨"历史 ADR / 代码 / 规范 / 关系"的上下文。
 
 ## 接受的边界（本 ADR 冻结，实现时禁止越界）

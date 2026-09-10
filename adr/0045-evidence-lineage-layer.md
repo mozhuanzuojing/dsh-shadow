@@ -6,6 +6,8 @@
 - 关联术语：`../CONTEXT.md`（Memory Atom / ShadowNode / AtomKind / Evidence Density / lineage）
 - 数据往来：`OpenAPI-Gateway/.shadow/2026-09-08`（52 原子：decision/memory 0% evidence，code/document 100%）
 
+> **勘误（ADR-0051 / v1.14.0）**：本文「四、memory kind 设计」写的 `NodeType = "memory" | "code" | "document" | "decision" | "concept"`（5 值）是 v1.8.0 那一轮的冻结口径；v1.14.0 起实现侧新增第 6 个 `resource`（资源卡投影，见 ADR-0051）。原文「不增加 type」指当时那一轮的边界，历史措辞保留。
+
 ## 目标
 
 > 让 Shadow 的每个高价值认知单元都能回答：**"这个东西为什么存在，它来自哪里？"**
