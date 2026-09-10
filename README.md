@@ -271,6 +271,14 @@ uv tool install semble
 
 不配 `evidenceProvider` / `indexEngine.provider` 就**完全不碰**这两条路径（默认 `fs`，行为不变）。配了却没装：`mode:"index"` 打印 `unAvailable(未装，勿当 verified)`，证据验证返回 `unavailable` 并在 `provenance.reason` 里给出原因（`zg_not_installed` / `semble_not_installed` / `timeout` / `error`）——**不会**把缺件说成 verified（缺件不静默，ADR-0049）。
 
+**而且不只报缺件，还给处置**（v1.15.8）：缺件时输出末尾附一行
+
+```text
+> 缺件处置：npm install -g @zvec/zvec-grep （需 Node ≥ 22；插件只用 --rg 路由…） · 提供：… · 现退到：… · 原因：zg_not_installed · 见 README「可选外部 CLI（zg / Semble）」
+```
+
+**这一行是给 agent 执行的，插件自己不装。**安装是有后果的动作，按本仓安全边界（「有后果的动作要用户确认」）与 `Authority ≠ Ownership`（inv 178）、`Delegation Scope 不可扩大`（inv 182），必须由外部权威授权、经宿主的 approval 栈执行——插件代装等于自己给自己扩权。所以流程是：**读到处置命令 → agent 执行 → 你看到并同意**。
+
 ## 安装（持久化）
 
 本地包以 `link:` 引入 profile（与 `cc-kit-dsh` 同法）：
@@ -316,10 +324,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.7`（zg 集成修复 + 可选外部 CLI 安装指南）** —— 最新几版摘要：
+**当前版本：`v1.15.8`（缺件处置：从「一句 unavailable」到「一条可执行命令」）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.8 | **缺件处置（工具集台账）**：新增 `core/toolset.ts` 声明式台账（`zg` / `semble`：`provides` / `degradesTo` / `remedy` / `doc`），并在 `mode:"index"` 与 `verifyEvidence` 两处缺件出口接上**可执行的确切命令**；`CandidateResult` 增 `reason`，顺带补上 `verifyEvidence` 此前不显示 `reason` 的缺口。**插件绝不代装**——依据是本仓自身条文：安全边界表「有后果的动作要用户确认」、inv 178 `Authority ≠ Ownership`、inv 182「scope 不可在执行中隐式扩大」；故改为**插件给命令、agent 经宿主 approval 栈执行**（与 `dsh-shadow` 从不代装插件、resource 卡片只读不写同一取向）。未登记的 provider **不编造命令**。全量回归 25/25 |
 | v1.15.7 | **zg 集成三处修复 + 安装指南**（用户指出「不然没用」）：① **spawn 硬阻断**——Windows 上 `execFile("zg")` 必 ENOENT（Node 不解析 npm 的 `.cmd`）、`execFile("zg.cmd")` 必 EINVAL（CVE-2024-27980 缓解），于是「zg 装好、手动跑得通、插件恒 unavailable」→ 改为定位包内 `dist/cli/index.js` 用 `node` 起它；② **输出解析**——zg 0.2.2 的 `--rg` 是「路径单独一行 + 缩进 `起-止 [heading 面包屑] 行号:内容`」，不是 `path:line:text` → 改状态机，并**删掉两个会制造证据的兜底**（「stdout 出现 ref.path」会把 zg 的 `missing: <路径>` 误判成 verified）；③ **裁决语义**——`verify` 必须按 `ref.path` 限定搜索（工作区级搜索 + 全局 top-N 会把目标路径截掉：实测一次查询 40 条命中/16 文件，目标排第 7 个文件），不存在的路径 → `not_found`/`stale`；另把失败原因写进 `provenance.reason`（ADR-0049）。README 新增「可选外部 CLI（zg / Semble）」安装与自检指南 |
 | v1.15.6 | **Semble 接为 Index Engine 的候选 provider**（ADR-0054）：`indexEngine.provider = "semble"`（本地 CLI，`uv tool install semble`）。**它是检索层、不是裁决层**——只产候选 → `rankRefs` → `authorizeScope` → 交回 Shadow Core；默认仍 `fs`（行为不变）。**为什么不进裁决面**：实测 Semble **无阈值、无负信号**（4 次查询分数三元组完全相同；「量子纠缠/哈勃常数」这类语料里没有的话题照样返回最高分；CLI 无 `--threshold`），交它 `verify` 会违反 ADR-0043「无证据不返回」与 ADR-0049。**两处实现约束**：① spawn 时必须清洗 `NO_PROXY`——本机 ambient 的 `[::1]` 会让其 httpx 抛 `Invalid port ':1]'`（模型已缓存也照崩），故剔掉带方括号的条目；② Semble 返回**相对路径**，必须先绝对化——否则 `authorizeScope`（绝对前缀匹配）会把候选**整批滤掉**（此坑由测试暴露）。端到端实测：`generateCandidates` 返回 20 条绝对路径候选并命中 `core/resource.ts:173-186` |
 | v1.15.5 | **旧协议约定全面删除（A/B/C/D）**：**A** 删 `core/` 里 4 处旧数据格式兼容兜底（`> 用户提示/决策：`〔decision〕 的 legacy 决策解析、`decisions` 回退、`node.ts` 的 `materials` 回退、`kind`/`lineage` 可选性），`ParsedMemory.kind`/`lineage` 转必填；**B** 修正 **23 个 ADR** 陈旧的「协议（提案，待 vX 实现）」状态（对应实现目录与 CHANGELOG 条目均已存在）；**C** ADR-0053 再正名 3 项同名双义（`mode:"verify"`→`verification`、Gateway `EvidenceRef`→`GatewayEvidenceRef`、`realityEvidenceRef`→`realEvidenceRef`），并**判定保留** 2 项并写明理由（`config.recall` 含管线级旋钮，改名会与语义不符；`args.identity` 再改就要生造词）；**D** 当前文档不再登记废止名（README / CONTEXT / LIVE-VERIFY / 工具 schema / 注入提示），映射与理由只留 ADR。**顺带修一个真 bug**：`core/experience.ts` 的决策一直在读**旧** `> 用户提示/决策：` 提示头（等于把任意用户消息当决策）→ 改读现行 `> 决策：` 并剥离 `〔source〕` |

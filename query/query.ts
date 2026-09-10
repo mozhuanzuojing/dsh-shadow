@@ -27,6 +27,7 @@ import { renderByTier, noMatchText, truncationNote } from "../retrieval/render.j
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
+import { unavailableHint } from "../core/toolset.js";
 import { kgTrace } from "../observer/observer.js";
 import { readSoul, soulText } from "../soul/soul.js";
 import { readIdentity, renderIdentity } from "../soul/identity.js";
@@ -213,13 +214,20 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     }
     const rows: string[] = [];
     const ctx = { fs, ws };
+    // 记下第一处 unavailable 及其 provider/reason：缺件处置要按 provider 给（ADR-0049 延伸）。
+    let unavailableRef: { provider?: string; reason?: string } | undefined;
     for (const text of texts.slice(0, 3)) {
       for (const p of evidencePathsOf(text).filter(isPathLike).slice(0, 6)) {
         const r = await deps.verifyEvidence({ path: p, kind: "path" }, ctx);
-        rows.push(`${r.status}  ${p}  (provider=${r.source} · freshness=${r.freshness} · conf=${r.confidence.toFixed(2)})`);
+        if (r.status === "unavailable" && !unavailableRef) unavailableRef = { provider: r.source, reason: r.provenance?.reason };
+        // 原因也要露出来（此前被吞：真机只看到一句 unavailable，无从排查）。
+        const why = r.provenance?.reason ? ` · reason=${r.provenance.reason}` : "";
+        rows.push(`${r.status}  ${p}  (provider=${r.source} · freshness=${r.freshness} · conf=${r.confidence.toFixed(2)}${why})`);
       }
     }
-    return scrubFinal(RECALL_PREFIX + "[Evidence Verify]" + (rows.length ? "\n" + rows.join("\n") : "\n（无可验证证据路径）") + flushWarn);
+    const hint = unavailableRef ? unavailableHint(unavailableRef.provider, unavailableRef.reason) : undefined;
+    const body = rows.length ? "\n" + rows.join("\n") : "\n（无可验证证据路径）";
+    return scrubFinal(RECALL_PREFIX + "[Evidence Verify]" + body + (hint ? "\n" + hint : "") + flushWarn);
   }
   if (args?.experience) {
     const matched: any[] = [];            const entryList: any[] = [];

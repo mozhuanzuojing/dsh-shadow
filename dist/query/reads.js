@@ -7,6 +7,7 @@ import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
+import { unavailableHint } from "../core/toolset.js";
 import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections, } from "../core/knowledge-engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
@@ -148,6 +149,13 @@ const index = {
                 lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
         else
             lines.push(r.provider === "fs" ? "- （fs: 全量扫描，无候选预筛）" : `- （${r.provider} 未产出候选：未装、超时或未命中）`);
+        // ADR-0049 的延伸（v1.15.8）：缺件不只报 unavailable，还给**可执行的确切命令**。
+        // 插件不代装（见 core/toolset.ts 头的边界依据）；命令由 agent 经宿主 approval 栈执行。
+        if (r.unavailable) {
+            const hint = unavailableHint(r.provider, r.reason);
+            if (hint)
+                lines.push("", hint);
+        }
         return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
     },
 };

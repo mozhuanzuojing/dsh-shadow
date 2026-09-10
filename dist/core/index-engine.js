@@ -24,7 +24,7 @@ export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider,
                 const ref = { path: "", query, kind: "query" }; // GatewayEvidenceRef(core types): 语义查询，path 留空
                 const r = await evidenceProvider.verify(ref, ctx);
                 if (r.status === "unavailable")
-                    return { provider: "zg", unavailable: true, refs: [] };
+                    return { provider: "zg", unavailable: true, reason: r.provenance?.reason, refs: [] };
                 const matches = await evidenceProvider.discover(ref, ctx);
                 const refs = rankRefs(toRefs(matches), query); // zg 思想：语义发现→词汇级排序锚定
                 return { provider: "zg", refs: authorizeScope(refs, { workspace: ctx?.workspace }) }; // ADR-0048⑥ 授权范围
@@ -37,7 +37,7 @@ export const createIndexEngine = (config, evidenceProvider = zgEvidenceProvider,
                 // ADR-0054：只产候选。未装/超时 → unavailable（调用方回退 fs），**绝不**冒充有候选。
                 const r = await sembleRun(query, ctx);
                 if (r.unavailable)
-                    return { provider: "semble", unavailable: true, refs: [] };
+                    return { provider: "semble", unavailable: true, reason: r.reason, refs: [] };
                 // 与 zg 同法：语义发现 → 词汇级重排（rankRefs 锚定精确标识/路径）→ 授权范围过滤。
                 return { provider: "semble", refs: authorizeScope(rankRefs(r.refs, query), { workspace: ctx?.workspace }) };
             },

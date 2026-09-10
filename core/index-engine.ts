@@ -13,6 +13,8 @@ export interface CandidateResult {
   provider: "fs" | "zg" | "semble";
   /** zg/semble 未装或不可用 → true；调用方应回退 fs 扫描。绝不把 unavailable 当作 verified。 */
   unavailable?: boolean;
+  /** 不可用的原因（与 Evidence Gateway 的 provenance.reason 同口径）；调用方据此给**可执行**的缺件处置。 */
+  reason?: string;
   /** 候选证据（zg/semble: 源文件路径+行号；fs: 空=全量扫描）。 */
   refs: AtomEvidenceRef[];
 }
@@ -40,7 +42,7 @@ export const rankRefs = (refs: AtomEvidenceRef[], query: string): AtomEvidenceRe
 export const createIndexEngine = (
   config: any,
   evidenceProvider: EvidenceProvider = zgEvidenceProvider,
-  sembleRun: (query: string, ctx: any) => Promise<{ unavailable?: boolean; refs: AtomEvidenceRef[] }> = sembleCandidates,
+  sembleRun: (query: string, ctx: any) => Promise<{ unavailable?: boolean; reason?: string; refs: AtomEvidenceRef[] }> = sembleCandidates,
 ): IndexEngine => {
   const provider = config?.indexEngine?.provider || "fs";
   if (provider === "zg") {
@@ -49,7 +51,7 @@ export const createIndexEngine = (
         // 先探测 zg 是否可用（verify 返回 unavailable 时不冒充候选）；否则回退 → 调用方 fs 扫描。
         const ref = { path: "", query, kind: "query" as const }; // GatewayEvidenceRef(core types): 语义查询，path 留空
         const r = await evidenceProvider.verify(ref, ctx);
-        if (r.status === "unavailable") return { provider: "zg", unavailable: true, refs: [] };
+        if (r.status === "unavailable") return { provider: "zg", unavailable: true, reason: r.provenance?.reason, refs: [] };
         const matches = await evidenceProvider.discover(ref, ctx);
         const refs = rankRefs(toRefs(matches), query); // zg 思想：语义发现→词汇级排序锚定
         return { provider: "zg", refs: authorizeScope(refs, { workspace: ctx?.workspace }) }; // ADR-0048⑥ 授权范围
@@ -61,7 +63,7 @@ export const createIndexEngine = (
       async generateCandidates(query, ctx) {
         // ADR-0054：只产候选。未装/超时 → unavailable（调用方回退 fs），**绝不**冒充有候选。
         const r = await sembleRun(query, ctx);
-        if (r.unavailable) return { provider: "semble", unavailable: true, refs: [] };
+        if (r.unavailable) return { provider: "semble", unavailable: true, reason: r.reason, refs: [] };
         // 与 zg 同法：语义发现 → 词汇级重排（rankRefs 锚定精确标识/路径）→ 授权范围过滤。
         return { provider: "semble", refs: authorizeScope(rankRefs(r.refs, query), { workspace: ctx?.workspace }) };
       },

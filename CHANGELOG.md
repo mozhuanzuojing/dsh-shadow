@@ -3,6 +3,56 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.8] 缺件处置：从「一句 unavailable」到「一条可执行命令」（工具集台账）
+
+用户 2026-09-10 提「你要有一个工具集编排，以方便使用，没有就安装，顺便给用户提醒即可」。本轮**只落地其中零风险的一半**（检测 + 提示），并把不做「代装」的理由写成可引用的条文。
+
+### 做了什么
+
+- **新** `core/toolset.ts`：能力台账（`CAPABILITIES`：`zg` / `semble`）+ `capabilityOf` / `remedyFor` / `unavailableHint`。每项声明 `{id, label, provides, degradesTo, remedy[platform], doc}`。
+- `query/reads.ts` 的 `mode:"index"` 与 `query/query.ts` 的 `verifyEvidence` 两处缺件出口接上处置行；`CandidateResult` 增 `reason`（与 Evidence Gateway 的 `provenance.reason` 同口径），zg 分支从 `provenance.reason` 取、semble 分支从 `sembleCandidates` 取。
+- 顺带补一个此前的缺口：`verifyEvidence` 的每行**此前不显示 `reason`**（真机只看到 `unavailable`，无从排查）→ 现在带 `· reason=…`。
+- **新** `test/toolset.test.ts`：台账自洽 / 未登记不编造 / 平台回退 / 提示含命令-原因-文档锚 / index 缺件路径端到端 / 默认 fs 无副作用。
+
+实际输出（缺件时）：
+
+```text
+> 缺件处置：npm install -g @zvec/zvec-grep （需 Node ≥ 22；插件只用 --rg 路由，不必放开被拦下的原生依赖 install 脚本） · 提供：证据验证（verifyEvidence）与 Index Engine 的 zg 候选 · 现退到：证据验证退回 fs（只判路径存在性）、候选退回全量扫描 · 原因：zg_not_installed · 见 README「可选外部 CLI（zg / Semble）」
+```
+
+未登记的 provider（如配置写成 `gzz`）→ **不产出任何提示**（不编造命令）。
+
+### 为什么**不**做「插件自己装」（边界，可引用）
+
+不是工程难度问题，是本仓自身的宪法不允许：
+
+| 出处 | 条文 |
+|------|------|
+| `README.md:227` 安全边界表 | 「**有后果的动作要用户确认**」 |
+| `references.md:58` 引 OpenAI《Computer use》 | 「破坏性变更…要用户确认」 |
+| `adr/0029-1` inv **178** | **Authority ≠ Ownership**（`can update service config` ≠ `owns service architecture`） |
+| `adr/0030` inv **182** | **Delegation Scope 不可扩大**：「scope 只能由外部权威以显式协议变更，**不可在执行中隐式扩大**」 |
+| `adr/0030:30` | 「**被授权执行 ≠ 被授权解释授权 ≠ 被授权扩大授权**」 |
+
+插件自行 spawn 安装器 = **自己给自己扩权**。故采用与「resource 卡片插件只读不写」同一取向：**插件给确切命令，由 agent 经宿主 approval 栈执行**——`dsh-shadow` 自己也从不代装插件（给的是 `dsh plugin add …`）。
+
+### 生态先例（先查是否重复造）
+
+`awesome-dsh-plugin` 里已有同题件：**`guo6x/dsh-housekeeper`**（工具链台账：node/pnpm/git/gh/ffmpeg/浏览器 + 缓存清理）、`AngelosZou/dsh-python-env`（装时的镜像与权限）、`happpsee/dsh-desktop-app`（无管理员 Windows 工具链配方）、`863683348/dsh-need-finder` / `dsh-recipe`（需求→插件 + 整套环境 recipe）。**「工具链台账」与「装插件」都已有现成件**；真正缺的是本版补的那一环——**某个增强报缺件时，就地给出那一条命令**。
+
+### 验证
+
+`npx tsc --noEmit` exit 0；`npm run build` exit 0；**全量回归 25/25 `ALL PASS ✅`**（新增 `test/toolset.test.ts`）。
+
+### 边界与未验证
+
+- 台账目前只登记 dsh-shadow **自己的**可选外部 CLI（`zg` / `semble`）。**通用开发工具（jadx 等）不在此列**——那是另一个平面，不属记忆插件（同 ADR-0051「预设里资源侦察员的工作方式不属本 ADR」的划法）。
+- 提示只在**缺件时**出现（默认 `fs` 路径零输出，回归已锁）。
+- **未验证**：平台分叉（`remedy[platform]`）目前全部走 `default`，未在 macOS/Linux 实测；「一键装」入口未做（见上边界）。
+
+
+
+
 ## [v1.15.7] zg 集成修复（装了也用不了）三处 + 可选外部 CLI 安装指南
 
 用户指出「不然没用」——本轮把 `zg`/`Semble` 从「插件里有分支、机器上不可用」修到**端到端可用**，并补上安装指南。`zg` 在本机**装了但插件一律报 unavailable**，根因有三个，逐个实测定位：
