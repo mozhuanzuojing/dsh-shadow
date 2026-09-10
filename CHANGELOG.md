@@ -3,6 +3,80 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.5] 旧协议约定全面删除（A/B/C/D）+ 同名双义第二轮正名 + references 补 OpenViking
+
+用户 2026-09-10 指示两项：「添加资料 `volcengine/OpenViking`」与「**旧协议约定全面删除**」。本轮按四项执行（A 代码兼容兜底 / B ADR 陈旧状态 / C 同名双义 / D 现行文档口径），并**顺带修掉一个被 A 暴露的真 bug**。
+
+### 0. references.md 补 OpenViking（已核实）
+
+- 新增 §5「volcengine/OpenViking」：**GitHub API（抓取 2026-09-10）+ 本机克隆 `G:\project\dsh1\openviking`（HEAD `592c0fe`）** 双重核实。36,445 ⭐ / 2,790 fork；`AGPLv3`（**`crates/ov_cli` 与 `examples` 为 Apache-2.0**）；`viking://` 虚拟文件系统 + 写入时 L0/L1/L2 分层 + 目录递归检索 + 检索轨迹可观察。记录三条对本仓要紧的事实：① **许可证约束**——主项目 AGPLv3 而本仓 MIT，**只可借鉴思想与文档结构，不可复制代码**（既有「不引入其代码或依赖」口径继续成立）；② 它**原生支持 DSH**（`examples/dsh-memory-plugin`，7 个 `viking_*` 工具、`agent/pre-step` 注入、`ctx.provide("openvikingMemory")`），是本项目记忆层的**直接替代品**而非远方的对照组；③ `ov reindex` 明写「**没有 `semantic` 或 `full` 这样的模式别名**」，与 ADR-0050「正名硬切、不留兼容别名」是同一取向的外部正例。**未核实**：其自报评测数字、该 DSH 插件能否在 `0.1.5-rc.1` 上装载。
+
+### A. 删除 4 处旧数据格式兼容兜底（`core/`）
+
+| # | 位置 | 旧行为 | 现行为 |
+|---|------|--------|--------|
+| A1 | `core/episode.ts` `parseMemory` ③ | `> 用户提示/决策：`〔decision〕在无 `> 决策：` 块时被当作决策解析 | **删除**。决策只来自 ① `> 决策：` / ② `> 决策理由：` / 正文 `决定 ` 行 |
+| A2 | `core/episode.ts` `deriveDecisions` | `decisionEvents` 为空时回退旧 `decisions`（reason 未知） | **删除**（A1 后该回退已不可达：`addDecision` 同时写两者） |
+| A3 | `core/node.ts` `deriveShadowNodes` | 无 `lineage.evidence` 时回退 `materials` | **删除**，evidence 只取 `lineage.evidence.locator` |
+| A4 | `core/episode.ts` `ParsedMemory` | `kind?` / `lineage?` 标「可选=兼容旧 Atom/合成构造」 | **转必填**（`parseMemory` 恒产出二者） |
+
+- **迁移而非兼容**：5 处「旧格式夹具」改为现行格式——`test/episode-lineage.test.ts` ×3、`test/recall-attribution.test.ts` ×2（`> 用户提示/决策：「X」〔decision〕` → `> 决策：〔user〕X`）。
+- **测试棘轮同步**：`test/query-observatory.test.ts` 的合成 `mkParsed` 补 `kind`/`lineage`（否则是「必填却靠运行时不检查」的隐性地雷）；两处因删除而**变成空断言**的旧标记断言收紧为现行标记（`episode-lineage` 场景「了解 当前 IO 不算决策」改为断言无 `> 决策：[^\n]*了解`；`goal-operation` 改为「无旧标记 **且** 有 `〔create〕`」）。
+- **`> 用户提示/决策：` 本身不是旧格式**：它是现行的**提示头**（`core/memory.ts` 仍在写），只有其中带 `〔decision〕` 标记的条目是旧决策载体——本轮只删后者。
+
+### 顺带修的真 bug（由 A 暴露，高）
+
+`core/experience.ts` 的 `decision` 一直读 `> 用户提示/决策：`（**提示头**），而不是现行 `> 决策：`。后果：**把任意用户消息当决策**，且 A1 删除后 Experience 的决策恒为空 → `{experience:true}` 的 topic 匹配、`judgment`、`projection` 三处一起失准（测试逐个暴露：场景 35 / 38 / 39 / 45）。修：读 `> 决策：` 并剥离 `〔source〕` 标记（与 `core/episode.ts` ① 同口径）。
+
+### B. 修正 23 个 ADR 的陈旧「协议（提案，待实现）」状态
+
+23 个 ADR 仍写着「协议（提案，待 vX 实现）」，而**对应实现目录与 CHANGELOG 条目均已存在**（ADR-0011/0013/0015/0016/0017/0018/0019/0020/0021/0023/0024/0026/0027/0028/0029/0030/0031/0032/0033/0035/0036 共 23 个）→ 状态行改为 `已实现（vX.Y.Z）`，逐一取自 CHANGELOG 的实现条目（如 ADR-0011→v0.23.0「Observation Trace」、ADR-0030→v0.36.0「Delegated Execution Boundary Kernel」、ADR-0035→v1.0.2、ADR-0036→v1.0.1）。复核：`adr/` 下「协议（提案」残留 **0**。
+
+### C. ADR-0053：同名双义收口（3 项正名 + 2 项判定保留）
+
+- 新增 `adr/0053-same-name-disambiguation.md`。**再正名 3 项**（全部**复用本仓已有词**，不生造）：`mode:"verify"`→**`verification`**（对象名早已是 `VerificationRun`）、Gateway `EvidenceRef`→**`GatewayEvidenceRef`**（沿用 `AtomEvidenceRef` 同一构词法）、`realityEvidenceRef`→**`realEvidenceRef`**（对齐已定的正名 `mode:"real-evidence"`）。`mode:"verify"` 进 `RETIRED_MODES` 显式拒绝。
+- **判定保留 2 项并写明理由**（不再靠注释桥含糊）：① `config.recall` **不改**——它下面还有 `cooldownTurns`/`debug`/`deprioritize`，是**整条召回管线**的旋钮（A 档关键词召回同样使用），改名 `semanticRecall` 会让 `semanticRecall.cooldownTurns` 语义变错（**这不是取舍，是改名会变错**；本 ADR 初稿曾打算改，核对作用域后否决）；② `args.identity` **不改**——与之撞车的 `mode:"identity"` 已于 ADR-0050 正名 `identity-advance`，再改就要生造词（违反本仓「禁止生造黑话」）。
+- 影响面：24 处 `EvidenceRef` + 7 处 `realityEvidenceRef` 机械改名（负向断言 `AtomEvidenceRef` **零误伤**，复核 3 处仍在）；`mode` 分派（`contverify` 的 `CONT_MODES`）、`intentOf` 的 `MODE_GOAL`、工具 schema 三处描述、两处测试断言同步。
+- **历史 ADR 正文保留原措辞**（ADR-0050 同口径）；ADR-0050 的保留清单由本 ADR 接续，其正文不改。
+
+### D. 当前文档不再登记废止名
+
+废止名的**映射与理由只留 ADR**，现行文档只写现行口径：`README.md` / `CONTEXT.md` 的「正名硬切」块改为**指针式命名口径**（不再逐一列举废止名）；`LIVE-VERIFY-checklist.md` 的口径提示同样改指针；工具 schema 的 `verifyEvidence` 描述去掉「（废止旧名 verify…）」；注入提示去掉「勿自造 mode:recall」。`CONTEXT.md` 的 `recovery` 行去掉「废止旧名 recall」。**保留**：`RETIRED_MODES` 拒绝表与其代码注释（那是机制本身，ADR 明确要求旧名显式拒绝）、`recall` 多义的**位置区分**注释（ADR-0053 §2 依赖它）。
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0（`dist` 同步重建）。
+- **全量回归 23/23 `ALL PASS ✅`**（收敛过程：A 落地后 `episode-lineage` 红 → 迁移 3 处夹具后绿；`recall-attribution` 依次暴露 `experienceOf` 旧字段 bug 的 4 个消费方（场景 35/38/39/45）→ 修 `experienceOf` + 迁移对应夹具后绿）。
+- 旧格式残留复核：`test/` 下带动旧决策标记的夹具 **0**（剩余 `〔decision〕` 出现在两处**否定断言**里，属有意保留的回归锁）。
+- `adr/` 下「协议（提案」残留 **0**；`AtomGatewayEvidenceRef` 误伤 **0**。
+
+### 边界与未验证
+
+- **破坏性**：旧格式记忆文件（v1.1.1 前的 `〔decision〕` 条目、v1.8.0 前无 lineage 的 Atom）**不再被解析成决策**——这是「全面删除」的定义域；本机无历史 `.shadow/`，故无实测数据可用；**其他机器/工作区若有旧记忆，其决策血缘会变少**。
+- 本轮**未改** persona 与预设（v1.15.4 的 team 优先不动）。
+- 未验证：`dist` 未做运行时端到端（本会话载入的是重启前的 dist）；旧数据影响面未实测。
+
+
+## [v1.15.4] 投影模式预设：派活改为「team 优先」（官方 experimental Agent Teams）
+
+用户 2026-09-10 指示「预设模式中要尽量少使用子代理，而是使用官方的 Agent Team，尽量避免子代理缓存命中低、花费高的缺点」。**本轮只改预设 persona 与文档，不动插件运行时**（`core/` 一行未改）。
+
+- **persona 重写 ①–⑤**（`agent-presets/projection/agent.cordis.yml`）：新增「**默认不派人**」门槛；② 明确 **优先 Agent Team、不要反复新开一次性 subagent**（复用同一具名 teammate，理由是「每个新 subagent 都要重付一遍系统提示 + 工具 schema 前缀」）；③ 把「何时才用 `subagent`」收窄为「一次性、无后续、不需来回」，要带上下文用 `subagent_fork`；⑤ 改为「团队操作」（并行批派 + `team_task_create` 的 revision compare-and-set + `wait_agent` 前先 `list_agents` + `queued` 绝不重发 + 只有 Lead 能 `spawn_teammate`/`interrupt_agent` + 给最终答复前等齐 teammate）。①②③④ 的原判据（该不该派 / 提示词自包含 / 只验一错就要返工 / 未复核 N 条）全部保留，仅重排与压词。
+- **persona 文本 2053 → 2380 字符**（+327，常驻成本计入；顶层 `- id:` 仍 16 行——新行挂在 `delegation` 组内）。
+- **装配面（关键，决定能不能用）**：Team 域服务与工具分属两个平面，且**包内无 `dsh.bundle`**（`dsh plugin add` 只会装成普通依赖，不会自动插行）：
+  | 面 | 位置 | 行 |
+  |---|---|---|
+  | 域服务 `ctx.agentTeams` | **host 组合**（profile `cordis.patch.yml`） | `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.1` |
+  | 9 个模型工具 | **preset**（本文件） | `@deepseek-ai/dsh-experimental-tool-agent-team@0.1.5-rc.1` |
+- **同名冲突（有意保留，上游明文）**：`send_message` / `list_agents` / `interrupt_agent` 同时是 `@deepseek-ai/dsh-tool-subagent-control`（+ `/list-agents`）的旧名。Team 版**按成员作用域遮蔽全局**，非 Team 子代理仍拿旧目录；后果是 Lead 不再能用 `send_message` 指挥普通 continuable 子代理。上游建议「两者都要时必须禁用旧定义」，本版**选择保留旧行**（若禁掉，非 Team 子代理将完全失去控制面），并在 preset 里就地写明取舍。
+- **已知缺口（与 ADR-0049「缺件不静默」相悖）**：Team 工具行 `inject: [..., 'agentTeams', ...]`，**host 没提供该服务时该行永不激活，但 `standingKeyFor` 仍报挂载成功**，9 个工具**静默不出现**。即：这个新依赖没有可见降级路径。已写入预设 README 作为前置条件，未在本轮修（修法需另议：要么把 host 行做成 dsh-shadow 自己 bundle 的一部分，要么在预设侧加可见告警）。
+- **验证**：①`dsh --profile web --dump-config` exit 0、552 行、无 `Error:`，新增 `- id: agent-team` 行；②**全新世代挂载校验**（临时 Cordis 探针，本会话真跑）：`copy('projection','projection-probe-a')` → `standingKeyFor('projection-probe-a')` **MOUNT OK（真组装）** → `remove`，无残留；③**host patch 层无需重启即生效**：改 `cordis.patch.yml` 前 `ctx.get('agentTeams')` = `UNDEFINED`，改后 = `present (object)`，实测方法 `membership` / `spawnTeammate` / `listMembers` / `createTask` 均为 function；④**端到端**：Team 工具已出现在活会话工具表（`spawn_teammate` / `wait_agent` / `team_task_create|list|get|update` 新增，`send_message` / `list_agents` / `interrupt_agent` 描述已换成 Team 版），`list_agents` 实调返回 Team roster（`lead` / `running` / 带 `model` 与 `diagnostics`）。
+- **同进程第二次挂载会失败（实测，根因已定位）**：改用新 id 再校验一次（`projection-probe-b`）报 `prompt section "team:policy" is already registered in this scope`。根因在包内（`dsh-experimental-tool-agent-team/lib/index.js`）：`apply()` 的去重用的是**插件实例级** `installed = new Map()`（第 531 行），而注册写进**成员 Agent 自己的作用域** —— `const scoped = agent.ctx`（第 232 行）→ `scoped.systemPrompt.section({ name: "team:policy" })`（第 238 行）。于是**同进程内第二次挂载**时新实例的 Map 是空的，会对**同一个活 Agent** 再注册一次同名 section → 抛错。影响面：① 两个预设都挂 `tool-agent-team` 时第二个必失败；② 同进程重挂（HMR / 组合重载）有同样风险。**冷启动只挂一次，故启动路径不受影响**（probe-a 那次即「进程内首次挂载」，MOUNT OK）。probe-a 的 standing generation 活到进程退出，故本会话残留其注册——**重启 web 进程即为干净状态**。
+- **未验证（不冒充）**：①「保留旧控制行 + Team 行同时干净挂载」——本进程内 Team 行先于旧行激活，冲突面没被真正触发，且第二次挂载已被上面的 section 冲突挡住、无法再试；② `dsh-experimental-agent-team` 是**实验包、无稳定性承诺**，未做长期回归；③ **未做冷启动实测**：「重启后只挂一次 → 正常」是按代码与 probe-a 结果推断，不是实测；④ 本轮无 TypeScript 改动，`dist` 不需重建（沿用 v1.15.3 的 `tsc --noEmit` / build / 23 项回归结论）。
+
+
+
+
 ## [v1.15.3] 审查修复：能力探测在真机不生效（inject 回调语义）+ 残留旧名与半修状态
 
 用户 2026-09-10 要求 review。派两位独立审查（① 正确性/回归；② 文档/发版一致性），父代理逐条复现验收，本条记录修复。**本轮修的全是 v1.15.0～v1.15.2 自身留下的漏洞。**

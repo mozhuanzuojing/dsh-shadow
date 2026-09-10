@@ -1,6 +1,6 @@
 # ADR-0013 · v0.24 Reflection Engine 协议（锁计算模型，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.24 实现） ｜ 版本：v0.24.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.24.0） ｜ 版本：v0.24.0
 > 前置：ADR-0012（v0.23 Observation Trace）。定位：**从多个 ObservationTrace 中发现"观察者自身重复出现的观察模式"**，不是总结 Trace。
 > 关键红线：**Reflection 输入只能是 `ObservationTrace[]`**。禁止 Memory / Experience 原文 / 外部知识 / LLM——Reflection 是对自身观察路径的回看，不是知识整理。
 

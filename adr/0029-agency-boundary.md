@@ -1,6 +1,6 @@
 # ADR-0029 · Observer Agency Boundary Protocol（v0.35 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.35 实现） ｜ 版本：v0.35.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.35.0） ｜ 版本：v0.35.0
 > 前置：ADR-0028.1（v0.34.1 Planning Integrity Lock）。定位：**Observer Agency Boundary**——不是让系统成为 Agent，而是定义"一个观察者在保持边界的情况下，可以拥有多少行动能力"。
 > 分界：v0.20–v0.34 是 cognition（我看到/知道/表示/想象/比较/行动）；**v0.35 进入 agency（为什么选择行动？选择来源是谁？）**。
 

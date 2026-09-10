@@ -1,6 +1,6 @@
 # ADR-0021 · Observer Federation Protocol（v0.29 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.29 实现） ｜ 版本：v0.29.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.29.0） ｜ 版本：v0.29.0
 > 前置：ADR-0020（v0.28.1 Epistemic Kernel）。定位：**多个 Observer 在保持独立主体的前提下，如何共同逼近 Reality**。
 > 一句话：**Federation 的目标不是让 Observer 达成一致，而是让不同 Observer 在保持主体独立的情况下，共同暴露 Reality 与 Projection 的差异。**
 > 防陷阱：不能退化成 `Agent A Memory \ Merge / Agent B Memory`（Multi-Agent RAG）。Federation 建在 **Reality 层交汇**，不是 Memory 层交汇。

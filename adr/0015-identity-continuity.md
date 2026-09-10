@@ -1,6 +1,6 @@
 # ADR-0015 · Observer Identity Continuity Protocol（v0.25 协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.25 实现） ｜ 版本：v0.25.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.25.0） ｜ 版本：v0.25.0
 > 前置：ADR-0014（v0.24 Reflection）。定位：**Identity 不是"总结出来的人格"，而是 Observer 在时间轴上的稳定约束**。
 > 关键：变的是"当前时间切片中，观察者对自身规律的认识"，不是灵魂；否则 v0.25 退化成 `过去行为→总结→改人格→影响未来`。
 > 建议改名：**Observer Identity Continuity / Observer Self-Model Evolution**（避免误解成模型人格变化）。

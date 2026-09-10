@@ -78,7 +78,7 @@ const toolRegistry = new Map<string, any>();
   //   12:00 → 另一任务（间隔 > 60min → 新 Episode）
   const seed = (rel: string, entry: string, at: string, decision: string, goal: string) => {
     store.set(`D:/ws/.shadow/${rel}`,
-      `# ${entry}\n\n> 完整线索\n> 背景/材料：${entry}/x.js\n> 用户提示/决策：「${decision}」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-07) · 证据(${entry}/x.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T2\n> 目标：${goal}\n\n- [${at}] [${entry}] 改/读 ${entry}/x.js\n`);
+      `# ${entry}\n\n> 完整线索\n> 背景/材料：${entry}/x.js\n> 决策：〔user〕${decision}\n> 证据链：来源(动作·用户) · 日期(2026-09-07) · 证据(${entry}/x.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T2\n> 目标：${goal}\n\n- [${at}] [${entry}] 改/读 ${entry}/x.js\n`);
   };
   seed("2026-09-07/2026-09-07--090000-pkg-a.md", "pkg-a", "09:00:00", "采用 bundle 模式", "把入口改造为 bundle");
   seed("2026-09-07/2026-09-07--090100-pkg-b.md", "pkg-b", "09:01:00", "拆分模块", "把入口改造为 bundle");
@@ -114,7 +114,7 @@ const toolRegistry = new Map<string, any>();
   const T = agent("T3");
   const rd = (x: any) => toolRegistry.get("read_shadow").execute(x, { agent: T });
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-io.md",
-    "# io-backend\n\n> 完整线索\n> 用户提示/决策：「删除 TodoSyncJob」〔decision〕；「保留 RetryWorker」〔decision〕\n> 概况：0 动作 · 2 用户消息 · 0 决策\n> 项目：ws\n> Agent：T3\n\n- [09:00:00] [io-backend] 用户：删除 TodoSyncJob。\n- [09:00:01] [io-backend] 用户：保留 RetryWorker。\n");
+    "# io-backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob；〔user〕保留 RetryWorker\n> 概况：0 动作 · 2 用户消息 · 2 决策\n> 项目：ws\n> Agent：T3\n\n- [09:00:00] [io-backend] 用户：删除 TodoSyncJob。\n- [09:00:01] [io-backend] 用户：保留 RetryWorker。\n");
   const dl = await rd({ mode: "decision" });
   assert.ok(!String(dl).startsWith("ERR"), "mode:decision 不应报错");
   assert.ok(String(dl).includes("2 条决策"), `Decision Lineage 应统计决策数：\n${String(dl).slice(0, 200)}`);
@@ -185,7 +185,7 @@ const toolRegistry = new Map<string, any>();
   assert.ok(txt5.includes("> 决策：〔user〕资产同步"), `范围/聚焦应捕获为决策：\n${txt5}`);
   assert.ok(txt5.includes("这是 openapi 的 U8 工作区"), `锚点/定位应捕获为决策：\n${txt5}`);
   assert.ok(/概况：\d+ 动作 · 3 用户消息 · 2 决策/.test(txt5), `决策数应为 2（资产同步+U8工作区；「了解当前IO」不算）：\n${txt5}`);
-  assert.ok(!txt5.includes("〔decision〕了解"), "「了解 当前 IO」不应被判为决策");
+  assert.ok(!/> 决策：[^\n]*了解/.test(txt5), "「了解 当前 IO」不应被判为决策（现行标记是 > 决策：；旧 〔decision〕 标记已删）");
   console.log("✔ 扩展 classifyUser：范围/聚焦 + 锚点/定位 捕获为 Decision；请求理解不算");
 }
 
@@ -235,7 +235,7 @@ const toolRegistry = new Map<string, any>();
   // Episode A（关闭）：09:00/09:01/09:05 三个原子（entry pkg-a，含决策"采用 bundle 模式"）
   const seedA = (rel: string, decision: string, path: string) =>
     store.set(`D:/ws/.shadow/${rel}`,
-      `# pkg-a\n\n> 完整线索\n> 背景/材料：${path}\n> 用户提示/决策：「${decision}」〔decision〕\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [pkg-a] 改/读 ${path}\n`);
+      `# pkg-a\n\n> 完整线索\n> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [pkg-a] 改/读 ${path}\n`);
   seedA("2026-09-07/2026-09-07--090000-pkg-a.md", "采用 bundle 模式", "pkg-a/x.js");
   seedA("2026-09-07/2026-09-07--090100-pkg-a.md", "拆分模块", "pkg-a/x2.js");
   seedA("2026-09-07/2026-09-07--090500-pkg-a.md", "重构 resolver", "pkg-a/x3.js");

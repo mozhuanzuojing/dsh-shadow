@@ -1,6 +1,6 @@
 # ADR-0031 · Observer Recall Continuity Boundary Protocol（v0.37 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.37 实现） ｜ 版本：v0.37.0（前置）
+> 时间：2026-09-07 ｜ 状态：已实现（v0.37.0） ｜ 版本：v0.37.0（前置）
 > 前置：ADR-0030.1（v0.36.1 Delegation Lifecycle Integrity Lock）。定位：**Recall Continuity Layer**——不是现实、不是身份、不是知识，而是 **Observer 对自身过去信息可访问性的变化**。
 > 分界：v0.20–v0.36.1 已在"内容轴"上约束 `Observation→RealityObservation→RealityClaim→Representation→Simulation→Planning→Action→Feedback→Validation→Delegation Lifecycle`；此 ADR 补**另一条轴"Remembering Lifecycle"**（可访问状态的变化），它是被遗忘/忆起而非被内容改变覆盖的时间维度。
 

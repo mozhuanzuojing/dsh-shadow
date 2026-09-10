@@ -1,5 +1,5 @@
 // dsh-shadow —— query/types.ts：read_shadow 查询的依赖注入契约（Phase 5）。
-import type { EvidenceRef, EvidenceResult, RecallCandidate, ShadowConfig } from "../core/types.js";
+import type { GatewayEvidenceRef, EvidenceResult, RecallCandidate, ShadowConfig } from "../core/types.js";
 
 export interface ShadowQueryDeps {
   fs: any;
@@ -8,7 +8,7 @@ export interface ShadowQueryDeps {
   /** 动态取落盘失败提示（lastFlushError → flushWarn）。 */
   getFlushWarn: () => string;
   /** 证据验证（经 config.evidenceProvider 路由到 fs/zg/自定义 provider）。 */
-  verifyEvidence: (ref: EvidenceRef, ctx: any) => Promise<EvidenceResult>;
+  verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>;
   /** 召回扩词（闭包：recallCfg + llm + routeFor）。 */
   expandTerms: (topic: string) => Promise<string[]>;
   /** recall_shadow 的 LLM 回导航（v1.6）：给候选任务，LLM 选最相关编号；失败返回 []（回退确定性）。 */

@@ -100,3 +100,30 @@
 3. **一张「什么情况用哪个」的路由表**（本项目最缺）；
 4. 给 agent 的粘贴式快速开始 + 机器可读文档入口；
 5. 明确写边界 / 限制 / 安全，而不是只讲能力。
+
+## 补充材料（2026-09-10 用户提供，本轮已核实）
+
+> 用户 2026-09-10 指定补录 `volcengine/OpenViking`。**已核实**：GitHub API（抓取时间 2026-09-10）+ 本机克隆 `G:\project\dsh1\openviking`（HEAD `592c0fe`）的 `README_CN.md` 与 `docs/zh/agent-integrations/16-capability-reference.md`。
+
+### 5. volcengine/OpenViking
+
+- 链接：https://github.com/volcengine/OpenViking ｜ 官网：https://openviking.ai/
+- **是什么**：面向 AI 智能体的**开源上下文数据库**（`An Agent-native context database`；仓库自述 `Self-evolving Context Database for AI Agents. Unify Agent Memory, Knowledge RAG and Skills.`）。Python，**AGPLv3**（注意：`crates/ov_cli` 与 `examples` 是 Apache-2.0，主项目是 AGPLv3）。
+- **核实**：**36,445** ⭐ / 2,790 fork / 690 open issues；创建 2026-01-05，最近推送 2026-09-10；topics 含 `agent-memory` / `agentic-rag` / `context-database` / **`dsh-plugin`**。
+- **核心机制**（README_CN 原文要点）：
+  - **`viking://` 虚拟文件系统**——记忆 / 资源 / 技能各有 URI，智能体用 `ls` / `tree` / `find` 浏览自己的上下文，**不查黑盒向量库**；
+  - **写入时生成 L0（摘要）/ L1（概览）/ L2（详情）三层**，按需加载；每个目录自带 `.abstract` / `.overview`，读完整文件前就能判断相关性；
+  - **目录递归检索**：向量检索先定位得分最高的**目录**，再逐层向下探索；**每次查询保留目录浏览轨迹**，结果不对时能看它出自哪条路径；
+  - 会话提交后**异步提取**用户偏好与智能体经验写入长期记忆。
+- **一条与本仓 ADR-0050 同向的纪律**：`ov reindex <uri> --mode` 只接受 `vectors_only` / `semantic_and_vectors` / `prune_orphans`，README 明写「**没有 `semantic` 或 `full` 这样的模式别名**」——与本仓「正名硬切、不留兼容别名」是同一取向的**外部正例**。
+- **仓库自报评测**（未经本仓复现，按原文记录）：LoCoMo 准确率 OpenClaw 24.20% → 82.08%、Hermes 33.38% → 82.86%、Claude Code 57.21% → 80.32%；输入 token 减少 34.3%–91.0%，查询时延降低 58.45%–66.10%；tau2-bench 任务成功率 Retail +6.87pp、Airline +11.87pp。方法论文 `VikingMem`，arXiv:2605.29640，称已被 VLDB 2026 接收。
+- **值得借鉴**：
+  - **「读之前先判相关性」的目录级 L0/L1**：把摘要挂在**目录**上而不只挂在文档上，是本项目「分层召回」可以再往前走一步的地方（本仓目前 L0/L1/L2 落在**记忆文件**粒度）。
+  - **检索轨迹可观察**：本仓已有 `read_shadow(topic,{debug:true})` 的管线 trace，可对照它「按目录浏览路径」的呈现形态。
+  - **无别名的模式命名纪律**（见上）。
+  - **`16-capability-reference.md`**：把 9 个 harness 的接入形态逐项列成矩阵（注入位置 / 预算 / 超时 / 提交时机 / subagent 会话 / 关闭方式 / 离线队列），是一份少见的**跨 harness 集成对照**写法，可作本仓文档结构的参照。
+- **与 dsh-shadow 的关系（两条要分清）**：
+  1. **它是 ADR-0001 的对照项**——本仓当年评估后选择**自建投影文件树**，理由是 OpenViking 需要额外跑 DB/RAG 重服务，对「agent 缺上下文就去翻」这种低成本诉求过重。**本仓已借鉴其思想**：README 明写「借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**」，`retention` 的 hotness 也注明是 OpenViking 式。
+  2. **它原生支持 DSH，因而是本项目记忆层的直接替代品**：`examples/dsh-memory-plugin` 是 **Cordis 原生插件**（同进程），`dsh plugin add ./examples/dsh-memory-plugin` 安装，注册 **7 个 `viking_*` 工具**，经 `agent/pre-step` waterfall 注入召回，teardown 时 commit（3s 超时、**无阈值**），并 `ctx.provide("openvikingMemory")` 供其他 Cordis 插件二次开发。其能力对照表记录的两条本仓需要注意的边界：**dsh 不感知 compaction**（注入内容随宿主压缩一起收缩、profile 不重投）；**每个 subagent = 独立 `dsh-<id>` 会话，父子关系不保留**。
+- **许可证约束（重要）**：主项目 **AGPLv3**、本仓 **MIT** ⇒ **只可借鉴思想与文档结构，不可复制其代码**（否则触发 copyleft）。本仓既有的「不引入其代码或依赖」口径继续成立。
+- **未核实**：其自报评测数字、`Agent Plugins 1.0` 与本机 DSH 的兼容性、`examples/dsh-memory-plugin` 在 **0.1.5-rc.1** 上是否可直接装载——**均未在本机实测**。

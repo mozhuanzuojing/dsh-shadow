@@ -170,14 +170,14 @@ export function apply(ctx, rawConfig = {}) {
                         judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
                         claim: { type: "boolean", description: "返回 claim→Evidence→Judgment：对每条匹配记忆的断言验证证据，由 Observer 决定结论/置信/理由（Evidence 是输入，Observer 下判断）。默认关。" },
                         taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + .shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
-                        verifyEvidence: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。（废止旧名 verify，见 ADR-0050）" },
+                        verifyEvidence: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。" },
                         identity: { type: "boolean", description: "返回 Identity 主体锚（id/价值观/原则/反模式/决策风格/边界/Observer Lens），长期实体。默认关。推进 Identity Timeline 用 mode:identity-advance（≠本旗标；ADR-0050）。" },
                         context: { type: "boolean", description: "返回 ObserverContext（observerId/identityRef/intent/asOf/lens/realityAnchor）——一次观察事件。默认关。" },
                         goal: { type: "string", description: "观察意图 goal（我想改变什么），与 topic 合成 Intent。默认按模式推断。" },
                         realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
                         lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
                         state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
-                        mode: { type: "string", description: "模式开关（不传则按布尔参数分派）。常用：episode / decision / task / context / recovery / query / query-log / shadow-report / shadow-manifest / index / knowledge / reflection / identity-advance / temporal / offline / validate / evidence / timeline / verify。长程与边界族（agency-* / delegation-* / recall-* / adapt-* / horizon-* / federation* / real-evidence / real-refer / model-* / world-* / simulate / candidate / execute / feedback / plan / distortion / stability / observer-* / workspace-* / continuity-index）的语义、入参与返回见 dsh-shadow 仓库的 CONTEXT.md「mode 参考」。" },
+                        mode: { type: "string", description: "模式开关（不传则按布尔参数分派）。常用：episode / decision / task / context / recovery / query / query-log / shadow-report / shadow-manifest / index / knowledge / reflection / identity-advance / temporal / offline / validate / evidence / timeline / verification。长程与边界族（agency-* / delegation-* / recall-* / adapt-* / horizon-* / federation* / real-evidence / real-refer / model-* / world-* / simulate / candidate / execute / feedback / plan / distortion / stability / observer-* / workspace-* / continuity-index）的语义、入参与返回见 dsh-shadow 仓库的 CONTEXT.md「mode 参考」。" },
                         from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
                         to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
                         minCount: { type: "number", description: "Identity 重复性闸门：同向轨迹最小次数（默认 5）。与 mode:identity-advance 配合。" },
@@ -202,7 +202,7 @@ export function apply(ctx, rawConfig = {}) {
                         valConfidence: { type: "number", description: "Federation 解释确信（validationConfidence），与 mode:federation-perspective 配合。" },
                         observation: { type: "string", description: "Reality Evidence 弱事实（某事件在某时间被观察到），与 mode:real-evidence 配合。" },
                         realityId: { type: "string", description: "Reality Evidence id（与 mode:real-refer / mode:stability 配合）。" },
-                        realityEvidenceRef: { type: "string", description: "Observer Difference 的 reality evidence 引用（字段名历史遗留；注册入口是 mode:real-evidence，与 mode:federation-diff 配合）。" },
+                        realEvidenceRef: { type: "string", description: "Observer Difference 的 reality evidence 引用（字段名历史遗留；注册入口是 mode:real-evidence，与 mode:federation-diff 配合）。" },
                         lensA: { type: "string", description: "Observer A 的 lens（与 mode:federation-diff 配合）。" },
                         lensB: { type: "string", description: "Observer B 的 lens（与 mode:federation-diff 配合）。" },
                         obsClaimB: { type: "string", description: "Observer B 的 observationClaim（与 mode:federation-diff 配合）。" },
@@ -278,8 +278,8 @@ export function apply(ctx, rawConfig = {}) {
                         continuityRef: { type: "string", description: "ContinuityRecord continuityRef（与 mode:observer-lineage 配合）。" },
                         kind: { type: "string", description: "WorkspaceRecord kind（observation/representation/simulation/planning/action/interaction；与 mode:workspace-record 配合）。" },
                         content: { type: "string", description: "WorkspaceRecord content（world 层项目内容；与 mode:workspace-record 配合）。" },
-                        evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verify 配合）。" },
-                        runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verify 配合）。" },
+                        evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verification 配合）。" },
+                        runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verification 配合）。" },
                     },
                 },
                 output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
@@ -328,7 +328,7 @@ export function apply(ctx, rawConfig = {}) {
             systemPrompt.context({
                 name: "dsh-shadow",
                 order: 40,
-                text: () => "你的思维、上下文与决策沉淀在 shadow 记忆树中。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery，勿自造 mode:recall）。需要精细穿透时再用 `read_shadow`（mode:episode/decision/task/context/recovery）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verify）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
+                text: () => "你的思维、上下文与决策沉淀在 shadow 记忆树中。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery）。需要精细穿透时再用 `read_shadow`（mode:episode/decision/task/context/recovery）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verification）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
                     "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
             });
         });

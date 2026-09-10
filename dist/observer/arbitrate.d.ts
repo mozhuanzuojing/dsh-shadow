@@ -1,4 +1,4 @@
-import type { EvidenceRef, EvidenceResult } from "../core/types.js";
+import type { GatewayEvidenceRef, EvidenceResult } from "../core/types.js";
 export declare const evidenceOf: (text: string, mm: any, meta: any, stale: boolean) => {
     kinds: string;
     date: any;
@@ -32,6 +32,6 @@ export declare const lineageOf: (list: {
     time: string;
     decision: string;
 }[];
-export declare const conflictOf: (fs: any, ws: string, text: string, verifyEvidence: (ref: EvidenceRef, ctx: any) => Promise<EvidenceResult>) => Promise<{
+export declare const conflictOf: (fs: any, ws: string, text: string, verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>) => Promise<{
     missing: string[];
 }>;

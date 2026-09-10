@@ -25,7 +25,7 @@
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
 import type { ShadowConfig } from "./core/types.js";
-export type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
+export type { EvidenceMatch, EvidenceProvider, GatewayEvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
 export { recordObservationTrace, renderObservationTrace } from "./observer/trace.js";
 export { reflectOf, renderReflection } from "./reflection/engine.js";

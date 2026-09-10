@@ -1,6 +1,6 @@
 # ADR-0026 · Observer Counterfactual Simulation Boundary Protocol（v0.32 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.32 实现） ｜ 版本：v0.32.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.32.0） ｜ 版本：v0.32.0
 > 前置：ADR-0025（v0.31.1 World Representation Integrity Lock）。定位：**从"认识现实"进入"探索可能现实"的分水岭** —— Observer Counterfactual Simulation。
 > 不叫 World Simulation Engine：Simulation 不是创造另一个 Reality，而是 **在当前 Representation 基础上生成一个受约束的可能状态空间**。
 

@@ -40,7 +40,7 @@ export const createIndexEngine = (config: any, evidenceProvider: EvidenceProvide
     return {
       async generateCandidates(query, ctx) {
         // 先探测 zg 是否可用（verify 返回 unavailable 时不冒充候选）；否则回退 → 调用方 fs 扫描。
-        const ref = { path: "", query, kind: "query" as const }; // EvidenceRef(core types): 语义查询，path 留空
+        const ref = { path: "", query, kind: "query" as const }; // GatewayEvidenceRef(core types): 语义查询，path 留空
         const r = await evidenceProvider.verify(ref, ctx);
         if (r.status === "unavailable") return { provider: "zg", unavailable: true, refs: [] };
         const matches = await evidenceProvider.discover(ref, ctx);

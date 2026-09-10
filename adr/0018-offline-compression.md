@@ -1,6 +1,6 @@
 # ADR-0018 · Observer Offline Compression Protocol（v0.27 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.27 实现） ｜ 版本：v0.27.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.27.0） ｜ 版本：v0.27.0
 > 前置：ADR-0017.1（v0.26 Temporal Kernel）。定位：v0.27 是第一次让 Observer 在**没有外界输入**的情况下观察自己——Offline Compression Cycle。
 > 关键：Dream **第一次允许系统提出"未发生但可能存在的结构"**，所以边界必须先锁死（否则退化成"高级总结器"/RAG）。
 

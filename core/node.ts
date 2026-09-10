@@ -49,8 +49,9 @@ export const deriveShadowNodes = (parsed: ParsedMemory[]): ShadowNode[] => {
     if (!gate.allowed) continue;
     const id = `sn-${p.date}-${p.time || "000000"}-${slug(entry)}`;
     const content = [...(p.decisions || []).slice(0, 5), ...(p.actions || []).slice(0, 3), ...(p.thinkLines || []).slice(0, 3)].map((x) => scrubUnsafe(String(x || "")).slice(0, 80));
-    // evidence 优先取 lineage.evidence 的 locator（v1.8.0），无 lineage 回退 materials（兼容旧 Atom/合成）。
-    const evidenceSrc = p.lineage?.evidence?.length ? p.lineage.evidence.map((e) => e.locator) : (p.materials || []);
+    // evidence 只取 lineage.evidence 的 locator（v1.8.0 Evidence Lineage）。
+    // v1.15.5 起不再回退 materials——那个回退只服务「无 lineage 的旧 Atom / 合成构造」，已不再支持。
+    const evidenceSrc = p.lineage.evidence.map((e) => e.locator);
     const evidence = evidenceSrc.slice(0, 6).map((x) => scrubUnsafe(String(x || "")).slice(0, 80));
     const relations: ShadowRel[] = [];
     for (const ev of evidence) relations.push({ type: "references", target: ev, source: "evidence" });

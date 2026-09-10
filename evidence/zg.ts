@@ -1,6 +1,6 @@
 // dsh-shadow —— evidence/zg.ts：ZgEvidenceProvider（内容/semantic/exact，CLI spawn zg --rg）。从 index.ts 迁出。
 // zg 是检索层（discover/verify），Arbitration 留在 Shadow Core。zg 未装 → explicit unavailable，绝不静默 fallback。
-import type { EvidenceMatch, EvidenceProvider, EvidenceRef, EvidenceResult } from "../core/types.js";
+import type { EvidenceMatch, EvidenceProvider, GatewayEvidenceRef, EvidenceResult } from "../core/types.js";
 
 export const runZg = async (args: string[], ctx: any, timeoutMs = 8000): Promise<any> => {
   try {
@@ -22,7 +22,7 @@ export const runZg = async (args: string[], ctx: any, timeoutMs = 8000): Promise
   }
 };
 
-export const parseZgMatches = (stdout: string, ref: EvidenceRef): EvidenceMatch[] => {
+export const parseZgMatches = (stdout: string, ref: GatewayEvidenceRef): EvidenceMatch[] => {
   const out: EvidenceMatch[] = [];
   for (const line of String(stdout || "").split("\n")) {
     if (!line.trim()) continue;
@@ -35,7 +35,7 @@ export const parseZgMatches = (stdout: string, ref: EvidenceRef): EvidenceMatch[
   return out;
 };
 
-export const zgVerify = async (ref: EvidenceRef, ctx: any): Promise<EvidenceResult> => {
+export const zgVerify = async (ref: GatewayEvidenceRef, ctx: any): Promise<EvidenceResult> => {
   const res = await runZg(["query", "--rg", "-n", "-F", ref.query || ref.path, "-g", "**"], ctx);
   const base = { source: "zg", provenance: { provider: "zg", at: new Date().toISOString() } };
   if (res.unavailable) return { ...base, status: "unavailable", matches: [], confidence: 0, freshness: "stale" };
@@ -45,6 +45,6 @@ export const zgVerify = async (ref: EvidenceRef, ctx: any): Promise<EvidenceResu
 };
 
 export const zgEvidenceProvider: EvidenceProvider = {
-  async discover(ref: EvidenceRef, ctx: any) { const r = await zgVerify(ref, ctx); return r.status === "verified" ? r.matches : []; },
-  async verify(ref: EvidenceRef, ctx: any) { return zgVerify(ref, ctx); },
+  async discover(ref: GatewayEvidenceRef, ctx: any) { const r = await zgVerify(ref, ctx); return r.status === "verified" ? r.matches : []; },
+  async verify(ref: GatewayEvidenceRef, ctx: any) { return zgVerify(ref, ctx); },
 };

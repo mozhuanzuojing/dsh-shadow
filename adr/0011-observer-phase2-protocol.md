@@ -1,6 +1,6 @@
 # ADR-0011 · Observer Kernel Phase II 协议（Observation Trace / Reflection / Identity Evolution / Dream）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.23 实现） ｜ 版本：v0.23 起
+> 时间：2026-09-07 ｜ 状态：已实现（v0.23.0） ｜ 版本：v0.23 起
 > 前置：ADR-0010（v0.22 Judgment）。定位：dsh-shadow 是 **Artificial Observer Projection Engine**，不是 memory plugin。
 > 关键：**Reflection 不能把 dsh-shadow 拉回"AI 自动总结过去"的普通 RAG**。Reflection 不是总结过去，而是 Observer 在经历之后对"自己的观察路径"进行压缩。
 

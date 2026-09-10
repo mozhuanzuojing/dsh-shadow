@@ -1,6 +1,6 @@
 # ADR-0032 · Observer Controlled Adaptation Boundary Protocol（v0.38 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.38 实现） ｜ 版本：v0.38.0（前置）
+> 时间：2026-09-07 ｜ 状态：已实现（v0.38.0） ｜ 版本：v0.38.0（前置）
 > 前置：ADR-0031.1（v0.37.1 Recall Integrity Lock）。定位：**Controlled Adaptation Boundary**——**第一次允许 `Experience → Change`**（过去经验改变未来行为方式），是从"保持连续"进入"允许变化"的分界线。
 > 分界：此前 Planning 比较路径、Action 执行授权、Recall 恢复过去；**v0.38 是第一个允许"基于现实反馈调整行为"的层**。真正风险：`Experience → Adaptation → Behavior change →『我已经变了』`——变成自我优化 Agent。
 

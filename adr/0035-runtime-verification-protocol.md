@@ -1,6 +1,6 @@
 # ADR-0035 · Observer Runtime Verification Protocol（第二阶段前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待阶段二验证实现） ｜ 版本：阶段二（Runtime Verification），不是 v0.40
+> 时间：2026-09-07 ｜ 状态：已实现（v1.0.2） ｜ 版本：阶段二（Runtime Verification），不是 v0.40
 > 前置：ADR-0034（v1.0.0-alpha Observer Runtime Closure）。定位：**Observer Runtime Validation Phase**——不是 Capability Expansion，而是**验证 231 条宪法（Constitution Set）在真实运行压力下是否保持成立**。
 > 分界：第一阶段从"构建能力"转为"证明能力不会越界"；第二阶段从"封存边界"进入"**验证边界在运行压力下不漂移**"。目标不是成功率，而是 `Failure≠Ignore / Success≠Truth` 是否被正确建模。
 

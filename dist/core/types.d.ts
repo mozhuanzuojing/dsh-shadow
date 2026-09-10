@@ -94,7 +94,7 @@ export interface ShadowConfig {
     /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */
     evidenceProviders?: Record<string, EvidenceProvider>;
 }
-export interface EvidenceRef {
+export interface GatewayEvidenceRef {
     path: string;
     query?: string;
     kind?: "path" | "symbol" | "query";
@@ -123,9 +123,9 @@ export interface EvidenceResult {
 }
 export interface EvidenceProvider {
     /** 找证据：可能相关的候选。 */
-    discover(request: EvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
+    discover(request: GatewayEvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
     /** 验证证据：给出 EvidenceResult。 */
-    verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
+    verify(request: GatewayEvidenceRef, ctx: any): Promise<EvidenceResult>;
 }
 /** 兼容 DSH Agent / Session 的最小形状（只读 id 与 header.cwd）。 */
 export interface AgentLike {

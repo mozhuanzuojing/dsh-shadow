@@ -42,7 +42,7 @@ export async function runFederation(deps, args, ctx) {
     if (mode === "federation-diff") {
         const pa = perspectiveOf({ observerId: String(args?.sourceObserverId || "A"), observationClaim: String(args?.obsClaim || "claim-A"), lens: args?.lensA, visible: args?.visibleA || [], hidden: args?.hiddenA || [] });
         const pb = perspectiveOf({ observerId: String(args?.targetObserverId || "B"), observationClaim: String(args?.obsClaimB || "claim-B"), lens: args?.lensB, visible: args?.visibleB || [], hidden: args?.hiddenB || [] });
-        const d = differenceOf(pa, pb, String(args?.realityEvidenceRef || ""));
+        const d = differenceOf(pa, pb, String(args?.realEvidenceRef || ""));
         return scrubFinal(RECALL_PREFIX + renderDifference(d) + flushWarn);
     }
     // stability

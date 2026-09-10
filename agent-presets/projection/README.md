@@ -94,6 +94,50 @@ over the other's job:
 The card format and the `resource` NodeType are plugin-side (ADR-0051, v1.14.0); this preset
 only steers how the agent uses them.
 
+### Agent Teams first, subagents last (v1.15.4)
+
+The persona's dispatch discipline is **team-first**: decide whether to delegate at all, and when
+it does delegate, prefer a named long-lived teammate over opening a fresh one-shot subagent every
+time. The stated reason is reuse, not magic: a new subagent pays the system prompt + tool-schema
+prefix again, while an existing teammate keeps a reusable prefix and only receives the new message.
+`subagent` / `subagent_fork` remain, but only for work that is genuinely one-shot with no follow-up.
+
+What this preset adds in the composition, and what it requires:
+
+| Piece | Plane | Row |
+|---|---|---|
+| Team domain service `ctx.agentTeams` | **host** (profile `cordis.patch.yml`) | `@deepseek-ai/dsh-experimental-agent-team` |
+| Nine model-facing Team tools | **preset** (this file) | `@deepseek-ai/dsh-experimental-tool-agent-team` |
+
+The nine tools are `spawn_teammate`, `send_message`, `list_agents`, `wait_agent`,
+`interrupt_agent`, `team_task_create`, `team_task_list`, `team_task_get`, `team_task_update`
+(`freshProvider: spawn` / `forkProvider: fork` mirror the preset's existing subagent providers).
+
+**Prerequisite, and it fails silently.** The Team package injects `agentTeams`, so with no host row
+the row never activates — but `standingKeyFor` still reports a successful mount, and the nine tools
+simply never appear. That contradicts this repository's ADR-0049「缺件不静默」: the Teams wiring has
+**no** visible degradation path. Install the host row (durable session storage is already in the
+base profile) before expecting the tools.
+
+**Name collision (deliberate, documented upstream).** `send_message`, `list_agents` and
+`interrupt_agent` are also the legacy continuable-subagent controls from
+`@deepseek-ai/dsh-tool-subagent-control` (+ its `/list-agents` entry), which this preset still
+mounts. The Team registrations are scoped to Team member Agents and **shadow the globals for
+them**; non-Team subagents keep the legacy catalog. Consequence: the Lead steers *teammates*, and
+its plain `subagent` / `subagent_fork` children are no longer reachable through `send_message`.
+Upstream says a composition wanting both "must disable the legacy definitions"; this preset keeps
+them on purpose so non-Team children retain their controls.
+
+**Mount only once per process.** Mounting `tool-agent-team` a second time in the same process
+fails with `prompt section "team:policy" is already registered in this scope`. The package
+(`dsh-experimental-tool-agent-team/lib/index.js`) dedupes with an **instance-level**
+`installed = new Map()` (line 531) while registering into the **member Agent's own scope**
+(`const scoped = agent.ctx`, line 232 → `scoped.systemPrompt.section({ name: "team:policy" })`,
+line 238). So a second mount sees an empty Map and re-registers the same section name on the same
+live Agent. Consequences: two presets both mounting this row collide on the second, and a
+same-process remount (HMR / loader reload) carries the same risk. A cold start mounts once and is
+unaffected.
+
 ### Persona row key (v1.14.1 fix)
 
 The `persona` row must use the **current** `@deepseek-ai/dsh-persona` config keys —

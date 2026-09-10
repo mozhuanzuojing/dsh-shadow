@@ -1,6 +1,6 @@
 # ADR-0036 · Observer Continuity Shadow Protocol（Global/Workspace 分层，封存后补全）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待实现） ｜ 版本：封存后补全（非能力层）
+> 时间：2026-09-07 ｜ 状态：已实现（v1.0.1） ｜ 版本：封存后补全（非能力层）
 > 前置：ADR-0034（v1.0.0-alpha Observer Runtime Closure）。定位：**给 global shadow 正确定位**——它不是"全局项目记忆"，而是 **Observer Continuity Shadow（observer 层）**；与 **Workspace Shadow（World 层）** 严格分层、不可混合。
 > 背景：v1.0-alpha 的 `Observer Continuity` 缺了**跨 workspace 的连续载体**。若无 global shadow：`新项目→新 workspace shadow→新上下文` → Observer 变成 `Project A/B/C Observer`，连续性断裂（`Memory isolated → Continuity broken`）。这正是 v0.37 Recall + v0.39 Long Horizon 最自然的落点。
 

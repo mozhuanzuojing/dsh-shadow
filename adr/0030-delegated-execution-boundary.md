@@ -1,6 +1,6 @@
 # ADR-0030 · Observer Delegated Execution Boundary Protocol（v0.36 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.36 实现） ｜ 版本：v0.36.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.36.0） ｜ 版本：v0.36.0
 > 前置：ADR-0029.1（v0.35.1 Agency Integrity Lock）。定位：**Observer Delegated Execution Boundary**——不是让系统"自主"，而是定义"外部权威把什么能力委派给 Observer，Observer 在授权下长期执行、约束下有限适应"。
 > 分界：v0.20–v0.35.1 解决了"一个 Observer 如何拥有能力，但不把能力误认为自身目的"；**v0.36 开始面对"外部权威委派 → 长期执行 → 约束下适应"这条更易慢性自主化的线**。
 > 命名说明：用户明确"不要直接叫 Delegated Autonomy（'Autonomy' 本身就是风险入口）"，更准确是 **Delegated Execution with Bounded Adaptation**；下文核心对象名沿用其提议术语（如 AutonomyBoundaryEvent），但语义一律是"授权边界"，不是"自主性"。

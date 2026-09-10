@@ -1,6 +1,6 @@
 # ADR-0027 · Observer Action Boundary Protocol（v0.33 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.33 实现） ｜ 版本：v0.33.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.33.0） ｜ 版本：v0.33.0
 > 前置：ADR-0026（v0.32 Counterfactual Simulation）。定位：**把系统性质从"我如何理解世界"转变为"我如何影响世界"**——但**Action Boundary Kernel**（不叫 Action Engine）。
 > 核心思想：**Action 不是 Simulation 的执行结果，而是一个经过约束、授权、反馈闭环的现实交互提议。**
 

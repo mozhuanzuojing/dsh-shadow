@@ -69,7 +69,7 @@ const run = async (change: any) => {
   const text = await run({ operation: "create", ref: { id: "g1", revision: 1 }, goal: { objective: "把 P99 降下来" } });
   assert.ok(text.includes("〔create〕"), `应带 〔create〕 标签，实际：\n${text.slice(0, 400)}`);
   assert.ok(text.includes("把 P99 降下来"), `应带上 goal objective，实际：\n${text.slice(0, 400)}`);
-  assert.ok(!text.includes("〔decision〕"), "goal 事件不应再退化成 〔decision〕");
+  assert.ok(!text.includes("〔decision〕") && text.includes("〔create〕"), "goal 事件不应退化成旧 〔decision〕 标记（应带 〔create〕）");
   console.log("✔ ① goal/changed(create) → 落盘记忆带 〔create〕 + objective（不再是 〔decision〕）");
 }
 

@@ -41,9 +41,9 @@ export interface ShadowConfig {
   evidenceProviders?: Record<string, EvidenceProvider>;
 }
 
-// ── Evidence Gateway（v0.14）：Shadow 只问 verify(EvidenceRef)，不关心底层是 fs/zg/git/... ──
+// ── Evidence Gateway（v0.14）：Shadow 只问 verify(GatewayEvidenceRef)，不关心底层是 fs/zg/git/... ──
 // zg 是「眼睛/Evidence Sensor」：discover(找证据)/verify(验证证据)；Arbitration(它意味着什么)留在 Shadow Core。
-export interface EvidenceRef {
+export interface GatewayEvidenceRef {
   path: string;
   query?: string;                    // semantic/exact 查询串
   kind?: "path" | "symbol" | "query";
@@ -68,9 +68,9 @@ export interface EvidenceResult {
 }
 export interface EvidenceProvider {
   /** 找证据：可能相关的候选。 */
-  discover(request: EvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
+  discover(request: GatewayEvidenceRef, ctx: any): Promise<EvidenceMatch[]>;
   /** 验证证据：给出 EvidenceResult。 */
-  verify(request: EvidenceRef, ctx: any): Promise<EvidenceResult>;
+  verify(request: GatewayEvidenceRef, ctx: any): Promise<EvidenceResult>;
 }
 
 /** 兼容 DSH Agent / Session 的最小形状（只读 id 与 header.cwd）。 */

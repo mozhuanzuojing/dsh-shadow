@@ -1,6 +1,6 @@
 # ADR-0018.1 · Observer Sleep Boundary & Hypothesis Isolation Protocol（v0.27 边界，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.27 实现） ｜ 版本：v0.27.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.27.0） ｜ 版本：v0.27.0
 > 前置：ADR-0018（Offline Compression）。定位：v0.20–v0.26 解决「Observer 如何存在」；v0.27 开始解决「Observer 如何产生内部世界模型」——风险升级。
 > 防滑点：从「观察压缩」滑向「自我幻想生成」。本 ADR 加 4 条约束。
 

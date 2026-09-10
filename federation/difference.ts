@@ -2,7 +2,7 @@
 // 输出 difference / blindSpot / unresolvedQuestion，不是 winner（Federation 价值=暴露"为什么看到不同世界"）。
 import type { FederatedPerspective, ObserverDifference } from "./types.js";
 
-export const differenceOf = (pa: FederatedPerspective, pb: FederatedPerspective, realityEvidenceRef: string): ObserverDifference => {
+export const differenceOf = (pa: FederatedPerspective, pb: FederatedPerspective, realEvidenceRef: string): ObserverDifference => {
   const union = Array.from(new Set([...pa.projectionSnapshot.visible, ...pb.projectionSnapshot.visible]));
   const blindSpot = union.filter((x) => !pa.projectionSnapshot.visible.includes(x) || !pb.projectionSnapshot.visible.includes(x));
   const visDiffA = pb.projectionSnapshot.visible.filter((x) => !pa.projectionSnapshot.visible.includes(x));
@@ -11,7 +11,7 @@ export const differenceOf = (pa: FederatedPerspective, pb: FederatedPerspective,
   const hidDiffB = pa.projectionSnapshot.hidden.filter((x) => !pb.projectionSnapshot.hidden.includes(x));
   const unresolvedQuestion = blindSpot.slice(0, 4).map((x) => `为什么 ${x} 只被一方看到？`);
   return {
-    realityEvidenceRef,
+    realEvidenceRef,
     observerA: pa.observerId,
     observerB: pb.observerId,
     projectionDelta: {
@@ -26,7 +26,7 @@ export const differenceOf = (pa: FederatedPerspective, pb: FederatedPerspective,
 
 export const renderDifference = (d: ObserverDifference) => {
   const lines = ["[Observer Difference]"];
-  lines.push(`realityRef ${d.realityEvidenceRef} · ${d.observerA} vs ${d.observerB}`);
+  lines.push(`realityRef ${d.realEvidenceRef} · ${d.observerA} vs ${d.observerB}`);
   lines.push(`visibleDiff ${d.projectionDelta.visibleDifference.join("、") || "—"}`);
   lines.push(`hiddenDiff ${d.projectionDelta.hiddenDifference.join("、") || "—"}`);
   lines.push(`lensDiff ${d.projectionDelta.lensDifference.join("、") || "—"}`);

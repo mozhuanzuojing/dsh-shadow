@@ -47,6 +47,7 @@ const RETIRED_MODES: Record<string, string> = {
   recall: "recovery",
   identity: "identity-advance",
   reality: "real-evidence",
+  verify: "verification",
 };
 
 export function retiredApiMessage(args: any): string | null {
@@ -55,7 +56,7 @@ export function retiredApiMessage(args: any): string | null {
     return `已废止：mode:"${mode}" → 请用 mode:"${RETIRED_MODES[mode]}"（ADR-0050）`;
   }
   if (args && Object.prototype.hasOwnProperty.call(args, "verify")) {
-    return `已废止：verify → 请用 verifyEvidence:true（Evidence Gateway；mode:"verify" 仍为 VerificationRun）`;
+    return `已废止：verify → 请用 verifyEvidence:true（Evidence Gateway）；要跑 VerificationRun 用 mode:"verification"（ADR-0053）`;
   }
   if (args?.recall) {
     return `已废止：args.recall → 请用 mode:"recovery"（或工具 recall_shadow）。语义扩词是宿主 config.recall，勿塞进工具参数`;

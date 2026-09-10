@@ -1,6 +1,6 @@
 # ADR-0016 · v0.26 Dream Protocol（Observer Offline Compression Cycle，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.26 实现） ｜ 版本：v0.26.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.26.0） ｜ 版本：v0.26.0
 > 前置：ADR-0015（v0.25 Identity）。定位：**Observer 对自身时间轨迹的低频压缩观察**（对应人睡眠），不是生成器、不是总结。
 > 关键红线：**Dream ≠ Fact / ≠ Reflection / ≠ Identity / ≠ Knowledge**。Dream 天生是"从不完整信息中发现隐藏结构"，必须先锁边界，否则破坏前 6 个版本建立的约束。
 

@@ -3,7 +3,7 @@
 import { confidenceOf } from "../retrieval/rank.js";
 import { ageDaysOf } from "../core/util.js";
 import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
-import type { EvidenceRef, EvidenceResult } from "../core/types.js";
+import type { GatewayEvidenceRef, EvidenceResult } from "../core/types.js";
 
 export const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => {
   const body = String(text || "");
@@ -84,7 +84,7 @@ export const lineageOf = (list: { date: string; time: string; decision?: string 
   return chain.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 };
 
-export const conflictOf = async (fs: any, ws: string, text: string, verifyEvidence: (ref: EvidenceRef, ctx: any) => Promise<EvidenceResult>) => {
+export const conflictOf = async (fs: any, ws: string, text: string, verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>) => {
   const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 12);
   if (!paths.length) return { missing: [] as string[] };
   const missing: string[] = [];

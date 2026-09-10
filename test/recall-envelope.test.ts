@@ -1,4 +1,4 @@
-﻿// dsh-shadow —— v1.12.6/1.12.7 回归（mock host，驱动真实插件代码）：
+// dsh-shadow —— v1.12.6/1.12.7 回归（mock host，驱动真实插件代码）：
 //   ① mode 描述下沉：工具 schema 变短 + 指针；CONTEXT.md「mode 参考」表覆盖源码里的**全部 61 个** mode（棘轮）。
 //   ② 召回信封：截断自报家门（总数 = 命中 − 返回，冷却也算在内）+ 空命中给可执行下一步与近似候选（标「未验证」）。
 //   ③ deprioritize：只降权、不移除（被降权的树仍可搜到，只是排名靠后，且 debug 能解释）。
@@ -217,10 +217,12 @@ assert.ok(rKeepIdentity.includes("Identity") || rKeepIdentity.includes("Soul") |
 const rKeepVerifyEv = await hostRetire.read({ topic: "alpha", verifyEvidence: true, max_tokens: 4096 });
 assert.ok(!rKeepVerifyEv.includes("已废止"), `verifyEvidence 正名不得被拒：\n${rKeepVerifyEv}`);
 assert.ok(rKeepVerifyEv.includes("Evidence") || rKeepVerifyEv.includes("verified") || rKeepVerifyEv.includes("not_found") || rKeepVerifyEv.includes("unavailable") || rKeepVerifyEv.includes("证据"), `verifyEvidence 应走 Gateway：\n${rKeepVerifyEv}`);
-const rKeepModeVerify = await hostRetire.read({ mode: "verify", evidenceRefs: ["evt-1"] });
-assert.ok(!rKeepModeVerify.includes("已废止"), `mode:verify（VerificationRun）保留：不得废止\n${rKeepModeVerify}`);
+const rRetiredModeVerify = await hostRetire.read({ mode: "verify", evidenceRefs: ["evt-1"] });
+assert.ok(rRetiredModeVerify.includes("已废止") && rRetiredModeVerify.includes("verification"), `mode:verify 应显式拒绝并指向 verification：\n${rRetiredModeVerify}`);
+const rKeepModeVerification = await hostRetire.read({ mode: "verification", evidenceRefs: ["evt-1"] });
+assert.ok(!rKeepModeVerification.includes("已废止"), `mode:verification（VerificationRun）正名不得被拒\n${rKeepModeVerification}`);
 assert.ok(modeDesc.includes("recovery") && modeDesc.includes("identity-advance"), "schema 常用 mode 应含正名");
-console.log("✔ ④ ADR-0050 旧名显式拒绝 + 保留面仍可用（identity / verifyEvidence / mode:verify / recovery）");
+console.log("✔ ④ ADR-0050/0053 旧名显式拒绝 + 保留面仍可用（identity / verifyEvidence / verification / recovery）");
 
 // ─────────────────────────────────────────────
 // ⑤ intentOf：mode 串不得错挂「召回相关记忆」

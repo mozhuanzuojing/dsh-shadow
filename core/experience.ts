@@ -4,10 +4,13 @@ export const experienceOf = (text: string, mm: any) => {
   const m = (re: RegExp) => (body.match(re) || [])[1] || "";
   const clue = m(/^> 证据链：(.+)$/m);
   const evidence = (clue.match(/证据\(([^)]*)\)/) || [])[1] || "";
+  // v1.15.5 修正：决策读**现行** `> 决策：` 字段（此前读旧格式 `> 用户提示/决策：` 的提示头，
+  // 等于把任意用户消息当决策）。并剥离 `〔source〕` 标记——与 core/episode.ts 的 ① 同一口径。
+  const decision = m(/^> 决策：(.+)$/m).replace(/^〔[^\]]+〕/, "").trim();
   return {
     situation: (body.match(/^# (.+)$/m) || [])[1] || "",
     problem: m(/^> 背景\/材料：(.+)$/m),
-    decision: m(/^> 用户提示\/决策：(.+)$/m),
+    decision,
     implementation: evidence || m(/^> 背景\/材料：(.+)$/m),
     evidence,
     // Summary ≠ Lesson（ADR-0003 §3-1）：summary = 真正的「摘要」（LLM 一句话回顾）；

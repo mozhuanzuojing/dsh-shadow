@@ -1488,12 +1488,12 @@ const todayStr = todayLocal();
   const P35 = { name, inject, apply };
   P35.apply(ctx35, { summary: { enabled: false }, recall: {} });
   store35.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-exp.md",
-    "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 背景/材料：acshObject/projectSelect.js\n> 用户提示/决策：「对象页选择器直接选择」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
+    "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 背景/材料：acshObject/projectSelect.js\n> 决策：〔user〕对象页选择器直接选择\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
   store35.set("D:/ws/acshObject/projectSelect.js", "export {}"); // 证据存在 → 裁决 fresh
   const r35 = await toolRegistry.get("read_shadow").execute({ topic: "对象页", experience: true, max_tokens: 4096 }, { agent: agentsById.get("T35") });
   assert.ok(!String(r35).startsWith("ERR"), "Experience 查询不应报错");
   assert.ok(r35.includes("[Experience] acshObject/acshObjectPageSelect"), `应输出结构化 Experience：\n${r35}`);
-  assert.ok(r35.includes("决策 「对象页选择器直接选择」〔decision〕"), "应含决策");
+  assert.ok(r35.includes("决策 对象页选择器直接选择"), "应含决策（现行 > 决策： 字段，已剥离 〔source〕 标记）");
   assert.ok(r35.includes("证据 acshObject/projectSelect.js"), "应含证据");
   assert.ok(r35.includes("裁决 fresh"), "应含裁决(证据存在)");
   assert.ok(r35.includes("结果 evidence_live"), "应含结果");
@@ -1545,7 +1545,7 @@ const todayStr = todayLocal();
   const P37 = { name, inject, apply };
   P37.apply(ctx37, { summary: { enabled: false }, recall: {} });
   store37.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-c1.md",
-    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：「先确认调用方再判断兼容成本」〔decision〕\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
+    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 决策：〔user〕先确认调用方再判断兼容成本\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
   store37.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-c2.md",
     "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：兼容层已被移除。\n> 证据链：来源(动作·用户) · 日期(2026-09-06) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：兼容层已移除。\n");
   store37.set("D:/ws/xyz/a.js", "export {}");
@@ -1584,7 +1584,7 @@ const todayStr = todayLocal();
   }));
   // M1：匹配任务 + what_matters 命中 → relevant（显著加权）
   store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-flow.md",
-    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
+    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 决策：〔user〕决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
   store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090002-compat.md",
     "# 遗留/bundle兼容\n\n> 完整线索\n> 背景/材料：legacy/compat.js\n> 用户提示/决策：遗留 bundle 兼容层。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:01:00] [遗留/bundle兼容] 用户：遗留 bundle 兼容层。\n");
   store38.set("D:/ws/acshModel/entry.js", "export {}");
@@ -1612,7 +1612,7 @@ const todayStr = todayLocal();
   const P39 = { name, inject, apply };
   P39.apply(ctx39, { summary: { enabled: false }, recall: {} });
   store39.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-j.md",
-    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 用户提示/决策：先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
+    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 决策：〔user〕先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
   const r39 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", judgment: true, max_tokens: 4096 }, { agent: agentsById.get("T39") });
   assert.ok(!String(r39).startsWith("ERR"), "Judgment 不应报错");
   assert.ok(r39.includes("[Judgment]"), "应输出 Judgment 段");
@@ -1774,9 +1774,9 @@ const todayStr = todayLocal();
   const P45 = { name, inject, apply };
   P45.apply(ctx45, { summary: { enabled: false }, recall: {} });
   store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
-    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store45.set("D:/ws/arch/x.js", "export {}");
   store45.set("D:/ws/product/ux.js", "export {}");
   const r45a = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T45") });
@@ -1807,7 +1807,7 @@ const todayStr = todayLocal();
     decision_style: ["architecture_first", "verify_before_modify"],
   }));
   store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-rel.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-other.md",
     "# other/thing\n\n> 完整线索\n> 用户提示/决策：无关条目。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [other/thing] 用户：无关条目。\n");
   store46.set("D:/ws/arch/x.js", "export {}");
@@ -1873,9 +1873,9 @@ const obsTexts = (store: Map<string, string>) =>
   const P48 = { name, inject, apply };
   P48.apply(ctx48, { summary: { enabled: false }, recall: {} });
   store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
-    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 用户提示/决策：优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store48.set("D:/ws/arch/x.js", "export {}");
   store48.set("D:/ws/product/ux.js", "export {}");
   await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T48") });
@@ -1900,7 +1900,7 @@ const obsTexts = (store: Map<string, string>) =>
   const P49 = { name, inject, apply };
   P49.apply(ctx49, { summary: { enabled: false }, recall: {} });
   store49.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-past.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store49.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-future.md",
     "# 架构/新方案\n\n> 完整线索\n> 用户提示/决策：最终方案已确定。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/新方案] 用户：最终方案已确定。\n");
   store49.set("D:/ws/arch/x.js", "export {}");
@@ -1925,7 +1925,7 @@ const obsTexts = (store: Map<string, string>) =>
   const P50 = { name, inject, apply };
   P50.apply(ctx50, { summary: { enabled: false }, recall: {} });
   store50.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store50.set("D:/ws/arch/x.js", "export {}");
   const r50 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, state: { focus: "deep", goalStage: "exploration" } }, { agent: agentsById.get("T50") });
   const obs = obsTexts(store50);
@@ -2784,7 +2784,7 @@ const mkV = (store: Map<string, string>, extraConfig: any = {}) => { const fs = 
 // ─────────────────────────────────────────────
 {
   const { fs, store } = mkV(new Map());
-  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], lensA: "risk-first", targetObserverId: "B", visibleB: ["performance"], lensB: "product", obsClaim: "A看安全", obsClaimB: "B看性能", realityEvidenceRef: "re-1", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+  const r = await toolRegistry.get("read_shadow").execute({ mode: "federation-diff", sourceObserverId: "A", visibleA: ["security"], lensA: "risk-first", targetObserverId: "B", visibleB: ["performance"], lensB: "product", obsClaim: "A看安全", obsClaimB: "B看性能", realEvidenceRef: "re-1", max_tokens: 4096 }, { agent: agentsById.get("T-val") });
   assert.ok(String(r).includes("[Observer Difference]"), "应输出 Observer Difference");
   assert.ok(String(r).includes("visibleDiff performance"), "应含 difference");
   assert.ok(String(r).includes("blindSpot security、performance"), "应含 blindSpot（谁漏什么）");
@@ -4465,7 +4465,7 @@ const wsctx = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_s
 // v1.0.2 Observer Runtime Verification Foundation：ADR-0035/0035.1。验证只读只报；验证器自身不越界。
 // 237-240: Verification≠Optimization / Cannot Change Authority / Cannot Change Identity / DriftReport≠RealityClaim。
 // ─────────────────────────────────────────────
-const ver = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "verify", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
+const ver = async (fs: any, ws: string, opts: any) => toolRegistry.get("read_shadow").execute({ mode: "verification", ...opts, max_tokens: 4096 }, { agent: agentsById.get("T-val") });
 
 // 237：Verification Cannot Optimize Self（Verification→Adaptation 禁）。
 {

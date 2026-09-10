@@ -1,6 +1,6 @@
 # ADR-0024 · Observer World Representation Layer Protocol（v0.31 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.31 实现） ｜ 版本：v0.31.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.31.0） ｜ 版本：v0.31.0
 > 前置：ADR-0023.1（v0.30.1 Reality Integrity Lock，Invariant 111–115 已固化为运行时约束）。
 > 命名：**Observer World Representation Layer Protocol**（不叫 World Model Protocol——"World Model" 天然暗示 世界实体库/因果模型/知识图谱/预测引擎/环境模拟器，而我们构建的不是这些）。
 > 定位：`Reality Model → World Representation Layer → Observer 当前可维护的世界结构表示`。

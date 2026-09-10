@@ -15,8 +15,8 @@ export interface ParsedMemory {
     actions: string[];
     thinkLines: string[];
     body: string;
-    kind?: AtomKind;
-    lineage?: AtomLineage;
+    kind: AtomKind;
+    lineage: AtomLineage;
 }
 /** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
 export interface DecisionEvent {

@@ -54,7 +54,7 @@ export interface RealityEvidence {
 }
 export type PerspectiveState = "isolated" | "corroborated" | "validated";
 export interface ObserverDifference {
-    realityEvidenceRef: string;
+    realEvidenceRef: string;
     observerA: string;
     observerB: string;
     projectionDelta: {

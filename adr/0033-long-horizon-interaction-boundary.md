@@ -1,6 +1,6 @@
 # ADR-0033 · Observer Long Horizon Interaction Boundary Protocol（v0.39 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.39 实现） ｜ 版本：v0.39.0（前置）
+> 时间：2026-09-07 ｜ 状态：已实现（v0.39.0） ｜ 版本：v0.39.0（前置）
 > 前置：ADR-0032.1（v0.38.1 Adaptation Integrity Lock）。定位：**Long Horizon Interaction Boundary**——v0.39 第一次面对"时间累积后，系统如何证明连续性，而不是被历史塑造成另一个主体"。
 > 分界：此前所有层都是单周期（Observe→Represent→Simulate→Plan→Act→Feedback）；v0.39 第一次组合 `Day 1: Observe→Plan→Act` / `Day 30: Recall→Adapt→Plan→Act` / `Day 300: History→Adapt→Strategy→Future Actions`。
 > 命名：**不叫** Long Term Memory / Persistent Agent / Autonomous Evolution（这些命名本身引入错误方向）。

@@ -57,7 +57,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | 体检：召回质量与稳定性 | `read_shadow({ mode: "shadow-report" })` / `{ mode: "query-log" }` | Evidence Density / Node 稳定性 / 类型分布 |
 
 另有长程与边界族 mode（`agency-*`、`delegation-*`、`adapt-*`、`horizon-*`、`recall-*`、`federation*`、`distortion`、`real-evidence`/`real-refer`、`simulate`/`candidate`/`execute`、`validate`/`evidence`、`model-*`、`world-*`、`temporal`、`reflection`、`observer-*`、`workspace-*`、`continuity-index`、`identity-advance`、`recovery`），属 ADR 落地的按需查询，不是日常入口；**全部 61 个 mode 的语义、入参与返回见 `CONTEXT.md` 的「mode 参考」表**（工具 schema 里的 `mode` 描述只留常用 mode + 指针，避免每个请求都背上这份清单）。
-> **正名硬切（ADR-0050 / v1.13.0）**：废止 `mode:"recall"`→`recovery`、`mode:"identity"`（推进）→`identity-advance`、`args.verify`→`verifyEvidence`、`mode:"reality"`→`real-evidence`；旧名显式拒绝。
+> **命名口径（ADR-0050 / ADR-0053）**：mode 名与参数名以工具 schema + `CONTEXT.md` 为唯一现行口径；被取代的旧名本文件不登记（映射与理由见 ADR-0050 / ADR-0053），调用旧名会返回「已废止：X → 请用 Y」，不落空进默认召回。
 > **取舍（有意为之）**：schema 不再携带各族边界语（如「非 Autonomous Agent」「不提升 epistemic/authority」）。不读 `CONTEXT.md` 的模型会少这层提醒——换来的是每个请求少约 1.2k 字符常驻上下文。要恢复，把 `CONTEXT.md` 的 mode 参考表接回 `mode` 描述即可。
 
 ### 谁能调用（用户显式 vs 模型自动）
@@ -180,7 +180,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 - **证据链（provenance）**：每条记忆文件线索头自带 `> 证据链：来源(种类)·日期·证据(路径)`；`read_shadow` 召回每条紧跟一行可解释 provenance——`来源·日期·状态(active/stale)·命中次数·置信·证据路径`。置信度**从可验证信号派生**（命中次数、状态、新鲜度），非 LLM 玄数，不含虚构 commit/来源。让记忆从「我记得」升级为「我知道它为什么值得参考」。
 - **Experience 全构建 + Memory≠Evidence**：Experience 补 `Outcome`（证据验证派生 evidence_live/stale/superseded）与 `Reflection`（无修正/证据缺失/已迭代）；读侧每条召回做**证据裁决**——证据路径存在性 + 同入口更新记忆 → `fresh/stale/superseded`，暴露 `裁决/结果/反思`，superseded 降权、置信联动。这是 `Memory ≠ Evidence` 的落点（ADR-0002）：记忆带 provenance/判断，证据验证可插拔（当前=工作区 `fs`，后续=zvec-grep，Shadow 只消费不重造检索）。
-- **Evidence Gateway**：`EvidenceProvider { discover()/verify() }` 抽象 + `EvidenceResult{ status, source, matches, confidence, freshness, provenance }`。Shadow 只问 `verifyEvidence(EvidenceRef)`，底层是 **fs（默认）/ zg（CLI）/ git/IDE…** 可插拔。**zg 是检索层不是裁决层**（Discovery/Ranking/Verification 在 Provider，**Arbitration 留在 Shadow Core**）；**zg 未装 → `unavailable`，绝不静默 fallback 成 verified**。`read_shadow(topic,{verifyEvidence:true})` 暴露验证。
+- **Evidence Gateway**：`EvidenceProvider { discover()/verify() }` 抽象 + `EvidenceResult{ status, source, matches, confidence, freshness, provenance }`。Shadow 只问 `verifyEvidence(GatewayEvidenceRef)`，底层是 **fs（默认）/ zg（CLI）/ git/IDE…** 可插拔。**zg 是检索层不是裁决层**（Discovery/Ranking/Verification 在 Provider，**Arbitration 留在 Shadow Core**）；**zg 未装 → `unavailable`，绝不静默 fallback 成 verified**。`read_shadow(topic,{verifyEvidence:true})` 暴露验证。
 
 ### 灵魂投影系统
 
@@ -267,8 +267,8 @@ dsh --profile web --dump-config   # 确认无 Error:
 `dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`agent-presets/projection/`）：
 
 - 包内位置：`agent-presets/projection/`（`agent.cordis.yml` + `preset.yml` + `README.md`），是**生产包构成**，随包发布。
-- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9 立、**v1.13.2 补"编排者与专家不重做同一件事"**：① 先分活（不值得派的自己做、不许先做出成果再派）→ ② 准确激活专家 → ③ 提示词七要素（同一段原文只进一个专家的提示词，审查等要独立判断的场景例外）→ ④ **只验一错就要返工的那几条、其余按未复核处理并列出**（原「逐条复核」已废止）→ ⑤ 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）、**⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）与 **⑦ 创意与资源**（v1.14.1：先派资源侦察员——查资源库（`shadow_query` 带 `scope:["resource"]`，命中跳过外搜）→ 八类词 + 反向词（每类 ≤5、两轮无新资源即停）→ 评价 → 写卡进 `.shadow/resources/<名字>.md`；再派创意专家——只发散、不检索；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据）。
-- **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（三个文件），或在 DSH 部署脚本中引用包内该目录。
+- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9 立、**v1.13.2 补"编排者与专家不重做同一件事"**：① 先分活（不值得派的自己做、不许先做出成果再派）→ ② 准确激活专家 → ③ 提示词七要素（同一段原文只进一个专家的提示词，审查等要独立判断的场景例外）→ ④ **只验一错就要返工的那几条、其余按未复核处理并列出**（原「逐条复核」已废止）→ ⑤ 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）；**v1.15.4 起派活改为「team 优先」**：默认先判该不该派，该派时优先官方 Agent Teams——具名长期 teammate、**复用同一个成员**而不是反复新开一次性 subagent（省下的正是每个新 subagent 都要重付一遍的系统提示 + 工具 schema 前缀）、共享任务板用 revision 做 compare-and-set 协调；只有「一次性、无后续、不需来回」才用 `subagent`（要带上会话上下文就用 `subagent_fork`）；**⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）与 **⑦ 创意与资源**（v1.14.1：先派资源侦察员——查资源库（`shadow_query` 带 `scope:["resource"]`，命中跳过外搜）→ 八类词 + 反向词（每类 ≤5、两轮无新资源即停）→ 评价 → 写卡进 `.shadow/resources/<名字>.md`；再派创意专家——只发散、不检索；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据）。
+- **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（三个文件），或在 DSH 部署脚本中引用包内该目录。**本预设额外要求 host 组合提供 `ctx.agentTeams`**（profile 的 `cordis.patch.yml` 挂 `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.1`，包无 `dsh.bundle` 故 `dsh plugin add` 不会自动插行）；缺该行时预设仍报挂载成功、但 9 个 Team 工具**静默不出现**——这是 ADR-0049「缺件不静默」的一个已知例外。另：`tool-agent-team` **每个进程只能挂一次**（第二次报 `prompt section "team:policy" is already registered in this scope`），细节见预设 README。
 - 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过；改动后按 `copy → standingKeyFor(新 id) → remove` 做一次**全新挂载校验**（`projection` 已挂载时 `standingKeyFor` 返回既有世代，不会重读文件）。
 - 注意：预设引用 DSH 标准内置插件（`@deepseek-ai/dsh-*`）与 `{{model}}/{{cwd}}` 模板变量，不依赖用户机器专属配置；`dsh-shadow` 本身在 host 常开，预设只在 persona 里指引 agent 使用 `read_shadow`。
 
@@ -276,10 +276,12 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.3`（审查修复：能力探测在真机不生效）** —— 最新几版摘要：
+**当前版本：`v1.15.5`（旧协议约定全面删除 + 同名双义第二轮正名）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.5 | **旧协议约定全面删除（A/B/C/D 四项）**：**A** 删 `core/` 里 4 处旧数据格式兼容兜底（`> 用户提示/决策：`〔decision〕 的 legacy 决策解析、`decisions` 回退、`node.ts` 的 `materials` 回退、`kind`/`lineage` 可选性），`ParsedMemory.kind`/`lineage` 转必填；**B** 修正 **23 个 ADR** 陈旧的「协议（提案，待 vX 实现）」状态（对应实现目录与 CHANGELOG 条目均已存在，改为「已实现（vX）」）；**C** ADR-0053 再正名 3 项同名双义（`mode:"verify"`→`verification`、Gateway `EvidenceRef`→`GatewayEvidenceRef`、`realityEvidenceRef`→`realEvidenceRef`），并**判定保留** 2 项并写明理由（`config.recall` 含管线级旋钮，改名会与语义不符；`args.identity` 再改就要生造词）；**D** 当前文档不再登记废止名（README / CONTEXT / LIVE-VERIFY 清单 / 工具 schema / 注入提示），映射与理由只留 ADR。**顺带修一个真 bug**：`core/experience.ts` 的决策一直在读**旧** `> 用户提示/决策：` 提示头（等于把任意用户消息当决策）→ 改读现行 `> 决策：` 并剥离 `〔source〕`。persona 与插件行为其余不变 |
+| v1.15.4 | **投影模式预设「team 优先」**（只改 persona 与文档）：默认先判该不该派；该派时优先官方 **Agent Teams**（`spawn_teammate` / `send_message` / `team_task_*`），复用同一具名 teammate 而不是反复新开一次性 `subagent`，只在「一次性、无后续」时用 `subagent` / `subagent_fork`。**前置与已知边界**：Team 域服务 `ctx.agentTeams` 必须由 **host 组合**提供（`@deepseek-ai/dsh-experimental-agent-team`，实验包无稳定性承诺）；预设只挂工具包 `@deepseek-ai/dsh-experimental-tool-agent-team`。**缺 host 行时预设仍报 `standingKeyFor` 挂载成功，但 9 个 Team 工具静默不出现**——与 ADR-0049「缺件不静默」相悖，是本版已知缺口。另：`send_message` / `list_agents` / `interrupt_agent` 三个名字被 Team 版**作用域内遮蔽**，Lead 不再能用它们直接指挥非 Team 的 continuable 子代理 |
 | v1.15.3 | **审查修复（review 发现 → 父代理逐条复现 → 修根因）**：v1.15.0 的「硬依赖报 error」在真机**不可达** —— `ctx.inject(deps, cb)` 只在依赖**就绪**时回调，把检查写在回调里等于「缺了就不报」；已把 `tools`/`systemPrompt` 纳入首个 `turn-stopping` 的检查（并补 `ctx.get`），新增**真实 cordis 端到端测试**（原先 mock 无条件回调 ⇒ 断言①是假通过）。另修：`core/types.ts` 残留旧名 `session.cwd`、`clear` 不清缓存致新记忆带旧 `> 目标：`、`goalText` 的 `\|\| "decision"` 伪装兜底；补 `exec.name` 正向断言 |
 | v1.15.2 | **过期旧名删净（ADR-0050 口径）**：`collect.ts`/`writer-capture.ts` 里 `change.objective`/`change.action`/`change.phase`/`change.kind`/`change.change?.objective`/`exec.tool?.name`/`exec.toolName`/`exec.tool` 全部删除（宿主任何版本都不存在），`scope.ts` 删掉恒 undefined 的 `agent.session.cwd` 候选并修正过期注释。**删旧名的价值当场兑现**：暴露 5 处建在编造形状上的测试（4 处 goal 载荷 + 4 处 tools/result），已全部改用宿主真实形状，断言意图不变；代码层旧名 grep 0 残留，回归 23/23 |
 | v1.15.1 | **会话/agent 接口核对 → 根因修复**：宿主 `GoalChanged` 恒为 `{operation, ref, goal?}`（`0.1.0-rc.7` 起四版逐字相同 + 运行时 Inspect 一致），插件却读 `action`/`phase`/`kind` → `act` 恒回退 `"decision"`，**goal 操作语义永久丢失**；新增 `test/goal-operation.test.ts`（真实载荷形状 + 七种 operation 全覆盖）。同时**撤销**两条子代理误报：`systemPrompt.context()` 与 `section()` 是并存的两个不同用途方法（插件用对了）、`agent.session` 是公开契约（只是 Inspect 目录看不到） |

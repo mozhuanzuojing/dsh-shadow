@@ -1,6 +1,6 @@
 # ADR-0028 · Observer Adaptive Planning Boundary Protocol（v0.34 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.34 实现） ｜ 版本：v0.34.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.34.0） ｜ 版本：v0.34.0
 > 前置：ADR-0027.1（v0.33.1 Action Integrity Lock）。定位：**Observer Adaptive Planning**——v0.33 冻结了 Action(执行) 边界；v0.34 冻结 **Decision(为什么选择这个行动)** 边界。
 > 不叫 Goal System / Reward System / Autonomous Agent Planner（这些名字天然携带固定目标/优化方向/价值函数/自主驱动——当前架构还不应拥有）。
 > 真正危险：**系统开始形成自己的行动偏好后，是否会偷偷形成价值、目标和自我强化。**

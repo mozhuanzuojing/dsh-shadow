@@ -63,14 +63,14 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
 > 共 **61 个** mode。通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
-> **正名硬切（ADR-0050 / v1.13.0）**：废止 `mode:"recall"`→`recovery`；`mode:"identity"`（推进）→`identity-advance`（读锚仍用 `args.identity`）；`args.verify`→`verifyEvidence`（`mode:"verify"`=VerificationRun 不动）；`mode:"reality"`→`real-evidence`。旧名显式拒绝，不落空进默认召回。lineage 侧证据类型正名为 `AtomEvidenceRef`（Gateway 仍叫 `EvidenceRef`）。
+> **命名口径（ADR-0050 / ADR-0053）**：读侧 mode 名与参数名以本表 + 工具 schema 为唯一现行口径；被取代的旧名不在本文档登记（映射与理由见 ADR-0050 / ADR-0053），调用旧名会返回「已废止：X → 请用 Y」，不落空进默认召回。
 
 | 族（源码） | mode | 一句话语义 |
 |------------|------|-----------|
 | 核心读 `query/reads.ts` | `episode` / `decision` | Episode Lineage（按「项目/会话+时间间隔」串连续任务）/ Decision Lineage（goal 事件 + 用户拍板，按入口聚合） |
 | | `task` | Task Lifecycle（ADR-0039：title/trigger/objective/constraints/status/决策链/观测结果） |
 | | `context` | Context Recovery（ADR-0040：ContextReference `subject/value/source/status`，答「以前知道的还能不能用」） |
-| | `recovery` | Task Recovery Bundle（人类友好恢复包；`recall_shadow` 内部即此；**废止**旧名 `recall`） |
+| | `recovery` | Task Recovery Bundle（人类友好恢复包；`recall_shadow` 内部即此） |
 | | `query` | Shadow Projection（ShadowNode 跨类型查询，带 evidence；`shadow_query` 内部即此） |
 | | `query-log` | Shadow Query Observatory（查询观测汇总 + 重复查询的 Node 稳定性） |
 | | `shadow-report` | Shadow Fitness Report（Evidence Density / 类型分布 / 潜在缺失类型） |
@@ -95,11 +95,11 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Observer Continuity / Verify `query/contverify.ts` | `observer-config` / `observer-boundary` / `observer-context` / `observer-lineage` | 配置 / 边界 / 观察事件 / 血缘 |
 | | `workspace-record` / `workspace-context` / `continuity-index` | 工作区记录 / 上下文 / 连续性索引 |
 | | `recall-index` | RecallIndex（导航非内容） |
-| | `verify` | VerificationRun（只读只报；禁改 authority/identity） |
+| | `verification` | VerificationRun（只读只报；禁改 authority/identity） |
 
 ## 关联
 - **`resource` 是第 6 个 NodeType（ADR-0051，v1.14.0）**：卡片=source、节点=投影；无 `source` 的卡片不上投影；不新增 mode（仍 61）。
-- **API 正名硬切（ADR-0050，v1.13.0）**：同名双义硬删旧名；旧名返回「已废止：X → 请用 Y」；`AtomEvidenceRef` ≠ Gateway `EvidenceRef`。
+- **命名口径（ADR-0050，v1.13.0；ADR-0053，v1.15.5）**：同名双义硬切，不保留兼容别名；旧 mode 返回「已废止：X → 请用 Y」。现行类型名：lineage 侧 `AtomEvidenceRef`、Gateway 侧 `GatewayEvidenceRef`（两者不可混用）。
 - **缺件不静默（ADR-0049，v1.12.8）**：可选增强缺依赖时**只降级到确定性路径 + 必须可见**（`unavailable`/warn/debug 之一），**绝不**把缺件说成「已验证/已存在/已完成」，也不凭记忆里的流程继续。provider 名拼错 → `unavailable / provider_unknown`。
 - **召回信封（v1.12.6/1.12.7）**：`read_shadow(topic)` 结果末尾的 `> 未返回的命中：N 条（命中 M · 本次返回 K）` 是**披露**不是指令；`N = M − K`（预算 / `limit` / 冷却都算），空命中给「下一步 + 近似候选（标未验证）」。
 - **`recall.deprioritize`（v1.12.6，默认空）**：命中路径/入口**含**这些子串时打分 ×0.4——**只降权不移除**（仍可搜到），用来压 `references-agents/`、`_reports/` 这类通用命名抢排位。

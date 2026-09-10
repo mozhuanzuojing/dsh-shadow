@@ -122,6 +122,9 @@ const mkParsed = (n: number, phrase: string) => Array.from({ length: n }, (_, i)
   rel: `.shadow/2026-09-08/00000${i}-constraint.md`, date: "2026-09-08", time: "000000",
   entry: `config/policy-${i}.md`, project: "p", agent: "a", goal: "",
   decisions: [], decisionEvents: [], userMessages: [phrase], materials: [], actions: [], thinkLines: [], body: phrase,
+  // v1.15.5：ParsedMemory.kind / lineage 已是必填——合成构造也必须给全（不再有「可选=兼容合成」）。
+  kind: "experience",
+  lineage: { source: "synthetic", createdBy: "agent", evidence: [], createdAt: "2026-09-08 00:00:00" },
 }));
 const miss = missingTypesOf(mkParsed(3, "禁止直接 fallback 到默认值，必须显式校验"));
 assert.ok(miss.some((m) => m.type === "constraint" && m.count >= 3), "≥3 处约束型 → 应提议 constraint");

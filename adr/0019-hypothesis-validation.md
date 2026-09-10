@@ -1,6 +1,6 @@
 # ADR-0019 · Observer Hypothesis Validation Protocol（v0.28 前置协议，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.28 实现） ｜ 版本：v0.28.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.28.0） ｜ 版本：v0.28.0
 > 前置：ADR-0018.1（v0.27 Sleep Kernel）。定位：**Reality Feedback Loop for Artificial Observer**——外部现实对 Observer 内部模型的反向约束。
 > 这不是"验证答案"，而是：**一个观察者是否拥有允许自己被现实推翻的机制**。这决定 dsh-shadow 是 Memory Augmented Agent 还是 Artificial Observer Runtime。
 

@@ -12,7 +12,7 @@ const FLAG_GOAL = {
 const MODE_GOAL = {
     recovery: "恢复任务记忆包",
     "identity-advance": "推进身份时间线",
-    verify: "运行验证",
+    verification: "运行验证",
     episode: "展开连续任务",
     decision: "展开决策血缘",
     task: "展开任务生命周期",

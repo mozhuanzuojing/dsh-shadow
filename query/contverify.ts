@@ -26,7 +26,7 @@ const CONT_MODES = new Set([
   "observer-context",
   "workspace-context",
   "continuity-index",
-  "verify",
+  "verification",
 ]);
 
 /** Returns the rendered body for a continuity/verify mode, or undefined if not one of this family. */

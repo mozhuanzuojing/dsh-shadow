@@ -1,6 +1,6 @@
 # ADR-0017.1 · Observer Temporal Kernel Implementation Boundary（v0.26 实现边界，先于实现）
 
-> 时间：2026-09-07 ｜ 状态：协议（提案，待 v0.26 实现） ｜ 版本：v0.26.0
+> 时间：2026-09-07 ｜ 状态：已实现（v0.26.0） ｜ 版本：v0.26.0
 > 前置：ADR-0017（Temporal Continuity）。本 ADR 锁定 5 个实现约束，防 v0.27 Dream / v0.29 Multi Observer 出现结构债。
 > 定位：v0.26 是 **Observer Temporal Kernel**（时间坐标系），不是"Dream 输入准备"。这是 dsh-shadow 从 AI Memory System 跨到 **Artificial Observer Runtime** 的分水岭。
 

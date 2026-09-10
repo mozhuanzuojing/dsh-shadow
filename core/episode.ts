@@ -30,9 +30,10 @@ export interface ParsedMemory {
   actions: string[];    // 动作行（改/读 + 调用）
   thinkLines: string[]; // 非动作正文行（思维/结论，供"为什么"）
   body: string;         // 完整正文（含线索头），供标题/摘要兜底
-  // v1.8.0 Evidence Lineage：从可观察信号派生（无 LLM / event-sourced）。可选=兼容旧 Atom/合成构造。
-  kind?: AtomKind;                // memory 二级属性（experience/metadata/session/task/artifact）
-  lineage?: AtomLineage;          // 为什么存在/来自哪里（source≠evidence）
+  // v1.8.0 Evidence Lineage：从可观察信号派生（无 LLM / event-sourced）。
+  // parseMemory 恒产出二者；v1.15.5 起取消「可选」，不再有「无 lineage 的旧 Atom / 合成构造」。
+  kind: AtomKind;                 // memory 二级属性（experience/metadata/session/task/artifact）
+  lineage: AtomLineage;           // 为什么存在/来自哪里（source≠evidence）
 }
 
 /** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
@@ -133,7 +134,6 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
   };
   // ① `> 决策：`（〔source〕statement；...）—— 新决策事实（一等事件，v1.1.1）
   const decLine = fieldOf(body, "决策");
-  const hasDecBlock = decLine.trim().length > 0;
   for (const seg of decLine.split(/；|;/)) {
     const s0 = seg.trim(); if (!s0) continue;
     const src = (s0.match(/^〔([^\]]+)〕/) || [])[1] || "goal";
@@ -149,17 +149,9 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
     const reason = s0.replace(/^〔[^\]]+〕/, "").trim();
     if (reason && reason !== "未明确" && reason !== "无" && !reasonsBySource[src]) reasonsBySource[src] = reason;
   }
-  // ③ Legacy `> 用户提示/决策：`〔decision〕—— 仅当无 `> 决策：` 块时兼容旧数据；
-  //    否则会与①对同一决策重复计数（①是全量 statement，③是 buildClueHeader 截断到 48 字版）。
-  const userPrompt = fieldOf(body, "用户提示/决策");
-  if (!hasDecBlock) {
-    for (const seg of userPrompt.split(/；|;/)) {
-      if (/〔decision〕/.test(seg)) {
-        const d = stripPrompt(seg);
-        if (d) addDecision(d, "user");
-      }
-    }
-  }
+  // ③ 旧格式 `> 用户提示/决策：`〔decision〕的兼容解析已删除（v1.15.5「旧协议约定全面删除」）：
+  //    该行是 v1.1.1 之前 buildClueHeader 的截断产物（48 字版），与 ① 的 `> 决策：` 全量 statement 重复计数。
+  //    旧格式记忆文件不再被解析为决策；只有 ① `> 决策：` / ② `> 决策理由：` 与正文 `决定 ` 行是决策来源。
   // ④ 正文逐行：goal 事件（决定 …）+ 用户消息 + 动作行 + 思维行
   const userMessages: string[] = [];
   const actions: string[] = [];
@@ -275,8 +267,9 @@ export const deriveDecisions = (parsed: ParsedMemory[], opts: { topic?: string; 
   for (const p of parsed) {
     const el = needle ? (p.entry.toLowerCase().includes(needle) || (opts?.entry ? p.entry === opts.entry : true)) : true;
     if (needle && !el) continue;
-    // 优先用富化 decisionEvents（带 reason/source）；旧数据无 events 时回退到 decisions（reason 未知）。
-    const events: DecisionEvent[] = p.decisionEvents.length ? p.decisionEvents : p.decisions.map((d) => ({ statement: d, source: "", reason: "" }));
+    // decisionEvents 是唯一决策来源（①/②/正文 `决定 ` 行都经 addDecision 同时写入 decisions 与 decisionEvents）；
+    // v1.15.5 起不再回退旧 `decisions`——那个回退只对「无 events 的旧 Atom」有意义，而旧 Atom 已不再支持。
+    const events: DecisionEvent[] = p.decisionEvents;
     for (const ev of events) {
       const text = ev.statement;
       const at = `${p.date} ${fmt(p.time)}`;
