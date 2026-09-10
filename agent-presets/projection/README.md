@@ -68,6 +68,50 @@ not a full copy of global AGENTS (DSH already aggregates those into `~/.dsh/AGEN
 via `sync-rules`). Wording in the persona uses「shadow / 项目文档」for the global
 AGENTS「memory 存档」habit, so it stays executable in projection mode.
 
+From v1.14.1 the persona also carries **⑦ 创意与资源** (open-ended / creative work). The agent
+dispatches a **resource scout** first and a **creative expert** second, and neither may take
+over the other's job:
+
+- **Resource scout — material only.** Check the library first (`shadow_query` with
+  `scope: ["resource"]`; a hit skips external search), identify the kind of source needed
+  (tool / GitHub / paper / official docs / article / case / dataset), expand keywords
+  (core, synonyms, technical, implementation, problem, GitHub, paper, competitor terms plus
+  **reverse keywords** — "how to avoid this problem"), with a stop rule (≤5 per class; stop
+  after two rounds with no new material), then evaluate, star, and write the card to
+  `.shadow/resources/<name>.md`. It does not solve the problem and does not judge options.
+- **Two-layer card.** The stable layer (`source` / `type` / `authority` / `activity` / `risk` /
+  one-liner) stays valid across questions; the per-question projection is a separate
+  `## 投影 @ <question>` section (`相关性 / 新颖性 / 可用性 / 启发度 / 可复用性` + citation +
+  conclusion), so scores given for an old question never contaminate a new one.
+- **Two boundaries.** A card **must** carry `source`, otherwise it never enters cognitive
+  queries (collected ≠ sourced); and `inspiration` is scored **only when a candidate option
+  actually cites the card**, with a note on which option it changed.
+- **Creative expert — divergence only.** Several options plus counter-intuitive ones, each with
+  its assumptions and risks; it does not search, only reads the cards the scout produced.
+  Convergence stays with the orchestrator (or an independent judge) as a comparison matrix
+  with a rejection reason per option.
+
+The card format and the `resource` NodeType are plugin-side (ADR-0051, v1.14.0); this preset
+only steers how the agent uses them.
+
+### Persona row key (v1.14.1 fix)
+
+The `persona` row must use the **current** `@deepseek-ai/dsh-persona` config keys —
+`suffix` + `prefix`. The older `text:` key no longer exists in the deployed plugin
+(0.1.5-rc.1 validates `prefix` as required), so a composition still carrying `text:` fails to
+mount with `$.prefix missing required value` — and because the roster's `broken` field is only
+a shape check, such a preset still *looks* fine in the picker until a session tries to compose
+it. This preset carried `text:` for several versions and could not mount; v1.14.1 switched it to
+the shipped presets' shape (`suffix: Your working directory is {{cwd}}.` + `prefix: >-`).
+
+Check with a real composition, not a shape read — `copy` the preset to a fresh id and mount it:
+
+```js
+await agentPresets.copy('projection', 'projection-probe')
+await agentPresets.standingKeyFor('projection-probe')   // 真组装；失败会抛错
+await agentPresets.remove('projection-probe')
+```
+
 ## Boundaries (mirrors Observer Runtime)
 
 ```

@@ -3,6 +3,19 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.14.1] 投影模式预设固化 ⑦「创意与资源」（资源侦察员 → 创意专家）
+
+用户 2026-09-10 决定把设计稿（`_reports/2026-09-10-投影模式-创意专家与资源侦察员-设计稿.md` §7）的 ⑦ 固化进投影模式预设。**只改 persona 文本与文档，不动插件运行时**（`resource` 类型与资源卡格式是 v1.14.0/ADR-0051 的事，本版只教 agent 怎么用）。
+
+- **persona 增 ⑦**（`agent-presets/projection/agent.cordis.yml`）：创意类问题先派「资源侦察员」再派「创意专家」，不许互相顶替。侦察员只找素材——查资源库（`shadow_query` 带 `scope:["resource"]`，命中跳过外搜）→ 识别入口（工具/GitHub/论文/官方文档/文章/案例/数据集）→ 扩词（核心/同义/技术/实现/问题/GitHub/论文/竞品 + **反向词「怎么避免这个问题」**；每类 ≤5、连续两轮没有新资源就停）→ 发现 → 评价 → 标星 → 写进 `.shadow/resources/<名字>.md`；它不解题、不评方案。资源卡两层（固有层长期有效 / 投影层按问题各存一段，别让旧问题的分污染新问题）；**卡片必须写 `source`**，否则不进认知查询；**启发度要有引用证据**（某方案真用了才计分，并记下改变了哪个方案）。创意专家只发散（多方案 + 反直觉 + 每个方案的假设与风险），不检索；收敛由主 agent 或独立裁判做对比矩阵并写淘汰理由。
+- **② 增补**：专家枚举里补一句「创意类任务先派资源侦察员再派创意专家，见 ⑦」——保证 ② 的激活清单与 ⑦ 不脱节。
+- **同步面**：`preset.yml` 描述（补 ⑦）、预设 `README.md`（新增 ⑦ 小节：侦察员职责 / 两层卡 / 两条边界 / 创意专家只发散）、主 `README.md`「投影模式」节与版本表、`package.json` 1.14.0 → 1.14.1。
+- **顺带修掉一个「预设根本挂不上」的存量缺陷（根因已定位）**：做挂载校验时 `standingKeyFor('projection')` **失败**——`persona` 行用的是旧键 `text:`，而当前部署的 `@deepseek-ai/dsh-persona`（0.1.5-rc.1，`lib/index.js` 的 `Config = z.object({ prefix: z.string().required(), suffix: …, complete: …, includeRuntimeContext: … })`）已把 `text` 改名为必填的 `prefix`，于是报 `$.prefix missing required value`。**这不是本轮 ⑦ 引入的**：用改动前备份另建一个独立预设（`probe-a`）挂载，报同一个错；四个 shipped 预设（standard/ptc/minimal/cordis）全部用 `prefix:`。修法：persona 行改为 `suffix: Your working directory is {{cwd}}.` + `prefix: >-`（与 shipped 预设同构，正文一字未删）。修后 `standingKeyFor('projection')` 与全新世代探针均 **mounted ✅**。
+- **验证**：① 宽容 YAML 解析（忽略 `!!js`）通过，行数 270、`- id:` 仍 **16**；② persona 行 config 键 = `['suffix','prefix']`（旧键 `text:` 残留 0 处），`prefix` 实测 **2067** 字符 + `suffix` 32 字符（改动前整段 1476 字符，净增 ≈620，常驻成本已计入），⑦/资源侦察员/创意专家/启发度要有引用证据/必须写 source/`shadow_query` 带 `scope:["resource"]`/不许互相顶替 **七个关键词全中**，①–⑥ 六条全部仍在；③ 包内 ↔ 安装副本三文件 SHA256 一致；④ **全新世代挂载校验**（临时 Cordis 探针）：`copy('projection','projection-probe')` → `read` 13955 字符 → `standingKeyFor('projection-probe')` **mounted（真组装，非形状检查）** → `remove` → 探针无残留 → `standingKeyFor('projection')` mounted ✅。
+- **边界**：只改 persona 与文档；不改插件 mode/API/服务/隔离域、不引依赖、不动 `agent-presets/` 的其余文件。
+- **待实测**：人格是否真让模型「先侦察后发散」要在**真开投影会话**时才看得到——本会话跑 `cordis` 预设（agentPreset=cordis），投影 persona 不作用于它，记为待实测、不伪称已验。
+
+
 ## [v1.14.0] 新增第 6 个 NodeType `resource`：`.shadow/resources/` 资源卡 → 派生投影（ADR-0051）
 
 用户 2026-09-10 决定「给 dsh-shadow 加 `resource` 作为新 Node 类型」。落地时先做了**归类冻结**（ADR-0051）：资源卡是 **source**（tool/agent 写的普通文件），`resource` 节点是 **Projection**（派生、可重建）——两者分开，才不违反 Shadow Contract（ADR-0043）。**不新增 mode**（仍 61），**不引向量库**（ADR-0001），**不做 Store**。
