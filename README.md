@@ -276,10 +276,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.0`（兼容性口径落地：验证基线声明 `engines.dsh` + 宿主绑定能力探测）** —— 最新几版摘要：
+**当前版本：`v1.15.1`（接口核对后的根因修复：`goal/changed` 读错字段名，操作语义丢失）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.1 | **会话/agent 接口核对 → 根因修复**：宿主 `GoalChanged` 恒为 `{operation, ref, goal?}`（`0.1.0-rc.7` 起四版逐字相同 + 运行时 Inspect 一致），插件却读 `action`/`phase`/`kind` → `act` 恒回退 `"decision"`，**goal 操作语义永久丢失**；修为 `change.operation` 放首位（旧名留末位兜底），新增 `test/goal-operation.test.ts`（真实载荷形状 + 七种 operation 全覆盖）。同时**撤销**两条子代理误报：`systemPrompt.context()` 与 `section()` 是并存的两个不同用途方法（插件用对了）、`agent.session` 是公开契约（只是 Inspect 目录看不到） |
 | v1.15.0 | **兼容性口径落地**：`package.json` 加 `engines.dsh: ">=0.1.5-rc.1"`（**验证基线声明，非闸门**——宿主与 pnpm 都不读 `engines`，已对全量编译产物检索零命中核实）；真防线是新增的**宿主绑定能力探测**（硬依赖 `ctx.on`/`ctx.inject`/`fs`/`tools` 报 error，可选 `llm`/`agents`/`agentDefaultModel`/`systemPrompt` 报一条 warn；时机避开 `apply()`，改在 `inject` 回调与首个 `turn-stopping`）；README 新增「兼容性（验证基线）」节；**0.1.5-rc.1 以下未发现不兼容点**（六服务两事件自 `0.1.0-rc.7` 起即在），故**不写「不兼容」** |
 | v1.14.1 | 投影模式预设加 **⑦ 创意与资源**（设计稿 §7 固化）：创意类问题先派**资源侦察员**（查库 → 命中跳过外搜 → 八类词 + 反向词、每类 ≤5 两轮无新资源即停 → 评价 → 写卡进 `.shadow/resources/`；不解题不评方案）再派**创意专家**（只发散、不检索）；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据；② 的专家枚举同步补一句。只改 persona 与文档 |
 | v1.14.0 | 新增 `resource` NodeType（ADR-0051）：`.shadow/resources/<name>.md` 资源卡（固有层 + 按问题的投影段）→ 派生 `ShadowNode{type:"resource"}`，`shadow_query` 的 `scope` 可收 `resource`；**无 `source` 的卡片不上投影**（收进库 ≠ 有出处）；纯派生、无 LLM；不新增 mode、不引向量库、不做 Store |

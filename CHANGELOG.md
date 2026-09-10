@@ -3,6 +3,23 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.1] 会话/agent 接口核对后的根因修复：`goal/changed` 操作语义丢失（读错字段名）
+
+用户 2026-09-10 追加「检查 dsh-shadow 对 dsh 会话的接口」。派两个独立子代理（① 本机 0.1.5-rc.1 编译产物逐条对照；② GitHub `deepseek-ai/deepseek-harness` 官方源码 + 运行时 `cordis_inspect_query` 交叉验证），父代理逐条验收后裁决，本条记录修复。
+
+- **确认的根因**：宿主 `GoalChanged` 自 `0.1.0-rc.7` 起（`0.1.1-rc.2` / `0.1.2-rc.1` / `0.1.5-rc.1` 逐版 declaration **逐字相同**，且与运行时 Inspect 一致）形状恒为 `{ operation, ref, goal? }`；**从来没有** `action` / `phase` / `kind`（`phase` 只存在于 `change.goal.phase`）。插件 `core/collect.ts` 的 `goalText()` 只读后三者 → `act` 恒回退 `"decision"`，**goal 的操作语义（create/edit/pause/resume/complete/block/clear）永久丢失且不报错**。注：`change.objective` 同样不存在，但被 `change.goal?.objective` 兜住，目标文本没丢。
+- **性质：长期 bug，不是版本改名**：四个版本 declaration 逐字相同 ⇒ 不构成「0.1.5-rc.1 以下不兼容」，但它确实是「在 0.1.5-rc.1 上 goal 语义是坏的」—— 正是本次接口核对要抓的东西（也印证 v1.15.0 自陈的边界：当时只验了「名字在不在」，没验字段/语义）。
+- **修法（最小）**：`core/collect.ts` → `change.operation || change.action || change.phase || change.kind || "decision"`（宿主真字段放首位，旧名留末位兜底）。`writer-capture.ts` **无需改** —— 其 `change.objective || change.goal?.objective` 第二项已命中真字段（子代理建议连这里一起改，父代理复核后**驳回**）。
+- **回归锁**：新增 `test/goal-operation.test.ts`（3 组）：用**宿主真实载荷形状**驱动插件，断言 create 带 `〔create〕` + objective 且**不再出现** `〔decision〕`；clear（无 goal 字段）带 `〔clear〕`；七种 operation 全覆盖。
+- **父代理裁决（推翻/修正子代理的两条结论）**：
+  1. **撤销「`systemPrompt` 契约冲突」**：两个子代理一个说 `context(...)`、一个说 `section(...)`。实测 0.1.5-rc.1 二者**并存且用途不同** —— `section()` 插静态有序段（`layer.sections`），`context()` 插动态运行时上下文（`layer.contexts`），均为公开方法（0.1.2-rc.1 起即如此）。插件用 `context()` **正确，不是缺陷**。
+  2. **修正「`agent.session` 是未声明字段」**：子代理 B 定位到根因 —— 它在 TS 类型（`runtime-types.ts` 的 `declare module` 增强）与官方文档里**是公开契约**，只因契约生成器只索引顶层 `export` 声明而**不在机器可读目录（Inspect）里**，且宿主自身 71 处第一方使用（含 `tool-fs/src/session-cwd.ts` 注释直接指名该路径）。⇒ 属「公开但 Inspect 看不到」，非「未承诺」。
+- **记账未修（父代理裁决为非本轮返工面）**：① `fs.writeText` 只传 2 参（无 `expected` / `signal` / `sandboxPolicy`）—— 已核实组合**确挂 `fs-sandbox`**，但触发条件是「解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow`」，且写失败**有可见信号**（场景13 测的正是它，`read_shadow` 会暴露「落盘失败」），故非「静默」；② `core/scope.ts` 的 `agent.session.cwd` 是死分支（宿主只有 `header.cwd`）；③ `continuity/engine.ts` 自造 `FsTarget`，违反 dsh-fs 书面契约（key 只能来自 `resolve()`），本地/沙箱后端今天可用；④ 工具名四级兜底里 `exec.tool` / `toolName` / `tool` 在 `ToolExecution` 上不存在，末位 `exec.name` 命中。
+- **验证**：`tsc --noEmit` exit 0；`tsc` build exit 0；**全量回归 23/23 `ALL PASS ✅`**（21 原有 + `host-probe` + 新增 `goal-operation`）。
+- **边界**：只改 `core/collect.ts` 一处字段名 + 新增一个测试；不动 API / mode / 读侧语义；**已落盘的历史记忆文本不回填**（重算属单独决策，未做）。
+- **待实测（需重启 web profile）**：探测块与本次修复都在源码 + `dist`，真机确认需重启；本会话用的是重启前载入的 dist。
+
+
 ## [v1.15.0] 兼容性口径落地：验证基线声明（`engines.dsh`）+ 宿主绑定能力探测
 
 用户 2026-09-10 要求「检查 dsh-shadow 对 DSH 0.1.5-rc.1 的支持，而且仅支持该版本以上」。经三轮追问定下口径（下详），本轮落地。**只加声明与可见性，不改任何 mode / API / 读侧语义。**
