@@ -3,6 +3,91 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.30] 重点材料 hl_mem 对标（ADR-0073）—— 一条可借鉴项（D8）+ 逐条不吸收
+
+用户 2026-09-11 两条指令：① 「添加参考资料 `github.com/lohr13/hl_mem`」；② 「**把这个作为重点材料**」；
+经确认落地为「立 ADR + 记 BACKLOG + 补 CHANGELOG」。**纯文档：无代码 / 配置 / 行为改动。**
+
+### 0. 一句话结论
+
+**「重点材料」不等于「已吸收」。** 本版把 `lohr13/hl_mem`（HL-Mem）标定为**重点对标对象**，产出一份**对标结论**：
+**一条可借鉴项**（→ D8）、**一条硬冲突**（LLM 提取 vs 纯函数派生）、**六条明确不吸收 + 逐条理由**、
+**一处许可边界澄清**（Apache-2.0 ≠ OpenViking 的 AGPLv3，但**许可允许 ≠ 该引**）。
+
+### 1. 事实读数（一手 raw 文件，抓取 2026-09-11）
+
+| 项 | 读数 |
+|---|---|
+| 是什么 | `Evidence-aware local memory service`，面向 agent 的**证据驱动长期记忆系统**：Event →（LLM）Claim → SQLite → FTS+Dense 混合召回 → REST / MCP / Hermes |
+| 许可 | **Apache-2.0**（GitHub API + `pyproject.toml`；**其 `LICENSE` 原文未逐字读取**） |
+| 语言 / 运行 | Python **3.12+**（CI 只在 3.13） |
+| 版本 / 活跃 | 最新 release **v1.1.7**（2026-09-08）；创建 2026-07-19；最近推送 2026-09-08 |
+| 规模 / 维护 | **7** ⭐ / 0 fork；`main` **983** 提交；contributors API 仅 1 人（`lohr13`） |
+| 接口 | CLI / FastAPI REST / **MCP stdio**（7 工具）/ Hermes Provider |
+| 存储 | SQLite WAL + FTS5 + 向量 BLOB（`sqlite_scan` 默认，可换 `sqlite_vec`） |
+
+**规模判断带上**：7 ⭐ / 单人维护 ⇒ 价值在**工程纪律的密度**，不在生态位；本版措辞按此收紧。
+
+### 2. 一处自我纠正（先记，因为它决定了 D8 的写法）
+
+本版动笔前核实到自己**上一版文档改动里的过度表述**：我原写「本仓最值得对照的是它的 `capability-matrix.md`」
+—— 核实后是**本仓 README 已有「默认开关」表**（`README.md:113-130`，**16 条能力 × 3 列**），
+**缺的是三列**（成熟度 / 降级行为 / 晋级标准），**不是「没有能力矩阵」**。
+⇒ **D8 的准确表述是「补三列」，不是「新建表」**；此精度已写进 ADR-0073 §2 末注与 D8 的「注意」条。
+
+### 3. 唯一落地的借鉴项 → D8
+
+**README「默认开关」表补齐「成熟度 / 降级行为 / 晋级标准」三列。**
+理由**不是「它这么做」**，而是本仓已有缺口：**ADR-0049「缺件不静默」要求降级必须可见**，
+但该口径目前**散在代码注释与 ADR 正文里**（`core/toolset.ts` 的 `degradesTo`、`routeVerify` 的
+`unavailable`、`recall` 的关键词兜底、`evidenceProvider` 的 `fs` 回退…），**没有一处能一眼看全**
+「每个能力关掉 / 缺件时，行为退到哪」。**本轮只登记，不实现。**
+
+### 4. 六条明确不吸收（逐条理由）
+
+| 不吸收项 | 理由 |
+|---|---|
+| **「LLM 负责提取」的写入路径** | **硬冲突**：本仓铁律是**纯函数派生、不猜字段、LLM 不能制造关系**（ADR-0042 / 0043 / 0051）⇒ 与本仓写入路径**不可拼接** |
+| **常驻服务**（FastAPI + worker + 服务化 SQLite） | **ADR-0001 判据复用**：否决 OpenViking 的理由是「要额外跑一个重服务，对低成本诉求过重」，它是**同一判据下的第二个样本** |
+| **向量库 / 混合检索**（FTS+Dense+RRF+Reranker） | 本仓已按 **ADR-0060** 定形为「单索引 + 层级 + 路由」，其实测结论是「**加判别层优先于加库**」 |
+| **物理删除闭包 + tombstone + fail-closed** | 本仓**有意相反**：`Forget ≠ Delete`（**ADR-0031**，`core/forget.ts` 头注释明写）。其 `tombstone` 在本仓 **0 命中**——**不是缺口，是设计取向** |
+| **双时间模型**（valid time / recorded time 字段体系） | 本仓近邻是 `asOf`（`core/util.ts:51` 的 `parseAsOf`，语义是「按时间点召回当时可见的记忆集」），而 `validTime` / `recordedTime` / `valid_from` / `recorded_at` 在本仓 **0 命中** ⇒ 引入属**新增字段体系 = 能力扩张**，须**另立 ADR** |
+| **它自报的评测分数** | 与 ADR-0060 同纪律：**别家的语料与后端不能当本系统的证据**；**未复现**，不得引用为「已验证」 |
+
+### 5. 许可边界：许可允许 ≠ 该引
+
+- **HL-Mem = Apache-2.0**；本仓 = MIT；**OpenViking 主工程 = AGPLv3**。
+- 差别是实质的：OpenViking 那条是「**不可抄代码**」的硬约束（ADR-0065 据此只写形状对照）；**HL-Mem 许可上允许复用**。
+- **但结论相同**：本仓**仍不引其代码或依赖** —— 理由是**架构判据**（ADR-0001 否决常驻服务；ADR-0043 / 0060 否决向量库），
+  **不是许可**。**把「许可允许」误读成「该引」是本次最需要防的滑坡**：许可放宽的是**复制权**，不是**架构适配性**。
+
+### 文档改动（本次全部改动）
+
+| 文件 | 改动 |
+|---|---|
+| `adr/0073-hl-mem-benchmark.md` | **新增**。沿用 `adr/0065` 体例（Context / Decision / 不吸收项 + 理由 / Alternatives / Consequences / 自检）；标题用「**对标结果**」而非「吸收」 |
+| `BACKLOG.md` | **新增 D8**（四项格式齐备）+ 计数行更新（21 → **22 条**） |
+| `references.md` | 顶部「★ 重点材料」节：去掉「未立 ADR / 不立待办」，改为指向 ADR-0073 与 D8；补「许可边界」与「与 `adr/0065` 的区别（两个动词不可混用）」；§6 标题加 ADR 指针 |
+| `CONTEXT.md` | 该条术语从「文档条目，未立 ADR、未吸收」改为 **ADR-0073**，并补硬冲突 / 唯一可借鉴项 / 不吸收清单 / 许可要点 |
+| `MEMORY.md` | 同上改口径，补两条纪律（**重点材料 ≠ 已吸收**；**许可允许 ≠ 该引**） |
+| `CHANGELOG.md` / `package.json` | 本条目 + 版本号 `1.15.29` → `1.15.30` |
+
+### 验证
+
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0。
+- `node test/recall-attribution.test.ts` → **`ALL PASS ✅`**（最高场景 240）。
+- **交叉引用一致性**：`adr/0073` ↔ `references.md`（顶部节 + §6）↔ `CONTEXT.md` ↔ `MEMORY.md` ↔ `BACKLOG.md` D8
+  **五处互指且路径可解析**；`README.md:113-130` 的行号与列数**实读核对**（16 条 × 3 列）。
+- 事实核对的**零命中检索**：`validTime` / `recordedTime` / `valid_from` / `recorded_at` 与 `tombstone` 在本仓源码 **0 命中**。
+
+### 未验证（诚实标注）
+
+- **HL-Mem 未克隆、未运行、未试装**；其评测分数（LongMemEval / MemDaily / PerLTQA）**未复现**；
+  其 MCP 与本机 DSH `0.1.5-rc.2` 的兼容性、`sqlite-vec` 路径**均未实测**。
+- `docs/capability-matrix.md` 只读了前段（约 7 KB），**其余特性行未逐条读完**。
+- ADR-0073 §2 的「本仓现状」一列是**源码实读**，**未在运行进程验证**行为差异。
+
+
 ## [v1.15.29] 台账「实测」标签比事实强 —— 改正默认值 + 权威对照签入成离线棘轮（ADR-0072）
 
 线索来自 `tools/audit-drift.ts` 的检测 B（`c.kind=provider`/`c.kind=reference`）。**先判它是不是漂移**：
