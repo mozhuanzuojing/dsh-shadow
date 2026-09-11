@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites } from "./audit-wiring.lib.ts";
+import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions } from "./audit-wiring.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
@@ -120,6 +120,133 @@ assert.equal(countCallSites(prod, "ChangeSet").sites, 0,
 assert.ok(countCallSites(prod, "invalidateProjection").sites > 0, "invalidateProjection 有调用点，不得误报");
 assert.ok(countCallSites(prod, "createJsonlProjectionStore").sites > 0, "createJsonlProjectionStore 有调用点，不得误报");
 console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；invalidateProjection / createJsonlProjectionStore 不误报");
+
+// ─────────────────────────────────────────────
+// ⑨ **字符串里的 `Name(` 不得被算成调用点**（v1.15.36 修的真盲区）
+//
+// 背景（**实测推翻了原先的记账**）：ADR-0062 补记曾把 A 类噪声成因记为
+// 「调用点只在**注释**里」。逐条实测后事实是：
+//   · 注释里 `Foo(`      → 旧实现已得 0（`countCallSites` 早已 `stripComments`）⇒ **不是盲区**；
+//   · **字符串里 `Foo(`** → 旧实现得 **1** ⇒ 把死代码看成活的 ⇒ **漏报**（比误报危险）；
+//   · 块注释 / 行注释         → 0（已正确）。
+// 故真正的盲区是**字符串**，方向是**漏报**，位置也与原记账不同。本组锁住修复。
+// ─────────────────────────────────────────────
+{
+  const one = (text: string, name: string) => countCallSites([{ file: "f.ts", text }], name).sites;
+  // ① 字符串字面量里的 `Foo(` 不得计入（**这就是修掉的那个盲区**）
+  assert.equal(one(`export const s = "Foo(1)";\nexport const Foo = (x: number) => x;\n`, "Foo"), 0,
+    "字符串里的 `Foo(` 不得算作调用点（旧实现算 1 ⇒ 漏报）");
+  // ② 单引号同理
+  assert.equal(one(`export const s = 'Foo(1)';\nexport const Foo = (x: number) => x;\n`, "Foo"), 0, "单引号字符串同理");
+  // ③ 注释（原来就正确，作为**反向不变量**锁住，防回归）
+  assert.equal(one(`// Foo(1)\nexport const Foo = (x: number) => x;\n`, "Foo"), 0, "行注释里不得计入");
+  assert.equal(one(`/* Foo(1) */\nexport const Foo = (x: number) => x;\n`, "Foo"), 0, "块注释里不得计入");
+  // ④ **反向不变量**：模板串 `${…}` 里的是**真调用**，抹掉它会制造新的漏报
+  assert.equal(one("export const s = `v=${Foo(1)}`;\nexport const Foo = (x: number) => x;\n", "Foo"), 1,
+    "模板串 ${…} 里的 `Foo(1)` 是**真调用**，必须仍计入（不得误伤）");
+  // ⑤ 模板串的**字面部分**不算
+  assert.equal(one("export const s = `Foo(1)`;\nexport const Foo = (x: number) => x;\n", "Foo"), 0,
+    "模板串的字面部分不算调用点");
+  // ⑥ 转义引号不破坏状态机
+  assert.equal(one('export const s = "a\\"Foo(1)";\nexport const Foo = (x: number) => x;\n', "Foo"), 0,
+    "转义引号不得让状态机提前闭合");
+  // ⑦ **行号不漂移**：掩码必须保行数（命中位置要能回溯到真实行）
+  const src = "/* 块\n注释 */\nconst a = \"x\";\n// 行注释\nconst b = 1;\n";
+  assert.equal(maskStrings(src).split("\n").length, src.split("\n").length,
+    "maskStrings 必须保持行数一致（否则报出的行号会漂）");
+  console.log("✔ ⑨ 字符串里的 `Name(` 不再算调用点（真盲区已修）；注释仍不计；**模板 `${…}` 里的真调用未误伤**");
+}
+
+// ─────────────────────────────────────────────
+// ⑩ **A 类分桶**（v1.15.36）：间接调用 / 平行 API 的判定面（结构上无法靠文本分析解决）
+// ─────────────────────────────────────────────
+{
+  const inline = [
+    { file: "g.ts", text: [
+      "export const notRevoked = (c: any) => c.revoked !== true;",
+      "export const assertNotRevoked = (c: any) => ({ ok: notRevoked(c) });",
+      "export const indirect = (r: any) => r.ok;",
+      "export const orphan = () => 1;",
+    ].join("\n") },
+    { file: "use.ts", text: [
+      "import { indirect } from './g.ts';",
+      "const guards = [indirect];",
+      "export const run = (r: any) => { for (const g of guards) g(r); };",
+    ].join("\n") },
+  ];
+  // 被 import 但无直接调用点 ⇒ A2（间接调用候选）
+  assert.deepEqual(importedBy(inline, "indirect"), ["use.ts"], "indirect 应被判「被 use.ts import」");
+  assert.equal(countCallSites(inline, "indirect").sites, 0, "indirect 无直接调用点（走了数组间接调用）");
+  // 零引用 ⇒ A1
+  assert.deepEqual(importedBy(inline, "orphan"), [], "orphan 未被 import");
+  assert.equal(pairedExport(exportsOf(inline[0].text), "orphan"), undefined, "orphan 无配对导出");
+  // 成对导出 ⇒ A3（双向）
+  const names = exportsOf(inline[0].text);
+  assert.deepEqual(names.sort(), ["assertNotRevoked", "indirect", "notRevoked", "orphan"], "应抽到 4 个导出");
+  assert.equal(pairedExport(names, "assertNotRevoked"), "notRevoked", "assertX 应配到 X");
+  assert.equal(pairedExport(names, "notRevoked"), "assertNotRevoked", "X 应反向配到 assertX");
+  assert.equal(pairedExport(names, "orphan"), undefined, "无配对的不得硬凑");
+  console.log("✔ ⑩ 分桶判定：被 import 且零裸提及→A2b、零引用→A1、被 import 且有提及→A2a、成对导出→A3（双向配对，不硬凑）");
+}
+
+// ─────────────────────────────────────────────
+// ⑪ 真仓库：分桶必须**覆盖全部** A 段条目（不丢线索），且各桶判据没走偏
+// ─────────────────────────────────────────────
+{
+  const aRows: { name: string; bucket: string; imports: string[]; bare: number }[] = [];
+  const exportRe = /^export\s+(?:const\s+(\w+)\s*=\s*(?:async\s*)?\(|function\s+(\w+)|async\s+function\s+(\w+)|class\s+(\w+))/gm;
+  for (const { file, text } of prod) {
+    for (const m of text.matchAll(exportRe)) {
+      const name = m[1] || m[2] || m[3] || m[4];
+      if (!name) continue;
+      if (countCallSites(prod, name).sites !== 0) continue;
+      const imports = importedBy(prod, name);
+      const pair = pairedExport(exportsOf(text), name);
+      const bare = bareMentions(prod, name, file).count;
+      aRows.push({ name, imports, bare, bucket: pair ? "A3" : !imports.length ? "A1" : bare === 0 ? "A2b" : "A2a" });
+    }
+  }
+  const cnt = (k: string) => aRows.filter((r) => r.bucket === k).length;
+  assert.equal(cnt("A2b") + cnt("A1") + cnt("A2a") + cnt("A3"), aRows.length, "四桶之和必须等于 A 段总数（不得丢线索）");
+  // 各桶判据逐条自证
+  for (const r of aRows.filter((x) => x.bucket === "A2b")) {
+    assert.ok(r.imports.length > 0 && r.bare === 0, `${r.name} 分到 A2b，必须「被 import 且零裸提及」`);
+  }
+  for (const r of aRows.filter((x) => x.bucket === "A1")) {
+    assert.ok(r.imports.length === 0, `${r.name} 分到 A1，必须未被 import`);
+  }
+  for (const r of aRows.filter((x) => x.bucket === "A2a")) {
+    assert.ok(r.imports.length > 0 && r.bare > 0, `${r.name} 分到 A2a，必须「被 import 且有裸提及」`);
+  }
+  console.log(`✔ ⑪ 真仓库分桶覆盖全部 ${aRows.length} 条（A2b ${cnt("A2b")} · A1 ${cnt("A1")} · A2a ${cnt("A2a")} · A3 ${cnt("A3")}）`
+    + ` ⇒ 需逐条查的 ${cnt("A2b") + cnt("A1")} 个`);
+}
+
+// ─────────────────────────────────────────────
+// ⑫ **裸提及判据**（盲区 ② 的真判据）：把「导入即闲置」与「间接调用」分开
+//    实测（真仓库 A2 候选 4 个）它**恰好切开**：`ledgerMismatch` 裸提及 0（唯一可疑），
+//    而 `ChangeSet`/`renderExperience`/`sembleCandidates` 各 1（类型位置 / 回调 / 默认参数，全正当）。
+// ─────────────────────────────────────────────
+{
+  const files = [
+    { file: "def.ts", text: "export const used = (x: number) => x;\nexport const idle = (x: number) => x;\n" },
+    { file: "use.ts", text: [
+      "import { used, idle } from './def.ts';",
+      "const guards = [used];",
+      "export const run = (r: number) => guards.map((g) => g(r));",
+    ].join("\n") },
+  ];
+  // `used` 在导入行之外**有**裸提及 ⇒ 间接调用候选（正当）
+  assert.ok(bareMentions(files, "used", "def.ts").count > 0, "used 在导入之外有提及 ⇒ 不得判为「导入即闲置」");
+  // `idle` 除导入行外**零提及** ⇒ 导入即闲置（可疑）
+  assert.equal(bareMentions(files, "idle", "def.ts").count, 0,
+    "idle 除导入行外零提及 ⇒ 必须判为「导入即闲置」（这是盲区 ② 的真判据）");
+  // 定义处那一次不得被算成「使用」
+  const onlyDef = [{ file: "d.ts", text: "export const nothing = () => 1;\n" }];
+  assert.equal(bareMentions(onlyDef, "nothing", "d.ts").count, 0,
+    "只有定义、无人引用 ⇒ 必须为 0（定义处那一次要减掉）");
+  console.log("✔ ⑫ 裸提及判据：间接调用（有提及）与导入即闲置（零提及）被正确分开；定义处不计入");
+}
 
 console.log("");
 console.log("未在测试中验证（诚实标注）：");

@@ -45,6 +45,76 @@ export const stripComments = (src) => {
 };
 
 /**
+ * **在 `stripComments` 之上，再抹掉字符串字面量里的“代码形状”**（v1.15.36）。
+ *
+ * 为什么需要（实测，不是推理）：`countCallSites` 数的是 `Name(` 形态，而**字符串里**也可能出现这个形状：
+ *   `export const s = "Foo(1)";`  ⇒ 旧实现把它算成 **1 个调用点** ⇒ 该符号被判「有接线」⇒ **漏报**。
+ * 实测三例（`_probe`）：注释里 `Foo(` ⇒ 0（已正确）；**字符串里 `Foo(` ⇒ 1（错）**；块注释 ⇒ 0（已正确）。
+ * ⇒ **真正的盲区是字符串，不是注释** —— 我原先的记账（ADR-0062 补记 §0 的 ①）把位置记错了，
+ *   且方向是**漏报**（把死代码看成活的），比误报更危险。已在 ADR 更正。
+ *
+ * 语义：**空白化**（保长度、保换行 ⇒ 行号不漂移），分三种情形：
+ *   · 行注释 / 块注释 —— 抹掉（与 `stripComments` 同）；
+ *   · `'…'` / `"…"` —— **整段抹掉**（调用点不可能出现在普通字符串里）；
+ *   · `` `…` `` 模板串 —— **只抹字面部分，`${…}` 里的代码原样保留并递归处理**
+ *     （`` `${f(x)}` `` 里的 `f(x)` 是**真调用**，抹掉它会制造新的漏报）。
+ *
+ * **已知边界**：`${…}` 里若含**未闭合的**花括号（如字符串中的 `"{"`），配对计数会偏 ——
+ * 该情形在本仓不存在，且工具一律人工复核。`stripComments` 保留原语义**不动**：
+ * `collectComparisons` / `hasProducer` 要匹配的正是字符串里的值，抹掉它会毁掉 B 类检测。
+ */
+export const maskStrings = (src) => {
+  const blank = (s) => s.replace(/[^\n]/g, " ");
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i], c2 = src[i + 1];
+    if (c === "/" && c2 === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const seg = end < 0 ? src.slice(i) : src.slice(i, end + 2);
+      out += blank(seg);
+      i = end < 0 ? n : end + 2;
+      continue;
+    }
+    if (c === "/" && c2 === "/") {
+      let j = i; while (j < n && src[j] !== "\n") j++;
+      out += blank(src.slice(i, j));
+      i = j;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && src[j] !== c) { if (src[j] === "\\") j++; j++; }
+      out += blank(src.slice(i, Math.min(j + 1, n)));
+      i = Math.min(j + 1, n);
+      continue;
+    }
+    if (c === "`") {
+      out += " ";
+      i++;
+      while (i < n) {
+        if (src[i] === "\\") { out += "  "; i += 2; continue; }
+        if (src[i] === "`") { out += " "; i++; break; }
+        if (src[i] === "$" && src[i + 1] === "{") {
+          let depth = 1, j = i + 2;
+          while (j < n && depth > 0) { if (src[j] === "{") depth++; else if (src[j] === "}") depth--; if (depth > 0) j++; }
+          out += "${" + maskStrings(src.slice(i + 2, j)) + "}";
+          i = j + 1;
+          continue;
+        }
+        out += src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+};
+
+/**
  * 路径分类：哪些是**生产源码**（其余为测试/产物，不作数）。
  *
  * **标定测试暴露的必要修正**：v1 用 `/[\\/]test[\\/]/` 判断 —— 该正则**要求前导斜杠**，
@@ -124,6 +194,9 @@ export const findOrphanComparisons = (files) => {
  * 判据：数 `Name(` 形态的调用/实例化（含 `new Name(`），再从总数里减去**定义形态**
  *   （`function Name(` / `class Name` / `Name = (` / `Name(` 出现在声明里）。
  * 纯文本启发式：不解析类型位置，故 `Foo(x)` 这种同名调用可能误计 —— 命中项仍需人工复核。
+ *
+ * **v1.15.36 修正**：改用 `maskStrings` 而非 `stripComments`（见其注释）——
+ *   字符串字面量里的 `Name(` 曾被算成调用点 ⇒ **漏报**（把死代码看成活的）。
  */
 export const countCallSites = (files, name) => {
   const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -135,7 +208,7 @@ export const countCallSites = (files, name) => {
   let calls = 0, defs = 0;
   const where = [];
   for (const { file, text } of files) {
-    const t = stripComments(text);
+    const t = maskStrings(text);
     const c = (t.match(callRe) || []).length;
     const d = (t.match(defRe) || []).length;
     if (c - d > 0) where.push(`${file}×${c - d}`);
@@ -143,3 +216,105 @@ export const countCallSites = (files, name) => {
   }
   return { sites: calls - defs, where };
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A 类的**分桶判据**（v1.15.36）：把「一个 33 条的大堆」拆成「三种不同性质的线索」。
+//
+// 为什么必须拆（实测 ADR-0062 补记 §0 的三条成因，逐条验证后的真实形态）：
+//   ① 调用点只在**字符串/注释**里  → 已由 `maskStrings` 修掉（不再制造「假调用点」）；
+//   ② 经**数组/变量间接调用**（`for (const g of guards) g(x)`）→ `Name(` 数不出来 ⇒ 误报；
+//   ③ 「成对导出、只接一半」的**平行 API**（谓词接线、`assert*` 包装不接线）→ 误报。
+// ② ③ 都**无法靠文本分析解决**（要类型/数据流分析）。故本工具**不去猜「它到底有没有被调用」**，
+// 而是**如实分桶**：被 import 过的、与已接线符号配对的，各自单独列出并标注——
+// 让人工复核从「33 条一条条查」变成「先看性质最可疑的那一桶」。
+// 这是本仓对「工具答不了的问题」的一贯处置：**不伪造精度，只把线索分类得更可操作**。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 从源码文本抽取**被具名 import / re-export 的符号**。返回 Map<file, Set<name>>。 */
+export const collectImported = (files) => {
+  const out = new Map();
+  // `import { a, b as c } from "…"` / `export { a, b } from "…"`（只取**本名**，忽略 as 别名）
+  const re = /(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s*from/g;
+  for (const { file, text } of files) {
+    const set = out.get(file) || new Set();
+    for (const m of maskStrings(text).matchAll(re)) {
+      for (const raw of m[1].split(",")) {
+        const nm = raw.trim().split(/\s+as\s+/)[0].trim();
+        if (nm) set.add(nm);
+      }
+    }
+    out.set(file, set);
+  }
+  return out;
+};
+
+/** 某符号是否**被生产代码 import**（任一处具名导入列表里出现）。 */
+export const importedBy = (files, name) => {
+  const imported = collectImported(files);
+  const hits = [];
+  for (const [file, set] of imported) if (set.has(name)) hits.push(file);
+  return hits.sort();
+};
+
+/** 去掉 `import … from` / `export … from` **整行**（空白化，保行数）——用于「导入之外还有没有提及」。 */
+export const stripImportLines = (text) =>
+  String(text).split("\n").map((l) => (/^\s*(?:import|export)\b.*\bfrom\b/.test(l) ? " ".repeat(l.length) : l)).join("\n");
+
+/**
+ * **裸提及计数**（盲区 ② 的真判据，v1.15.36）。
+ *
+ * 为什么需要：A2「被 import 但无直接调用点」混着两种完全不同的东西 ——
+ *   · 经**数组/回调/默认参数**间接调用，或只出现在**类型位置**（如 `set: ChangeSet`）⇒ **正当**；
+ *   · 被 import 了却**除导入行外再无任何提及** ⇒ **未使用的导入**，真可疑。
+ * 实测（真仓库 204 文件 / 516 导出，A2 候选 4 个）本判据**恰好切开**：
+ *   `ledgerMismatch` 裸提及 **0**（唯一可疑）· `ChangeSet`/`renderExperience`/`sembleCandidates` 各 **1**
+ *   （分别是类型位置 / `exps.map(renderExperience)` / 默认参数值 —— 全是正当用途）。
+ * ⇒ 它把「8 条要人工查」缩到「1 条真的要看」。**这是文本分析能给出的最强信号**。
+ *
+ * 做法：统计掩码后、**去掉导入行**的文本里 `\bname\b` 的出现次数，再减去**声明处那一次**。
+ * **已知边界**：`-1` 假设声明只贡献一次提及；重导出（barrel）与本文件多次声明会偏。
+ * 故仍属线索级 —— 它**缩小范围**，不定罪。
+ */
+export const bareMentions = (files, name, declFile) => {
+  const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+  let total = 0;
+  const where = [];
+  for (const { file, text } of files) {
+    const t = stripImportLines(maskStrings(text));
+    const c = (t.match(re) || []).length;
+    if (c) { total += c; where.push(`${file}×${c}`); }
+  }
+  // 减去声明文件里那一次（`export const name = (` / `export class name {` 本身算一次提及）
+  const decl = files.find((f) => f.file === declFile)?.text || "";
+  const declCount = (stripImportLines(maskStrings(decl)).match(re) || []).length;
+  return { count: Math.max(0, total - Math.min(1, declCount)), where };
+};
+
+/** 某文件里**被具名导出的符号清单**（用于「配对导出」判定）。 */
+export const exportsOf = (text) => {  const re = /^export\s+(?:const\s+(\w+)\s*=\s*(?:async\s*)?\(|function\s+(\w+)|async\s+function\s+(\w+)|class\s+(\w+))/gm;
+  const out = [];
+  for (const m of text.matchAll(re)) {
+    const nm = m[1] || m[2] || m[3] || m[4];
+    if (nm) out.push(nm);
+  }
+  return out;
+};
+
+/**
+ * **配对导出**判定（盲区 ③ 的可操作化）：`assertX` ↔ `x` 这类成对导出的另一半。
+ *
+ * 用例（本仓真实形态）：`notRevoked` 与 `assertNotRevoked` 同文件导出，
+ * 引擎只 import 了**谓词**，`assert*` 包装无人调用 —— 那不是「忘接线」，是**一处决定**。
+ * 双向匹配：给 `assertNotRevoked` 找 `notRevoked`；给 `notRevoked` 找 `assertNotRevoked`。
+ */
+export const pairedExport = (names, name) => {
+  const has = (x) => names.includes(x);
+  if (/^assert/i.test(name)) {
+    const rest = name.replace(/^assert/, "");
+    for (const cand of [rest.charAt(0).toLowerCase() + rest.slice(1), rest]) if (has(cand)) return cand;
+  }
+  const cap = "assert" + name.charAt(0).toUpperCase() + name.slice(1);
+  if (has(cap)) return cap;
+  return undefined;
+};
+
