@@ -98,6 +98,20 @@ export interface ShadowConfig {
             timeoutMs?: number;
         };
     };
+    /**
+     * 目录级 L0/L1 sidecar（ADR-0065 吸收 OpenViking，D6 落地；v1.15.35）。
+     *
+     * **默认开**（`enabled !== false`）—— 与 `projectionStore`（默认关）**不同**，理由是：
+     * ① 它是**派生物**（ADR-0003），可整份重建、删掉不丢事实；
+     * ② 写入次数**有界** —— 每个**日期目录一份**，不是每条记忆一份；
+     * ③ 它就是 D6 决定「三条都做」的产物，若默认关就等于**又一次「写好了但从不执行」**
+     *    （恰是本仓 T1/T4 刚清理干净的那类）。
+     * `showInIndex`：在 `_index.md` 里列最近几个目录的 L0（默认 3，0 = 不列）。
+     */
+    abstracts?: {
+        enabled?: boolean;
+        showInIndex?: number;
+    };
     /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
     evidenceProvider?: string;
     /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */

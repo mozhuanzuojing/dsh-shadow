@@ -39,6 +39,8 @@ export interface WriterCore {
   writeConsent: boolean;
   episodeGap: number;
   episodeShow: number;
+  /** 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）：默认**开**（派生物，见下）。 */
+  abstractCfg: Record<string, any>;
 }
 
 export function createWriterCore(opts: { context: any; config: ShadowConfig; getAgentById: (id: string | undefined) => any }): WriterCore {
@@ -67,6 +69,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     writeConsent: config.writeConsent === true,
     episodeGap: Math.max(0, Number(episodeCfg.gapMinutes) || 60),
     episodeShow: Math.max(0, Number(episodeCfg.showInIndex) || 8),
+    abstractCfg: config.abstracts ?? {},
   };
 }
 

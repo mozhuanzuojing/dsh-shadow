@@ -4,6 +4,7 @@
 // fs 重、领域逻辑最密；用显式 WriterCore 注入（状态 + 配置派生），便于无 harness 验证。
 // 与 writer.ts 原实现逐字一致；flush 经 hooks.primaryComp 取主入口（composition root 注入，解 cycle）。
 import { SHADOW_ROOT } from "./paths.js";
+import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "./abstract.js";
 import { resolveWorkspace } from "./scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
 import { today, compact, slug, topicsInText } from "./util.js";
@@ -124,6 +125,47 @@ export function makeMaterialize(core, hooks) {
             });
         }
     };
+    // ── 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）────────────────────────────
+    //  每条记忆一份摘要是 O(N) 写；**每个日期目录一份**是 O(#dates) 写，故代价有界（见 types.ts 的注释）。
+    //  层次：记忆（source）→ L1 → L0，**每层只从它下面那层派生**（`core/abstract.ts` 的唯一纪律）。
+    //  返回「最近 N 个目录的 L0」供 `_index.md` 引用 —— 这条读路径让 sidecar **不是死代码**。
+    const writeAbstracts = async (fs, ws, recs) => {
+        if (core.abstractCfg.enabled === false)
+            return "";
+        const byDate = new Map();
+        for (const r of recs) {
+            if (!r?.date)
+                continue;
+            const arr = byDate.get(r.date) || [];
+            arr.push(r);
+            byDate.set(r.date, arr);
+        }
+        // 降序 = 最近的目录在前（与 `listDir` 的升序相反，故显式排 —— 与 ADR-0071 同一处坑）。
+        const dates = [...byDate.keys()].sort((a, b) => b.localeCompare(a));
+        const facesOf = (rs) => rs.map((r) => ({ name: r.name, time: r.time, entry: r.entry, topics: r.topics || [] }));
+        const sections = [];
+        for (const date of dates) {
+            const faces = facesOf(byDate.get(date));
+            const l1 = deriveL1(faces);
+            // `pending` 恒为 0：本函数与 `_index.md` 用**同一份 `recs`** 派生 ⇒ 构造上不可能落后。
+            // 之所以仍写下这个字段：③ 要求派生件**自报覆盖率**，而「自报 0」本身就是可对账的断言
+            //（`test/abstract-sidecar.test.ts` 的棘轮会独立重算，而不是信它）。
+            const text = renderSidecar(date, l1, { covered: faces.length, pending: 0 });
+            try {
+                const t = await fs.resolve(`${ws}/${sidecarRel(date)}`, { cwd: ws });
+                await fs.writeText(t, text);
+            }
+            catch (e) {
+                console.log("[dsh-shadow] abstract sidecar write failed:", e && e.message);
+                continue; // 一个目录写失败不影响其余；也不把它列进 `_index.md`（避免指向不存在的摘要）
+            }
+            sections.push(`- ${date}（${faces.length} 条）${deriveL0(l1)}`);
+        }
+        const show = Math.max(0, Number(core.abstractCfg.showInIndex) || 3);
+        if (!show || !sections.length)
+            return "";
+        return `\n\n## 目录摘要（L0 · 派生物）\n${sections.slice(0, show).join("\n")}\n`;
+    };
     const rebuildIndex = async (fs, ws) => {
         if (!fs || !ws)
             return;
@@ -171,6 +213,9 @@ export function makeMaterialize(core, hooks) {
                     parsed.push(r.parsed);
             }
             let idx = buildIndexText(ws, memories, topicFiles, { count: todayCount, topics: [...todayTopics] });
+            // 目录级 L0/L1 sidecar（ADR-0065 / D6）：先把 sidecar 写出去，再把它最近几个目录的 L0
+            // 引到 `_index.md` —— 顺序不能反（否则索引可能指向一份写失败的摘要）。
+            idx += await writeAbstracts(fs, ws, recs);
             // 把碎片串成"任务回溯（Episodes）"：一次连续任务 = 一个 Episode（派生式，不写回记忆文件）。
             if (core.episodeShow > 0) {
                 try {

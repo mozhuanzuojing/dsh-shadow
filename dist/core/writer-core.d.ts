@@ -34,6 +34,8 @@ export interface WriterCore {
     writeConsent: boolean;
     episodeGap: number;
     episodeShow: number;
+    /** 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）：默认**开**（派生物，见下）。 */
+    abstractCfg: Record<string, any>;
 }
 export declare function createWriterCore(opts: {
     context: any;

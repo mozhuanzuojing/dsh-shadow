@@ -24,6 +24,7 @@ export function createWriterCore(opts) {
         writeConsent: config.writeConsent === true,
         episodeGap: Math.max(0, Number(episodeCfg.gapMinutes) || 60),
         episodeShow: Math.max(0, Number(episodeCfg.showInIndex) || 8),
+        abstractCfg: config.abstracts ?? {},
     };
 }
 // 路由推导：显式 provider/model，否则取 agentDefaultModel.currentSelection()。与 writer.ts 原实现逐字一致。
