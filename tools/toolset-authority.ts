@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyOne } from "./winget-verify.ts";
-import { claimOf, ledgerMismatch, unsubstantiatedMeasured, type AuthorityRow } from "./toolset-authority.lib.ts";
+import { claimOf, countInconsistency, ledgerMismatch, unsubstantiatedMeasured, type AuthorityRow } from "./toolset-authority.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MANIFEST = join(here, "toolset-authority.json");
@@ -108,11 +108,25 @@ if (checkOnly) {
   process.exit(changed.length ? 1 : 0);
 }
 
+// **清单自洽门**（v1.15.33 接线）：`counts` 是**派生自 `rows` 的汇总**，两者一旦漂移，
+// 下游（离线棘轮 / 人读）就会拿着一个与事实不符的汇总数。
+// 此前 `countInconsistency`（`toolset-authority.lib.ts:66`）**只被测试调用**，CLI 从不调用它
+// ⇒ 这个自洽检查在生产里**从未执行**（接线审计 A 类线索，见 ADR-0062 / BACKLOG T4）。
+// 放在 `writeFileSync` **之前**：不一致就**拒绝写入**，不产出坏清单。
+const inconsistent = countInconsistency(manifest as any);
+if (inconsistent.length) {
+  console.error("");
+  console.error(`清单自洽校验失败（${inconsistent.length} 项）—— 拒绝写入：`);
+  for (const e of inconsistent) console.error(`  · ${e}`);
+  process.exit(1);
+}
+
 writeFileSync(MANIFEST, JSON.stringify(manifest, null, 1) + "\n", "utf8");
 console.log("");
 console.log(`已写入 ${MANIFEST}`);
 console.log(`  共 ${rows.length} · 台账==权威 ${okRows.length} · **老化 ${aged.length}** · 未取到/异常 ${bad.length}`);
 console.log(`  **「实测」但本机读数不能佐证：${falseMeasured.length}** ${falseMeasured.length ? "← 必须为 0！" : "✅"}`);
+console.log(`  清单自洽（counts ↔ rows）：✅ ${inconsistent.length === 0 ? `已校验 ${Object.keys(manifest.counts).length} 个计数` : ""}`);
 if (falseMeasured.length) {
   for (const r of falseMeasured) console.log(`     ${r.id.padEnd(16)} 台账 ${r.ledgerVerSrc} ${r.ledgerVersion} · 本机 ${r.machineVersion ?? "(未检出)"}`);
   process.exitCode = 1;

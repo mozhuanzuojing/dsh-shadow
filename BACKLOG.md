@@ -6,13 +6,15 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-11（`v1.15.32`）—— **现存 22 条**（T 3 / D 8 / V 6 / G 4 + **B3**）；
-> 已结案 **13 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
-> 漂移审计工具 / 图快照顺序 / 台账版本出处 / **T5 漂移键复核** / **T2 主要噪声** / **W1 审计工具漏报**）；
-> **D6** 已决策待实现。
+> 最后整理：2026-09-11（`v1.15.33`）—— **现存 18 条**（T 2 / D 8 / V 6 / G 4 + **B3** + **T7**）；
+> 已结案 **15 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
+> 漂移审计工具 / 图快照顺序 / 台账版本出处 / **T5 漂移键复核** / **T1 A 类分诊** / **T4 零引用定性** /
+> **W1 审计工具漏报** / **countInconsistency 接线**）；**D6** 已决策待实现。
 > **T5 已结案**（v1.15.32）：检测 B **11 键逐个复核完毕**（1 处真漂移已修 + 其余落「正当分层/同形不同义」），
 > 并**先修了工具自己的漏报**（`?.` 把同一判据拆成两个键）；台账「两级边界」不变量已从实测升级为**棘轮**。
-> **T1/T4 已重分诊**（同轮，见 T1/T4 节）：A 段实为 **33 条**（原记 30），逐条落三选一，结果回写 `adr/0062`。
+> **T1/T4 已结案**（v1.15.33）：A 段 **33 条逐条落格**（误报 12 / 零引用 18 符号 / 仅测试 4 / **真断线 1**），
+> 结果回写 `adr/0062`「补记」；真断线 `countInconsistency` **已接线**并加**接线棘轮**；
+> 顺带发现与 T5 **同型**的第二处漂移（`isExchangeable` 重写唯一源）与一处**新风险**（→ **T7**）。
 > **本轮新增 B3 + T6**（ADR-0074：写入缺 `sandboxPolicy` ⇒ **记忆一条都落不了盘**；修复已提交，
 > 但插件 `dist/` 不热加载 ⇒ 需重启宿主才能在真机复核）。
 > **注意**：ADR-0074 **不列在本台账的「已结案」里** —— 它从来不是待办项，是本轮**新发现的真缺陷**
@@ -161,32 +163,30 @@
 > **工具已标定**（`npm run audit:wiring:selftest`，8 组断言全过），但其输出是**线索不是结论**，
 > 必须逐条人工分诊 —— 这部分**只做了一小部分**。
 
-### T1. 审计 A 类线索未逐条分诊（30 条）
+### ✅ T1. 审计 A 类线索 —— **已逐条分诊结案（v1.15.33）**
 
-- **依据**：`adr/0062-wiring-audit.md`「未验证」第 1 条；`npm run audit:wiring` 输出 A 段。
-  **计数为 2026-09-11 实跑所得**（`node tools/audit-wiring.ts .`，生产源码 **196** 个）；
-  语料随仓库变化，重跑可能不同。**注意**：`v1.15.22` 把 `tools/*.mjs` 切到 `.ts` 后，
-  工具开始扫到自己，但 **A 类计数不变（30）**。
-- **本轮（v1.15.22）新增的分诊结果**（用 `_research/triage-a.ts` 逐条查生产调用点）：
-  - **`progressiveDisclosure` / `refineTree`（`core/knowledge-cost.ts`）、`renderRetrieved`（`core/knowledge-retrieval.ts`）**
-    —— 生产里**只有注释提到**它们（`core/knowledge-engine.ts:7-8` 的清单式注释），
-    唯一真调用点是测试 ⇒ 属「**注释造成的假调用点**」，实际是**仅测试消费**（误报，但值得记）。
-  - **`sembleCandidates`** —— **有生产调用点**（`core/index-engine.ts:10/45`）⇒ 误报。
-  - **`apply`（`index.ts`）** —— 命中的是 `core/writer.ts:39` 的**注释**「apply 清理」⇒ 误报。
-  - **`assertResultNoAuthorityGrowth` / `assertResultNoSelfConfidence` / `assertResultNoInferredObjective`
-    / `assertResultNoIdentityChain`** —— **有生产调用点**：`long-horizon/engine/interaction.ts:6` 导入后
-    放进 `resultGuards` 数组并在 `buildContinuityEvent` / `buildInteractionAdaptationLink` 里
-    `for (const g of resultGuards)` 逐个调用 ⇒ **误报**（与 `delegation/guard/*` 同类：
-    经数组间接调用，工具数不出 `Name(` 形态）。
-  - **`hasNoUpgradeApi` / `isCognitiveAtom` / `isMetadataMemoryText` / `renderIntent` /
-    `isExchangeable` / `renderIdentityModel` / `relationForProposal` / `readTemporalGraph` / `readGraph`**
-    —— **生产与测试引用皆为零**（全仓 grep 各只命中定义行本身，`isExchangeable` 仅多一个测试）。
-    这是**新一类线索**：既非「忘了接线」也非「测试面」，而是**导出了但谁都没用的公开面**。
-    ⇒ **升为 T4**（见下）。
-- **仍待处置**：`ChangeSet`（见 D1）。
-- **为什么没做**：逐条核实成本高，且 A 类**精度本身低**（工具无类型分析）。
-- **完成判据**：每条落「误报（给出生产使用点）/ 真断线（给出处置）/ 零引用（进 T4）」三选一，
-  结果回写 `adr/0062`。
+- **结论**：A 段 **33 条**（实跑计数，原记 30）**全部落格**，结果回写 **`adr/0062`「补记（v1.15.33）」**。
+  明细表（含每条的 `文件:行号` 证据）见该节，此处只留结论与**两处对本节的更正**。
+- **工具的三条盲区**（本轮补上的成因解释）：
+  ① 调用点只在**注释**里；② 经**数组/变量间接调用**（`for (const g of guards) g(x)`）；
+  ③ 「成对导出、只接一半」的**平行 API**（谓词接线、`assert*` 包装不接线）。
+  A 类精度低**不是「工具差」**，而是本仓**有意导出测试向 API** 与这三类结构所致。
+- **两处对原文的更正（原文措辞含糊，此处收紧）**：
+  1. **`progressiveDisclosure` / `refineTree` 不是「误报」** —— 原文写「误报，但值得记」。
+     准确表述：它们**仅测试消费**（`test/knowledge-engine.test.ts:53,59`），
+     生产命中只有 `core/knowledge-engine.ts:8` 的**注释** ⇒ 属「**注释造成的假调用点**」，
+     按三选一应落**零引用/仅测试消费**这一格，**不是**「有生产调用点」意义上的误报。
+  2. **`renderIntent` 不是「生产有调用点」** —— 它是**零引用**；
+     `observer/core.ts:20` 用的是 `intentOf`，渲染在 `:31` 内联 ⇒ 见 ADR-0062 §4。
+- **本节未列、但本轮新报出的 3 个符号**（原文那批 30 条没有它们）：
+  `renderExperience`（**误报**，`query/query.ts:251` 作回调传入）、
+  `auditDrift`（**零引用，已删除**）、`countInconsistency`（**真断线，已接线**）。
+- **真断线（唯一一处）**：`countInconsistency` —— 清单自洽检查**生产从未执行**。
+  已在 `writeFileSync` **之前**接线 + `process.exit(1)` 拒绝坏清单；
+  锁见 `test/toolset-authority.test.ts` **⑥ 接线棘轮**（断言「CLI 调了它」，非「函数存在」）。
+- **`ChangeSet` 与 D1 的关系（重要，防误读）**：本轮判 `ChangeSet` 为「接口**可达**」
+  （`projection-store.ts:85` 的 store 工厂在生产被调用），而 **D1 说「未接线」仍然成立**
+  （无生产**实例化点**）。两条不矛盾：一条说接口可达、一条说没人实例化 ⇒ **D1 维持原判**。
 
 ### T2. 审计 B 类线索未逐条分诊（**85 条**）
 
@@ -290,10 +290,10 @@
   生产者/消费者分别表达同一判据在分层架构里**可能是正当的**。
 - **完成判据**：11 个键各落「正当（给出分层理由）/ 真漂移（给出修复 + 锁）」二选一，结果回写 `adr/0070`。
 
-### T4. A 类里 8 个「生产与测试引用皆为零」的导出符号（**已落 2 个，余 6 个**）
+### ✅ T4. A 类里「生产与测试引用皆为零」的导出符号 —— **已全部定性（v1.15.33）**
 
-- **依据**：A 类逐条核实（`_research/triage-a.ts` → `triage-a-out.json`）+ **ADR-0070/0071**。
-- **已处置 3 个**：
+- **依据**：A 类逐条核实（`adr/0062`「补记（v1.15.33）」§4 的处置表）+ **ADR-0070/0071**。
+- **已处置**：
   - `isCognitiveAtom` —— **已删除**（ADR-0066）。理由不是「死代码」，而是它的规则与
     `validateAtomProjection` **完全重复**，留着会成为**第四份口径**。
   - `readTemporalGraph` / `readGraph` —— **保留 + 改正 + 收敛**（ADR-0071）：
@@ -301,20 +301,36 @@
     两份近重复逻辑收敛到 `persistence/snapshots.ts`。
     **接线与否另议**：`mode:"temporal"` 的真实读路径是 `buildTemporalGraph`（重建），
     **不应**把 reader 接成缓存（会重蹈 ADR-0069 的「缓存与源头脱钩」）。
-- **剩余 6 个清单**（全部只命中定义行；`isExchangeable` 另有 1 处测试引用）：
+  - `auditDrift` —— **已删除**（v1.15.33）。全仓零引用（生产+测试+夹具皆无），
+    且它**没有任何信息价值**：只是把两个检测器打包成对象，删掉不减少能力。
+  - `isExchangeable`（+ 孪生常量 `EXCHANGEABLE_KINDS`）—— **已收敛**（v1.15.33）：
+    `isExchangeable` 曾**再手写一遍**同一三元素数组，而 `EXCHANGEABLE_KINDS` 是唯一源。
+    与 T5 的 `c.status=supported` **同型**（同一判据多处表达）。
+  - `countInconsistency` —— **已接线**（v1.15.33，T1 的真断线项）。
+- **各符号最终定性**（逐条落「接线 / 删除 / 保留并注明」）：
 
-  | 符号 | 文件 | 所在文件行数 |
+  | 符号 | 处置 | 一句话理由 |
   |---|---|---|
-  | `hasNoUpgradeApi` | `agency/guards.ts:22` | 56（整文件） |
-  | `isMetadataMemoryText` | `core/episode.ts` | —（ADR-0066 决定**保留**：服务不 parseMemory 的读路径） |
-  | `renderIntent` | `core/intent.ts:54` | 61（同文件只有 `intentOf` 在用） |
-  | `isExchangeable` | `federation/contract.ts:23` | 31（整文件） |
-  | `renderIdentityModel` | `identity/timeline.ts:64` | 73（整文件） |
-  | `relationForProposal` | `temporal/edge.ts:30` | 30（整文件） |
+  | `auditDrift` | **删除** | 空壳包装，零引用且无信息价值 |
+  | `countInconsistency` | **接线** | 有明确用途注释的生成期校验，此前从未执行 |
+  | `isExchangeable` / `EXCHANGEABLE_KINDS` | **收敛** | 唯一源已存在却被重写；类型系统管不到内联字面量 |
+  | `renderIntent` | **保留并注明** | 完整形态渲染器（`question`/`desired_outcome`/`constraints`），实际读侧在 `observer/core.ts:31` **内联**只取 `goal`；删除会让完整形态失去唯一落点 |
+  | `renderIdentityModel` | **保留并注明** | 同上型：渲染 `IdentityModel`（时间线版本模型），而 `read_shadow` 的身份输出走 `soul/identity.ts` 的 `renderIdentity`（**不是同一对象**）⇒ 写完的模型无专属渲染出口 |
+  | `relationForProposal` | **保留并注明**（+ 新风险） | 原文已注「留接口」；**本轮新发现它忽略入参** ⇒ 升 **T7** |
+  | `writeMeta` | **保留并注明** | `meta.ts:92` 已声明是「明确要覆盖」的逃生舱；生产写 meta 一律走 `mutateMeta`（ADR-0068） |
+  | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
+  | `hasNoUpgradeApi` | **保留（暂不处置）** | `agency/guards.ts` **唯一**未被 `agency/engine.ts:4` import 的导出（同文件另 15 个都被用）；「遗漏接线」还是「有意保留」**本轮未判定**，且删它要动 invariant 面 |
+  | `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的目标能力，实现完整；**是否启用属产品决策**（默认路径可能刻意不做成本折叠）⇒ 见 T1 |
+  | 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷；按**家族**加注，不逐条删 |
 
-- **其余子类**：`renderIntent` / `renderIdentityModel` / `hasNoUpgradeApi` / `relationForProposal` /
-  `isExchangeable` —— 「算了/判了但没渲染或没接出去」，需逐个定性。
-- **完成判据**：余 6 个各落「接线 / 删除 / 保留并注明理由」。
+- **四处代码注释已加**（供后续读者不再重复分诊）：
+  `delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge-cost.ts`、
+  `core/intent.ts`、`identity/timeline.ts`。
+- **两个仍未决的产品问题**（**不是「没做」而是「需你拍板」**）：
+  ① `progressiveDisclosure` / `refineTree` 该**接线**还是**有意不启用**？
+  ② `renderIntent` / `renderIdentityModel` 该**并入某条读路径**还是长期作为备用渲染器？
+  ⇒ 这两问都属 `adr/0048` 的目标能力范围，**本轮不擅自决定**。
+- **完成判据**：~~余 6 个各落「接线 / 删除 / 保留并注明理由」~~ → **已达成**（上表逐条落格）。
 
 ### T6. 兜底根场景仍走**部署 fallback** —— ADR-0074 **明确未覆盖**的那一半
 
@@ -335,6 +351,25 @@
 - **注意（防过度表述）**：本条的**优先级低于 B3** —— B3 是「主路径（会话工作区）全失效」，
   本条是「边角路径（兜底根）未覆盖」。真机上主路径一旦恢复，本条可能长期不被触及。
 - **完成判据**：三选一落定；若选 ①②，须附一条能复现该场景的测试（无 session + 无显式 root）。
+
+### T7. `relationForProposal` **忽略入参**（本轮新发现，零引用所以当前无害）
+
+- **依据**：`adr/0062-wiring-audit.md`「补记（v1.15.33）」§5；T4 分诊时顺带发现。
+- **现状（读源码核实）**：`temporal/edge.ts:30`
+  `export const relationForProposal = (_n: any): TemporalEdge["relation"] => "evolved_into";`
+  —— 形参名带下划线前缀 = **有意不用**，恒返回常量。
+- **为什么现在无害、将来有害**：它当前是**零引用**（`adr/0062` 补记 §4 已登记「保留并注明」），
+  所以不影响任何行为。但**一旦按名字接线**（例如让 `TemporalEdge.relation` 由它决定），
+  调用方传什么节点都会被**静默丢弃**、统一成 `evolved_into`。
+- **与 `c.status=supported` / `isExchangeable` 那两族的区别（重要，别混为一谈）**：
+  那两族的危险是「**口径分叉**」（同一判据多处表达，其中一处漂移）；
+  这一处的危险是「**掉参数**」（签名收了参数却不用）。**两种都要修，但测法不同** ——
+  口径分叉可加「唯一源」棘轮；掉参数只能靠**行为断言**（传不同节点必须得到不同关系，或明确删掉形参）。
+- **现有注释的不完整处**：`temporal/edge.ts:29` 已写「保留：…v0.26 不跑 reflection，留接口」，
+  但**没写**「它忽略入参」这一点 ⇒ 本轮已在代码注明。
+- **完成判据**：三选一 —— ① 接线并让 relation 真正由入参决定（附行为断言）；
+  ② 删除（并确认 `TemporalEdge.relation` 的取值不依赖它）；③ 保留并**改签名去掉未用形参**
+  （`(_n: any)` → `()`），使「它不消费输入」在类型层面显式。
 
 ---
 

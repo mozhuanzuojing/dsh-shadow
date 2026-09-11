@@ -56,6 +56,14 @@ export const writeIdentityVersion = async (fs, ws, model) => {
         console.log("[dsh-shadow] identity timeline write failed:", e && e.message);
     }
 };
+// ⚠ **接线状态（v1.15.33 / T4 分诊结论：保留并注明，未接线）**：本函数全仓**零引用**（仅定义行）。
+//   它与 `core/intent.ts` 的 `renderIntent` 同型：都是**完整形态的渲染器**，而实际读侧走别的路径。
+//   `read_shadow` 的身份输出由 `soul/identity.ts` 的 `renderIdentity` 提供（`query/query.ts:129`），
+//   本函数渲染的却是 `IdentityModel`（**时间线版本模型**，带 `version`/`learned`/`currentModel`），
+//   与前者**不是同一个对象**。`mode:"identity-advance"` 会**写** `IdentityModel`（本文件上方），
+//   但读回它时用的是 `renderIdentity` ⇒ **写完的模型没有专属渲染出口**。
+//   **不删的理由**：它是这个模型唯一的完整性渲染；删掉等于承认该模型只能以原始 JSON 出现。
+//   **不接线的理由**：接到哪条读路径属产品决策（新增 mode 还是并入 identity 输出）⇒ `BACKLOG.md` T1 待决。
 export const renderIdentityModel = (m) => {
     const lines = ["[Identity]"];
     lines.push(`version ${m.version} · at ${m.at}`);

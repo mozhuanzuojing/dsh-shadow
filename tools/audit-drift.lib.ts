@@ -180,11 +180,13 @@ export const findPredicateExpressedTwice = (files: { file: string; text: string 
   return leads.sort((a, b) => a.detail.localeCompare(b.detail) || a.file.localeCompare(b.file) || a.line - b.line);
 };
 
-/** 跑全部检测器。 */
-export const auditDrift = (files: { file: string; text: string }[]) => ({
-  freshness: findFreshnessAsksProcess(files),
-  predicates: findPredicateExpressedTwice(files),
-});
+// **已删除（v1.15.33 / T4）**：此处的便利包装
+//   `export const auditDrift = (files) => ({ freshness: findFreshnessAsksProcess(files), predicates: findPredicateExpressedTwice(files) })`
+// 它是**全仓零引用**（生产 + 测试 + 夹具皆无调用者）：唯一的「消费者」本应是 CLI，而
+// `tools/audit-drift.ts:38-39` **直接**调用两个检测器、并不经过它。
+// 删它的判据不是「没人 import」（本仓有意导出测试向 API），而是它**没有任何信息价值** ——
+// 它只是把两次调用打包成一个对象，删掉不减少任何能力，留着却让人以为存在一条统一入口。
+// 若将来需要统一入口，应由 CLI 侧的调用点决定形态，而不是在这里预留一个空壳。
 
 /** 测试/CLI 共用：按标记抽出**原始文本**里的行号（不剥注释 —— 标记本身写在注释里）。 */
 export const markedLines = (text: string, marker: string): number[] => {

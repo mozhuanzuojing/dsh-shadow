@@ -1,3 +1,4 @@
+import { EXCHANGEABLE_KINDS } from "./types.js";
 export const packetOf = (opts) => ({
     sourceObserverId: opts.sourceObserverId,
     observationClaim: opts.observationClaim,
@@ -16,7 +17,15 @@ export const renderPacket = (p) => {
     return lines.join("\n");
 };
 // 认知边界 Enforcement：只允许交换三种类型；Identity/Memory/Dream 不可交换。
-export const isExchangeable = (kind) => ["ObservationClaim", "ValidationResult", "AlternativePerspective"].includes(kind);
+//
+// **v1.15.33 收敛（T4）**：本行原为**再手写一遍**同一数组
+//   `["ObservationClaim", "ValidationResult", "AlternativePerspective"].includes(kind)`
+// 而 `federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 早就是这份清单的**唯一源**。
+// 危险在于**类型系统只保证 `EXCHANGEABLE_KINDS` 覆盖 `ExchangeableKind`，管不到这个内联字面量**：
+// 将来往联合类型里加第四个可交换种类并同步 `EXCHANGEABLE_KINDS` 时，这里会**静默漏掉它**
+// （测试也只会测前三个）。与 ADR-0063/D5、以及同轮 `c.status=supported` 属同一族：
+// 「唯一判据源存在，却各处重写」。故改为引用唯一源。
+export const isExchangeable = (kind) => EXCHANGEABLE_KINDS.includes(kind);
 export const assertPacketBarrier = (p) => {
     const reasons = [];
     if (!p.boundary.identityExcluded)

@@ -44,6 +44,13 @@ export const intentOf = (args, topic) => {
         constraints: constraints.length ? constraints : undefined,
     };
 };
+// ⚠ **接线状态（v1.15.33 / T4 分诊结论：保留，未接线）**：本函数全仓**零引用**（仅定义行本身）。
+//   正在使用的是 `intentOf`（`observer/core.ts:20`），而它的渲染在 `observer/core.ts:31` **内联**为
+//   `` `intent ${o.intent.goal}` `` —— 即这里有**一个渲染器与一处内联渲染并存**。
+//   **为什么保留而不删**：`[Intent]` 这个多行带 `question`/`desired_outcome`/`constraints` 的形态
+//   是 `Intent` 类型的**完整**表达，内联那句只取了 `goal`。删掉它会让「完整形态」失去唯一落点，
+//   将来要给用户看完整 Intent 时只能重写。**但它是零引用，不要误以为已被渲染路径使用。**
+//   ⇒ 若要消除这处「两处表达」，应让 `observer/core.ts` 改用它，而不是删它（属 `BACKLOG.md` T1 待决）。
 export const renderIntent = (i) => {
     const lines = ["[Intent]"];
     lines.push(`goal ${i.goal}`);

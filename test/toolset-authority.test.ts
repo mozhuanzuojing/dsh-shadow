@@ -97,6 +97,31 @@ const { CAPABILITIES } = await import("../dist/core/toolset.js");
   assert.ok(!dist.has("实测") || manifest.counts.falseMeasured === 0, "若有「实测」条目，清单必须记 falseMeasured=0");
 }
 
+// ─────────────────────────────────────────────
+// ⑥ **接线棘轮**（v1.15.33）：`countInconsistency` 必须真的**被 CLI 调用**
+//    ① 只证明「这个函数是对的」；但一个**从不执行的检查**与没有检查等价 ——
+//    这正是 ADR-0062 那一族（「机制对了，断的是谁调用它」）。
+//    实测（v1.15.33 接线前）：`tools/toolset-authority.ts:24` 的 import **不含**它，
+//    CLI 只调 `unsubstantiatedMeasured` ⇒ `counts` 与 `rows` 的自洽性**生产从未校验过**。
+//    本段用**源码级棘轮**锁住接线（不是断言「函数存在」，而是断言「CLI 调了它」）。
+// ─────────────────────────────────────────────
+{
+  const src = readFileSync(join(repoRoot, "tools", "toolset-authority.ts"), "utf8");
+  assert.ok(/import\s*\{[^}]*\bcountInconsistency\b[^}]*\}\s*from/.test(src),
+    "tools/toolset-authority.ts 必须 import countInconsistency（否则清单自洽检查不会执行）");
+  assert.ok(/\bcountInconsistency\s*\(/.test(src),
+    "tools/toolset-authority.ts 必须**调用** countInconsistency，不能只 import");
+  // 反向不变量：校验必须在**写盘之前** —— 否则会先产出坏清单再报错。
+  const callAt = src.indexOf("countInconsistency(");
+  const writeAt = src.indexOf("writeFileSync(MANIFEST");
+  assert.ok(callAt >= 0 && writeAt >= 0 && callAt < writeAt,
+    `自洽校验必须发生在 writeFileSync 之前（否则会先写出坏清单）；call=${callAt} write=${writeAt}`);
+  // 且不一致时要**拒绝写入**（exit 1），不是只打印一行。
+  const guard = src.slice(callAt, writeAt);
+  assert.ok(/process\.exit\(1\)/.test(guard), "自洽校验失败必须拒绝写入（process.exit(1)），不能只打日志");
+  console.log("✔ ⑥ 接线棘轮：CLI 真的调用 countInconsistency，且**在写盘前**用 process.exit(1) 拒绝坏清单");
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · **本机读数不重新探测** —— `machineVersion` 是生成时那台机器的留档；");

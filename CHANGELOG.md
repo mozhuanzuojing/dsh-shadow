@@ -3,6 +3,96 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.33] T1/T4 结案：A 类**逐条**分诊 —— 修 1 处真断线 + 1 处同型漂移 + 删 1 处空壳
+
+用户 2026-09-11 选定 BACKLOG 的 **T1 + T4**（A 类线索逐条分诊、零引用导出定性）。
+**本轮是代码 + 测试改动**：接线 1 处、收敛 1 处、删除 1 处、加 4 处代码注释、新增 1 条接线棘轮。
+
+### 0. 一句话结论
+
+**A 段 33 条全部落格**：误报 12 · 零引用 18 符号 · 仅测试消费 4 · **真断线 1**。
+真断线是 **`countInconsistency`** —— 一个**有明确用途注释、却从未被调用**的生成期校验。
+顺带发现**与 T5 同型**的第二处漂移（`isExchangeable` 重写唯一源）与一处**新风险**（→ T7）。
+
+### 1. 补上「A 类精度低」的**成因**（原 ADR 只说了结论）
+
+工具数不出三类调用 ⇒ 本仓绝大多数 A 类线索都落在里面：
+
+| 盲区 | 本仓实例 |
+|---|---|
+| 调用点只在**注释**里 | `progressiveDisclosure` / `refineTree`（`core/knowledge-engine.ts:8` 的清单式注释） |
+| 经**数组/变量间接调用** | 4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards`、`:43` 循环调用）；`renderExperience`（`query/query.ts:251` 作回调传入）；`sembleCandidates`（`index-engine.ts:45` 默认参数注入） |
+| 「成对导出、只接一半」的**平行 API** | delegation 的 7 个 `assert*` 包装（引擎只用谓词） |
+
+### 2. 真断线（唯一一处，**已修**）：`countInconsistency` 从未被执行
+
+- **事实**：`tools/toolset-authority.lib.ts:66` 定义了它，注释写明
+  *「清单自洽性：`counts` 必须与 `rows` 实际相符」*；但 `tools/toolset-authority.ts:24` 的 import
+  **不含它**，CLI 只调 `unsubstantiatedMeasured`（`:74`）后直接 `writeFileSync`（`:111`）
+  ⇒ **`counts` 与 `rows` 的自洽性在生产里从未校验过**（只有测试在跑）。
+- **为什么是「真断线」而非「零引用」**：它有**明确用途注释**，且 `counts` 是**下游要读的汇总**
+  （离线棘轮断言 `falseMeasured === 0`）—— **一个从不执行的检查与没有检查等价**（ADR-0062 的原始命题）。
+- **修法**：在 `writeFileSync` **之前**调用；不一致则打印 + `process.exit(1)`，**拒绝写入坏清单**。
+- **锁**：`test/toolset-authority.test.ts` **⑥ 接线棘轮** —— 断言 CLI **import 了它**、**调用了它**、
+  调用在 **`writeFileSync` 之前**、失败路径是 `process.exit(1)`。
+  **关键区别：断言的是「CLI 调了它」，不是「函数存在」** —— 后者才是「机制对了、断的是谁调用它」的正解。
+  已验证**先红后绿**（临时移除 import ⇒ 红）。
+
+### 3. 与 T5 **同型**的第二处真漂移：`isExchangeable` 重写了唯一源（**已修**）
+
+- **事实**：`federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 是这份清单的**唯一源**（且**零引用**），
+  而 `federation/contract.ts:23` 的 `isExchangeable` **再手写一遍**同一三元素数组。
+- **危险点（比 `c.status=supported` 更具体）**：`ExchangeableKind` 是联合类型，
+  `EXCHANGEABLE_KINDS: ExchangeableKind[]` **会被类型检查**（漏一个编译不过），
+  但 `isExchangeable` 的内联字面量**不受该类型约束** ⇒ 将来加第四种可交换种类时，
+  类型系统会**逼你**更新 `EXCHANGEABLE_KINDS`、却**不会**提醒 `isExchangeable` ⇒ **静默漏掉**。
+- **修法**：改为 `EXCHANGEABLE_KINDS.includes(kind)`。
+- **未加单独棘轮（诚实标注）**：类型系统已承担主体约束，内联重写已消除，再加源码级正则棘轮边际价值低。
+
+### 4. 删除 1 处空壳：`auditDrift`
+
+全仓**零引用**（生产 + 测试 + 夹具**都**没有）。判据**不是**「没人 import」（本仓有意导出测试向 API），
+而是它**没有任何信息价值** —— 只是把两个检测器打包成一个对象；CLI（`tools/audit-drift.ts:38-39`）
+**直接**调用两个检测器，本就不经过它。删掉不减少任何能力，留着却让人以为存在一条统一入口。
+
+### 5. 其余各项：**保留并注明**（4 处代码注释）
+
+`renderIntent` / `renderIdentityModel`（完整形态渲染器，实际读侧走内联或 `renderIdentity`）·
+`progressiveDisclosure` / `refineTree` / `renderRetrieved`（`adr/0048 ①/②` 的目标能力，**是否启用属产品决策**）·
+7 个 delegation `assert*`（「谓词接线、`assert*` 不接线」是**一处决定**，按**家族**加注）·
+`writeMeta`（已声明的逃生舱）· `isMetadataMemoryText`（ADR-0066 已决定保留）。
+**`hasNoUpgradeApi` 保留、暂不处置**：它是 `agency/guards.ts` 唯一未被 `agency/engine.ts:4` import 的导出
+（同文件另 15 个都被用）；「遗漏接线」还是「有意保留」**本轮未判定**，且删它要动 invariant 面。
+
+### 6. 本轮**新发现**（未修，升 T7）：`relationForProposal` **忽略入参**
+
+`temporal/edge.ts:30` 签名为 `(_n: any)` ⇒ 恒返回 `"evolved_into"`。当前**零引用所以无害**；
+但**一旦按名字接线**，调用方传什么都**静默丢弃**。**与 §3 那族的区别很重要**：
+§3 的危险是「**口径分叉**」（可加「唯一源」棘轮），这一处的危险是「**掉参数**」
+（只能靠行为断言或删掉形参）。已在代码加注 ⇒ `BACKLOG.md` **T7**。
+
+### 7. 两处对 BACKLOG 原文的**更正**
+
+1. **`progressiveDisclosure` / `refineTree` 不是「误报」**：原文写「误报，但值得记」措辞含糊。
+   准确表述是**仅测试消费**（`test/knowledge-engine.test.ts:53,59`），生产命中只有**注释**。
+2. **`renderIntent` 不是「生产有调用点」**：它是**零引用**；`observer/core.ts:20` 用的是 `intentOf`。
+
+**`ChangeSet` 与 D1 的关系（防误读）**：本轮判 `ChangeSet` 为「接口**可达**」
+（`projection-store.ts:85` 的 store 工厂在生产被调用），而 **D1 说「未接线」仍然成立**
+（无生产**实例化点**）。两条不矛盾 ⇒ **D1 维持原判**。
+
+### 8. 验证
+
+- `npx tsc --noEmit` / `npm run typecheck:tools` / `npm run build` 均 **exit 0**。
+- 全套回归 **40/40 `ALL PASS ✅`**；`audit-drift.selftest` 与 `audit-wiring.selftest` 均 **ALL PASS**。
+- A 段：**33 条 → 31 条**。
+- **未验证（诚实标注）**：A 类是**线索级**，本轮结论基于**人工 grep/read**（每条带 `文件:行号`），
+  非工具自动判定；工具的**三条盲区未修** ⇒ A 段仍会误报。
+  两个**产品问题**仍待拍板（`progressiveDisclosure`/`refineTree` 启用与否；
+  `renderIntent`/`renderIdentityModel` 是否并入读路径）。
+
+---
+
 ## [v1.15.32] T5 结案：漂移审计检测 B 各键逐个复核 —— 并**先修了工具自己的漏报**（ADR-0070 补记）
 
 用户 2026-09-11 选定 BACKLOG 的 **T5**（漂移审计检测 B 余下各键复核 + 台账两级边界棘轮）。

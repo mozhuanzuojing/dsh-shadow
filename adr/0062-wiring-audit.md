@@ -107,5 +107,95 @@
 - [x] 工具经**标定**：8 组断言全过，含 2 处**真仓库已知答案**（`status=superseded` / `ChangeSet`）与 2 处**反例不误报**。
 - [x] 标定中修正的 4 个工具缺陷全部记录在案（本 ADR §2 表），可复现追溯。
 - [x] 全套回归通过；`tools/` 已在 `package.json` 的 `files` 白名单内（随包发布）。
-- [ ] **未验证**：A 类命中是否还有**第二处**真实断线（本轮只逐条核实了 guard 类与 `ChangeSet`，其余 80+ 条 B 类与 ~28 条 A 类**未逐条分诊**）。
+- [ ] **未验证**：A 类命中是否还有**第二处**真实断线（本轮只逐条核实了 guard 类与 `ChangeSet`）。
+- [x] ~~**未做**：A 类 ~30 条未逐条分诊~~ → **已结（v1.15.33，见下节）**。
 - [ ] **未做**：把审计接入任何自动门禁（本仓无 CI）。
+
+---
+
+## 补记（v1.15.33）：A 类**逐条**分诊结案 —— 33 条全部落格
+
+`BACKLOG.md` 的 **T1 / T4** 要求「A 类每条落『误报 / 真断线 / 零引用』三选一，结果回写 ADR-0062」。
+本轮把 **A 段 33 条**逐条核实完毕（`node tools/audit-wiring.ts .`，生产源码 192 个）。
+
+### 0. 先说工具的三条口径（否则会误读结论）
+
+1. **`tools/` 被算作生产**：`isProductionPath` 只排除 `node_modules/dist/test/tests/fixtures/__tests__`。
+   故 `auditDrift` / `countInconsistency` 这类工具内部符号会进 A 段。
+2. **工具数不出三类调用**：① 调用点只在**注释**里；② 经**数组/变量间接调用**（`for (const g of guards) g(x)`）；
+   ③ 「成对导出、只接一半」的**平行 API**（谓词接线、`assert*` 包装不接线）。
+   本仓绝大多数 A 类线索都属这三类 —— 这正是原 ADR 只说了结论、没说成因的那条「A 类精度低」的**具体成因**。
+3. **A 段计数随语料变**：本轮实测 **33**（`adr/0062` 原文记 ~30；差异来自删/增符号）。
+
+### 1. 分诊结论
+
+| 类别 | 条数 | 符号 |
+|---|---|---|
+| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/query.ts:251` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
+| **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge-engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
+| **误报 · 跨层 API** | **1** | `ChangeSet` —— `core/projection-store.ts:85` 的 store 工厂在生产被调用（`:168`），故 `invalidateFor(new ChangeSet(...))` 是**可达消费点**。⚠ **与 D1 的关系**：D1 说「`ChangeSet`/`invalidateFor` 生产中未接线」**仍然成立**（无生产**实例化点**）；两条不矛盾 —— 一条说「接口可达」，一条说「没人实例化」。⇒ **D1 维持原判** |
+| **零引用（生产 + 测试皆无调用）** | **18 符号 / 8 决定** | 见 §4 表 |
+| **仅测试消费** | **4** | `renderRetrieved`、`isExchangeable`、`readTemporalGraph`、`readGraph`（后二者 ADR-0071 已定「保留 + 改正 + 收敛」） |
+| **真断线（原本意图接线却断了）** | **1** | **`countInconsistency`** —— 见 §2 |
+| **工具自身** | **2** | `auditDrift`（全仓零引用，**已删**）、`countInconsistency`（**已接线**） |
+
+### 2. 真断线（**本轮唯一一处，已修**）：`countInconsistency` 从未被执行
+
+- **事实**：`tools/toolset-authority.lib.ts:66` 定义了 `countInconsistency`，注释写明
+  *「清单自洽性：`counts` 必须与 `rows` 实际相符」*；但 `tools/toolset-authority.ts:24` 的 import
+  **不含它**，CLI 只调 `unsubstantiatedMeasured`（`:74`）后直接 `writeFileSync`（`:111`）
+  ⇒ **`counts` 与 `rows` 的自洽性在生产里从未校验过**，只有 `test/toolset-authority.test.ts` 在跑。
+- **为什么算「真断线」而不只是「零引用」**：它有**明确用途注释**、且 `counts` 是**下游要读的汇总**
+  （离线棘轮断言 `falseMeasured === 0`）—— 一个**从不执行的检查与没有检查等价**（本 ADR 的原始命题）。
+- **修法**：在 `writeFileSync` **之前**调用它；不一致则打印 + `process.exit(1)`，**拒绝写入坏清单**。
+- **锁**：`test/toolset-authority.test.ts` **⑥ 接线棘轮** —— 断言 CLI **import 了它**、
+  **调用了它**、调用发生在 **`writeFileSync` 之前**、且失败路径是 `process.exit(1)` 而非只打日志。
+  **这不是「断言函数存在」，而是断言「CLI 调了它」** —— 后者才是本 ADR 命题的正解。
+  已验证**先红后绿**（临时移除 import ⇒ 红）。
+
+### 3. 与 T5 同型的第二处真漂移：`isExchangeable` 重写了唯一源（**已修**）
+
+- **事实**：`federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 是这份清单的**唯一源**（且**零引用**），
+  而 `federation/contract.ts:23` 的 `isExchangeable` **再手写一遍**同一三元素数组字面量。
+- **危险点（比 `c.status=supported` 那次更具体）**：`ExchangeableKind` 是联合类型，
+  `EXCHANGEABLE_KINDS: ExchangeableKind[]` **会被类型检查**（漏一个编译不过），
+  但 `isExchangeable` 的内联字面量**不受该类型约束** ⇒ 将来加第四种可交换种类时，
+  类型系统会**逼你**更新 `EXCHANGEABLE_KINDS`、却**不会**提醒 `isExchangeable` ⇒ 静默漏掉。
+- **修法**：`isExchangeable = (kind) => EXCHANGEABLE_KINDS.includes(kind)`（引用唯一源）。
+- **未加单独棘轮（诚实标注）**：与 T5 的 `claim-admission` 不同，这里**类型系统已承担主体约束**，
+  内联重写已消除；再加源码级正则棘轮边际价值低，故只做收敛 + 本记录。
+
+### 4. T4 余下各项的处置（各落「接线 / 删除 / 保留并注明」）
+
+| 符号 | 处置 | 理由（已写进代码注释） |
+|---|---|---|
+| `auditDrift` | **删除** | 全仓零引用（生产 + 测试 + 夹具**都**没有）。判据不是「没人 import」，而是它**没有任何信息价值**：只是把两个检测器打包成一个对象，删掉不减少任何能力。CLI 直接调两个检测器，本就不经过它 |
+| `countInconsistency` | **接线** | 见 §2 |
+| `isExchangeable` (+`EXCHANGEABLE_KINDS`) | **收敛** | 见 §3 |
+| `writeMeta` | **保留并注明** | `persistence/meta.ts:92` 已声明是「明确要覆盖」的逃生舱；生产写 meta **一律走 `mutateMeta` 事务**（ADR-0068）⇒ 它不是遗漏接线，是**有意留的后门**。本 ADR 登记结论、不重复其注释 |
+| `relationForProposal` | **保留并注明**（+ **新风险**，见 §5） | `temporal/edge.ts:29` 原文已写「保留：…v0.26 不跑 reflection，留接口」 |
+| `renderIntent` / `renderIdentityModel` | **保留并注明** | 二者同型：都是**完整形态的渲染器**，而实际读侧走别的路径（`observer/core.ts:31` 内联 / `soul/identity.ts` 的 `renderIdentity`）。它们承载「完整形态」的唯一落点，删掉会让模型只能以原始 JSON 出现；**接线与否属产品决策** ⇒ T1 待决。已在两处代码加注 |
+| `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的**目标能力**，实现完整；是否启用属产品决策（默认路径可能刻意不做成本折叠）⇒ T1 待决。已在 `core/knowledge-cost.ts` 加注 |
+| 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷。已在 `expansion-guard.ts` 加注（家族级） |
+| `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `agency/guards.ts` **唯一**未被 `agency/engine.ts:4` import 的导出（同文件另 15 个都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
+| `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
+| 4 个长程 `assert*` | **误报** | `interaction.ts:11-17` 入数组、`:43` 循环调用 |
+
+**`assert*` 家族的结构性结论**：delegation 7 + 长程 4 = 11 个 `assert*` 的**唯一消费者是测试**。
+根因是**同一个决定**（导出「带理由」的断言包装作测试面），**不是 11 处独立缺陷**。
+⇒ 处置按**家族**做（加一条家族注释），不逐条删 —— 删一个会与其余不一致。
+
+### 5. 本轮**新发现**（未修，已登记为待办）
+
+**`relationForProposal` 忽略入参**：`temporal/edge.ts:30` 签名为 `(_n: any)` ⇒ 恒返回 `"evolved_into"`。
+它现在是**零引用**所以无害；但**一旦接线**（例如把 `TemporalEdge.relation` 改由它决定），
+调用方传什么都会被丢弃、**静默统一成 `evolved_into`**。已加注并升为 `BACKLOG.md` **T7**。
+
+### 6. 计数与验证
+
+- A 段：**33 条 → 31 条**（减少来自 `auditDrift` 的删除；`countInconsistency` 仍被工具报出，
+  但它现在是**已被接线的**，其「零调用」判定已失效 —— 这正是**记录的接线棘轮**要守的）。
+- `npx tsc --noEmit` / `npm run typecheck:tools` / `npm run build` 均 **exit 0**。
+- 全套回归 **40/40**；`audit-drift.selftest` 与 `audit-wiring.selftest` 均 **ALL PASS**。
+- **诚实标注**：A 类是**线索级**；本轮结论基于**人工 grep/read**（每条带 `文件:行号`），
+  非工具自动判定；工具自身的三条盲区（注释 / 间接调用 / 平行 API）**未修** ⇒ A 段仍会误报。
