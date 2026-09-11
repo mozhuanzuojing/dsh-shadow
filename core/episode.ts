@@ -83,44 +83,52 @@ export const deriveCreatedBy = (p: { decisionEvents: DecisionEvent[]; userMessag
   return "agent";
 };
 
+/**
+ * 「会话元数据」的**唯一判准**（ADR-0066 定稿）。此前本仓有**三份口径互不相同**的实现，
+ * 现收敛为：本函数是**唯一判据源** —— `deriveAtomKind` 用按字段的它，
+ * `isMetadataMemoryText` 是它在**文本表面**的等价表达（给不 parseMemory 的读路径用）。
+ *
+ * 定义：**只在没有可执行内容时才成立** —— 入口是写侧兜底字面量 `"shadow"`
+ * （`core/writer-materialize.ts:175`：`primaryComp?.(id || "") || "shadow"`，语义是「**没识别出组件**」），
+ * **有用户要点、但既无材料也无决策**（用户说了话，系统没产出可执行的东西）。
+ *
+ * 为什么是这一条 —— 真语料 **7089 条**实测（`adr/0066`；探针 `_research/d5-signal-experiment.ts`）：
+ *
+ * | 判准 | 判 metadata | 其中其实有工作痕迹* | 精度 | 挡住投影 |
+ * |---|---|---|---|---|
+ * | 旧：`!materials && (entry==="shadow" \|\| userMessages.length)` | 4744 | **4279** | **9.8%** | **66.9%** |
+ * | 本条 | **93** | **0** | **100.0%** | **1.3%** |
+ *
+ * \* 工作痕迹 = 有动作行或思维行（真的干活了）。用户话**不算**痕迹 ——
+ *   会话元数据的语义恰是「有用户要点、但没有实际工作」。（第一版探针把用户话也算成痕迹，
+ *   导致判准自相矛盾、精度恒为 0；已自曝并修正指标。）
+ *
+ * 后果对比：旧判准让 `deriveShadowNodes` 只产出 2345/7089 个节点（主题召回可见 100%、
+ * `shadow_query` 只见 33.1% ⇒ **两条读路径相差 66.9%**）；本条产出 6458（**91.1%**），分歧消失。
+ */
+export const isSessionMetadataAtom = (p: { entry: string; materials: string[]; decisions: string[]; userMessages: string[] }): boolean =>
+  p.entry === "shadow" && p.userMessages.length > 0 && !p.materials.length && !p.decisions.length;
+
 // kind：memory 二级属性（非 new type）。决策→experience；todo/plan 内容→task；
-// 无材料且为会话元数据入口→metadata；其余→experience。
-//
-// ⚠ 已知信号问题（ADR-0063，**待用户裁决 D5**，本处只标注不改行为）：
-//   第 4 行的 `p.entry === "shadow"` 把 `entry` 当「会话元数据」的代理，但 `entry` 恰恰是
-//   **写侧取不到组件时的兜底字面量**（`core/writer-materialize.ts:175`：
-//   `const entry = hooks.primaryComp?.(id || "") || "shadow"`）——即「没识别出组件」，
-//   而不是「这是会话记账」。实测（真 `.shadow` 语料 6960 条）：
-//     · 被判 metadata 的 4137 条 **entry 全部是 "shadow"**，占全库 **59.4%**；
-//     · 其中 **94.4% 有实质内容**（有动作行 / 思维行 / 用户话）——不是记账；
-//     · 后果：`validateAtomProjection` 据此把 **67.2% 的库** 挡在 `shadow_query` 之外
-//       （`deriveShadowNodes` 只产出 2283/6960 个节点），而主题召回路径
-//       （`query/query.ts:263-296`）**不做 kind 过滤** ⇒ 同一份语料两条读路径可见性相差 67.2%。
-//   复核方式：`node _research/measure-metadata-quality.ts`、`measure-path-visibility.ts`。
+// 会话元数据（判据见 `isSessionMetadataAtom`）→metadata；其余→experience。
 export const deriveAtomKind = (p: { entry: string; materials: string[]; decisions: string[]; goal: string; userMessages: string[] }): AtomKind => {
   if (p.decisions.length || p.goal) return "experience";
   const text = `${p.entry} ${[...p.materials, ...p.userMessages, p.goal].join(" ")}`.toLowerCase();
   if (/todo|plan|待办|任务|尚未|未完成|next|backlog/.test(text)) return "task";
-  if (!p.materials.length && (p.entry === "shadow" || p.userMessages.length)) return "metadata";
+  if (isSessionMetadataAtom(p)) return "metadata";
   return "experience";
 };
 
-// v1.8.0 Gate 覆盖：Atom 是否进入「认知查询/召回」默认集（kind∈metadata|session → 排除）。
+// 读侧（topic 召回路径不 parseMemory）用**文本启发式**判定同一件事。
 //
-// ⚠ **生产中零调用点**（ADR-0063 实测：全仓含测试在内，除本行定义外无任何引用）。
-//   它与下面 `isMetadataMemoryText` 是**同一条规则的两份实现**，而真正生效的是**第三份** ——
-//   `core/lineage-validator.ts:18` 的 `validateAtomProjection`（由 `core/node.ts:48` 调用）。
-//   三份实现口径互不相同：本函数按 `kind`（实测判 4137 条）、`isMetadataMemoryText` 按文本
-//   启发式（实测判 110 条）、`validateAtomProjection` 按 `kind`（即与前一份同口径，只在投影路径生效）。
-//   处置（删除 / 接线 / 保留）见 ADR-0063 与待办 D5，**不在本轮静默改动**。
-export const isCognitiveAtom = (p: { kind?: AtomKind }): boolean => p?.kind !== "metadata" && p?.kind !== "session";
-
-// 读侧（topic 召回路径不 parseMemory）用文本启发式判定「会话元数据」原子：entry=shadow + 有用户要点 + 无材料 + 无决策。
+// 它是 `isSessionMetadataAtom` 在文本表面的等价表达（同样的「entry=shadow + 有用户要点 +
+// 无材料 + 无决策」四条）。两份写法的差别只在**数据来源**：本函数解析文本，那条用已解析字段。
+// `test/atom-kind-gate.test.ts` 有一致性锁：两份实现对同一批输入必须给出同一答案。
 //
-// ⚠ **生产中零调用点**（同 ADR-0063）。它当初是为**不 parseMemory 的读路径**写的，
-//   而该路径（`query/query.ts:263-296` 的主题打分循环）今天**仍未 parseMemory、仍未做 kind 过滤**
-//   ⇒ 这道门从未合上。反过来说，它比 `deriveAtomKind` 的口径**窄 37 倍**
-//   （真语料实测 110 vs 4137 条），因为它额外要求「有用户要点」且 `entry === "shadow"`。
+// 历史（ADR-0063/0066）：本函数与已删除的 `isCognitiveAtom` 都曾是**生产中零调用点**，
+// 而当时生效的第三份（`deriveAtomKind` 的旧判准）口径与这两份都不同 —— 实测精度仅 9.8%。
+// ADR-0066 定稿后：`isCognitiveAtom` **已删除**（它的规则与 `validateAtomProjection` 完全重复），
+// 本函数**保留**（它服务不 parseMemory 的读路径），且两条口径现在**经测量一致**。
 export const isMetadataMemoryText = (text: unknown): boolean => {
   const t = String(text || "");
   const entry = (t.match(/^# (.+)$/m) || [])[1]?.trim() || "";
