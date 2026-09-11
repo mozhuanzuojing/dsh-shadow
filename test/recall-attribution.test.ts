@@ -1350,6 +1350,9 @@ const todayStr = todayLocal();
         const f = nk.slice(prefix.length).split("/")[0];
         if (f !== "_index.md") names.add(f);
       }
+      // 忠实模拟宿主契约（v1.15.15）：`dsh-fs-local/lib/index.js:277` 列不存在的目录会抛 FS_NOT_FOUND。
+      // 原 mock 返回 []（不抛）⇒ `fsExists` 的目录兜底把「不存在」误判成「存在」⇒ 本场景的冲突检测失效。
+      if (!names.size) throw new Error("FS_NOT_FOUND");
       return [...names].map((n) => ({ name: n }));
     },
   };
@@ -1658,6 +1661,8 @@ const todayStr = todayLocal();
       const prefix = base + "/";
       const names = new Set();
       for (const k of store41.keys()) { const nk = k.replace(/\\/g, "/"); if (!nk.startsWith(prefix)) continue; const f = nk.slice(prefix.length).split("/")[0]; if (f !== "_index.md") names.add(f); }
+      // 忠实模拟宿主契约（v1.15.15）：列不存在的目录会抛（`dsh-fs-local/lib/index.js:277`）。
+      if (!names.size) throw new Error("FS_NOT_FOUND");
       return [...names].map((n) => ({ name: n }));
     },
   };

@@ -113,7 +113,12 @@ console.log(`✔ ⑦ 棘轮 WSL：文档里 ${wslTools.size} 个工具全部能�
 // ④ 巡检渲染：分类分组 + 「未探测」与「未检出」必须可区分
 // ─────────────────────────────────────────────
 const rows = await surveyCapabilities({ survey: "providers" });
-assert.ok(rows.some((r) => r.available === true), "本机应有已检出的 provider");
+// v1.15.13 修正：原断言是 `rows.some(r => r.available === true)`（「本机应有已检出的 provider」）——
+// 这把**某台机器的安装状态**写死进了测试。本机 zg / semble 实测均 ENOENT（未装），该断言**恒红**，
+// 于是一进 CI / 换机就红，且一条永远红的测试会掩盖以后真正的失败。
+// 真正要守护的不变量是**与机器无关**的：默认巡检必须真的**探过** provider（available ∈ {true,false}，
+// 而不是 null=未探测）；装了才有 true，没装就该得 false——两者都是「探测确实跑了」的证据。
+assert.ok(rows.every((r) => r.capability.kind !== "provider" || r.available !== null), "默认巡检必须真的探测 provider（available 不得为 null=未探测）");
 assert.ok(rows.every((r) => r.capability.kind === "provider" || r.available === null), "默认巡检不应探测 reference");
 const out = renderSurvey(rows, { survey: "providers" });
 assert.ok(out.includes("## 插件内接线"), "应含分类标题");

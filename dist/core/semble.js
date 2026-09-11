@@ -1,3 +1,4 @@
+import { isAbsoluteLocator } from "../evidence/paths.js";
 /** 单次检索超时。首次调用可能触发索引构建，故比 zg 的 8s 宽。 */
 const DEFAULT_TIMEOUT_MS = 30000;
 /** stdout 上限（Semble 返回 JSON，大命中可能偏大）。 */
@@ -52,8 +53,8 @@ export const absolutizeLocator = (locator, ws) => {
     const p = String(locator || "").trim().replace(/\\/g, "/");
     if (!p)
         return "";
-    if (/^([a-zA-Z]:\/|\/)/.test(p))
-        return p; // 已是绝对（含盘符或根斜杠）
+    if (isAbsoluteLocator(p))
+        return p; // 已是绝对（含盘符或根斜杠）—— 判定集中一处
     const base = String(ws || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
     return base ? `${base}/${p}` : p;
 };

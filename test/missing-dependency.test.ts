@@ -32,6 +32,12 @@ const makeHost = (config: any, seeds: { rel: string; text: string }[] = []) => {
         const first = nk.slice(base.length).split("/")[0];
         if (first !== "_index.md") names.add(first);
       }
+      // **忠实模拟宿主契约**（v1.15.15）：`dsh-fs-local/lib/index.js:277` 明确
+      //   `if (!info) throw new FsError(..., "FS_NOT_FOUND")` —— 列一个**不存在**的目录会**抛**。
+      // 原 mock 返回 `[]`（不抛），于是 `fsExists` 的目录兜底会把「不存在」误判成「存在」，
+      // 让这个测试**失真**（它本意是验证「缺件不冒充 verified」）。
+      // 局限：本 mock 是扁平文件表，无法表达「存在的空目录」；真实 fs 在 probe 过后返回 `[]`。
+      if (!names.size) throw new Error("FS_NOT_FOUND");
       return [...names].map((n) => ({ name: n }));
     },
   };

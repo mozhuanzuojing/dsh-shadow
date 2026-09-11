@@ -5,6 +5,7 @@
 //     交它裁决就会违反 ADR-0043「无证据不返回」与 ADR-0049「绝不把近似说成 verified」。
 // 缺件不静默：semble 未装（ENOENT）→ unavailable，调用方回退 fs 全量扫描，**绝不**冒充有候选。
 import type { AtomEvidenceRef } from "./lineage.js";
+import { isAbsoluteLocator } from "../evidence/paths.js";
 
 /** 单次检索超时。首次调用可能触发索引构建，故比 zg 的 8s 宽。 */
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -60,7 +61,7 @@ export const runSemble = async (args: string[], timeoutMs = DEFAULT_TIMEOUT_MS):
 export const absolutizeLocator = (locator: unknown, ws: unknown): string => {
   const p = String(locator || "").trim().replace(/\\/g, "/");
   if (!p) return "";
-  if (/^([a-zA-Z]:\/|\/)/.test(p)) return p;               // 已是绝对（含盘符或根斜杠）
+  if (isAbsoluteLocator(p)) return p;                       // 已是绝对（含盘符或根斜杠）—— 判定集中一处
   const base = String(ws || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
   return base ? `${base}/${p}` : p;
 };

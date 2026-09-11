@@ -3,6 +3,243 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.16] 多粒度检索层形态：路由已存在 + 实测否证全量扇出（ADR-0060）
+
+用户 2026-09-11 设想：**「向量化库多弄几个，片段超大/大/中/小，每次找回从这些库中都找一遍。」**
+动手前先做文献裁决 + 本系统真语料实测，得到**一个改变问题性质的事实**。
+
+### 一、**现有实现已经是「路由」，不是「扇出」**
+
+```
+core/types.ts:35        indexEngine?: { provider?: "fs" | "zg" | "semble" }   ← 单值
+core/index-engine.ts:47 const provider = config?.indexEngine?.provider || "fs";
+                        if (provider === "zg") { ... } if (provider === "semble") { ... }
+```
+工厂按配置路由到**恰好一个** provider。⇒ 用户的设想**不是「加能力」，而是对现有设计的退步**。
+
+### 二、真语料实测（新增 `tools/retrieval-eval.mjs`）
+
+把调研标注为「属组合推理、**非论文结论**」的那条（无阈值检索器 + 扇出）变成**测量**：
+语料 = 真 `.shadow` 1500 条；检索器**按 ADR-0054 实测性质建模**（Semble 无阈值、无负信号）；同候选预算；3 个种子报极差。
+
+| 策略 | recall | 均返回 | **离题噪声** |
+|---|---|---|---|
+| A 单库·有阈值 | **0.358**±0.033 | 3.57 | **0.000** |
+| B 单库·**无阈值** | 0.358 | 5.00 | **1.000** |
+| C **扇出2库·无阈值**+RRF（用户设想） | 0.347±0.053 | 5.00 | **1.000** |
+| D **路由·有阈值+弃权** | **0.358** | 3.57 | **0.000** |
+| E 扇出2库·有阈值+RRF | 0.347±0.053 | 5.00 | 1.000 |
+| F 单库·二元组·有阈值 | 0.344±0.060 | 5.00 | 1.000 |
+
+**四条读数**：① 「无阈值」**一个**性质就足以灌满噪声（1.000 vs 0.000），扇出只是**乘以库数**；② 扇出**即便含互补来源也不升召回**（0.347 vs 0.358，对单·二元组仅 +0.002，落在 ±0.053 内）；③ **阈值强弱因检索器而异**（二元组 1.000 vs 词 0.000）→ 每来源须各自标定；④ 最差即无阈值扇出。
+
+### 三、Decision
+
+- **不做**无阈值全量扇出；**多粒度若做**，形态是**单索引 + 层级表示**（`level`/`parent_id`，只索引最细层，命中沿 parent 上取），不是「建 N 个库」；
+- **加判别层（重排器）优先于加库**（2606.28367）；
+- 路由优先用**简单基线**（2607.24010）；
+- 多来源时**每个来源各自标定阈值**（SSCC；实测已证阈值强弱因检索器而异）；
+- **ADR-0001 / 0043 / 0054 的定位不变**——向量层仍是 ADR-0001 Notes 说的**增强层**、ADR-0054 说的**检索层非裁决层**。
+
+### 四、两处引用陷阱（防以后写错）
+
+- 「**small-to-big / parent-document / auto-merging retriever**」**没有原始论文**（名字来自 LangChain 工程文档）→ 学术等价物是 RAPTOR / HiChunk / UMG-RAG / HeteRAG；
+- 「**Markdown heading 切块**」**无任何论文**（最大空白，只能自己实验定）。
+
+### 五、**产品方向待用户裁决**（本 ADR 未单方面推翻任何既有 ADR）
+
+用户原话「每次从这些库都找一遍」被实测与文献**双重反对**，但这是产品方向，须用户拍板：① 按证据改（推荐）② 装机后用同一工具复测再定 ③ 仍按原设想（本 ADR 记录「用户决策，证据反对」）。
+
+### 验证
+
+- `tools/retrieval-eval.mjs` 可复现（确定性 PRNG、多种子、同预算）；`npm run eval:retrieval` 已加。
+- 实验过程中**修掉两处自己的方法学缺陷并记入代码注释**：① off-topic 查询最初用两条真实文档的词拼接 → 「正确答案为空」不成立；② 收紧「2-gram 全局频率 ≤1」→ **一条都构造不出**（常用 2-gram 遍地都是），已回退并记录。
+- `npx tsc` clean；全量回归 30 个测试文件全过（本次为工具 + 文档，未改运行时行为）。
+
+### 未验证（诚实标注）
+
+- 检索器是**按已实测性质建模**的，**不是**真实向量模型；本机 semble / zg **均未安装**（ENOENT），**未跑真实向量检索**。
+- 查询是「部分线索」式（3 token），**非自然语言问句**；recall 绝对值只在本设定下有意义，**不可外推**。
+- 只测 RRF 一种融合（凸组合 CC 未对照）；**未测重排层增益**（本仓无重排器，「先重排」引自文献）。
+
+
+## [v1.15.15] 引用漂移检测（双条件）+ 修两处假「证据失效」（ADR-0059）
+
+用户 2026-09-11 目标之一：**「管理本地知识库的可供 agent 执行的真相和纠正漂移」**。先做文献裁决 + 在自己的真语料上量事实，再动手。
+
+### 一、先量事实：表面 40.8% 的「证据失效」里，绝大多数是假的
+
+对 `.shadow` 全库（6465 个记忆）跑 `evidencePathsOf → isPathLike → fsExists`（**召回路径上真正用的那条链**）：
+
+| 阶段 | 可解析 | 判「缺失」 | 占比 |
+|---|---|---|---|
+| 修复前 | 1489 | **1025** | **40.8%** |
+| 修 F1（绝对路径）后 | 2255 | 267 | 10.6% |
+| 再修 F2（目录）+ 双条件后 | — | **226** | **9.0%** |
+
+⇒ **约 76% 的「证据失效」判定是假的。**
+
+### 二、F1（真 bug）：绝对 locator 被拼上工作区前缀
+
+`fsExists` **无条件**做 `${ws}/${rel}` → `D:/project/wslc1/x.ps1` 变成 `D:/project/dsh1/D:/project/wslc1/x.ps1`（双前缀，必然不存在）。
+实测：`D:/project/dsh1/vendor/dsh-shadow/package.json`（**磁盘上确实存在**）被判 `false`。
+**后果**：语料里常见的跨项目绝对路径证据被一律判失效 → 召回里 `score × 0.5` + `stale=true`、`mode:"context"` 报「已过时」——**假漂移**。
+**修复**：新增 `isAbsoluteLocator`（`evidence/paths.ts`，**单一来源**；`core/semble.ts` 的 `absolutizeLocator` 一并改用它，消掉两处各写正则的漂移风险）。
+
+### 三、F2（同类真 bug）：目录引用被判缺失
+
+`readText` 对目录必失败 → 引用**存在的目录**被判失效（实测 `D:\project\wslc1` 11×、`D:\project\dsh1\vendor\dsh-shadow` 8×）。
+**修复**：`readText` 失败后补一次 `listDir`。
+**依据来自读真实源码**（`@deepseek-ai/dsh-fs-local/lib/index.js`）：`readText(目录)` 抛 `FS_NOT_REGULAR_FILE`(:341) / `listDir(目录)` 成功 / `listDir(不存在)` 抛 `FS_NOT_FOUND`(:277) → 兜底正确。
+
+### 四、检测判据：**双条件**（借 CASCADE / FSE 2026 的思路）
+
+> 只有 **① 引用是「可检查的具体路径」** 且 **② 确实解析不到** 才判失效。
+
+新增 `isConcreteLocator` 排除**通配符**（`scripts/*.ps1`）与 **git ref**（`origin/main`）——「通配符还在不在」不是良构问题。
+接入 `observer/arbitrate.ts`（`conflictOf`，驱动召回降权）与 `core/context.ts`（`refPathsOf`，驱动「已过时」标记）。
+> `isPathLike` **故意不收窄**：它服务粗筛，收窄会改变既有调用方的候选集。
+
+### 五、**不做自动纠正**（证据反对）
+
+| 排除 | 依据 |
+|---|---|
+| 让 LLM 判「哪条过期」 | 余弦相似度分辨「被推翻」vs「换个说法」**AUROC 仅 0.59**（[2606.26511](https://arxiv.org/abs/2606.26511)，近随机） |
+| LLM 自动纠正 / 解冲突 | 误纠正率主导 **53–94%**（[2605.27559](https://arxiv.org/abs/2605.27559)）；Huang（ICLR 2024）无外部反馈时**性能反降**；Kamoi（TACL 2024）**无任何工作证明提示式自纠能成功** |
+| 裸用 LLM 检测文档-代码漂移 | DocPrism（**ISSTA 2026**）：**flag rate 98%**，加约束后降到 14% |
+
+**本仓既有设计被证据正面支持**：`DriftReport` 只答「有无违反边界」且明确≠现实断言、`Mutation = LLM 只能读+总结，永不 create fact/关系`——**本轮不改**。
+
+### 六、测试侧发现：两处 mock 不忠实
+
+修 `fsExists` 后 `missing-dependency` 与 `recall-attribution` **先红**。查证是 **mock 不忠实**：其 `listDir` 对不存在的目录返回 `[]` 而不抛，与已核实的真实契约（抛 `FS_NOT_FOUND`）不符。已按真实源码修正两处 mock。
+> 通用教训：**mock 与宿主契约不符时，测的是 mock 不是系统**（本仓 v1.15.2 踩过同类）。
+
+### 验证
+
+- 前后对照数据：**1025 → 267 → 243**（非单点断言）。
+- 新增 `test/evidence-absolute-path.test.ts`（10 组断言，含「修复前为红」的回归）。
+- 端到端：`conflictOf` 对存在的绝对路径 `missing=[]`（不降权）、对不存在的仍正确报出。
+- `npx tsc` clean；**全量回归 30 个测试文件全过**。
+
+### 未验证（诚实标注）
+
+- 真机 DSH 内 `host.fs` 的 `resolve` 语义（测试用 `node:path` + 真实磁盘模拟）。
+- 其余测试的内存 fs mock 是否还有别处不忠实（本轮只修了被暴露的两处）。
+- **残余 9.0% 未解析**，主体是跨项目相对路径（如 `scripts\wslc-utils.ps1` 来自 wslc1）——需「跨项目根注册」，本轮不做。**不靠猜基线**（猜已被证伪两次）。
+
+
+## [v1.15.14] 工具台账扩源：程序化核验 + 按名字猜包 ID 被证伪（ADR-0058）
+
+用户 2026-09-11：**「现在的工具集不够，去论文 github 上继续找」**。ADR-0055 曾**否决**「台账用外部数据源」——本轮先核实那条否决是否仍成立，再扩。
+
+### 一、外围核验：哪些源能用（全部本机实测）
+
+| 源 | 实测 | 适用 |
+|---|---|---|
+| **`winget show`（本机 CLI）** | ✅ 直接给 版本/发布者/绰号/描述/主页/**许可证**，且查的是本机实际源 | **首选：核验 + 取版本 + 取许可证** |
+| winget-pkgs raw manifest | ✅ MIT；**但路径含版本号，不知道版本就拼不出**（`ripgrep`/`jadx` 实测 404） | 读 manifest 原文 |
+| winget CDN `source.msix` | ✅ **20,230,433 字节**、`Last-Modified: Fri, 11 Sep 2026 00:00:20 GMT`；解出 `Public/index.db`（**41,680,896 字节** SQLite，**14,816 个包**） | 一次性**全量候选发现** |
+| ScoopInstaller/Main bucket | ✅ Unlicense | 补 Windows 二进制名 + license |
+| Repology API | ✅ 123 repo，**确认 `has_winget=False`** | 仅 Linux/WSL 侧 |
+| **`api.winget.run`** | ❌ **冻结在 2023-03-16**（fzf/ripgrep/neovim 的 `UpdatedAt` 全是 `2023-03-16T14:34:1x`） | **已废** |
+
+### 二、核心纠错：**按名字自动解析包 ID 是错的**（实测证伪）
+
+CDN 索引解出后按 moniker/命令/名称/ID 后缀自动解析，**立刻产出假阳性**：
+
+| 工具名 | 自动猜到 | 真实 |
+|---|---|---|
+| `xh` | `Mozilla.Firefox.xh` @ 155.0.1 ❌ | `ducaale.xh` @ 0.26.2 |
+| `delta` | `eToro.Delta` @ 2026.1.0 ❌ | `dandavison.delta` @ 0.19.2 |
+| `nix` | `ADInstruments.LabChart...OxfordOptronix` ❌ | — |
+| `choose` / `ack` / `sad` / `maven` / `sox` / `dog` | 各为无关包 ❌ | — |
+
+**根因**：winget 包 ID 是 `<Publisher>.<Package>`，同名不同物极多，后缀匹配把无关包的尾巴当命中。
+⇒ **包 ID 由人裁决（`tools/toolset-seed.json`），机器只做①核验 ②候选发现（列候选供裁决，绝不自动选）。**
+
+### 三、扩源结果
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 台账总数 | 50 | **107**（2 provider + 105 reference） |
+| 分类 | 13 | **17**（新增 容器与编排 / 安全与供应链 / 文档与转换 / 媒体处理） |
+| 带许可证 | 0 | **57** |
+
+新增 `tools/winget-verify.mjs`（**locale 无关**解析：不按「版本:」/「Version:」标签匹配，改用「值像版本形状」+ 首行 `[ID]` 锚点）+ `tools/winget-verify-seed.mjs`。**57/57 核验通过**。
+
+### 四、拐点口径澄清（避免误用证据）
+
+最硬的证据 [arXiv:2606.30317](https://arxiv.org/abs/2606.30317)：「tool-selection accuracy drops below 90% between **10 and 15 tools per context**」。
+**关键限定**：量的是**每次请求注入 prompt 的工具 schema 数**，**不是目录条目数**。
+⇒ 台账**不进上下文**（是按需读的查表），故**可以扩**；**必须保持小的是「模型面前可调用的工具面」**；**禁止把台账条目暴露成独立工具**。
+
+### 五、顺带修一处**静默丢弃**
+
+`tool()` 辅助函数的 `note` 参数只在「无 winget 包」分支被用，**有包分支把它整条丢掉** → 传进来的许可证/坑说明**无声消失**。已改为拼接，并新增第 11 参 `verSrc` 区分版本出处（`"实测"`=本机跑出来 vs `"权威核验"`=来自 `winget show` 目录，**不代表本机已装**）——否则「实测」会说谎。
+
+### 验证
+
+- 台账自洽：107 项、0 重复 id、0 undefined、17 分类全部登记进 `CATEGORY_ORDER`、probe 无空参数。
+- **双向棘轮**：101 个 winget ID 台账↔文档全部对齐（扩源时棘轮**先红后绿**，证明它有效）。
+- `npx tsc` clean；**全量回归 29 个测试文件全过**。
+- 核验器单测：中/英文界面的 `winget show` 输出解析结果一致；「未找到」正确识别。
+
+### 未验证（诚实标注）
+
+- 新条目 `probe` 旗标在真机（多数工具本机未装，只会显示「未检出」）。
+- `winget show` 解析在**其他本地化**（非中/英）下的表现。
+- 无 CI 自动跑核验（依赖网络与本机 winget）。
+
+
+## [v1.15.13] 委派 × 工具集接缝：修 P0「toolset 不可达」+ 能力预检（ADR-0057）
+
+用户 2026-09-11：**「agent-team 和工具集要整合、配合，缺一不可」**。整合前两块**零功能交叉**（全仓 grep 证实）。调查中先挖出一个**潜伏三个版本的 P0 缺陷**，再落地接缝。
+
+### 一、P0：`mode:"toolset"` 是死代码（修复）
+
+`query/reads.ts` 定义了 `toolset` ReadQuery，但 **`readQueries` 数组没有把它放进去**。`dispatchReadQuery` 找不到它 → `{mode:"toolset"}` 落到 `query.ts` 的「无 topic」分支 → **静默返回 `_index.md`**。整块台账**没有任何可达入口**，而 README / CONTEXT / ADR-0055 全把它写成现行入口。
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| 缺陷存在 | `findReadQuery({mode:'toolset'})` = **MISS** | 已注册 11 个 mode，无 toolset |
+| 潜伏起点 | v1.15.9 加入当天即未挂上 | `git log -L 238,238:query/reads.ts` |
+| 为何三个版本全绿 | 三个 toolset 测试**全部直接 import 执行函数**，从不走 dispatch | **断的是接线，不是执行** |
+| 修复 | `readQueries` 补 `toolset`（+ `index.ts` mode 描述补登记） | 12 个 mode 全可达 |
+
+**新增 `test/toolset-dispatch.test.ts`**，纪律是**只走真实入口 `dispatchReadQuery`**，含双向棘轮：正向（`{mode:"toolset"}` 必须被接住）+ 反向（**可 dispatch 的 mode 必须在 `index.ts` mode 描述里登记**，防「接得上却说不出口」）。已**回档复验**：改动前该断言红、`findReadQuery` = MISS。
+
+> 通用教训：**测试若绕过真实入口，就测不到接线的断裂**。seam 类重构必须留一条走真实入口的测试。
+
+### 二、接缝：能力预检（ADR-0057）
+
+- **`findCapabilities(need)`**（`core/toolset.ts`）：按能力需求反查台账。匹配面 = `id` / 二进制名 / `label` / `provides` / `category`，词边界 + 别名归一（`fdfind→fd`、`batcat→bat`、`ripgrep→rg`、`z→zoxide`…，与 WSL 棘轮 ALIAS 同源）。**不是能力评分**，不排优劣、不给主体打分（inv 179/184）。
+- **`precheckCapabilities()` / `renderPrecheck()`**（`core/toolset-exec.ts`）：`read_shadow({mode:"toolset", need:[...]})`。**只读**，未命中不编造命令。
+- **输出固定带三条硬边界**，由测试锁住：① **不是闸门**（reference 不影响插件行为）② **装完本会话不可见**（宿主 PATH 是启动时快照，同进程 teammate 同样看不见）③ **缺件只能上报、不能自装**（审批凭据是发起者，自装撞 inv 182）。
+- **persona ② 补一句**派活前预检（preset 平面只加纪律，闸门仍在 host）。
+
+### 三、一个关键的硬约束（F2）
+
+`installCapability` 早已写明：**宿主进程的 PATH 是启动时快照，新装的工具通常要重启宿主才可见**。而委派的 teammate 是**同进程内的子 Agent**。
+⇒ **「预检 → 缺件先装 → 再派」这条最自然的整合链路，在单会话内收益为零。** 预检的价值是让你**提前知道走哪条降级路径**，不是让你先装。这条已写进输出（不只在文档里）。
+
+### 四、顺带修掉一个**恒红的测试**
+
+`test/toolset-catalog.test.ts` ④ 原断言「**本机应有已检出的 provider**」——把**某台机器的安装状态**写死进测试。本机 zg/semble 实测均 ENOENT，该断言**恒红**；而一条永远红的测试会**掩盖以后真正的失败**。改为与机器无关的不变量（默认巡检必须真的探过 provider，`available` 不得为 `null`）。用 `git stash` 回档确认它在本次改动前**就已恒红**，排除「我引入」的可能。
+
+### 验证
+
+- `npx tsc --noEmit` + `npx tsc`：**clean**。
+- 全量回归 **29 个测试文件全过**（新增 `toolset-dispatch` / `toolset-precheck`）。
+- P0 回档复验：改动前 `findReadQuery({mode:"toolset"})` = MISS，改动后 HIT。
+
+### 未验证（诚实标注）
+
+- 真机 `read_shadow({mode:"toolset", need:[...]})` 的**端到端**返回——测试走的是 `dispatchReadQuery` 层，未经过 DSH 工具调用栈。
+- 本机无 zg/semble，预检的「多命中短路」在**已装**状态下未经实测（只在未检出状态验过）。
+- **F2 的实测复现**（装了工具但本进程看不见）未跑：会真的安装软件；代码依据是 `installCapability` failed 分支注释与 ADR-0055 §4。
+
+
 ## [v1.15.12] 缺陷清扫：修 5 项真缺陷 + 2 处记账勘误（其中 1 项既有 bug 被本轮激活）
 
 用户 2026-09-10：**「所有发现的缺陷都要fix」**。先把散落在 CHANGELOG / ADR / 代码注释里的「记账未修 / 已知缺口」逐条**查证当前是否仍存在**（不凭记账动手），再分类处置。

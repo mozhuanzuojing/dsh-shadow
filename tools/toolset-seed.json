@@ -1,0 +1,73 @@
+{
+  "_comment": "台账扩源种子（人裁决 + 机器核验）。**pkg 必须是精确包 ID，不是搜索词**——按名字猜已被证伪。核验工具：tools/winget-verify.mjs。",
+  "_rule": "选入判据：publisher 能证明是上游本身（如 JohnMacFarlane.Pandoc / Insecure.Nmap / Kitware.CMake），或公认的官方再打包。选不出上游的宁可不收。",
+  "candidates": [
+    { "id": "upx",        "pkg": "UPX.UPX",                        "bin": "upx",        "label": "UPX",              "category": "逆向与二进制分析", "flag": "--version", "provides": "可执行文件压缩/加壳", "replaces": "—", "note": "上游自维护" },
+    { "id": "rizin",      "pkg": "Rizin.Rizin",                    "bin": "rizin",      "label": "Rizin",            "category": "逆向与二进制分析", "flag": "-v",        "provides": "逆向工程框架（radare2 分支）", "replaces": "radare2", "note": "radare2 活跃分支；GUI 是 Rizin.Cutter" },
+    { "id": "dnspy",      "pkg": "dnSpyEx.dnSpy",                  "bin": "dnSpy",      "label": "dnSpyEx",          "category": "逆向与二进制分析", "flag": "--version", "provides": ".NET 调试与反编译", "replaces": "—", "note": ".NET 反编译首选；原 dnSpy 已停更，此为维护分支" },
+    { "id": "ilspy",      "pkg": "icsharpcode.ILSpy",              "bin": "ILSpy",      "label": "ILSpy",            "category": "逆向与二进制分析", "flag": "--version", "provides": ".NET 反编译（开源）", "replaces": "—", "note": "上游组织 icsharpcode" },
+    { "id": "exiftool",   "pkg": "OliverBetz.ExifTool",            "bin": "exiftool",   "label": "ExifTool",         "category": "逆向与二进制分析", "flag": "-ver",      "provides": "文件元数据读写（EXIF 等）", "replaces": "—", "note": "Windows 再打包；上游 philharvey/ExifTool" },
+
+    { "id": "nmap",       "pkg": "Insecure.Nmap",                  "bin": "nmap",       "label": "Nmap",             "category": "网络与下载", "flag": "--version", "provides": "端口扫描与网络探测", "replaces": "—", "note": "上游 Insecure.Com（nmap 官方发布者名）" },
+    { "id": "dog",        "pkg": "ogham.dog",                      "bin": "dog",        "label": "dog",              "category": "网络与下载", "flag": "--version", "provides": "DNS 查询客户端", "replaces": "dig / nslookup", "note": "作者 ogham（同 bat 系出）" },
+    { "id": "doggo",      "pkg": "MrKaran.Doggo",                  "bin": "doggo",      "label": "doggo",            "category": "网络与下载", "flag": "--version", "provides": "DNS 查询（现代）", "replaces": "dig", "note": "作者 MrKaran" },
+    { "id": "httpie",     "pkg": "HTTPie.HTTPie",                  "bin": "http",       "label": "HTTPie",           "category": "网络与下载", "flag": "--version", "provides": "人性化 HTTP 客户端", "replaces": "curl（可读性更好）", "note": "上游自维护" },
+    { "id": "mitmproxy",  "pkg": "mitmproxy.mitmproxy",            "bin": "mitmdump",   "label": "mitmproxy",        "category": "网络与下载", "flag": "--version", "provides": "HTTP(S) 抓包与改写", "replaces": "Fiddler / Charles", "note": "命令行版是 mitmdump；另有 mitmweb/mitmproxy" },
+    { "id": "curl",       "pkg": "cURL.cURL",                      "bin": "curl",       "label": "curl",             "category": "网络与下载", "flag": "--version", "provides": "HTTP 客户端", "replaces": "—", "note": "Windows 自带的 curl.exe 版本旧，此为上游最新" },
+    { "id": "iperf3",     "pkg": "ar51an.iPerf3",                  "bin": "iperf3",     "label": "iperf3",           "category": "网络与下载", "flag": "--version", "provides": "网络带宽测试", "replaces": "—", "note": "Windows 构建；上游 esnet/iperf" },
+
+    { "id": "miller",     "pkg": "Miller.Miller",                  "bin": "mlr",        "label": "Miller",           "category": "文本与数据", "flag": "--version", "provides": "CSV/TSV/JSON 流式处理", "replaces": "awk / cut / join", "note": "二进制名是 mlr" },
+    { "id": "duckdb",     "pkg": "DuckDB.cli",                     "bin": "duckdb",     "label": "DuckDB CLI",       "category": "文本与数据", "flag": "--version", "provides": "进程内分析型 SQL（可直接查 CSV/Parquet）", "replaces": "sqlite3（分析场景）", "note": "上游自维护" },
+    { "id": "xsv",        "pkg": "BurntSushi.xsv.MSVC",            "bin": "xsv",        "label": "xsv",              "category": "文本与数据", "flag": "--version", "provides": "CSV 命令行工具集", "replaces": "csvkit", "note": "作者 BurntSushi（同 ripgrep）" },
+    { "id": "jj",         "pkg": "jj-vcs.jj",                      "bin": "jj",         "label": "Jujutsu",          "category": "Git 与版本控制", "flag": "--version", "provides": "VCS（Git 兼容，工作流不同）", "replaces": "—", "note": "上游 jj-vcs；与 Git 仓库互操作" },
+    { "id": "gron",       "pkg": "TomHudson.gron",                 "bin": "gron",       "label": "gron",             "category": "文本与数据", "flag": "--version", "provides": "JSON → 可 grep 的赋值语句", "replaces": "jq（grep 场景）", "note": "作者 TomHudson" },
+
+    { "id": "kubectl",    "pkg": "Kubernetes.kubectl",             "bin": "kubectl",    "label": "kubectl",          "category": "容器与编排", "flag": "version",   "provides": "Kubernetes 命令行", "replaces": "—", "note": "版本子命令是 `kubectl version`" },
+    { "id": "helm",       "pkg": "Helm.Helm",                      "bin": "helm",       "label": "Helm",             "category": "容器与编排", "flag": "version",   "provides": "Kubernetes 包管理", "replaces": "—", "note": "版本子命令是 `helm version`" },
+    { "id": "k9s",        "pkg": "Derailed.k9s",                   "bin": "k9s",        "label": "k9s",              "category": "容器与编排", "flag": "version",   "provides": "Kubernetes TUI", "replaces": "kubectl 手敲", "note": "作者 derailed" },
+    { "id": "kind",       "pkg": "Kubernetes.kind",                "bin": "kind",       "label": "kind",             "category": "容器与编排", "flag": "version",   "provides": "本地 Kubernetes（容器内）", "replaces": "minikube", "note": "上游 kubernetes-sigs" },
+    { "id": "minikube",   "pkg": "Kubernetes.minikube",            "bin": "minikube",   "label": "minikube",         "category": "容器与编排", "flag": "version",   "provides": "本地单节点 Kubernetes", "replaces": "—", "note": "上游 kubernetes" },
+    { "id": "kustomize",  "pkg": "Kubernetes.kustomize",           "bin": "kustomize",  "label": "kustomize",        "category": "容器与编排", "flag": "version",   "provides": "K8s 清单定制（无模板）", "replaces": "helm（轻量场景）", "note": "上游 kubernetes-sigs" },
+    { "id": "stern",      "pkg": "stern.stern",                    "bin": "stern",      "label": "stern",            "category": "容器与编排", "flag": "--version", "provides": "多 Pod 日志聚合", "replaces": "kubectl logs -f", "note": "上游 stern" },
+    { "id": "dive",       "pkg": "wagoodman.dive",                 "bin": "dive",       "label": "dive",             "category": "容器与编排", "flag": "version",   "provides": "镜像分层分析", "replaces": "docker history", "note": "作者 wagoodman；用于精简镜像" },
+    { "id": "skaffold",   "pkg": "Google.ContainerTools.Skaffold", "bin": "skaffold",   "label": "Skaffold",         "category": "容器与编排", "flag": "version",   "provides": "K8s 开发内循环", "replaces": "手写 CI 脚本", "note": "Google 官方" },
+    { "id": "podman",     "pkg": "RedHat.Podman",                  "bin": "podman",     "label": "Podman",           "category": "容器与编排", "flag": "--version", "provides": "无守护进程容器引擎", "replaces": "docker", "note": "RedHat 官方" },
+
+    { "id": "trivy",      "pkg": "AquaSecurity.Trivy",             "bin": "trivy",      "label": "Trivy",            "category": "安全与供应链", "flag": "--version", "provides": "漏洞/配置/密钥扫描", "replaces": "—", "note": "Aqua Security 官方" },
+    { "id": "gitleaks",   "pkg": "Gitleaks.Gitleaks",              "bin": "gitleaks",   "label": "gitleaks",         "category": "安全与供应链", "flag": "version",   "provides": "Git 历史密钥扫描", "replaces": "手写正则", "note": "上游 gitleaks" },
+    { "id": "syft",       "pkg": "Anchore.Syft",                   "bin": "syft",       "label": "Syft",             "category": "安全与供应链", "flag": "version",   "provides": "SBOM 生成", "replaces": "—", "note": "Anchore 官方" },
+    { "id": "grype",      "pkg": "Anchore.Grype",                  "bin": "grype",      "label": "Grype",            "category": "安全与供应链", "flag": "version",   "provides": "SBOM/镜像漏洞扫描", "replaces": "—", "note": "Anchore 官方，与 syft 配套" },
+    { "id": "sops",       "pkg": "SecretsOPerationS.SOPS",         "bin": "sops",       "label": "SOPS",             "category": "安全与供应链", "flag": "--version", "provides": "加密的配置文件管理", "replaces": "明文密钥", "note": "上游 getsops" },
+    { "id": "cosign",     "pkg": "Sigstore.Cosign",                "bin": "cosign",     "label": "Cosign",           "category": "安全与供应链", "flag": "version",   "provides": "制品签名与验签", "replaces": "—", "note": "Sigstore 官方" },
+    { "id": "kubescape",  "pkg": "kubescape.kubescape",            "bin": "kubescape",  "label": "Kubescape",        "category": "安全与供应链", "flag": "version",   "provides": "K8s 安全基线扫描", "replaces": "—", "note": "ARMO 官方" },
+
+    { "id": "cmake",      "pkg": "Kitware.CMake",                  "bin": "cmake",      "label": "CMake",            "category": "构建与任务", "flag": "--version", "provides": "跨平台构建系统", "replaces": "手写 Makefile", "note": "Kitware 官方" },
+    { "id": "ninja",      "pkg": "Ninja-build.Ninja",              "bin": "ninja",      "label": "Ninja",            "category": "构建与任务", "flag": "--version", "provides": "高速构建后端", "replaces": "make（速度）", "note": "上游 ninja-build" },
+    { "id": "k6",         "pkg": "GrafanaLabs.k6",                 "bin": "k6",         "label": "k6",               "category": "构建与任务", "flag": "version",   "provides": "负载测试", "replaces": "ab / jmeter", "note": "Grafana 官方" },
+    { "id": "goreleaser", "pkg": "goreleaser.goreleaser",          "bin": "goreleaser", "label": "GoReleaser",       "category": "构建与任务", "flag": "--version", "provides": "Go 制品发布自动化", "replaces": "手写发布脚本", "note": "上游自维护" },
+    { "id": "bazelisk",   "pkg": "Bazel.Bazelisk",                 "bin": "bazelisk",   "label": "Bazelisk",         "category": "构建与任务", "flag": "version",   "provides": "Bazel 版本管理器", "replaces": "手动装 bazel", "note": "上游 bazelbuild" },
+
+    { "id": "pandoc",     "pkg": "JohnMacFarlane.Pandoc",          "bin": "pandoc",     "label": "Pandoc",           "category": "文档与转换", "flag": "--version", "provides": "文档格式互转（md/docx/pdf…）", "replaces": "—", "note": "作者 John MacFarlane（上游本人）" },
+    { "id": "qpdf",       "pkg": "QPDF.QPDF",                      "bin": "qpdf",       "label": "qpdf",             "category": "文档与转换", "flag": "--version", "provides": "PDF 结构变换/修复", "replaces": "—", "note": "上游 qpdf" },
+    { "id": "tesseract",  "pkg": "UB-Mannheim.TesseractOCR",       "bin": "tesseract",  "label": "Tesseract OCR",    "category": "文档与转换", "flag": "--version", "provides": "图片/PDF 文字识别", "replaces": "—", "note": "Windows 常用再打包；上游 tesseract-ocr" },
+    { "id": "poppler",    "pkg": "oschwartz10612.Poppler",         "bin": "pdftotext",  "label": "Poppler",          "category": "文档与转换", "flag": "-v",        "provides": "PDF 文本/图片提取（pdftotext/pdftoppm）", "replaces": "—", "note": "Windows 构建；上游 freedesktop/poppler" },
+    { "id": "typst",      "pkg": "Typst.Typst",                    "bin": "typst",      "label": "Typst",            "category": "文档与转换", "flag": "--version", "provides": "排版系统（LaTeX 替代，快）", "replaces": "LaTeX", "note": "上游 typst" },
+
+    { "id": "imagemagick", "pkg": "ImageMagick.ImageMagick",       "bin": "magick",     "label": "ImageMagick",      "category": "媒体处理", "flag": "--version", "provides": "图像转换与处理", "replaces": "—", "note": "二进制名是 magick（IM7）" },
+    { "id": "yt-dlp",     "pkg": "yt-dlp.yt-dlp",                  "bin": "yt-dlp",     "label": "yt-dlp",           "category": "媒体处理", "flag": "--version", "provides": "网络视频/音频下载", "replaces": "youtube-dl", "note": "上游自维护" },
+    { "id": "mkvtoolnix", "pkg": "MoritzBunkus.MKVToolNix",        "bin": "mkvmerge",   "label": "MKVToolNix",       "category": "媒体处理", "flag": "--version", "provides": "Matroska 封装/拆分", "replaces": "—", "note": "作者 Moritz Bunkus（上游本人）" },
+    { "id": "oxipng",     "pkg": "Shssoichiro.Oxipng",             "bin": "oxipng",     "label": "oxipng",           "category": "媒体处理", "flag": "--version", "provides": "PNG 无损压缩", "replaces": "optipng", "note": "上游自维护" },
+
+    { "id": "glab",       "pkg": "GLab.GLab",                      "bin": "glab",       "label": "GitLab CLI",       "category": "Git 与版本控制", "flag": "--version", "provides": "GitLab 命令行（MR/Issue/CI）", "replaces": "网页操作", "note": "上游 glab（GitHub CLI 的 GitLab 对应物）" },
+    { "id": "git-absorb", "pkg": "tummychow.git-absorb",           "bin": "git-absorb", "label": "git-absorb",       "category": "Git 与版本控制", "flag": "--version", "provides": "自动把改动折进正确的提交（fixup）", "replaces": "手动 git rebase -i", "note": "作者 tummychow" },
+
+    { "id": "bottom",     "pkg": "Clement.bottom",                 "bin": "btm",        "label": "bottom",           "category": "磁盘与系统", "flag": "--version", "provides": "系统监控（跨平台 top）", "replaces": "任务管理器 / htop", "note": "二进制名是 btm；作者 ClementTsang" },
+    { "id": "sysinternals", "pkg": "Microsoft.Sysinternals.Suite", "bin": "handle",     "label": "Sysinternals Suite", "category": "磁盘与系统", "flag": "-?",      "provides": "Windows 深度诊断（handle/procdump/autoruns…）", "replaces": "—", "note": "微软官方；套件含数十个工具，此处探针用 handle" },
+    { "id": "hwinfo",     "pkg": "REALiX.HWiNFO",                  "bin": "HWiNFO64",   "label": "HWiNFO",           "category": "磁盘与系统", "flag": "--version", "provides": "硬件信息与传感器读取", "replaces": "—", "note": "上游 REALiX" },
+
+    { "id": "conan",      "pkg": "JFrog.Conan",                    "bin": "conan",      "label": "Conan",            "category": "版本与包管理", "flag": "--version", "provides": "C/C++ 包管理", "replaces": "vcpkg（另一选择）", "note": "JFrog 官方" },
+    { "id": "pixi",       "pkg": "prefix-dev.pixi",                "bin": "pixi",       "label": "pixi",             "category": "版本与包管理", "flag": "--version", "provides": "跨语言环境与包管理", "replaces": "conda（更快）", "note": "上游 prefix-dev" },
+    { "id": "miniconda",  "pkg": "Anaconda.Miniconda3",            "bin": "conda",      "label": "Miniconda3",       "category": "版本与包管理", "flag": "--version", "provides": "Python/Conda 环境管理", "replaces": "—", "note": "二进制名是 conda；Anaconda 官方" },
+    { "id": "chocolatey", "pkg": "Chocolatey.Chocolatey",          "bin": "choco",      "label": "Chocolatey",       "category": "版本与包管理", "flag": "--version", "provides": "Windows 包管理器（winget 之外的第二渠道）", "replaces": "—", "note": "上游 chocolatey；台账多条目在其上有包时可作补充渠道" }
+  ]
+}

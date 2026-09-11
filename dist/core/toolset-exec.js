@@ -18,7 +18,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { capabilityOf, providerCapabilities, referenceCapabilities, CATEGORY_ORDER, } from "./toolset.js";
+import { capabilityOf, findCapabilities, providerCapabilities, referenceCapabilities, remedyFor, CATEGORY_ORDER, } from "./toolset.js";
 import { resolveZgInvocation, resetZgInvocationCache } from "../evidence/zg.js";
 /** provider 探测超时（首次可能触发索引/模型加载）。 */
 const PROBE_TIMEOUT_PROVIDER = 15000;
@@ -212,4 +212,94 @@ export const renderInstall = (o) => {
         "unknown-capability": "❌ 未登记",
     };
     return [`# 工具集台账 · 安装 ${o.id}`, "", `- 结果：${badgeMap[o.status]}`, `- 命令：${o.display || "（未解析）"}`, `- 说明：${o.detail}`].join("\n");
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// 能力预检（v1.15.13，接缝 G3/G4）—— 委派机制 × 工具集台账的**接缝**
+//
+// 为什么需要：派活时手里只有一句「这个活得做全文搜索 / 反编译 APK」，而台账的入口是 id。
+// 预检把「需要什么能力」翻译成「在本机是否就位、缺了退到哪」。
+//
+// **三条硬边界（都不是偏好，是可引用条文）**：
+//   ① **不是闸门**：`reference` 是通用工具目录，ADR-0055 §1 明写它「不影响插件行为」。
+//      把 reference 当派活硬依赖（「缺 rg 就不许派活」）是**事实错误**。预检只给事实与降级建议。
+//   ② **产出只能是「降级」或「告知需重启」，不能是「先装再派」**：见 PROCESS_LOCAL_VISIBILITY。
+//   ③ **不给主体打分**：预检回答「机器上有没有」，**不**排专家优劣、不产出 capability level
+//      （ADR-0029.1 inv 179 `Agency ≠ Identity`、ADR-0030 inv 184 `Feedback ≠ Permission Upgrade`；
+//      `delegation/types/context.ts` 的禁增列 trust/confidence/reputation/capabilityLevel 同源）。
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * **本进程可见性约束（C4）** —— 为什么「先装再派」在一个会话内收益为零。
+ *
+ * `installCapability` 装完仍可能探测不到：**宿主进程的 PATH 是启动时快照**，
+ * 新装的工具通常要**重启宿主**才能被本进程看到。而委派的 teammate 是**同进程内的子 Agent**。
+ * ⇒ 装完那一回合，Lead 与所有 teammate **都用不上**。
+ *
+ * 该事实原先只在**安装失败之后**才说（见 `installCapability` 的 failed 分支）；
+ * 预检期就该说——否则调用方会按「装上就能用」做计划。
+ */
+export const PROCESS_LOCAL_VISIBILITY = "宿主进程的 PATH 是启动时快照：**本进程内新装的工具通常要重启宿主才可见**（同进程内的子 Agent 同样看不见）。故预检后**不要**按「先装再派」做计划——处置是**降级**或**告知用户需重启**。";
+/**
+ * 按能力需求预检。**只读**（只探测，绝不安装）。
+ * 未命中的需求不探测、不编造命令——只如实说「台账未登记」。
+ */
+export const precheckCapabilities = async (needs, timeoutMs) => {
+    const list = (needs || []).map((n) => String(n || "").trim()).filter(Boolean).slice(0, 12);
+    return Promise.all(list.map(async (need) => {
+        const hits = findCapabilities(need);
+        if (!hits.length)
+            return { need, hit: false, hits: [], available: null, detail: "台账未登记该能力（不编造命令）" };
+        // 多命中（如 coreutils 三变体）→ 逐条探测，任一可用即算就位。
+        let firstMissing = null;
+        for (const c of hits) {
+            const p = await probeCapability(c.id, timeoutMs);
+            if (p.available)
+                return { need, hit: true, capability: c, hits, available: true, detail: `${c.label} 可用（${p.detail}）` };
+            if (!firstMissing)
+                firstMissing = p;
+        }
+        return { need, hit: true, capability: hits[0], hits, available: false, detail: firstMissing?.detail || "未检出" };
+    }));
+};
+/**
+ * 渲染预检结果。**必须**带上三条边界（不是闸门 / 装完进程内不可见 / 缺件只能上报不能自装）——
+ * 少任何一条，读侧输出就会被误读成「许可」或「禁令」。
+ */
+export const renderPrecheck = (rows, platform = process.platform) => {
+    const lines = ["# 工具集台账 · 能力预检", ""];
+    const missing = [];
+    for (const r of rows) {
+        if (!r.hit) {
+            lines.push(`- ⚠ ${r.need} —— **台账未登记**（不编造装法；见 docs/toolchain-windows.md 自行补充）`);
+            continue;
+        }
+        const badge = r.available === true ? "✅" : r.available === false ? "⬜" : "·";
+        const state = r.available === true ? "就位" : r.available === false ? "未检出" : "（未探测）";
+        lines.push(`- ${badge} ${r.need} → ${r.capability.label}（\`${r.capability.id}\`）—— ${state}${r.available === true ? `（${r.detail}）` : ""}`);
+        if (r.available !== true) {
+            lines.push(`    - 缺件时退到：${r.capability.degradesTo}`);
+            const rem = remedyFor(r.capability.id, platform);
+            if (rem)
+                lines.push(`    - 装法（**需用户显式要求 + 宿主审批**，见下）：\`${rem.cmd}\``);
+            missing.push(r.capability);
+        }
+        if (r.hits.length > 1) {
+            lines.push(`    - 同能力多条目：${r.hits.map((h) => `\`${h.id}\``).join(" / ")}（择一即可，勿全装）`);
+        }
+    }
+    if (missing.length) {
+        const providerMissing = missing.filter((c) => c.kind === "provider");
+        const referenceMissing = missing.filter((c) => c.kind === "reference");
+        lines.push("");
+        if (providerMissing.length) {
+            lines.push(`> **插件内接线缺件**（会改变插件行为，影响是实的）：${providerMissing.map((c) => `\`${c.id}\``).join(" / ")}。`);
+        }
+        if (referenceMissing.length) {
+            lines.push(`> **通用工具缺件**（\`kind:"reference"\`）：${referenceMissing.map((c) => `\`${c.id}\``).join(" / ")}。`);
+        }
+    }
+    lines.push("");
+    lines.push(`> **预检不是闸门**：\`reference\` 是通用工具目录，ADR-0055 §1 明写它「不影响插件行为」。缺它**不构成**不派活的理由——只说明该走降级路径（见每行的「退到」）。`);
+    lines.push(`> ${PROCESS_LOCAL_VISIBILITY}`);
+    lines.push(`> **缺件的处置权不在被委派者**：安装要经用户显式要求 + 宿主审批（只有 \`allowed-once\` 是授予），且审批凭据是**发起者**。被派出去的子代理/teammate 发现缺件，**只上报、不自装**——自装等于把「改机器」塞进委派范围，撞 inv 182「scope 不可在执行中隐式扩大」。`);
+    return lines.join("\n");
 };

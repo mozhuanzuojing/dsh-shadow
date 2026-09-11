@@ -2,7 +2,7 @@
 // zg/fs 是"发现了什么"（discover/verify），这里才是"它意味着什么"（Arbitration）。从 index.ts 迁出。
 import { confidenceOf } from "../retrieval/rank.js";
 import { ageDaysOf } from "../core/util.js";
-import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
+import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 import type { GatewayEvidenceRef, EvidenceResult } from "../core/types.js";
 
 export const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => {
@@ -85,7 +85,11 @@ export const lineageOf = (list: { date: string; time: string; decision?: string 
 };
 
 export const conflictOf = async (fs: any, ws: string, text: string, verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>) => {
-  const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 12);
+  // **双条件**（ADR-0059，借 CASCADE/FSE 2026 的思路）：只有在
+  //   ① 引用是**可检查的具体路径**（`isConcreteLocator` 排除通配符 `scripts/*.ps1`、git ref `origin/main`）
+  //   ② 它确实解析不到
+  // 同时成立时，才判「证据缺失」。缺 ① 就去验存在性必然判缺失 → 会误降权（见 `evidence/paths.ts` 注释）。
+  const paths = evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator).slice(0, 12);
   if (!paths.length) return { missing: [] as string[] };
   const missing: string[] = [];
   for (const p of paths) {

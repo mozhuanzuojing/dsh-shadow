@@ -50,6 +50,19 @@ export declare const CATEGORY_ORDER: string[];
 export declare const providerCapabilities: () => Capability[];
 export declare const referenceCapabilities: () => Capability[];
 export declare const capabilityOf: (id: unknown) => Capability | undefined;
+/**
+ * **按「需要什么能力」反查台账**（v1.15.13，接缝 G2）。
+ *
+ * 为什么需要它：`capabilityOf(id)` 要求调用方**先知道台账的 id**；而派活时手里只有一句
+ * 「这个活得做全文搜索 / 反编译 APK」。没有反查，agent 只能靠猜 id，或干脆不查。
+ *
+ * 匹配面：`id` / `probe[0]`（二进制名）/ `label` / `provides` / `category`，**词边界**匹配 + 别名归一。
+ *
+ * **这不是能力评分**（边界见 ADR-0029.1 inv 179 / ADR-0030 inv 184）：它只回答
+ * 「台账里有没有一个叫这个名字的东西」，**不排优劣、不给主体打分、不产出 capability level**。
+ * 命中多条是正常的（如 `coreutils` 三变体），调用方自行决定用哪个。
+ */
+export declare const findCapabilities: (need: unknown) => Capability[];
 /** 取该平台（或 default）的处置；条目未登记 → undefined。 */
 export declare const remedyFor: (id: unknown, platform?: string) => CapabilityRemedy | undefined;
 /**

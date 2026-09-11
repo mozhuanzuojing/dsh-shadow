@@ -146,7 +146,118 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 | 压缩/解压 | `7z` | `7zip.7zip` | 26.03 | `tar` / `unzip`（Windows 无 `unzip`） |
 
 ---
+true### 2.11–2.21 分类补充（v1.15.14 扩源，ADR-0058）truetrue> 以下 57 项由 `tools/winget-verify-seed.mjs` **程序化核验**后写入 —— 对每个**精确包 ID** 调 `winget show`，true> 取权威版本与许可证；核验不过的一律不采纳（本次 57/57 通过）。true> **为什么不按名字自动找包**：实测该做法会产出假阳性 ——true> `xh` 会猜成 `Mozilla.Firefox.xh`（真实 `ducaale.xh`）、`delta` 猜成 `eToro.Delta`（真实 `dandavison.delta`）、true> `choose` 猜成 `AuthenticatorChooser`、`nix` 猜成 `LabChart`。所以**包 ID 必须由人裁决、机器只做核验与取版本**。true> 版本取自核验日（2026-09-11），会随时间变化；**ID 稳定**。
+### 2.11 逆向与二进制分析
 
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| .NET 调试与反编译 | `dnSpy` | `dnSpyEx.dnSpy` | 6.6.0 | — |
+| 文件元数据读写（EXIF 等） | `exiftool` | `OliverBetz.ExifTool` | 13.59 | — |
+| .NET 反编译（开源） | `ILSpy` | `icsharpcode.ILSpy` | 11.0.0.9375 | — |
+| 逆向工程框架（radare2 分支） | `rizin` | `Rizin.Rizin` | 0.9.1 | radare2 |
+| 可执行文件压缩/加壳 | `upx` | `UPX.UPX` | 5.2.1 | — |
+
+### 2.12 网络与下载
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| HTTP 客户端 | `curl` | `cURL.cURL` | 8.21.0.6 | — |
+| DNS 查询客户端 | `dog` | `ogham.dog` | 0.1.0 | dig / nslookup |
+| DNS 查询（现代） | `doggo` | `MrKaran.Doggo` | 1.4.0 | dig |
+| 人性化 HTTP 客户端 | `http` | `HTTPie.HTTPie` | 2025.2.0 | curl（可读性更好） |
+| 网络带宽测试 | `iperf3` | `ar51an.iPerf3` | 3.21 | — |
+| HTTP(S) 抓包与改写 | `mitmdump` | `mitmproxy.mitmproxy` | 12.2.3 | Fiddler / Charles |
+| 端口扫描与网络探测 | `nmap` | `Insecure.Nmap` | 7.80 | — |
+
+### 2.13 文本与数据
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 进程内分析型 SQL（可直接查 CSV/Parquet） | `duckdb` | `DuckDB.cli` | 1.5.5 | sqlite3（分析场景） |
+| JSON → 可 grep 的赋值语句 | `gron` | `TomHudson.gron` | 0.7.1 | jq（grep 场景） |
+| CSV/TSV/JSON 流式处理 | `mlr` | `Miller.Miller` | 6.20.2 | awk / cut / join |
+| CSV 命令行工具集 | `xsv` | `BurntSushi.xsv.MSVC` | 0.13.0 | csvkit |
+
+### 2.14 Git 与版本控制
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 自动把改动折进正确的提交（fixup） | `git-absorb` | `tummychow.git-absorb` | 0.9.0 | 手动 git rebase -i |
+| GitLab 命令行（MR/Issue/CI） | `glab` | `GLab.GLab` | 1.117.0 | 网页操作 |
+| VCS（Git 兼容，工作流不同） | `jj` | `jj-vcs.jj` | 0.44.0 | — |
+
+### 2.15 容器与编排
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 镜像分层分析 | `dive` | `wagoodman.dive` | 0.13.1 | docker history |
+| Kubernetes 包管理 | `helm` | `Helm.Helm` | 4.3.0 | — |
+| Kubernetes TUI | `k9s` | `Derailed.k9s` | 0.51.0 | kubectl 手敲 |
+| 本地 Kubernetes（容器内） | `kind` | `Kubernetes.kind` | 0.33.0 | minikube |
+| Kubernetes 命令行 | `kubectl` | `Kubernetes.kubectl` | 1.37.0 | — |
+| K8s 清单定制（无模板） | `kustomize` | `Kubernetes.kustomize` | 5.8.1 | helm（轻量场景） |
+| 本地单节点 Kubernetes | `minikube` | `Kubernetes.minikube` | 1.39.0 | — |
+| 无守护进程容器引擎 | `podman` | `RedHat.Podman` | 5.8.3 | docker |
+| K8s 开发内循环 | `skaffold` | `Google.ContainerTools.Skaffold` | 2.24.0 | 手写 CI 脚本 |
+| 多 Pod 日志聚合 | `stern` | `stern.stern` | 1.34.0 | kubectl logs -f |
+
+### 2.16 安全与供应链
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 制品签名与验签 | `cosign` | `Sigstore.Cosign` | 3.1.3 | — |
+| Git 历史密钥扫描 | `gitleaks` | `Gitleaks.Gitleaks` | 8.30.1 | 手写正则 |
+| SBOM/镜像漏洞扫描 | `grype` | `Anchore.Grype` | 0.118.0 | — |
+| K8s 安全基线扫描 | `kubescape` | `kubescape.kubescape` | 4.0.14 | — |
+| 加密的配置文件管理 | `sops` | `SecretsOPerationS.SOPS` | 3.13.3 | 明文密钥 |
+| SBOM 生成 | `syft` | `Anchore.Syft` | 1.51.0 | — |
+| 漏洞/配置/密钥扫描 | `trivy` | `AquaSecurity.Trivy` | 0.74.0 | — |
+
+### 2.17 构建与任务
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| Bazel 版本管理器 | `bazelisk` | `Bazel.Bazelisk` | 1.29.0 | 手动装 bazel |
+| 跨平台构建系统 | `cmake` | `Kitware.CMake` | 4.4.3 | 手写 Makefile |
+| Go 制品发布自动化 | `goreleaser` | `goreleaser.goreleaser` | 2.17.1 | 手写发布脚本 |
+| 负载测试 | `k6` | `GrafanaLabs.k6` | 2.2.0 | ab / jmeter |
+| 高速构建后端 | `ninja` | `Ninja-build.Ninja` | 1.13.2 | make（速度） |
+
+### 2.18 文档与转换
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 文档格式互转（md/docx/pdf…） | `pandoc` | `JohnMacFarlane.Pandoc` | 3.11 | — |
+| PDF 文本/图片提取（pdftotext/pdftoppm） | `pdftotext` | `oschwartz10612.Poppler` | 25.07.0-0 | — |
+| PDF 结构变换/修复 | `qpdf` | `QPDF.QPDF` | 12.4.1 | — |
+| 图片/PDF 文字识别 | `tesseract` | `UB-Mannheim.TesseractOCR` | 5.4.0.20240606 | — |
+| 排版系统（LaTeX 替代，快） | `typst` | `Typst.Typst` | 0.15.1 | LaTeX |
+
+### 2.19 媒体处理
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 图像转换与处理 | `magick` | `ImageMagick.ImageMagick` | 7.1.2.29 | — |
+| Matroska 封装/拆分 | `mkvmerge` | `MoritzBunkus.MKVToolNix` | 100.0.0 | — |
+| PNG 无损压缩 | `oxipng` | `Shssoichiro.Oxipng` | 10.1.1 | optipng |
+| 网络视频/音频下载 | `yt-dlp` | `yt-dlp.yt-dlp` | 2026.08.19 | youtube-dl |
+
+### 2.20 磁盘与系统
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| 系统监控（跨平台 top） | `btm` | `Clement.bottom` | 0.14.9 | 任务管理器 / htop |
+| 硬件信息与传感器读取 | `HWiNFO64` | `REALiX.HWiNFO` | 8.50 | — |
+| Windows 深度诊断（handle/procdump/autoruns…） | `handle` | `Microsoft.Sysinternals.Suite` | 未取到（套件包） | — |
+
+### 2.21 版本与包管理
+
+| 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |
+|---|---|---|---|---|
+| Windows 包管理器（winget 之外的第二渠道） | `choco` | `Chocolatey.Chocolatey` | 2.7.4.0 | — |
+| C/C++ 包管理 | `conan` | `JFrog.Conan` | 2.32.0 | vcpkg（另一选择） |
+| Python/Conda 环境管理 | `conda` | `Anaconda.Miniconda3` | 未取到（套件包） | — |
+| 跨语言环境与包管理 | `pixi` | `prefix-dev.pixi` | 0.80.0 | conda（更快） |
 ## 3. GNU 工具链：Windows 上到底装哪个（刚需分类）
 
 因为 §0 那些命令在 Windows 上根本不存在，这一节是**优先级最高**的。三个选项：

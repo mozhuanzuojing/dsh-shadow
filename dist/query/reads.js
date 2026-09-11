@@ -8,7 +8,7 @@ import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { unavailableHint } from "../core/toolset.js";
-import { surveyCapabilities, renderSurvey, installCapability, renderInstall } from "../core/toolset-exec.js";
+import { surveyCapabilities, renderSurvey, installCapability, renderInstall, precheckCapabilities, renderPrecheck } from "../core/toolset-exec.js";
 import { createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge, renderKnowledgeRetrieval, sectionPath, flattenSections, } from "../core/knowledge-engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
@@ -160,8 +160,8 @@ const index = {
         return scrubFinal(RECALL_PREFIX + lines.join("\n") + flushWarn);
     },
 };
-// ── toolset：工具集台账（只读巡检）+ 显式安装（审批门）──
-// 巡检是只读的；安装只在显式传 `install:"<id>"` 时发生，且**一律先要审批**、
+// ── toolset：工具集台账（只读巡检 / 能力预检）+ 显式安装（审批门）──
+// 巡检与预检都是只读的；安装只在显式传 `install:"<id>"` 时发生，且**一律先要审批**、
 // 拿不到 `allowed-once` 就不装（见 core/toolset-exec.ts 的权限模型注释）。
 const toolset = {
     modes: ["toolset"],
@@ -171,6 +171,13 @@ const toolset = {
         if (installId) {
             const o = await installCapability(installId, { approval: deps.approval, agent: exec?.agent });
             return scrubFinal(RECALL_PREFIX + renderInstall(o) + flushWarn);
+        }
+        // 能力预检（v1.15.13）：把「需要什么能力」翻译成「本机是否就位 / 缺了退到哪」。
+        // 这是委派 × 工具集的接缝：派活前查，产出只用于**降级决策**，不是派活闸门。
+        const needArgs = Array.isArray(args?.need) ? args.need : (args?.need ? [args.need] : []);
+        if (needArgs.length) {
+            const rows = await precheckCapabilities(needArgs.map((n) => String(n)));
+            return scrubFinal(RECALL_PREFIX + renderPrecheck(rows) + flushWarn);
         }
         const opts = {
             survey: args?.survey === "all" ? "all" : "providers",
@@ -213,7 +220,7 @@ const shadowManifest = {
         return scrubFinal(RECALL_PREFIX + renderManifest(m) + flushWarn);
     },
 };
-export const readQueries = [episodeDecision, task, context, recovery, shadowQuery, knowledge, index, queryLog, shadowReport, shadowManifest];
+export const readQueries = [episodeDecision, task, context, recovery, shadowQuery, knowledge, index, queryLog, shadowReport, shadowManifest, toolset];
 const modeOf = (args) => String(args?.mode || "");
 export const findReadQuery = (args) => {
     const m = modeOf(args);

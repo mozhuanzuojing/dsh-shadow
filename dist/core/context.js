@@ -5,7 +5,7 @@
 // - P2 Transformation Trace：Mapping ≠ Source Fact（如 D:\ → /mnt/d/，rule=windows_wsl_mapping），
 //   转换视图标注规则、非事实。仍只读/派生，未改写事实源。
 import { scrubUnsafe } from "../security/scrub.js";
-import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
+import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 const applyMapping = (value, mappings) => {
     for (const m of mappings || []) {
         const f = String(m.from || "").replace(/[/\\]+$/, "");
@@ -19,10 +19,14 @@ const applyMapping = (value, mappings) => {
     return undefined;
 };
 // 从一条记忆抽取引用的证据路径（去重、限流）。
+// v1.15.15（ADR-0059）：加 `isConcreteLocator` —— 通配符与 git ref 不是可检查的具体路径，
+// 拿它们验存在性必然判缺失，会在 mode:"context" 里报成「已过时/证据缺失」（假漂移）。
 const refPathsOf = (p) => {
     const fromBody = evidencePathsOf(p.body || "");
     const fromMats = (p.materials || []).filter((x) => isPathLike(x));
-    return Array.from(new Set([...fromBody, ...fromMats])).filter((x) => isPathLike(x) && !!x).slice(0, 12);
+    return Array.from(new Set([...fromBody, ...fromMats]))
+        .filter((x) => isPathLike(x) && isConcreteLocator(x) && !!x)
+        .slice(0, 12);
 };
 export const deriveContextReferences = async (parsed, verifyEvidence, fsCtx, mappings = []) => {
     const map = new Map();

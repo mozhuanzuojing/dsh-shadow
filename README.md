@@ -70,7 +70,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | `read_shadow(..., { debug: true })` / `{ verifyEvidence: true }` / `{ kg: true }` | 模型可自动调用 | 只是多返回 trace / 证据验证 / 图谱邻接，仍不改状态 |
 | `mode: "shadow-report"` / `mode: "query-log"` 体检 | 用户要求，或定期自查 | 只读、只生成派生报告（`rm -rf` 可重建） |
 | 开启 `retention` / `forget` / `compact` / `projectionStore` / `knowledgeEngine` | **仅用户显式要求** | 会改召回集与索引行为，属有后果动作（改配置 + 重启） |
-| `mode:"toolset"`（只读巡检） | 模型可自动调用 | 只是探测可选 CLI 是否可用，不改任何东西 |
+| `mode:"toolset"`（只读巡检 / 能力预检） | 模型可自动调用 | 只是探测可选 CLI 是否可用，不改任何东西 |
 | `mode:"toolset"` + `install:"<id>"`（**安装**） | **仅用户显式要求** | 有后果动作：**一律先经宿主审批**，只有 `allowed-once` 才执行；装完**重探**再报结果 |
 | `writeConsent: true` 之后的落盘 | **仅用户显式要求** | 用户没明说「记住」时只累积不落盘（默认 `false` 照常采集） |
 
@@ -287,10 +287,27 @@ uv tool install semble
 
 ```text
 read_shadow({ mode: "toolset" })                             # 只读巡检：按分类列出全部条目 + provider 实时状态
-read_shadow({ mode: "toolset", survey: "all" })              # 并行探测全部 44 项（实测约 1.5s）
+read_shadow({ mode: "toolset", survey: "all" })              # 并行探测全部 105 项（会起 105 个子进程，按需用）
 read_shadow({ mode: "toolset", category: "GNU 工具链" })      # 只看某一分类
+read_shadow({ mode: "toolset", need: ["全文搜索", "jadx"] })  # 能力预检：派活前查「要用的工具本机有没有」（见下）
 read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某一项（会先向你申请审批）
 ```
+
+### 能力预检：派活决策 × 能力事实的接缝（v1.15.13，ADR-0057）
+
+派活时手里只有一句「这个活得做全文搜索 / 反编译 APK」，而台账入口原本是 id。`need:[...]` 把**能力需求**反查成台账条目并探测本机状态（反查用 `findCapabilities`，支持 id / 二进制名 / 用途词 / 分类名 / 别名 `fdfind→fd`、`ripgrep→rg` 等）。
+
+它是**只读**的，未命中的需求**不编造命令**——只如实说「台账未登记」。输出固定带**三条硬边界**：
+
+| 边界 | 内容 | 依据 |
+|---|---|---|
+| ① **不是闸门** | `reference` 是通用工具目录，「不影响插件行为」；缺它**不构成**不派活的理由，按每行的「缺件时退到」走降级 | ADR-0055 §1 |
+| ② **装完本会话不可见** | 宿主进程的 PATH 是**启动时快照**，同进程内的子 Agent（teammate）同样看不见 → 别按「先装再派」做计划 | ADR-0055 §4 |
+| ③ **缺件只能上报、不能自装** | 安装的审批凭据是**发起者**；被委派者自装 = 把「改机器」塞进委派范围 | inv 182 |
+
+> 边界 ② 有个直接后果：**「预检 → 缺件先装 → 再派」这条最自然的链路在单会话内收益为零**。预检的价值是让你**提前知道该走哪条降级路径**，而不是让你先装。
+>
+> 三条边界由 `test/toolset-precheck.test.ts` 锁住，且专门断言输出**不含**评分/等级/优先派类措辞——预检只答「机器上有没有」，**不给主体打分**（inv 179 / inv 184）。
 
 安装走的是**宿主自己的审批服务**（`ctx.approval.request`），只有拿到 `allowed-once` 才执行：
 
@@ -364,12 +381,16 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 > 完整变更历史（按版本，含每个版本的决策/边界/验证记录）见 [CHANGELOG.md](./CHANGELOG.md)。
 
-**当前版本：`v1.15.12`（缺陷清扫：5 项真缺陷 + 2 处记账勘误）** —— 最新几版摘要：
+**当前版本：`v1.15.16`（多粒度检索层形态：路由已存在 + 实测否证全量扇出，ADR-0060）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
 | v1.15.12 | **缺陷清扫**（用户「所有发现的缺陷都要 fix」）：先**逐条查证** 16 条记账/缺口是否仍存在，再分类处置。**修 5 项真缺陷**——① `continuity/engine.ts` 自造 `FsTarget`（违反 dsh-fs 契约，sandbox 下静默失败）；② **投影缓存不感知源变化**（`invalidate` 零调用点 → 写侧 `ensureIndex` 挂钩 + 读侧**源指纹**，并**顺带修掉一个被激活的既有 bug**：`abs()` 把 `displayPath` 字符串当 `FsTarget` 传）；③ 台账补登 7 条（44→50）+ `docs/toolchain-wsl.md` 纳入**棘轮**；④ `HOST_BASELINE` 双源加**防漂移棘轮**；⑤ Team 工具静默缺口的**可感知降级**（①为待决策的结构性项）。**2 处记账勘误**：`fs.writeText` 省略 `expected`/`sandboxPolicy` 是契约允许的（**非缺陷**）；`revocation-guard` **不是孤儿**（测试在用）。**自曝**：第一版把「不传指纹」写成永不命中缓存（测试当场变红）。全量回归 **27/27**，新增 3 处回归锁 |
 | v1.15.11 | **派活判据由「team 优先」修正为「复用优先」+ 委派规模控制**（ADR-0056）：会复用 ≥2 次才用 teammate；host 行 `maxMembers: 4`（经代码核实是 **per-session 终身累计**上限，**非并发**；无移除路径、失败也占名额）；往返 **≤2 轮**、一次委派一条消息、避免冷恢复；`workflow`/`subagent` **不吃名额**。代价：persona **+235 字符**常驻 |
+| v1.15.16 | **多粒度检索层形态**（ADR-0060）：先点明一个改变问题性质的事实 —— **现有 `indexEngine.provider` 是单值**（`"fs"|"zg"|"semble"`），工厂只路由到**一个**，故「多库全量扇出」是**退步**而非加能力。新增 `tools/retrieval-eval.mjs`（`npm run eval:retrieval`）在**真 `.shadow` 语料**上实测：检索器按 ADR-0054 实测性质建模（无阈值）、同候选预算、3 种子报极差。结果：**离题噪声** 有阈值单库 **0.000** vs 无阈值 **1.000**（扇出只是把噪声**乘以库数**）；扇出即便含互补来源**也不升召回**（0.347 vs 0.358，落在 ±0.053 内）。⇒ **多粒度若做，形态是「单索引 + 层级表示（level/parent_id）+ 路由」**，不是建 N 个库；**加判别层优先于加库**；多来源须**各自标定阈值**。**产品方向待用户裁决**（本 ADR 未单方面推翻任何既有 ADR）。附两处引用陷阱：「small-to-big」**无原始论文**、Markdown heading 切块**无论文** |
+| v1.15.15 | **引用漂移检测 + 修两处假「证据失效」**（ADR-0059）：先在全库（6465 记忆）量事实 —— 表面 **40.8%** 的「证据失效」里约 **76% 是假的**。**F1（真 bug）**：`fsExists` 无条件做 `${ws}/${rel}`，绝对 locator 变双前缀（`D:/ws/D:/other/x.ps1`）→ 磁盘上存在的文件被判失效；**F2**：`readText` 对目录必失败 → 目录引用被判失效（补 `listDir` 兜底，真实契约已读源码核实）。修复后 **1025 → 243**。检测判据改为**双条件**（借 CASCADE/FSE 2026）：只有「**可检查的具体路径**」（`isConcreteLocator` 排除通配符与 git ref）**且**「确实解析不到」才判失效。**明确不做自动纠正** —— 让 LLM 判过期（AUROC 0.59 近随机）、LLM 自纠（误纠正率 53–94%）、裸 LLM 查文档漂移（flag rate 98%）均有证据反对。顺带发现**两处 mock 不忠实**（`listDir` 对不存在目录返回 `[]` 而非抛错），已按真实源码修正 |
+| v1.15.14 | **工具台账扩源**（ADR-0058）：50 → **107 项**（2 provider + 105 reference），分类 13 → **17**（新增 容器与编排 / 安全与供应链 / 文档与转换 / 媒体处理）。**全部经权威核验**：新增 `tools/winget-verify.mjs`（对精确包 ID 调 `winget show`，locale 无关解析，取版本/许可证）+ `tools/winget-verify-seed.mjs`，**57/57 通过**。**核心纠错**：按名字自动解析包 ID **实测证伪** —— `xh`→Mozilla.Firefox.xh、`delta`→eToro.Delta、`nix`→LabChart、`choose`→AuthenticatorChooser 等 9 例假阳性，故**包 ID 必须由人裁决、机器只做核验与候选发现**。**拐点口径澄清**：arXiv 2606.30317 的「10–15 个工具跌破 90%」量的是**每次请求注入的工具 schema 数**（per context），**不是目录条目数** —— 台账本来就不进上下文，故**可以扩**；必须保持小的是「模型面前可调用的工具面」，**禁止把条目暴露成工具**。顺带修一处**静默丢弃**：`tool()` 的 `note` 在有 winget 包分支被整条丢掉（许可证/坑说明无声消失）→ 已拼接，并新增 `verSrc` 区分「实测」与「权威核验」 |
+| v1.15.13 | **委派 × 工具集接缝**（ADR-0057）：**先修一个潜伏三个版本的 P0** —— `query/reads.ts` 定义了 `toolset` ReadQuery 却**没放进 `readQueries` 数组**，`{mode:"toolset"}` 静默回落到 `_index.md`，整块台账**无任何可达入口**（三个既有测试全**直接 import 执行函数**、从不走 dispatch，所以三个版本全绿）。修复 + 新增 `test/toolset-dispatch.test.ts`（**只走真实入口**，含「可 dispatch 的 mode 必须在 `index.ts` 登记」反向棘轮；已回档复验）。接缝本体：**能力预检** `read_shadow({mode:"toolset", need:["全文搜索",…]})` —— `findCapabilities(need)` 按能力需求反查台账（id/二进制名/用途词/分类名 + 别名，**不是能力评分**），`precheckCapabilities` 只读探测，输出固定带**三条硬边界**：① 不是闸门 ② **装完本会话不可见**（宿主 PATH 是启动时快照，同进程 teammate 同样看不见 ⇒「预检→先装→再派」单会话内收益为零）③ 缺件只能上报不能自装（inv 182）。persona ② 同步补一句。顺带修掉 `toolset-catalog` ④ 一个**恒红断言**（把「本机应有已检出的 provider」写死进测试；已改与机器无关的不变量） |
 | v1.15.10 | **工具集台账扩为两级**（ADR-0055）：`kind:"provider"`（插件内接线：zg/semble）与 **`kind:"reference"`（通用 CLI 目录，44 项 / 13 分类）**。新增 `docs/toolchain-windows.md`（Windows 口径，winget ID 全部本机实测）与 `docs/toolchain-wsl.md`，**随包发布**；`test/toolset-catalog.test.ts` 做**双向棘轮**（台账↔文档漂移即红，首次运行即抓出一个写错的 ID）。巡检支持 `survey:"all"`（并行探测全部，实测 44 项 **1.5s**）与 `category` 过滤。探测口径收紧为诚实的「**未检出 ≠ 未安装**」。全量回归 27/27 |
 | v1.15.9 | **一键装入口 `mode:"toolset"`**：`read_shadow({mode:"toolset"})` = 只读巡检；`{mode:"toolset", install:"<id>"}` = **显式安装**。授权走**宿主自己的审批服务**（`ctx.approval.request`），**只有 `allowed-once` 才执行**；`rejected`/`cancelled`/`unavailable`/无通道/无 agent/审批抛错/非词表返回值 → **一律不安装**（fail closed）。已可用 → 幂等短路；装完**重探**才报结果。顺带解掉与 `zg` 同类的 Windows 陷阱：**`npm` 也是 `.cmd`**，故解析为 `node <npm-cli.js> install -g <pkg>`。mode 总数 61 → **62** |
 | v1.15.8 | **缺件处置（工具集台账）**：新增 `core/toolset.ts` 声明式台账（`zg` / `semble`：`provides` / `degradesTo` / `remedy` / `doc`），并在 `mode:"index"` 与 `verifyEvidence` 两处缺件出口接上**可执行的确切命令**；`CandidateResult` 增 `reason`，顺带补上 `verifyEvidence` 此前不显示 `reason` 的缺口 |
