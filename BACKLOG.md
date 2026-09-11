@@ -6,14 +6,30 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-12（`v1.15.28`）—— **现存 21 条**（T 4 / D 5 / V 6 / G 4 + **D7**）；
-> 已结案 **9 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
-> 漂移审计工具 / 图快照顺序）；**D6** 已决策待实现。
-> **漂移审计已产出 2 个真发现**（`judgment.ts` 双条件缺口、图快照取最旧）；T5 余 **10 个键待复核**。
+> 最后整理：2026-09-12（`v1.15.29`）—— **现存 21 条**（T 4 / D 5 / V 6 / G 4 + **D7**）；
+> 已结案 **10 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
+> 漂移审计工具 / 图快照顺序 / 台账版本出处）；**D6** 已决策待实现。
+> **漂移审计已产出 3 次复核**（`judgment.ts` 双条件缺口、图快照取最旧、台账标签）；T5 余 **9 个键**。
 
 ---
 
 ## 〇、已结案（保留结论，便于回溯）
+
+### ✅ 台账「实测」标签比事实强（ADR-0072，v1.15.29）—— **量证·改正默认值·签入离线棘轮**
+
+- **由来**：`npm run audit:drift` 检测 B 第三次产出（`c.kind=*`）——**先判它不是漂移**（生产者/消费者分层），
+  顺带实测边界不变量 107 项全满足；但顺「台账诚实性」查下去命中**真问题**。
+- **问题**：`verSrc` 默认 `"实测"`（= 本机 `--version` 跑出来的），但 v1.15.10 的 44 条数字**全部来自 winget 目录**
+  —— 44 条中 **35 条与权威逐字一致**；`fzf` 台账 0.74.3 / 本机 0.73.1（且来自 scoop）；
+  `zoxide` 台账 0.10.0 / `winget list` 已装 0.9.9「可用 0.10.0」（抄的是**「可用」列**）。
+- **第二层（第八个「机制存在、没接线」实例）**：`verify:toolset` 传 `expectedVersion: null`
+  ⇒ `verDrift` 分支**从未生效** ⇒ 版本误标**不可能被发现**（那个「版本漂移 0」是假读数）。
+- **修复**：默认值改为 `"权威核验"` + 新增 `tools/toolset-authority.ts`（真调 winget 且**把台账版本当期望值**，
+  并记录本机读数）⇒ 清单 `tools/toolset-authority.json` 签入 + **离线棘轮** `test/toolset-authority.test.ts`（5 组，含**正对照**）。
+- **实测**：101 条 —— 台账==权威 **88** · **老化 13**（正常，不判错）· **falseMeasured 0**。
+- **自曝**：测试首跑暴露我自己的判据范围错（拿全部 107 条比只覆盖 101 条的清单 ⇒ 6 条假不一致），已修。
+- **未验证**：`machineVersion` 是生成时那台机器的留档（测试不重探测，避免机器相关断言恒红）；
+  清单**未接入自动门禁**；`"实测"` 标签本轮 0 条被真正启用（本机可检出的条目台账版本都与本机不符）。
 
 ### ✅ 图快照读取取到最旧的（ADR-0071，v1.15.28）—— **工具体检 B 第二次真发现·闭环验证**
 
@@ -206,18 +222,26 @@
 
 - **依据**：`adr/0070-drift-audit-tool.md`「未做」；`npm run audit:drift` 的 B 段。
 - **现状**：真仓库上 B 段报 **11 个键 / 28 处**（`v1.15.28` 修掉 `name=graph.json` 后从 12/30 降下来）。
-  本轮**只复核了两个**：`res.status=not_found`（抓到第 7 处真缺陷 `observer/judgment.ts`）与
-  `name=graph.json`（ADR-0071 的真漂移），**其余 10 个键未复核**：
-  `c.kind=provider` / `c.kind=reference` / `c.status=supported` / `e.kind=user` / `err.code=ENOENT` /
-  `kind=error` / `r.status=unavailable` / `type=anti_pattern` / `type=principle` / `v=string`。
+  本轮（v1.15.29）**复核了第三个**：`c.kind=provider` / `c.kind=reference` —— **判为正当分层**
+  （`toolset.ts` **声明** `kind`（`Capability.kind: ToolKind`，类型必填）↔ `toolset-exec.ts` **消费**它），
+  并**顺带实测**了它文档化的边界不变量（`toolset.ts:3`「两级台账必须分清」+ `degradesTo` 规定
+  reference 填「不影响插件行为」）：**107 项全满足** ⇒ 边界没糊。
+  **但那条不变量仍没有棘轮**（本 ADR 只做了实测，未加断言）⇒ 见下「附带项」。
+- **已复核 3 个，全部有产出**：`res.status=not_found`（第 7 处真缺陷）、`name=graph.json`（ADR-0071 真漂移）、
+  `c.kind=*`（正当分层 + 边界实测）。
+- **未复核的 9 个键**：
+  `c.status=supported` / `e.kind=user` / `err.code=ENOENT` / `kind=error` /
+  `r.status=unavailable` / `type=anti_pattern` / `type=principle` / `v=string`。
+- **附带项（本轮实测得出，未做成棘轮）**：台账「两级边界」不变量（reference 的 `degradesTo` 必须表明
+  「不影响插件行为」、provider 必须给确定性退路 + `provides` + `install`）当前 107 项全满足，
+  但 **`toolset-catalog.test.ts` 未覆盖它** —— 建议补一条棘轮（改动小、价值明确），
+  避免以后加条目时把边界写糊。**本轮未做**（属 T5 的收尾工作）。
 - **几个看起来值得优先看的**（**未复核，只是排序依据**）：
   - **`err.code=ENOENT`**（`core/semble.ts` + `evidence/zg.ts`）—— 两处都在判「CLI 未安装」，
     口径若不同会撞 ADR-0049「缺件不静默」；
-  - **`r.status=unavailable`**（`core/index-engine.ts` + `query/query.ts`）—— provider 不可用处理；
-  - **`c.kind=provider` / `c.kind=reference`**（`core/toolset-exec.ts` + `core/toolset.ts`）——
-    台账两级的判定，正是**目标第 (1)(2) 条**的接缝。
-- **经验**：前两个复核的**都**是真问题（不是噪声）—— 说明检测 B 的产出率比预期高，
-  值得把剩余 10 个逐个过一遍。
+  - **`r.status=unavailable`**（`core/index-engine.ts` + `query/query.ts`）—— provider 不可用处理。
+- **经验**：已复核的三个**全部**有产出（2 个真问题 + 1 个正当分层但顺带发现别的）—— 说明检测 B 的
+  产出率比预期高，值得把剩余 9 个逐个过一遍。
 - **纪律**：B **只答「同一键出现在多个模块」，答不了「两处口径是否一致」** ⇒ **不得据 B 定罪**；
   生产者/消费者分别表达同一判据在分层架构里**可能是正当的**。
 - **完成判据**：11 个键各落「正当（给出分层理由）/ 真漂移（给出修复 + 锁）」二选一，结果回写 `adr/0070`。

@@ -1,0 +1,924 @@
+{
+ "_comment": "台账版本的权威对照清单（ADR-0072）。由 tools/toolset-authority.ts 生成，**随包签入**。用途有二：① 记录「核验当日，台账声称什么、winget 权威说什么」，使**老化可见**；② 供离线棘轮（test/toolset-authority.test.ts）断言「台账未被静默改动」。台账改了版本或出处 → 必须重跑本工具，否则棘轮变红。",
+ "verifiedAt": "2026-09-11",
+ "counts": {
+  "total": 101,
+  "ok": 88,
+  "aged": 13,
+  "unavailable": 0,
+  "notFound": 0,
+  "idMismatch": 0,
+  "falseMeasured": 0
+ },
+ "rows": [
+  {
+   "id": "coreutils-ms",
+   "pkg": "Microsoft.Coreutils",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2026.9.3",
+   "authorityVersion": "2026.9.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "coreutils-uutils",
+   "pkg": "uutils.coreutils",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.10.0",
+   "authorityVersion": "0.11.0",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "busybox",
+   "pkg": "frippery.busybox-w32",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.38.0-FRP",
+   "authorityVersion": "1.38.0-FRP-5579-g5749feb35",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "rg",
+   "pkg": "BurntSushi.ripgrep.MSVC",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "15.2.0",
+   "authorityVersion": "15.2.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "fd",
+   "pkg": "sharkdp.fd",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "10.5.0",
+   "authorityVersion": "10.5.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "ast-grep",
+   "pkg": "ast-grep.ast-grep",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.45.2",
+   "authorityVersion": "0.45.3",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "fzf",
+   "pkg": "junegunn.fzf",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.74.3",
+   "authorityVersion": "0.74.3",
+   "machineVersion": "0.73.1",
+   "status": "ok"
+  },
+  {
+   "id": "jq",
+   "pkg": "jqlang.jq",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.8.2",
+   "authorityVersion": "1.8.2",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "yq",
+   "pkg": "MikeFarah.yq",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "4.53.6",
+   "authorityVersion": "4.53.6",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "sd",
+   "pkg": "chmln.sd",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.1.0",
+   "authorityVersion": "1.1.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "bat",
+   "pkg": "sharkdp.bat",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.26.1",
+   "authorityVersion": "0.26.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "glow",
+   "pkg": "charmbracelet.glow",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "3.0.0",
+   "authorityVersion": "3.0.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "hexyl",
+   "pkg": "sharkdp.hexyl",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.17.0",
+   "authorityVersion": "0.17.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "eza",
+   "pkg": "eza-community.eza",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.23.5",
+   "authorityVersion": "0.23.5",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "yazi",
+   "pkg": "sxyazi.yazi",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "26.9.1",
+   "authorityVersion": "26.9.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "zoxide",
+   "pkg": "ajeetdsouza.zoxide",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.10.0",
+   "authorityVersion": "0.10.0",
+   "machineVersion": "0.9.9",
+   "status": "ok"
+  },
+  {
+   "id": "atuin",
+   "pkg": "Atuinsh.Atuin",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "18.21.0",
+   "authorityVersion": "18.22.0",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "starship",
+   "pkg": "Starship.Starship",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.26.0",
+   "authorityVersion": "1.26.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "nushell",
+   "pkg": "Nushell.Nushell",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.114.1",
+   "authorityVersion": "0.115.1",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "direnv",
+   "pkg": "direnv.direnv",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.37.1",
+   "authorityVersion": "2.37.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "zellij",
+   "pkg": "Zellij.Zellij",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.45.1",
+   "authorityVersion": "0.45.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "tldr",
+   "pkg": "tldr-pages.tlrc",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.13.1",
+   "authorityVersion": "1.13.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "lazydocker",
+   "pkg": "JesseDuffield.Lazydocker",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.25.2",
+   "authorityVersion": "0.25.2",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "wezterm",
+   "pkg": "wez.wezterm",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "20240203",
+   "authorityVersion": "(未取到)",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "nvim",
+   "pkg": "Neovim.Neovim",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.12.5",
+   "authorityVersion": "0.12.5",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "delta",
+   "pkg": "dandavison.delta",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.19.2",
+   "authorityVersion": "0.19.2",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "lazygit",
+   "pkg": "JesseDuffield.lazygit",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.64.1",
+   "authorityVersion": "0.65.0",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "gh",
+   "pkg": "GitHub.cli",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.100.0",
+   "authorityVersion": "2.100.0",
+   "machineVersion": "2.93.0",
+   "status": "ok"
+  },
+  {
+   "id": "dust",
+   "pkg": "bootandy.dust",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.2.5",
+   "authorityVersion": "1.2.5",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "dua",
+   "pkg": "Byron.dua-cli",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.42.1",
+   "authorityVersion": "2.44.0",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "btop",
+   "pkg": "aristocratos.btop4win",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.0.5",
+   "authorityVersion": "1.0.5",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "procs",
+   "pkg": "dalance.procs",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.14.12",
+   "authorityVersion": "0.14.12",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "xh",
+   "pkg": "ducaale.xh",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.26.2",
+   "authorityVersion": "0.26.2",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "aria2",
+   "pkg": "aria2.aria2",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.37.0",
+   "authorityVersion": "1.37.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "gping",
+   "pkg": "orf.gping",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.21.0",
+   "authorityVersion": "1.21.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "ffmpeg",
+   "pkg": "Gyan.FFmpeg",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "9.0.1",
+   "authorityVersion": "9.0.1",
+   "machineVersion": "9.0.1-full_build-www.gyan.dev",
+   "status": "ok"
+  },
+  {
+   "id": "mise",
+   "pkg": "jdx.mise",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2026.8.5",
+   "authorityVersion": "2026.9.4",
+   "machineVersion": "2026.5.4",
+   "status": "version-drift"
+  },
+  {
+   "id": "uv",
+   "pkg": "astral-sh.uv",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.12.12",
+   "authorityVersion": "0.12.13",
+   "machineVersion": "0.11.17",
+   "status": "version-drift"
+  },
+  {
+   "id": "just",
+   "pkg": "Casey.Just",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.58.0",
+   "authorityVersion": "1.58.0",
+   "machineVersion": "1.56.0",
+   "status": "ok"
+  },
+  {
+   "id": "mprocs",
+   "pkg": "pvolok.mprocs",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.9.6",
+   "authorityVersion": "0.9.6",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "hyperfine",
+   "pkg": "sharkdp.hyperfine",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.20.0",
+   "authorityVersion": "1.20.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "lnav",
+   "pkg": "tstack.lnav",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.14.1-rc1",
+   "authorityVersion": "0.14.1-rc1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "7zip",
+   "pkg": "7zip.7zip",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "26.03",
+   "authorityVersion": "26.03",
+   "machineVersion": "26.01",
+   "status": "ok"
+  },
+  {
+   "id": "jadx",
+   "pkg": "Skylot.jadx",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.5.6",
+   "authorityVersion": "1.5.6",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "dnspy",
+   "pkg": "dnSpyEx.dnSpy",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "6.6.0",
+   "authorityVersion": "6.6.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "exiftool",
+   "pkg": "OliverBetz.ExifTool",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "13.59",
+   "authorityVersion": "13.59",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "ilspy",
+   "pkg": "icsharpcode.ILSpy",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "11.0.0.9375",
+   "authorityVersion": "11.0.0.9375",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "rizin",
+   "pkg": "Rizin.Rizin",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.9.1",
+   "authorityVersion": "0.9.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "upx",
+   "pkg": "UPX.UPX",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "5.2.1",
+   "authorityVersion": "5.2.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "curl",
+   "pkg": "cURL.cURL",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "8.21.0.6",
+   "authorityVersion": "8.21.0.6",
+   "machineVersion": "8.21.0",
+   "status": "ok"
+  },
+  {
+   "id": "dog",
+   "pkg": "ogham.dog",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.1.0",
+   "authorityVersion": "0.1.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "doggo",
+   "pkg": "MrKaran.Doggo",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.4.0",
+   "authorityVersion": "1.4.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "httpie",
+   "pkg": "HTTPie.HTTPie",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2025.2.0",
+   "authorityVersion": "2025.2.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "iperf3",
+   "pkg": "ar51an.iPerf3",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "3.21",
+   "authorityVersion": "3.21",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "mitmproxy",
+   "pkg": "mitmproxy.mitmproxy",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "12.2.3",
+   "authorityVersion": "12.2.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "nmap",
+   "pkg": "Insecure.Nmap",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "7.80",
+   "authorityVersion": "7.80",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "duckdb",
+   "pkg": "DuckDB.cli",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.5.5",
+   "authorityVersion": "1.5.5",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "gron",
+   "pkg": "TomHudson.gron",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.7.1",
+   "authorityVersion": "0.7.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "miller",
+   "pkg": "Miller.Miller",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "6.20.2",
+   "authorityVersion": "6.21.0",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "xsv",
+   "pkg": "BurntSushi.xsv.MSVC",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.13.0",
+   "authorityVersion": "0.13.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "git-absorb",
+   "pkg": "tummychow.git-absorb",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.9.0",
+   "authorityVersion": "0.9.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "glab",
+   "pkg": "GLab.GLab",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.117.0",
+   "authorityVersion": "1.117.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "jj",
+   "pkg": "jj-vcs.jj",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.44.0",
+   "authorityVersion": "0.44.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "dive",
+   "pkg": "wagoodman.dive",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.13.1",
+   "authorityVersion": "0.13.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "helm",
+   "pkg": "Helm.Helm",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "4.3.0",
+   "authorityVersion": "4.3.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "k9s",
+   "pkg": "Derailed.k9s",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.51.0",
+   "authorityVersion": "0.51.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "kind",
+   "pkg": "Kubernetes.kind",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.33.0",
+   "authorityVersion": "0.33.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "kubectl",
+   "pkg": "Kubernetes.kubectl",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.37.0",
+   "authorityVersion": "1.37.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "kustomize",
+   "pkg": "Kubernetes.kustomize",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "5.8.1",
+   "authorityVersion": "5.8.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "minikube",
+   "pkg": "Kubernetes.minikube",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.39.0",
+   "authorityVersion": "1.39.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "podman",
+   "pkg": "RedHat.Podman",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "5.8.3",
+   "authorityVersion": "5.8.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "skaffold",
+   "pkg": "Google.ContainerTools.Skaffold",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.24.0",
+   "authorityVersion": "2.24.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "stern",
+   "pkg": "stern.stern",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.34.0",
+   "authorityVersion": "1.34.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "cosign",
+   "pkg": "Sigstore.Cosign",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "3.1.3",
+   "authorityVersion": "3.1.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "gitleaks",
+   "pkg": "Gitleaks.Gitleaks",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "8.30.1",
+   "authorityVersion": "8.30.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "grype",
+   "pkg": "Anchore.Grype",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.118.0",
+   "authorityVersion": "0.118.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "kubescape",
+   "pkg": "kubescape.kubescape",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "4.0.14",
+   "authorityVersion": "4.0.14",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "sops",
+   "pkg": "SecretsOPerationS.SOPS",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "3.13.3",
+   "authorityVersion": "3.13.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "syft",
+   "pkg": "Anchore.Syft",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.51.0",
+   "authorityVersion": "1.51.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "trivy",
+   "pkg": "AquaSecurity.Trivy",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.74.0",
+   "authorityVersion": "0.74.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "bazelisk",
+   "pkg": "Bazel.Bazelisk",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.29.0",
+   "authorityVersion": "1.29.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "cmake",
+   "pkg": "Kitware.CMake",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "4.4.3",
+   "authorityVersion": "4.4.3",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "goreleaser",
+   "pkg": "goreleaser.goreleaser",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.17.1",
+   "authorityVersion": "2.18.1",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "k6",
+   "pkg": "GrafanaLabs.k6",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.2.0",
+   "authorityVersion": "2.2.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "ninja",
+   "pkg": "Ninja-build.Ninja",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "1.13.2",
+   "authorityVersion": "1.13.2",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "pandoc",
+   "pkg": "JohnMacFarlane.Pandoc",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "3.11",
+   "authorityVersion": "3.11",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "poppler",
+   "pkg": "oschwartz10612.Poppler",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "25.07.0-0",
+   "authorityVersion": "25.07.0-0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "qpdf",
+   "pkg": "QPDF.QPDF",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "12.4.1",
+   "authorityVersion": "12.4.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "tesseract",
+   "pkg": "UB-Mannheim.TesseractOCR",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "5.4.0.20240606",
+   "authorityVersion": "5.4.0.20240606",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "typst",
+   "pkg": "Typst.Typst",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.15.1",
+   "authorityVersion": "0.15.1",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "imagemagick",
+   "pkg": "ImageMagick.ImageMagick",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "7.1.2.29",
+   "authorityVersion": "7.1.2.31",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "mkvtoolnix",
+   "pkg": "MoritzBunkus.MKVToolNix",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "100.0.0",
+   "authorityVersion": "100.0.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "oxipng",
+   "pkg": "Shssoichiro.Oxipng",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "10.1.1",
+   "authorityVersion": "10.2.1",
+   "machineVersion": null,
+   "status": "version-drift"
+  },
+  {
+   "id": "yt-dlp",
+   "pkg": "yt-dlp.yt-dlp",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2026.08.19",
+   "authorityVersion": "2026.08.19",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "bottom",
+   "pkg": "Clement.bottom",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.14.9",
+   "authorityVersion": "0.14.9",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "hwinfo",
+   "pkg": "REALiX.HWiNFO",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "8.50",
+   "authorityVersion": "8.50",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "sysinternals",
+   "pkg": "Microsoft.Sysinternals.Suite",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "未取到（套件包）",
+   "authorityVersion": "(未取到)",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "chocolatey",
+   "pkg": "Chocolatey.Chocolatey",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.7.4.0",
+   "authorityVersion": "2.7.4.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "conan",
+   "pkg": "JFrog.Conan",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "2.32.0",
+   "authorityVersion": "2.32.0",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "miniconda",
+   "pkg": "Anaconda.Miniconda3",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "未取到（套件包）",
+   "authorityVersion": "(未取到)",
+   "machineVersion": null,
+   "status": "ok"
+  },
+  {
+   "id": "pixi",
+   "pkg": "prefix-dev.pixi",
+   "ledgerVerSrc": "权威核验",
+   "ledgerVersion": "0.80.0",
+   "authorityVersion": "0.80.0",
+   "machineVersion": null,
+   "status": "ok"
+  }
+ ]
+}
