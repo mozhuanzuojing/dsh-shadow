@@ -3,6 +3,60 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.21] BACKLOG 分诊结案：`pinned` / `archived` 无入口 —— 升为 D4 决策项（19 条）
+
+用户 2026-09-11：**「待办记录好后，提交，结束」**。故本轮不新增功能，只把 `BACKLOG.md` 里
+**T3 那条待分诊**分诊到底，并把分诊暴露出的产品决策补成 **D4**。**纯文档改动，生产代码零改动。**
+
+### T3 分诊结论：不是「接线断了」，是「已文档化但无入口的能力」
+
+- 原线索只有审计 B 类报的 `status=archived` 无写入者。本轮**扩展**：**`pinned` 同样无写入者** ——
+  生产代码只写 `pinned: false`（`core/memory.ts:74`、`core/writer-materialize.ts:88`、`query/query.ts:401`），
+  **`pinned: true` 全仓零处**（三路 grep 核实：字面量 / `pinned:` / `pinned =`）。
+- 两者的读点与语义：
+
+  | 状态 | 读点 | 语义 | 生产可达？ |
+  |---|---|---|---|
+  | `pinned: true` | `core/lifecycle.ts:27`（→`TRUSTED`）、`core/forget.ts:17`（→**永不被遗忘**） | 「人工显式信任」 | ❌ **恒为 false** |
+  | `status: "archived"` | `core/lifecycle.ts:28`（→`ARCHIVED`）、`core/forget.ts:18`（→**立即遗忘**） | 「人工归档」 | ❌ **无写入者** |
+
+- **三条依据支持「无入口」这个判定**：
+  1. `_meta.json` 是 **Derived Artifact**（ADR-0003：Memory 文件 = source of truth，meta 可被
+     `rebuild-index` 重建）⇒ **手工编辑它会被下次重建抹掉**，故「人来改 meta」不是设计上的入口；
+  2. **没有任何命令 / 工具 / 元数据约定**能置 `pinned` / `archived`（插件工具面只有
+     `read_shadow` / `recall_shadow` / `shadow_query`，均无写侧动作）；
+  3. **实现与设计声明不一致**：`MEMORY.md:90` 明写生命周期「从 meta 信号派生……**不做写侧硬状态迁移**、
+     纯按信号推导」，而 `lifecycleOf` 的两条最前置判断读的恰恰是**写侧 `rec.status` / `rec.pinned`**。
+- **需一并处置的文档承诺**（行号逐个核实通过）：`README.md:35`（`NEW → … → ARCHIVED`）、
+  `README.md:177`（`pinned` 永存）、`README.md:178`（`pinned→TRUSTED` 优先）、
+  `MEMORY.md:90`、`CHANGELOG.md:1637`。
+
+### 新增 D4：三条路，决策权在用户
+
+| 选项 | 代价 / 风险 |
+|---|---|
+| ① 补持久入口 | 会把**外部权威状态**落在 Derived Artifact 上 —— 与 ADR-0003 **直接冲突**；除非先把状态**升为 source** |
+| ② 改为信号派生 | 与 `MEMORY.md:90` 一致；但「**人工**归档」**没有信号可派**，强行派生会造出语义不符的状态 |
+| ③ 纠正文档 | 最小、最诚实；代价是**丢掉一个已文档化的能力承诺** |
+
+**建议倾向 ③ 为主 + ① 的窄版本**（先改准文档；若产品确实要「人工钉住/归档」，再单独立项设计
+**符合 ADR-0003 的持久入口** —— 状态必须落在 source）。**不建议 ②**（无信号可派）。
+**这只是建议，决策权在用户**（本仓纪律：不单方面推翻已冻结的 ADR）。
+
+### 台账结构变化
+
+- 条数 **18 → 19**：T3 从「待分诊」结案（转入 D4），二类 3 → 2（T1 / T2 仍未分诊），三类 3 → 4。
+- 修正 T2 一处 Markdown 折行粘连（`kind=deleted` 与 `status=compared` 两条被挤在同一行）。
+- 修正 T3/D4 的 README 引用：原写「`README.md:178` 承诺 `pinned` 永存」不准确 ——
+  「`pinned` 永存」在 `:177`，`:178` 是生命周期状态机那一行；已拆成两处精确引用。
+
+### 验证
+
+- `npx tsc --noEmit` clean（exit 0）。
+- **全套回归 31 个测试文件全过**（`test/**/*.test.ts` 逐个 `node` 执行，31/31）。
+- 审计工具标定 `node tools/audit-wiring.selftest.mjs` → **8 组断言 + ALL PASS ✅**。
+- 本轮**只改文档**（`BACKLOG.md` / `CHANGELOG.md` / `README.md` / `package.json` 版本号），无 `src` 改动 ⇒ `dist` 不变。
+
 ## [v1.15.20] 新增 BACKLOG.md：待办与未决事项的唯一台账（18 条）
 
 用户 2026-09-11：**「先记录代办任务，后续再继续」**。故把跨 7 轮累积的未完成事项集中落成仓库内的一份台账，

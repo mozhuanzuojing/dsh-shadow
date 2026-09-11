@@ -6,7 +6,7 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-11（v1.15.19 之后）。
+> 最后整理：2026-09-11（`v1.15.21`）—— 现存 **19 条**（B 2 / T 3（其中 T3 已结案） / D 4 / V 6 / G 4）；T1 / T2 仍未分诊。
 
 ---
 
@@ -43,7 +43,7 @@
 
 ---
 
-## 二、待分诊（第 8 轮正在做，未完成）
+## 二、待分诊（第 8/9 轮已分诊一部分，T1 / T2 未完成）
 
 > 背景：`v1.15.13`–`v1.15.18` 连续挖出**四类同源缺陷**，共同特征是「**机制是对的，
 > 断的是谁调用它 / 谁写这个值**」，而**单元测试全绿**。故做了审计工具
@@ -75,23 +75,44 @@
   - 短局部变量别名（`st=`、`lc=`、`o=`、`s=`、`v=`、`c=`、`m=`）—— 工具无作用域分析，属误报。
 - **仍需核实的少数**（第 8 轮已开始）：
   - **`status=archived`** —— 见 T3；
-  - `kind=deleted`（`core/change-set.ts`）—— 与 D1 同源（`ChangeSet` 未实例化）；  - `status=compared` / `status=explored`（`simulation/guard/reality-boundary.ts:5`）——
+  - `kind=deleted`（`core/change-set.ts`）—— 与 D1 同源（`ChangeSet` 未实例化）；
+  - `status=compared` / `status=explored`（`simulation/guard/reality-boundary.ts:5`）——
     需确认是不是**外部数据**（模拟结果的形态）；
   - `kind=metadata` / `kind=session`（`core/lineage-validator.ts:18`）—— 需确认 `AtomKind` 的取值来源。
 - **完成判据**：可疑项核准到「外部输入 / 真断线」；真断线进 D 段。
 
-### T3. `status = "archived"` 无生产者 —— 待判定是缺陷还是设计
+### T3. 已分诊：`pinned` / `archived` 两个「人工权威状态」**无任何入口**（升为 D4）
 
-- **依据**：第 8 轮审计 B 类输出 `status=archived 读于 core/forget.ts:18, core/lifecycle.ts:28`；
-  全仓 `"archived"` 只出现在**读侧**（`forget.ts:18`、`lifecycle.ts:28`）与 `retrieval/rank.ts:103` 的**权重表**，
-  **生产代码无任何写入点**（已用两轮 grep 核实：`meta.status` 的写入只有 `"active"`（`core/memory.ts:74`、
-  `query/query.ts:401`）与 `"compacted"`（`core/writer-materialize.ts:88`））。
-- **为什么可疑**：与 `v1.15.18` 修的 `superseded` **完全同类**（机制在、写入者缺）。
-- **但可能是有意设计**：`archived` 语义是「**人工归档**」（`lifecycle.ts` 的优先级注释写「人工归档」）。
-  若产品上**没有提供归档动作**，则「无写入者」是**能力未实现**，而非接线断了 —— 两者处置不同。
-- **待确认**：是否存在归档入口（命令 / 工具 / 元数据手写约定）；`MEMORY.md` 或文档里有无相关承诺。
-- **完成判据**：判定为「(a) 未实现的归档能力 → 记为待实现功能」或
-  「(b) 应有写入者而缺 → 按同 `superseded` 的方式接线」；结论回写 `adr/0062` 与 `CONTEXT.md`。
+- **原线索**：审计 B 类报 `status=archived` 无写入者（`core/forget.ts:18`、`core/lifecycle.ts:28`）。
+- **分诊中扩展**（第 9 轮）：**`pinned` 同样无写入者** —— 生产代码只写 `pinned: false`
+  （`core/memory.ts:74`、`core/writer-materialize.ts:88`、`query/query.ts:401` 三处），
+  **`pinned: true` 全仓零处**（三路 grep 核实：字面量、`pinned:`、`pinned =`）。
+- **两者的可达性**：
+  | 状态 | 读点 | 语义 | 生产可达？ |
+  |---|---|---|---|
+  | `pinned: true` | `core/lifecycle.ts:27`（→`TRUSTED`）、`core/forget.ts:17`（→**永不被遗忘**） | 「人工显式信任」 | ❌ **恒为 false** |
+  | `status: "archived"` | `core/lifecycle.ts:28`（→`ARCHIVED`）、`core/forget.ts:18`（→**立即遗忘**） | 「人工归档」 | ❌ **无写入者** |
+- **判定：这是「已文档化但无入口的能力」，不是「接线断了」**。三条依据：
+  1. **`_meta.json` 是 Derived Artifact**（ADR-0003：Memory 文件 = source of truth，
+     `_meta.json` 可被 `rebuild-index` 重建）⇒ **手工编辑它会被下次重建抹掉**，
+     故「人来改 meta」**不是设计上的入口**；
+  2. **没有任何命令 / 工具 / 元数据约定能置 `pinned` 或 `archived`**（已查：插件的工具面只有
+     `read_shadow` / `recall_shadow` / `shadow_query`，均无写侧动作）；
+  3. **实现与设计声明不一致**：`MEMORY.md:90` 明写生命周期「从 meta 信号派生……
+     **不做写侧硬状态迁移**、纯按信号推导」，而 `lifecycleOf` 的两条最前置判断
+     读的恰恰是**写侧 `rec.status` / `rec.pinned`**。
+- **文档承诺（需一并处置）**：
+  - `README.md:35` 承诺「生命周期状态机 `NEW → … → ARCHIVED`」；
+  - `README.md:177` 承诺「`pinned` 永存」（`status: stale/superseded/archived` 默认排除）；
+  - `README.md:178` 承诺生命周期「`NEW → … → SUPERSEDED/ARCHIVED`（pinned→TRUSTED 优先）」；
+  - `MEMORY.md:90` / `CHANGELOG.md:1637` 同口径列出 `SUPERSEDED/ARCHIVED`。
+- **为什么这不是「顺手接线」就能解决的**：三条路各有代价，见 **D4**（需决策）。
+- **完成判据**：见 D4。
+
+#### T3-orig（保留原始线索，便于回溯）
+
+- 第 8 轮审计输出：`status=archived 读于 core/forget.ts:18, core/lifecycle.ts:28`；
+  全仓 `"archived"` 只出现在**读侧**与 `retrieval/rank.ts:103` 的**权重表**，生产无写入点。
 
 ---
 
@@ -132,6 +153,25 @@
 - **注意**：引入三元组需要**从记忆文本里稳定抽出 (s, r, o)** —— 那一步一旦交给 LLM，
   就撞 ADR-0059 的裁决（让 LLM 判语义有硬证据反对）。故若做，**抽取规则必须确定性**。
 - **完成判据**：决定做 / 不做；若做，先写清**确定性抽取规则**并单独起 ADR。
+
+### D4. `pinned` / `archived`：补入口、改派生、还是纠正文档？
+
+- **依据**：T3 的分诊结论（`pinned` 恒 false、`archived` 无写入者；`_meta.json` 是 Derived Artifact；
+  `MEMORY.md:90` 声明「纯按信号推导、不做写侧硬状态迁移」与实现的写侧读取**不一致**）。
+- **三条路及代价**：
+
+  | 选项 | 做什么 | 代价 / 风险 |
+  |---|---|---|
+  | **① 补持久入口** | 加命令 / 工具动作置 `pinned` / `archived` | 会把「**外部权威状态**」落在 **Derived Artifact**（`_meta.json`）上 —— 与 ADR-0003「Memory 文件是 source of truth、meta 可重建」**直接冲突**；除非先把该状态**升为 source**（例如落进记忆文件头），那是更大的改动 |
+  | **② 改为信号派生** | 删掉两条写侧读取，改由 meta 信号推导 | 与 `MEMORY.md:90` 的声明一致；但「**人工**归档」本质**没有信号可派** —— 强行派生会造出一个语义不符的状态（本仓纪律：不臆造机制） |
+  | **③ 纠正文档** | 改 `README.md:35` / `:177` / `:178` / `MEMORY.md:90`，删掉不可达承诺或标注「保留给未来入口」 | 最小改动、最诚实；代价是**丢掉一个已文档化的能力承诺** |
+
+- **建议倾向**：**③ 为主 + ① 的窄版本**——先把文档改准（现状与承诺对齐），
+  若产品确实需要「人工钉住/归档」，再单独立项设计**符合 ADR-0003 的持久入口**
+  （状态必须落在 source，而不是派生文件）。**不建议 ②**（无信号可派，会造语义不符的状态）。
+  这只是建议，**决策权在用户**。
+- **完成判据**：选定其一并落地；若选 ③，需同步改 `README.md` 三处（`:35` / `:177` / `:178`）+ `MEMORY.md:90`，
+  并在 `adr/0062` 记「T3 已分诊并处置」；若选 ①，需先起 ADR 论证「外部权威状态落在哪一层」。
 
 ---
 
