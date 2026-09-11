@@ -3,6 +3,92 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.27] 投影漂移审计工具（经标定）—— 首次使用抓到第 7 处缺陷（ADR-0070）
+
+前五轮（v1.15.22–26）找到的都是**同一族**缺陷：**机制对、断的是「投影跟不上源头」**，且单元测试全绿。
+**逐个手工找是体力，不是能力** —— 目标第 (4) 条要的是「漂移检测与纠正的**能力**」。
+本轮转向造工具，且它**第一次使用就抓到一个新缺陷**。新增 ADR-0070。
+
+### 一、新增 `tools/audit-drift.ts`（+ `.lib.ts` + `.selftest.ts` + 两个夹具）
+
+| 检测器 | 判据 | 定位 |
+|---|---|---|
+| **A** 派生件新鲜度**只看进程、不问源** | ① 守卫是**裸 `return;`**（排除「缓存命中回值」）② 条件含**进程内集合**的 `.has(` ③ **条件不含源探针**（含「探针赋值的局部名」） | 精度高，**已标定** |
+| **B** 同一条判据在 **≥2 个模块**被表达 | `字段=字面量` 跨文件出现 | **线索级**，每键需人工复核 |
+
+**收窄与判据要点**：
+- 进程内集合的三种接收者：`core.<field>.has(`（`WriterCore` 就是进程内状态持有者）、
+  本文件 `new Set/Map` 的局部名、`<ident>.<prop>.has(` 中 prop 名含 `Map|Set|Cache|Dirty|Warm|Seen|Visited`。
+- **函数名收窄**（`DERIVED_ARTIFACT_FN`）：不加这条会把 `if (core.pending.has(id)) return;`
+  （已在处理，无需重复）误报。
+- 第 ③ 条要认「**探针赋值的局部名**」：修复后的写法是
+  `const fpNow = await shadowSourcesFingerprint(...); if (fpNow === prev) return;` —— 不做这一步
+  会把**已修好**的代码报成漂移。
+- **B 是线索不是结论**：它答不了「两处口径是否一致」（那才是 D5 的病根）⇒ 工具里写明**不得据 B 定罪**。
+
+### 二、**先标定，再用**（ADR-0062 §2 的纪律）
+
+**① 夹具 10 组**（带 `MARK:` 标记，测试**按标记定位**、不硬编码行号）：
+POS-1/2/3 三种进程内集合形态应报；NEG-1「返回值早退=缓存命中」/ NEG-2「条件用探针赋值的局部名」/
+NEG-3「条件直接含探针」/ NEG-4「不含进程内集合」/ NEG-5「**非派生件路径**上的正当早退」一律不报；
+B-POS 跨文件应报（两侧各一条）、B-NEG 单文件不报。
+
+**② git 历史里的真缺陷（最强的一组）**：`0c4e06b:core/writer-materialize.ts` 的 `:41` 与 `:215`
+正是 ADR-0069 的两处真缺陷，而同文件当前版本已修 ⇒ 检测器必须「**旧版报 2 条、新版报 0 条**」。
+**把历史编码进测试**（而不是靠人记），是为了让结论**可复现**。
+
+### 三、工具首次使用即抓到**第 7 处**缺陷：`judgment.ts` 漏了双条件的第一条
+
+检测 B 报出 `res.status=not_found` 跨 `core/context.ts` 与 `observer/arbitrate.ts` —— 顺着查下去，
+发现**第三个消费者漏了条件**：
+
+| 位置 | 证据候选筛选 |
+|---|---|
+| `observer/arbitrate.ts:92` | `.filter(isPathLike).filter(isConcreteLocator)` ✅ |
+| `observer/judgment.ts:26` | `.filter(isPathLike)` ❌ **漏了 `isConcreteLocator`** |
+
+而 `evidence/paths.ts:22-24` 的注释**明文写着契约**：*「`isPathLike` **故意不收窄** …… 需要
+「可检查」语义的地方用 `isConcreteLocator`」* —— 契约被违反在一处。
+
+**后果**：对 glob（`scripts/*.ps1`）与 git ref（`origin/main`）也做存在性检查 ⇒ 必然 `not_found`
+⇒ `conflictCount++` ⇒ 结论**假降为 `evidence_stale`**、置信假降、rationale 谎称「证据路径缺失」。
+**实测**（真语料 2436 条有路径引用的记忆）：**12 条（0.49%）** 受影响 / 非具体 locator **17 处**。
+
+**修复**：补 `.filter(isConcreteLocator)`（一行 + import）。
+**复现测试** `test/evidence-missing-criterion.test.ts` —— **修复前先看红**：
+
+```
+AssertionError: 通配符 `scripts/*.ps1` 不是「可检查的具体路径」，不得判 evidence_stale；
+  实际 evidence_stale（rationale: 证据路径缺失 1 处，结论降为待验证）
+```
+
+修复后 5 组断言全过，含 ③ **反向不变量**（真实缺失的**具体**路径仍须判冲突 —— 别把门修没了）
+与 ⑤ **跨消费者一致性**（6 组混合证据上 `judgment` 与 `arbitrate` 判定必须一致）。
+
+### 四、验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 检测 A 夹具标定 | `audit-drift.selftest.ts` ③ | ✅ 恰好报 POS-1/2/3，NEG-1..5 全不报 |
+| 2 | **检测 A 真历史标定** | ④ `git show 0c4e06b:core/writer-materialize.ts` | ✅ 旧版报 `:41`/`:215`，当前版 **0** |
+| 3 | 检测 B 夹具标定 | ⑤ 标记对照 | ✅ 跨文件报两侧、单文件不报 |
+| 4 | **真仓库回归护栏** | ⑥ 检测 A 必须 0 条 | ✅ 0 条（与 ADR-0069 修复一致） |
+| 5 | 缺陷复现（修复前） | `node test/evidence-missing-criterion.test.ts` | ✅ ① 处 `evidence_stale`（复现成功） |
+| 6 | 修复后转绿 | 同一测试 | ✅ 5/5 |
+| 7 | 影响面实测 | `_research/judgment-locator-drift.ts`（2436 条） | ✅ **12 条 / 0.49%** / 17 处 |
+| 8 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 9 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0 |
+| 10 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **36/36**（35 + 新增 1） |
+| 11 | 接线审计标定 | `tools/audit-wiring.selftest.ts` | ✅ 8 组断言 + ALL PASS |
+| 12 | 漂移审计标定 | `tools/audit-drift.selftest.ts` | ✅ 6 组 + ALL PASS |
+| 13 | 三方版本一致 | `package.json` / `README` / `CHANGELOG` | ✅ 均 `1.15.27` |
+
+**未验证（诚实标注）**：① 真机 `not_found` 语义端到端（复现测试用按契约写的假 Gateway）；
+② **检测 B 的 12 个键只复核了 `not_found` 一个**，其余 11 个为**未复核线索**（多为正当的分层表达）；
+③ 检测 A 的四条已知边界（`return <值>` 形式 / 跨行守卫 / 模块级单例持有 / 函数名不含 `DERIVED_ARTIFACT_FN`
+关键词）**会漏**，已写进工具输出与测试末尾；④ 工具**未接入任何自动门禁**（本仓无 CI，与 ADR-0062 的 V6 同一缺口）；
+⑤ 本次改动**尚未在运行进程生效**（插件 `dist/` 不热加载，ADR-0057）。
+
 ## [v1.15.26] `_index.md` 的投影漂移 —— 新鲜度必须问源，不能只问进程（ADR-0069）
 
 延续 D5（ADR-0066）的视角「**同一份语料、两条读路径可见性不同**」，本轮在

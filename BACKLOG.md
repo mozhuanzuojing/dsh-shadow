@@ -6,13 +6,23 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-11（`v1.15.26`）—— **现存 20 条**（T 3 / D 5 / V 6 / G 4 + **D7**）；
-> 已结案 **6 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发）+ **`_index.md` 投影漂移**（ADR-0069）；
-> **D6** 已决策待实现。T1 / T2 / T4 仍未完成。
+> 最后整理：2026-09-12（`v1.15.27`）—— **现存 21 条**（T 4 / D 5 / V 6 / G 4 + **D7**）；
+> 已结案 **8 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 / 漂移审计工具）；
+> **D6** 已决策待实现。T1 / T2 / **T5** 未完成。
 
 ---
 
 ## 〇、已结案（保留结论，便于回溯）
+
+### ✅ 投影漂移审计工具（ADR-0070，v1.15.27）—— **造工具·两层标定·首次使用抓到第 7 处**
+
+- **动机**：v1.15.22–26 连续五轮同族缺陷**全靠手工找**（体力）。目标第 (4) 条要的是**能力**。
+- **工具**：`tools/audit-drift.ts` —— 检测 A（新鲜度只看进程，精度高）+ 检测 B（判据跨模块表达，线索级）。
+- **标定**：夹具 10 组 + **git 历史真缺陷**（`0c4e06b` 旧报 `:41`/`:215`、当前版报 0）。
+- **首次使用即产出**：抓到 `observer/judgment.ts:26` **漏 `isConcreteLocator`** —— 对 glob / git ref
+  做存在性检查 ⇒ 假冲突 ⇒ 结论假降 `evidence_stale` + 置信假降；实测 **12 条（0.49%）/ 17 处**。已修。
+- **锁**：`test/evidence-missing-criterion.test.ts`（含 ③ 反向不变量 + ⑤ **跨消费者一致性**）。
+- **未做**：检测 B 的 **12 个键只复核了 1 个**（其余 11 个为未复核线索）；工具未接入自动门禁。
 
 ### ✅ `_index.md` 的投影漂移（ADR-0069，v1.15.26）—— **量证·修三层根因·加锁完成**
 
@@ -176,6 +186,24 @@
 
 - 第 8 轮审计输出：`status=archived 读于 core/forget.ts:18, core/lifecycle.ts:28`；
   全仓 `"archived"` 只出现在**读侧**与 `retrieval/rank.ts:103` 的**权重表**，生产无写入点。
+
+### T5. 漂移审计检测 B 的其余 11 个键待人工复核（线索，非结论）
+
+- **依据**：`adr/0070-drift-audit-tool.md`「未做」；`npm run audit:drift` 的 B 段。
+- **现状**：真仓库上 B 段报 **12 个键 / 30 处**。本轮**只复核了 `res.status=not_found` 那一个**
+  （并因此抓到第 7 处真缺陷 `observer/judgment.ts`），**其余 11 个键未复核**：
+  `c.kind=provider` / `c.kind=reference` / `c.status=supported` / `e.kind=user` / `err.code=ENOENT` /
+  `kind=error` / `name=graph.json` / `r.status=unavailable` / `type=anti_pattern` / `type=principle` /
+  `v=string`。
+- **几个看起来值得优先看的**（**未复核，只是排序依据**）：
+  - **`name=graph.json`**（`temporal/persistence.ts` + `world/persistence/persist.ts`）——
+    与 **T4** 的「`readTemporalGraph` / `readGraph` **只写不读**」同源，两处**都写一个图、都没有读回**；
+  - **`err.code=ENOENT`**（`core/semble.ts` + `evidence/zg.ts`）—— 两处都在判「CLI 未安装」，
+    口径若不同会撞 ADR-0049「缺件不静默」；
+  - **`r.status=unavailable`**（`core/index-engine.ts` + `query/query.ts`）—— provider 不可用处理。
+- **纪律**：B **只答「同一键出现在多个模块」，答不了「两处口径是否一致」** ⇒ **不得据 B 定罪**；
+  生产者/消费者分别表达同一判据在分层架构里**可能是正当的**。
+- **完成判据**：11 个键各落「正当（给出分层理由）/ 真漂移（给出修复 + 锁）」二选一，结果回写 `adr/0070`。
 
 ### T4. A 类里 8 个「生产与测试引用皆为零」的导出符号（本轮从 T1 拆出）
 

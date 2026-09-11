@@ -1,6 +1,6 @@
 import { confidenceOf } from "../retrieval/rank.js";
 import { readRel } from "../persistence/files.js";
-import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
+import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 // claim：记忆里的"断言"（优先用户提示/决策，否则入口标题）；这是要被验证的主张。
 export const claimOf = (text) => {
     const decision = (String(text || "").match(/^> 用户提示\/决策：(.+)$/m) || [])[1] || "";
@@ -12,7 +12,17 @@ export const judgmentOfClaim = async (fs, ws, mm, observer, verifyEvidence) => {
     if (!text)
         return null;
     const claim = claimOf(text);
-    const paths = evidencePathsOf(text).filter(isPathLike).slice(0, 6);
+    // **双条件**（ADR-0059 定的判据；ADR-0070 补齐本处漏掉的那一条）：
+    //   只有「① 引用是**可检查的具体路径**（`isConcreteLocator` 排除 glob `scripts/*.ps1` 与
+    //   git ref `origin/main`）**且** ② 它确实解析不到」才算「证据缺失」。
+    // 此前本处只做了 `.filter(isPathLike)`（**故意不收窄**的粗筛，见 `evidence/paths.ts:22-24` 的注释），
+    // 于是对 glob / git ref 也做存在性检查 ⇒ 必然 `not_found` ⇒ `conflictCount++`
+    // ⇒ 结论**假降为 `evidence_stale`**、置信度假降。
+    // 同一判据在 `observer/arbitrate.ts` 是**正确**的（它一直带这一道过滤）——
+    // 这是「同一判据在多处表达、其中一处漏了条件」的那一族（由 `tools/audit-drift.ts` 的检测 B 抓到）。
+    // 真语料实测受影响 12 条（0.49%）/ 非具体 locator 17 处。
+    // 收敛锁定：`test/evidence-missing-criterion.test.ts`（含与 `arbitrate.ts` 的**跨消费者一致性**断言）。
+    const paths = evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator).slice(0, 6);
     let evidence = null;
     let conflictCount = 0;
     for (const p of paths) {
