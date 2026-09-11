@@ -4,6 +4,6 @@ import type { WriterHooks } from "./writer-capture.js";
 export interface MaterializeResult {
     flush: (agent: AgentLike | undefined) => Promise<void>;
     rebuildIndex: (fs: any, ws: string) => Promise<void>;
-    ensureIndex: (ws: string) => Promise<void>;
+    ensureIndex: (ws: string, session?: any) => Promise<void>;
 }
 export declare function makeMaterialize(core: WriterCore, hooks: WriterHooks): MaterializeResult;

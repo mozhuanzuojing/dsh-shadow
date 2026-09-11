@@ -5,6 +5,7 @@
 // 与 writer.ts 原实现逐字一致；flush 经 hooks.primaryComp 取主入口（composition root 注入，解 cycle）。
 import { SHADOW_ROOT } from "./paths.js";
 import { resolveWorkspace } from "./scope.js";
+import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
 import { today, compact, slug, topicsInText } from "./util.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
@@ -228,7 +229,10 @@ export function makeMaterialize(core, hooks) {
         if (id)
             core.comps.delete(id);
         const ws = resolveWorkspace(agent, core.cwdBySession, core.config);
-        const fs = core.context.get("fs");
+        // 会话作用域的 fs（ADR-0074）：写入必须携带**该会话自己的**沙箱策略 ——
+        // 省略该参数会让沙箱退回部署 fallback（mode=workspace-write + `process.cwd()`），
+        // 会话工作区一旦不等于服务启动目录，写入即被围栏拒绝（记忆一条都落不了盘）。
+        const fs = scopedFs(core.context.get("fs"), policyForAgent(core.context, agent));
         if (!ws || !fs)
             return;
         try {
@@ -265,10 +269,11 @@ export function makeMaterialize(core, hooks) {
     //   而主题召回走 `listMemories`（每次读盘）**看得见** ⇒ 同一份语料两条读路径可见性分歧。
     // 修法与 v1.15.12 修 `shadow_query` 陈旧投影**同型**：让新鲜度问**源**，不只问进程 ——
     // 用已存在的 `shadowSourcesFingerprint`（它就是为这个目的写的，此前只接给了 `nodes.jsonl`）。
-    const ensureIndex = async (ws) => {
+    const ensureIndex = async (ws, session) => {
         if (!ws)
             return;
-        const fsI = core.context.get("fs");
+        // 读路径同样会经此写盘（`_index.md`、Episode 收口文件）⇒ 同样要带会话策略（ADR-0074）。
+        const fsI = scopedFs(core.context.get("fs"), sessionPolicy(core.context, session));
         if (!fsI)
             return;
         if (core.indexCacheWarm.has(ws) && !core.indexDirty.has(ws)) {

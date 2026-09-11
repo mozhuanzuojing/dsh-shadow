@@ -3,6 +3,114 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.31] 写入省略 `sandboxPolicy` ⇒ **记忆一条都落不了盘**（ADR-0074）
+
+用户 2026-09-11 指令「fix 这个」—— 承接上一轮接口核验时**顺手发现**的落盘失败横幅。
+**本轮是代码修复**：新增 `core/fs-scope.ts` + 三处接入 + 一个新回归测试。
+
+### 0. 一句话结论
+
+**不是目录不存在、也不是「解析不出 session cwd」，而是插件的写入漏传了 `sandboxPolicy`。**
+省略该参数拿到的是**部署 fallback**（`mode = DSH_PERMISSION_MODE ?? workspace-write`、
+`workspaceRoot = **process.cwd()**` —— dsh 服务进程的启动目录），而写入目标是**会话工作区**
+`session.header.cwd`。两者不同时被 `dsh-fs-sandbox` 围栏拒绝。
+**反直觉点**：本部署会话策略**本来就是 `danger-full-access`**（带 session 会在 `checkedTarget` L156 直接放行）
+—— 是「漏传参」把一次本可放行的写入降级成了越界写。
+
+### 1. 现象（两次、跨版本 ⇒ 与升级无关）
+
+`read_shadow` 顶部长期挂：
+
+```
+⚠ shadow 最近一次落盘失败（2026-09-11T11:35:11.891Z：cannot write
+"G:\project\dsh1\.shadow\2026-09-11\2026-09-11--193511-shadow.md": file access denied under workspace-write mode）
+```
+
+时间戳 **两次**：`11:28:02Z`（`v1.15.12`，升级前）/ `11:35:11Z`（`v1.15.30`，升级后）
+⇒ 一直坏着；**读路径完好、写路径全挂**。
+
+### 2. 根因链（全部读宿主编译产物核实，非猜测）
+
+| 层 | 位置 | 事实 |
+|---|---|---|
+| 围栏 | `dsh-fs-sandbox/lib/index.js:154` | `policy = sandboxPolicy ?? ctx.sandboxPolicy.resolve()` ← **无 session** |
+| 判定 | 同文件 `:156/160/164` | `danger-full-access` 直接放行；否则 `writableRoots(policy)` 判包含；失败抛 `FS_SANDBOX_DENIED` |
+| 策略 | `dsh-sandbox-policy/lib/index.js:141-148` | 无 session ⇒ `mode = defaultMode`、`workspaceRoot = resolve(process.cwd())` |
+| 配置 | `dsh-base/cordis.patch.yml:207-212` | `mode: DSH_PERMISSION_MODE ?? 'workspace-write'`；`workspaceRoot: process.cwd()` |
+
+**排除的两个替代解释**：① 目录不存在（`dsh-fs-local:497` 写前 `mkdir recursive`；且报错出自 `!contained` 分支
+而非 `ENOENT`）；② 落到兜底根（报错路径 `G:\project\dsh1\.shadow\…` **就是会话 cwd**，
+`resolveShadowScope` 走的是 `implicit` 分支）。
+
+### 3. 两处**旧记账被真机推翻**（就地勘误，原文保留）
+
+- **v1.15.12 §A3**（本文件内已加勘误块）：曾判「只传 2 参 = **非缺陷**」，理由是「省略 = 用**当前会话策略**」。
+  **契约原文不是这么说的** —— Inspect 复核 `writeText` JSDoc：*"Omit to leave the backend its own default."*
+  「backend's own default」= 部署 fallback，**与调用方的会话无关**。⇒ 该判定把「后端默认」误读成「我的会话」。
+- **v1.15.x「记账未修」①**：把触发条件写成「解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow`」。
+  **说窄了** —— 真实触发条件是「**会话工作区 ≠ 服务进程启动目录**」，与能否解析 cwd 无关
+  （本次实测正是 cwd 解析**成功**时失败）。
+
+### 4. 修复（ADR-0074）：在**取得 fs 的三处**包一层会话作用域门面
+
+新增 `core/fs-scope.ts`：
+
+```ts
+sessionPolicy(context, session)  // = context.get("sandboxPolicy")?.resolve({ session })
+policyForAgent(context, agent)   // = sessionPolicy(context, agent?.session)
+scopedFs(rawFs, policy)          // 只把 writeText 的第 5 参补齐；无策略 ⇒ 原样返回 rawFs
+```
+
+三处接入（已用 `get("fs")` 全仓 grep 核实这是插件取得 fs 的**仅有三处**）：
+
+| # | 位置 | 会话来源 |
+|---|---|---|
+| ① | `core/writer-materialize.ts` `flush(agent)` | 事件载荷的 `agent.session` |
+| ② | 同文件 `ensureIndex(ws, session?)` | 新增可选参，由读侧入口透传（`query/query.ts:140`） |
+| ③ | `index.ts`：`queryDeps` 由 `const` 改为 `makeQueryDeps(exec)` | 本次 `exec.agent.session` |
+
+**为什么不逐点改**：全部写入经由**同一个 fs 对象**向下传递 ⇒ 在取得处包一次 ≡ 全写入点都补齐，
+且**不动任何 `persistence/*` 签名**（那才是 40 处改动 + 40 处回归面）。
+
+**四条不变量（都锁进测试）**：
+1. **不越权** —— 只补调用方**没给**的；显式传入原样转发。策略取 `resolve({session})`，即**该会话自己的 mode**；
+   门面**从不构造 `danger-full-access`**，也**从不覆盖 `read-only`**（测试 ③ 是正对照：只读会话写入**仍被拒**）。
+2. **旧宿主零变化** —— 无 `sandboxPolicy` 服务时门面**恒等返回原 fs**。且这**不算降级**：
+   `dsh-fs-sandbox` 自己 `inject: ["sandboxPolicy"]`，该服务缺失时**围栏根本不挂载**
+   ⇒ 故不写进 `SOFT_IMPACT`（不报假 gap）。
+3. **保留「没有 stat」** —— `persistence/meta.ts:50` 用 `typeof fs.stat === "function"` 判分派；
+   门面**只转发真实存在的方法**，否则探测恒真、既有的「诚实降级」分支失效（测试 ⑥c）。
+4. **读侧一并修** —— 读路径也会写（`_index.md` / query-log / identity timeline / validation history），
+   不接 ③ 等于只修一半。`makeQueryDeps` **刻意不展开 `queryDeps`**（展开会急切求值 `fs`/`approval`
+   两个 getter，把 `apply()` 时未就绪的服务固化进去）。
+
+### 5. 先复现再修（本仓纪律）
+
+新增 `test/fs-sandbox-scope.test.ts`：mock fs **忠实复刻 `checkedTarget` 的围栏判定**
+（`mkFencedFs`：部署 fallback root `C:/svc` **故意** ≠ 会话工作区 `D:/proj`）。
+**修复前先跑**（暂存新 `dist`、用旧 `dist`）：
+
+```
+[dsh-shadow][error] flush FAILED: cannot write "D:/proj/.shadow/2026-09-11/2026-09-11--195034-shadow.md":
+  file access denied under workspace-write mode
+AssertionError: 会话工作区 ≠ 服务启动目录时，记忆仍必须落盘；实际写入 []
+```
+
+**报错文案与真机横幅逐字同型** ⇒ mock 复刻忠实（不是「测 mock 不是系统」）。
+修复后 **6/6**：① 落盘成功 ② 携带的是**该会话自己的**策略（root = 会话 cwd + `sessionId`）
+③ read-only 正对照 ④ danger-full-access ⑤ 读路径 `_index.md` 落盘 ⑥ 门面契约（恒等降级 / 补齐省略 /
+不覆盖显式 / 保留 `stat` 缺失）。
+
+### 6. 验证
+
+- `npx tsc --noEmit` **exit 0**；`npm run build` **exit 0**（`dist/` 已同步提交）。
+- 全套回归 **39/39 `ALL PASS ✅`**（38 原有 + 新增 `fs-sandbox-scope`）；`dist` 与源码同步。
+- **未验证（诚实标注）**：① 真机（插件 `dist/` 不热加载，ADR-0057 ⇒ 需**再重启一次**，记 **B3**）；
+  ② 兜底根 `~/.dsh-observer/shadow` 场景**本修复未覆盖**（无 session 就没有「会话策略」可问，记 **T6**）；
+  ③ `editText` 只做门面转发断言，插件今天不调用它。
+
+---
+
 ## [v1.15.30] 重点材料 hl_mem 对标（ADR-0073）—— 一条可借鉴项（D8）+ 逐条不吸收
 
 用户 2026-09-11 两条指令：① 「添加参考资料 `github.com/lohr13/hl_mem`」；② 「**把这个作为重点材料**」；
@@ -1399,6 +1507,13 @@ CDN 索引解出后按 moniker/命令/名称/ID 后缀自动解析，**立刻产
 
 ### A3. `fs.writeText` 只传 2 参 —— **不是缺陷**（勘误）
 
+> **⚠ 勘误（v1.15.31 / ADR-0074）：本条结论已被真机实测推翻。** 省略 `sandboxPolicy` **不是**
+> 「用当前会话策略」，而是用**部署 fallback**（`workspaceRoot = **process.cwd()**`）。
+> 「省略是契约允许的」这句仍然成立（*"Omit to leave the backend its own default."*），
+> 但**「backend's own default」≠「调用方的会话策略」** —— 两者无关。会话工作区 ≠ 服务进程启动目录时，
+> 写入**必被围栏拒绝**（实测：`.shadow/` 一条都落不了盘，而该会话策略其实是 `danger-full-access`）。
+> 原文保留以便追溯；现行口径见 **ADR-0074**。
+
 契约原文（`dsh-fs-sandbox` 的 `writeText` JSDoc）：
 
 - `expected … **omit for unconditional**`
@@ -1921,7 +2036,7 @@ CHANGELOG.md
 - **父代理裁决（推翻/修正子代理的两条结论）**：
   1. **撤销「`systemPrompt` 契约冲突」**：两个子代理一个说 `context(...)`、一个说 `section(...)`。实测 0.1.5-rc.1 二者**并存且用途不同** —— `section()` 插静态有序段（`layer.sections`），`context()` 插动态运行时上下文（`layer.contexts`），均为公开方法（0.1.2-rc.1 起即如此）。插件用 `context()` **正确，不是缺陷**。
   2. **修正「`agent.session` 是未声明字段」**：子代理 B 定位到根因 —— 它在 TS 类型（`runtime-types.ts` 的 `declare module` 增强）与官方文档里**是公开契约**，只因契约生成器只索引顶层 `export` 声明而**不在机器可读目录（Inspect）里**，且在宿主多个包中被广泛第一方使用（含 `tool-fs/src/session-cwd.ts` 注释直接指名该路径）。⇒ 属「公开但 Inspect 看不到」，非「未承诺」。
-- **记账未修（父代理裁决为非本轮返工面）**：① `fs.writeText` 只传 2 参（无 `expected` / `signal` / `sandboxPolicy`）—— 已核实组合**确挂 `fs-sandbox`**，但触发条件是「解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow`」，且写失败**有可见信号**（场景13 测的正是它，`read_shadow` 会暴露「落盘失败」），故非「静默」；② `core/scope.ts` 的 `agent.session.cwd` 是死分支（宿主只有 `header.cwd`）；③ `continuity/engine.ts` 自造 `FsTarget`，违反 dsh-fs 书面契约（key 只能来自 `resolve()`），本地/沙箱后端今天可用；④ 工具名四级兜底里 `exec.tool` / `toolName` / `tool` 在 `ToolExecution` 上不存在，末位 `exec.name` 命中。
+- **记账未修（父代理裁决为非本轮返工面）**：① `fs.writeText` 只传 2 参（无 `expected` / `signal` / `sandboxPolicy`）—— 已核实组合**确挂 `fs-sandbox`**，但触发条件是「解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow`」，且写失败**有可见信号**（场景13 测的正是它，`read_shadow` 会暴露「落盘失败」），故非「静默」；**v1.15.31 勘误（ADR-0074）：该归因说窄了** —— 真实触发条件是「**会话工作区 ≠ 服务进程启动目录**」，**与能否解析 cwd 无关**（实测失败时 cwd 解析是成功的），且后果不是「有可见信号就算无害」而是**整棵记忆树永不落盘**；② `core/scope.ts` 的 `agent.session.cwd` 是死分支（宿主只有 `header.cwd`）；③ `continuity/engine.ts` 自造 `FsTarget`，违反 dsh-fs 书面契约（key 只能来自 `resolve()`），本地/沙箱后端今天可用；④ 工具名四级兜底里 `exec.tool` / `toolName` / `tool` 在 `ToolExecution` 上不存在，末位 `exec.name` 命中。
 - **验证**：`tsc --noEmit` exit 0；`tsc` build exit 0；**全量回归 23/23 `ALL PASS ✅`**（21 原有 + `host-probe` + 新增 `goal-operation`）。
 - **边界**：只改 `core/collect.ts` 一处字段名 + 新增一个测试；不动 API / mode / 读侧语义；**已落盘的历史记忆文本不回填**（重算属单独决策，未做）。
 - **待实测（需重启 web profile）**：探测块与本次修复都在源码 + `dist`，真机确认需重启；本会话用的是重启前载入的 dist。

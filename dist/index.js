@@ -25,6 +25,7 @@
  * 零运行时依赖 @deepseek-ai/*：全部服务经 ctx.get / ctx.inject 读取。
  */
 import { createShadowCollector } from "./core/writer.js";
+import { scopedFs, sessionPolicy } from "./core/fs-scope.js";
 import { routeVerify } from "./evidence/gateway.js";
 import { runReadShadow } from "./query/query.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
@@ -130,21 +131,29 @@ export function apply(ctx, rawConfig = {}) {
     // zg 是「眼睛/Evidence Sensor」；Arbitration(它意味着什么) 留在 Shadow Core。zg 未装 → 明确 unavailable，绝不静默 fallback。
     const verifyEvidence = (ref, ctx) => routeVerify(ref, ctx, config.evidenceProvider || "fs", config.evidenceProviders);
     // 读侧查询依赖注入（闭包型依赖在此构造；领域逻辑在 query/query.ts）。
-    const queryDeps = {
-        // 懒解析 fs：与写侧 collector（core/writer.ts:242）一致，在每次 runReadShadow 执行时才取。
-        // 避免在 apply() 时急切快照得到 undefined 并永久固化进 queryDeps.fs，
-        // 导致 read_shadow 恒命中 query/query.ts 的「（fs 服务不可用）」守卫（读写不对称 bug）。
-        get fs() { return context.get("fs"); },
-        config,
-        cwdBySession: collector.cwdBySession,
-        getFlushWarn: collector.getFlushWarn,
-        verifyEvidence,
-        expandTerms: collector.expandTerms,
-        recallSelect: collector.recallSelect,
-        knowledgeNavigate: collector.knowledgeNavigate,
-        ensureIndex: (ws) => collector.ensureIndex(ws),
-        // 懒取审批服务（与 fs 同法：apply() 时可能尚未就绪；缺它时安装 fail closed，不代装）。
-        get approval() { return context.get("approval"); },
+    // **每次读取按本次 exec 的会话解析一次沙箱策略**（ADR-0074，见 core/fs-scope.ts）：
+    // 读路径同样会写盘（`_index.md` / query-log / identity timeline / validation history…），
+    // 不带会话策略的写入会被 `dsh-fs-sandbox` 按「部署 fallback + process.cwd()」围栏拒绝。
+    // 故这里由 const 改为 per-exec 构造 —— 且**不**展开 queryDeps（展开会急切求值 getter，
+    // 把 apply() 时尚未就绪的服务固化进去，正是 fs/approval 两处特意写成 getter 要避免的事）。
+    const makeQueryDeps = (exec) => {
+        const policy = sessionPolicy(context, exec?.agent?.session);
+        return {
+            // 懒解析 fs：与写侧 collector（core/writer.ts:242）一致，在每次 runReadShadow 执行时才取。
+            // 避免在 apply() 时急切快照得到 undefined 并永久固化进 queryDeps.fs，
+            // 导致 read_shadow 恒命中 query/query.ts 的「（fs 服务不可用）」守卫（读写不对称 bug）。
+            get fs() { return scopedFs(context.get("fs"), policy); },
+            config,
+            cwdBySession: collector.cwdBySession,
+            getFlushWarn: collector.getFlushWarn,
+            verifyEvidence,
+            expandTerms: collector.expandTerms,
+            recallSelect: collector.recallSelect,
+            knowledgeNavigate: collector.knowledgeNavigate,
+            ensureIndex: (ws) => collector.ensureIndex(ws, exec?.agent?.session),
+            // 懒取审批服务（与 fs 同法：apply() 时可能尚未就绪；缺它时安装 fail closed，不代装）。
+            get approval() { return context.get("approval"); },
+        };
     };
     if (typeof context.inject === "function") {
         context.inject(["tools"], (toolsCtx) => {
@@ -290,7 +299,7 @@ export function apply(ctx, rawConfig = {}) {
                     },
                 },
                 output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
-                execute: (args, exec) => runReadShadow(queryDeps, args, exec),
+                execute: (args, exec) => runReadShadow(makeQueryDeps(exec), args, exec),
             });
             // v1.5 Shadow Usability Layer：人类友好入口。隐藏 episode/decision/task/context 等底层模式，
             // 只给一句自然查询，返回「记忆恢复包（Task Recovery Bundle）」。内部 = read_shadow({mode:'recovery', topic})。
@@ -305,7 +314,7 @@ export function apply(ctx, rawConfig = {}) {
                     },
                 },
                 output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
-                execute: (args, exec) => runReadShadow(queryDeps, { mode: "recovery", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
+                execute: (args, exec) => runReadShadow(makeQueryDeps(exec), { mode: "recovery", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
             });
             // Phase 1A Shadow Projection：跨类型统一查询（memory/decision/code/document/concept/resource），返回带 evidence 的 context。
             // 内部 = read_shadow({mode:'query', topic, scope, limit})；Node 是派生投影（非事实源），可追溯。
@@ -321,7 +330,7 @@ export function apply(ctx, rawConfig = {}) {
                     },
                 },
                 output: { schema: { type: "string" }, render: (_args, value) => [{ type: "text", text: value }] },
-                execute: (args, exec) => runReadShadow(queryDeps, { mode: "query", topic: String((args && args.query) || "").trim(), scope: args && args.scope, limit: args && args.limit }, exec),
+                execute: (args, exec) => runReadShadow(makeQueryDeps(exec), { mode: "query", topic: String((args && args.query) || "").trim(), scope: args && args.scope, limit: args && args.limit }, exec),
             });
         });
     }

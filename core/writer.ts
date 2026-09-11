@@ -27,8 +27,9 @@ export interface ShadowCollector {
   recallSelect: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;
   /** Knowledge Engine 的 LLM 树上导航（v1.10.0，PageIndex `chat=` 步）：给候选章节，LLM 选编号；失败 []。 */
   knowledgeNavigate: (query: string, candidates: { id: string; title: string; content: string }[]) => Promise<number[]>;
-  /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。 */
-  ensureIndex: (ws: string) => Promise<void>;
+  /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。
+   *  `session` 由读侧入口透传，用于解析**该会话自己的**沙箱策略（ADR-0074）。 */
+  ensureIndex: (ws: string, session?: any) => Promise<void>;
   /** 事件 handler（index.ts 用 context.on 绑定）。 */
   onFsObserved: (target: any, observation: any, actor: any) => undefined;
   onToolsResult: (exec: any) => undefined;
