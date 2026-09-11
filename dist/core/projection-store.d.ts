@@ -5,7 +5,20 @@ export interface ShadowProjectionStore {
     load(): Promise<ShadowNode[] | null>;
     invalidate(): Promise<void>;
     rebuild(derive: () => Promise<ShadowNode[]>): Promise<ShadowNode[]>;
-    /** ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。 */
+    /**
+     * ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。
+     *
+     * ⚠ **生产中未接线**（v1.15.19 用 `tools/audit-wiring.mjs` 审计确认，见 ADR-0062）：
+     *   本方法的**唯一调用点是测试**（`test/projection-store.test.ts`）。生产走的是
+     *   `invalidateProjection` 的**粗粒度清空**（`invalidate()`）——见 `writer-materialize.ts` 的
+     *   `ensureIndex`：它在 `rebuildIndex` 后清整个缓存，而 `rebuildIndex` 本身是**全量扫描**
+     *   （`listMemories`），**没有跟踪变更集**，故拿不到可喂给本方法的 `ChangeSet`。
+     *
+     * **这不是正确性缺陷**：粗粒度清空是正确路径（缓存是可重建派生，清空后下次读自动重建），
+     *   只是放弃了「只失效变更项」的优化。接线它需要**新增写侧变更跟踪**（并伴随一次性能取舍：
+     *   清空 = 一次极小写 + 下次全量重建；本方法 = 读全量缓存 + 写回，换下次读更快）。
+     *   按本仓纪律**不臆造机制**，故保留实现与测试、显式标注未接线，由后续决策是否接线或删除。
+     */
     invalidateFor?(set: ChangeSet): Promise<void>;
 }
 export declare const projectionIndexRel: () => string;
