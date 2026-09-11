@@ -454,10 +454,21 @@ export async function runReadShadow(deps, args, exec) {
         }
         await writeLedger(fs, ws, { turn, served: nextServed });
     }
-    if (servedDetail.length) {
+    // 命中数累积（v1.15.24 修，ADR-0067）：**必须基于 `servedRels`（每条被返回的），不是 `servedDetail`**。
+    // 根因（实测复现）：`servedDetail` 的定义是 `s.tier !== "L0" && render.includes("…")`
+    //   —— 即「渲染里**展开了片段**」的那些记忆，它本来是给上面的**冷却台账**用的（`detail: true`）。
+    //   拿它来累积命中数，会漏掉两类被返回的记忆：
+    //     ① `tierFor` 对「动作行占比 > 60%」的记忆返回 **L0**（真语料实测 **74.3%**，5342/7185）
+    //        ⇒ 这类记忆**永不可能**命中数 +1；
+    //     ② 即便是 L1/L2，还要该次预算够展开片段（`budgetChars >= out.length + 30`）才进集合。
+    //   实测佐证：本机 7000+ 条记忆、多次召回后 `.shadow/_meta.json` **仍不存在**。
+    // 语义依据：`hits` 在文档里的定义是「召回**命中数**」（README「记忆遗忘」节：hotness = 命中数 × 半衰期衰减），
+    //   被返回一条记忆就是一次命中 —— 与「是否展开了片段」无关。
+    // 收敛锁定：`test/hit-accumulation.test.ts`（含「未返回者不得记 hits」的反向不变量）。
+    if (servedRels.length) {
         const next = await readMeta(fs, ws);
         const observer = agent?.id ? String(agent.id) : "";
-        for (const p of servedDetail) {
+        for (const p of servedRels) {
             const rec = next[p] || { created: today(), hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: "", confirmedBy: [] };
             rec.hits = (rec.hits || 0) + 1;
             rec.lastSeen = turn;

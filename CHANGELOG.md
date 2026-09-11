@@ -3,6 +3,101 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.24] 第五处同类缺陷：命中数累积触发条件错 —— 74.3% 的记忆永不可能被记命中（ADR-0067）
+
+延续 ADR-0066（D5）的视角「**同一策略、只在一处生效 / 判据错**」，本轮在
+`query/query.ts` 找到**第五个实例**并修复。**新增 ADR-0067 + 回归锁，立 D7。**
+
+### 一、缺陷：`hits` 用的是 `servedDetail`，而它要求「渲染里展开了片段」
+
+`query/query.ts` 里「给被服务的记忆累加 `hits`/`confirmedBy`」那段用的是 `servedDetail`，
+其定义（同文件 `:370`）是：
+
+```ts
+if (s.tier !== "L0" && render.includes("…")) servedDetail.push(s.mm.rel);
+```
+
+它**本来是给冷却台账用的**（`:385-396`，`detail: true`），却被复用去累积命中数。两个后果：
+
+1. `tierFor`（`retrieval/rank.ts`）对「**动作行占比 > 60%**」的记忆返回 **L0**；
+2. 即便是 L1/L2，还要该次**预算够展开片段**（`budgetChars >= out.length + 30`）才进集合。
+
+**真语料实测（7185 条）**：
+
+| tier | 条数 | 占比 |
+|---|---|---|
+| **L0** | **5342** | **74.3%** |
+| L1 | 1512 | 21.0% |
+| L2 | 331 | 4.6% |
+
+⇒ **74.3% 的记忆永不可能被记命中。**
+
+**端到端佐证**：本机 `.shadow/` 有 7185 条记忆、`_index.md` **1.8 MB**、多次召回之后，
+**`.shadow/_meta.json` 根本不存在**（`Get-ChildItem -Recurse -Filter _meta.json` 为空）。
+—— 即：整条 retention/hotness/lifecycle 信号链**从未真正启动**。
+
+### 二、语义依据：`hits` 是「召回命中数」，不是「展开片段数」
+
+README「记忆遗忘」节原文：召回用 **hotness**（**命中数** × 半衰期衰减）加权。
+**被返回一条记忆就是一次命中**，与「是否展开了片段」无关。
+`servedDetail` 的语义是「以 detail 形式服务」（服务冷却台账），是**另一件事**，两者不该混用。
+
+### 三、先复现，再修
+
+新增 `test/hit-accumulation.test.ts`，**修复前先跑**（关键：修复前必须先看到它红）：
+
+```
+✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0（真语料 74.3% 的记忆是这个形态）
+AssertionError: 被返回的记忆必须在 _meta.json 里有记录（hits 是「召回命中数」，与是否展开片段无关）
+  actual: undefined, expected: true
+```
+
+⇒ 缺陷在 mock 里**稳定复现**（不是只靠读码推断）。**修复**：累积改用 `servedRels`
+（`:363` 对**每个真正进入输出的**记忆入栈），`servedDetail` 继续服务冷却台账。修复后 4 组断言全过。
+
+### 四、连带恢复（此前实际不可达）
+
+| 能力 | 修复前 | 修复后 |
+|---|---|---|
+| `hits` 累积 | 74.3% 的记忆永不 +1；`_meta.json` 不存在 | 每条被返回的记忆 +1 |
+| 生命周期 `OBSERVED`（hits>0） | **不可达** | 可达 |
+| 生命周期 `VERIFIED`/`TRUSTED`（`confirmedBy` ≥1/≥2） | **不可达** | 可达 |
+| `forget` 的 `minHits` 保护（默认 1） | **从不生效** | 生效（被召回过的记忆不再被判「低价值」） |
+| `retention` 的 hotness | 恒为 0（纸面功能） | 真正反映使用 |
+
+> **又一例「单元测试绿、功能仍失效」**：`lifecycle-superseded.test.ts` 里有
+> `OBSERVED`/`VERIFIED`/`TRUSTED` 的单元测试（直接构造 `{hits:2}` / `{confirmedBy:["a","b"]}`），
+> 全绿 —— 但**生产里这三态从未触发过**，因为喂给 `lifecycleOf` 的 `rec` 恒为 `undefined`。
+
+### 五、立 D7：`hits` 的范围决策（有意不顺手做）
+
+`hits`/`confirmedBy` **只在主题召回路径累积**。`shadow_query`、**`recall_shadow`（`mode:"recovery"`，
+最常用的恢复入口）**、`mode:"episode"` 等**都不累积**。把它们也算命中，会把 `hits` 的语义
+从「被主题召回」扩大为「被任何读入口读过」—— 而 `shadow_query` 常被**探测性**调用。
+**两种语义都自洽但含义不同**，且会改变 `hotness` 的含义 ⇒ **升为 D7，决策权在用户**
+（建议倾向：分两个计数；或维持现状并在文档里写明）。
+
+### 六、验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 探针量化 L0 占比 | `_research/tier-l0-share.ts`（7185 条） | ✅ **L0 5342（74.3%）** |
+| 2 | `_meta.json` 不存在的实证 | `.shadow` 递归查找 | ✅ 不存在（尽管 7185 条记忆 / 1.8 MB 索引） |
+| 3 | **修复前先看红** | `node test/hit-accumulation.test.ts` | ✅ ② 处 `actual: undefined`（复现成功） |
+| 4 | 修复后转绿 | 同一测试 | ✅ 4 组断言全过 |
+| 5 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 6 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0 |
+| 7 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **33/33**（32 + 新增 1） |
+| 8 | 审计工具标定 | `tools/audit-wiring.selftest.ts` | ✅ 8 组断言 + ALL PASS |
+| 9 | 三方版本一致 | `package.json` / `README` / `CHANGELOG` | ✅ 均 `1.15.24` |
+
+**未验证（诚实标注）**：① 本次改动**尚未在运行进程生效**（插件 `dist/` 不热加载，ADR-0057），
+真机上 `.shadow/_meta.json` 是否如期出现须**再重启一次**后复核；
+② 引入一次**额外的 `_meta.json` 读写**（每次有命中的主题召回），写入比原来频繁（原来几乎不写）；
+③ `_meta.json` 的**增长无上限**（现状无上限，未加）；
+④ `forget.enabled` 时此修复会**降低有效删除量**（被召回过的记忆受 `minHits` 保护）——
+方向符合文档意图，但属行为变化，已显式记录在 ADR-0067 的「负 / 已知边界」。
+
 ## [v1.15.23] 按推荐落地：B1 闭环 / B2·D4·D6 决策 / D5 修掉两条读路径 66.9% 的可见性分歧（ADR-0066）
 
 用户 2026-09-11：**「已经重启 按推荐」** —— ① 确认 B1（重启使插件代码生效）闭环；
