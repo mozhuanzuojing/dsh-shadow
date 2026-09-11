@@ -6,13 +6,28 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-12（`v1.15.27`）—— **现存 21 条**（T 4 / D 5 / V 6 / G 4 + **D7**）；
-> 已结案 **8 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 / 漂移审计工具）；
-> **D6** 已决策待实现。T1 / T2 / **T5** 未完成。
+> 最后整理：2026-09-12（`v1.15.28`）—— **现存 21 条**（T 4 / D 5 / V 6 / G 4 + **D7**）；
+> 已结案 **9 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
+> 漂移审计工具 / 图快照顺序）；**D6** 已决策待实现。
+> **漂移审计已产出 2 个真发现**（`judgment.ts` 双条件缺口、图快照取最旧）；T5 余 **10 个键待复核**。
 
 ---
 
 ## 〇、已结案（保留结论，便于回溯）
+
+### ✅ 图快照读取取到最旧的（ADR-0071，v1.15.28）—— **工具体检 B 第二次真发现·闭环验证**
+
+- **由来**：`npm run audit:drift` 的检测 B 报 `name=graph.json` 跨两个模块；顺查发现三层事实
+  （近重复 / write-only / 真实读路径是重建）+ **一个新的顺序 bug**。
+- **顺序 bug**：`listDir` 契约 "stable name order"、真机 `localeCompare` 升序，日期目录名
+  `YYYY-MM-DD` 字典序=时间序 ⇒ 两个 reader「取第一个」= **取最旧**的快照
+  （而 `graph.json` 是可重建派生件 ⇒ 回读更旧的派生件 = ADR-0069 同族）。
+- **修复**：新增 `persistence/snapshots.ts` 的 `readLatestSnapshot`（降序取第一份），
+  两个 reader **收敛为参数化调用**（不「两处各修一遍」—— 那会保留「多处表达」的分叉结构）。
+- **复现**：修复前 `实际返回 day07`；修复后 **6/6**（含③乱序插入仍取最新、⑤无快照→`null`）。
+- **闭环**：重跑审计，检测 B **12 键/30 处 → 11 键/28 处**、该键**已消失**。
+- **诚实标注**：两 reader **当前零调用**（属 T4）⇒ **运行时收益为 0**，收益是**消除地雷 + 消除重复**。
+- **未处理**：快照**无限增长**（每天一份、从不清理）—— 属存储治理，另议题。
 
 ### ✅ 投影漂移审计工具（ADR-0070，v1.15.27）—— **造工具·两层标定·首次使用抓到第 7 处**
 
@@ -190,49 +205,48 @@
 ### T5. 漂移审计检测 B 的其余 11 个键待人工复核（线索，非结论）
 
 - **依据**：`adr/0070-drift-audit-tool.md`「未做」；`npm run audit:drift` 的 B 段。
-- **现状**：真仓库上 B 段报 **12 个键 / 30 处**。本轮**只复核了 `res.status=not_found` 那一个**
-  （并因此抓到第 7 处真缺陷 `observer/judgment.ts`），**其余 11 个键未复核**：
+- **现状**：真仓库上 B 段报 **11 个键 / 28 处**（`v1.15.28` 修掉 `name=graph.json` 后从 12/30 降下来）。
+  本轮**只复核了两个**：`res.status=not_found`（抓到第 7 处真缺陷 `observer/judgment.ts`）与
+  `name=graph.json`（ADR-0071 的真漂移），**其余 10 个键未复核**：
   `c.kind=provider` / `c.kind=reference` / `c.status=supported` / `e.kind=user` / `err.code=ENOENT` /
-  `kind=error` / `name=graph.json` / `r.status=unavailable` / `type=anti_pattern` / `type=principle` /
-  `v=string`。
+  `kind=error` / `r.status=unavailable` / `type=anti_pattern` / `type=principle` / `v=string`。
 - **几个看起来值得优先看的**（**未复核，只是排序依据**）：
-  - **`name=graph.json`**（`temporal/persistence.ts` + `world/persistence/persist.ts`）——
-    与 **T4** 的「`readTemporalGraph` / `readGraph` **只写不读**」同源，两处**都写一个图、都没有读回**；
   - **`err.code=ENOENT`**（`core/semble.ts` + `evidence/zg.ts`）—— 两处都在判「CLI 未安装」，
     口径若不同会撞 ADR-0049「缺件不静默」；
-  - **`r.status=unavailable`**（`core/index-engine.ts` + `query/query.ts`）—— provider 不可用处理。
+  - **`r.status=unavailable`**（`core/index-engine.ts` + `query/query.ts`）—— provider 不可用处理；
+  - **`c.kind=provider` / `c.kind=reference`**（`core/toolset-exec.ts` + `core/toolset.ts`）——
+    台账两级的判定，正是**目标第 (1)(2) 条**的接缝。
+- **经验**：前两个复核的**都**是真问题（不是噪声）—— 说明检测 B 的产出率比预期高，
+  值得把剩余 10 个逐个过一遍。
 - **纪律**：B **只答「同一键出现在多个模块」，答不了「两处口径是否一致」** ⇒ **不得据 B 定罪**；
   生产者/消费者分别表达同一判据在分层架构里**可能是正当的**。
 - **完成判据**：11 个键各落「正当（给出分层理由）/ 真漂移（给出修复 + 锁）」二选一，结果回写 `adr/0070`。
 
-### T4. A 类里 8 个「生产与测试引用皆为零」的导出符号（本轮从 T1 拆出）
+### T4. A 类里 8 个「生产与测试引用皆为零」的导出符号（**已落 2 个，余 6 个**）
 
-- **依据**：本轮 A 类逐条核实（`_research/triage-a.ts` → `triage-a-out.json`）。
-- **已处置 1 个**：`isCognitiveAtom` —— **已删除**（ADR-0066）。理由不是「死代码」，
-  而是它的规则与 `validateAtomProjection` **完全重复**，留着会成为**第四份口径**
-  （ADR-0063 的病根就是「同一条规则三份实现、口径互不相同」）。
-- **剩余 8 个清单**（全部只命中定义行；`isExchangeable` 另有 1 处测试引用）：
+- **依据**：A 类逐条核实（`_research/triage-a.ts` → `triage-a-out.json`）+ **ADR-0070/0071**。
+- **已处置 3 个**：
+  - `isCognitiveAtom` —— **已删除**（ADR-0066）。理由不是「死代码」，而是它的规则与
+    `validateAtomProjection` **完全重复**，留着会成为**第四份口径**。
+  - `readTemporalGraph` / `readGraph` —— **保留 + 改正 + 收敛**（ADR-0071）：
+    它们是持久化层的公开读 API；发现并修掉**顺序 bug**（取到最旧的快照），
+    两份近重复逻辑收敛到 `persistence/snapshots.ts`。
+    **接线与否另议**：`mode:"temporal"` 的真实读路径是 `buildTemporalGraph`（重建），
+    **不应**把 reader 接成缓存（会重蹈 ADR-0069 的「缓存与源头脱钩」）。
+- **剩余 6 个清单**（全部只命中定义行；`isExchangeable` 另有 1 处测试引用）：
 
   | 符号 | 文件 | 所在文件行数 |
   |---|---|---|
   | `hasNoUpgradeApi` | `agency/guards.ts:22` | 56（整文件） |
-  | `isMetadataMemoryText` | `core/episode.ts` | —（ADR-0066 决定**保留**：服务不 parseMemory 的读路径；本条从 T4 移出） |
+  | `isMetadataMemoryText` | `core/episode.ts` | —（ADR-0066 决定**保留**：服务不 parseMemory 的读路径） |
   | `renderIntent` | `core/intent.ts:54` | 61（同文件只有 `intentOf` 在用） |
   | `isExchangeable` | `federation/contract.ts:23` | 31（整文件） |
   | `renderIdentityModel` | `identity/timeline.ts:64` | 73（整文件） |
   | `relationForProposal` | `temporal/edge.ts:30` | 30（整文件） |
-  | `readTemporalGraph` | `temporal/persistence.ts:16` | 32（**只写不读**） |
-  | `readGraph` | `world/persistence/persist.ts:13` | 29（**只写不读**） |
 
-- **两个子类（性质不同，须分开处置）**：
-  - **(a) 成对的读/写不对称**：`readTemporalGraph` / `writeTemporalGraph`、
-    `readGraph` / `writeGraph` —— **只写不读**。这是**真线索**：数据落盘但无人读回，
-    要么是「读回来做校验」忘了接，要么是「只做审计留痕、本就不读」。**需定性**。
-  - **(b) 无关口的渲染器**：`renderIntent` / `renderIdentityModel` / `hasNoUpgradeApi` /
-    `relationForProposal` / `isExchangeable` —— 「算了/判了但没渲染或没接出去」。需逐个定性。
-- **为什么没做**：需要**逐个追作者意图**（前瞻 / 遗漏 / 有意公开面）；本轮只交付了
-  「生产与测试引用皆为零」这一定量事实，**未逐个定性**。
-- **完成判据**：8 个各落「接线 / 删除 / 保留并注明理由」；其中 (a) 两条优先（可能涉及「写了不读」）。
+- **其余子类**：`renderIntent` / `renderIdentityModel` / `hasNoUpgradeApi` / `relationForProposal` /
+  `isExchangeable` —— 「算了/判了但没渲染或没接出去」，需逐个定性。
+- **完成判据**：余 6 个各落「接线 / 删除 / 保留并注明理由」。
 
 ---
 

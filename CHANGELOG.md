@@ -3,6 +3,92 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.28] 图快照读取取到最旧的 —— 并收敛两份近重复逻辑（ADR-0071）
+
+**本轮是上一版漂移审计工具（ADR-0070）的检测 B 第二次产出真发现**，且**用同一工具完成了闭环验证**。
+新增 ADR-0071。
+
+### 一、线索来源与三层事实
+
+检测 B 报出 `name=graph.json` 出现在两个生产模块（`temporal/persistence.ts` +
+`world/persistence/persist.ts`）。顺着查下去：
+
+1. **两个 reader 逐字近重复** —— 除根目录与返回类型外逻辑完全相同（连 try/catch 位置都一样）。
+2. **两者都 write-only**（T4 已记）：生产者 `writeTemporalGraph` ← `observer-kernel.ts:46`、
+   `writeGraph` ← `world.ts:40`；而两个 reader **生产与测试引用皆为零**。
+3. **真实读路径是「重建」不是「回读」**：`mode:"temporal"` 走 `buildTemporalGraph`（读 traces 重建）
+   **之后**才落一份快照 —— 与 ADR-0017 checklist ①（graph.json 是**可重建**索引）与
+   ⑥（该 mode 由 `buildTemporalGraph` 提供）一致。
+
+### 二、新发现的**顺序 bug**
+
+两个 reader 都是「遍历 `listDir` 的日期目录，**碰到第一个**含 `graph.json` 的就 return」。而：
+
+- `listDir` 契约原文：*"List direct children of a directory in **stable name order**."*
+- 真机实现（已读 `dsh-fs-local` 的 `listDirectory`）：`entries.sort((l, r) => l.name.localeCompare(r.name))` ⇒ **升序**
+- 日期目录名 `YYYY-MM-DD` ⇒ **字典序 = 时间序**
+
+⇒ **「取第一个」= 取最旧的那份快照。** 而 `graph.json` 是**可重建的派生快照**（ADR-0003/0017/0024）
+—— 回读一份**更旧**的派生件，正是 ADR-0069 刚修过的「投影与源头脱钩」那一族。
+
+### 三、修复：顺序纪律**单一来源** + 消除近重复
+
+新增 `persistence/snapshots.ts` 的 `readLatestSnapshot(fs, ws, dirRel, fileName)`：
+
+```ts
+const dates = entries.filter(isDateDir).map(name).sort((a, b) => b.localeCompare(a)); // **降序**
+for (const name of dates) { ... 找到第一个含快照的 ... return ... }
+```
+
+两个 reader 收敛为**参数化调用**（各一行）。
+**为什么不「两处各修一遍」**：本仓这几轮的教训正是「同一逻辑在多处表达，其中一处会漂移」
+（ADR-0063 三份判据、ADR-0070 的双条件漏在第三个消费者）——收敛是**结构性回应**，不是顺手重构。
+
+### 四、先复现，再修
+
+`test/graph-snapshot-order.test.ts`（6 组），**修复前先跑**：
+
+```
+AssertionError: 应返回**最新**（2026-09-09 / day09）；
+  实际返回了 day07 —— 升序列表取第一个 = 最旧
+```
+
+修复后 6/6：① temporal 取最新 ② world 取最新 ③ **乱序插入**仍取最新（只看名字序）
+④ 中间某天缺图仍取到最新那个有图的 ⑤ **反向不变量**：无快照 → `null`（不抛、不编造）
+⑥ 往返可读回。
+
+### 五、**闭环验证**：工具报的漂移在修完后真的消失
+
+重跑 `npm run audit:drift`：
+
+| 读数 | 修复前 | 修复后 |
+|---|---|---|
+| 检测 B | **12 个键 / 30 处** | **11 个键 / 28 处** |
+| `name=graph.json` | 在列（2 文件） | **已消失** |
+
+⇒ 「检测 → 修复 → 检测确认消失」的**闭环成立**；这也同时证明该键**确实是真漂移**
+（而非正当的分层表达）。
+
+### 六、验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 顺序 bug 复现（修复前） | `node test/graph-snapshot-order.test.ts` | ✅ ① 处返回 `day07`（最旧） |
+| 2 | 修复后转绿 | 同一测试 | ✅ **6/6** |
+| 3 | **闭环**：B 段键数下降且该键消失 | `npm run audit:drift` | ✅ 12→**11** 键 / 30→**28** 处 |
+| 4 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 5 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0 |
+| 6 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **37/37**（36 + 新增 1） |
+| 7 | 两个审计工具标定 | `audit-wiring` / `audit-drift` selftest | ✅ 均 ALL PASS |
+| 8 | 三方版本一致 | `package.json` / `README` / `CHANGELOG` | ✅ 均 `1.15.28` |
+
+**未验证（诚实标注）**：① **运行时收益为 0** —— 两个 reader **当前生产零调用**（T4），
+本次改动修的是「**若接线则正确**」，收益是**消除地雷 + 消除重复**，不是修一条在跑的路径；
+② 真机 `listDir` 排序按**契约 + 真机实现**认定（已读 `dsh-fs-local`），但**未在真机跑这两个 reader**
+（零调用，无法触发）；③ **快照无限增长**（`writeTemporalGraph` 每天一份、从不清理）**未处理**，
+属另一议题；④ 本次改动**尚未在运行进程生效**（插件 `dist/` 不热加载，ADR-0057）；
+⑤ T4 的 8 个符号里本 ADR 只落了 **2 个**，其余 6 个仍待定性。
+
 ## [v1.15.27] 投影漂移审计工具（经标定）—— 首次使用抓到第 7 处缺陷（ADR-0070）
 
 前五轮（v1.15.22–26）找到的都是**同一族**缺陷：**机制对、断的是「投影跟不上源头」**，且单元测试全绿。
