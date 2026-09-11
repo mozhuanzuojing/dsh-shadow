@@ -108,26 +108,58 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 ### 默认开关（装完什么都不动会怎样）
 
-**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的三项（采集、摘要、查询观测）都可一行关掉。
+**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的是**四项**（采集与落盘、一句话摘要 `summary`、查询观测 `queryLog`、Episode 回溯 `episodes`）—— 其中**只有 `summary` / `queryLog` 能一行关掉**，`episodes` 目前**关不掉**（见下表注 ①），采集本身也**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
 
-| 能力 | 默认 | 开着会怎样 / 怎么开 |
-|------|------|---------------------|
-| 采集与落盘 | **开** | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」 |
-| 一句话摘要 `summary` | **开** | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关（关掉后本项无 LLM 调用） |
-| 查询观测 `queryLog` | **开** | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
-| Episode / 任务回溯 `episodes` | **开** | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
-| 语义召回 B 档 `recall` | 关 | 开需 `recall = { enabled: true, provider, model }`；关时走无外部依赖的关键词召回 |
-| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
-| 召回 trace `recall.debug` | 关 | 开需 `{ debug: true }` 或 `recall.debug: true` |
-| 召回降权 `recall.deprioritize` | 空（不降权） | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**，仍可搜到）；如 `deprioritize: ["references-agents", "_reports"]` |
-| 记忆遗忘 `retention` | 关 | `retention = { enabled: true, halfLifeDays: 7 }`：hotness 加权 + stale 默认排除 |
-| GC / 归档 `forget` | 关 | `forget.enabled: true` 才把低价值记忆移出活跃召回集（文件保留，Forget≠Delete） |
-| Episode 收口归档 `compact` | 关 | `compact.enabled: true` 才合并原子文件 |
-| LLM 推理导航 `llmRecall` | 关 | 开需 `llmRecall = { enabled: true, provider, model }` |
-| Projection Store `projectionStore` | 关 | `projectionStore.enabled: true`（Node/query 稳定后再开） |
-| Knowledge Engine `knowledgeEngine` | 关 | `enabled: true` 启用；其中 LLM 树上导航再单独 `llmNavigate.enabled` |
-| 工程知识图谱 `kg` | 关 | 按需 `read_shadow(topic, { kg: true })` |
-| 证据 Provider `evidenceProvider` | `fs` | 换 `zg` 需已装 CLI；未装报 `unavailable`，不静默 fallback |
+> **关于「成熟度」列的读法（v1.15.34 / D8）**：本仓**不给自己打 `stable`/`beta`/`experimental` 等级**
+> （全仓无此口径；`adr/0073:53` 亦自陈「0 个 ADR 带『重新评估条件』小节」）。若要凭空造一套等级，
+> 就是**让文档比事实强** —— 正是 ADR-0072 刚修过的那种谎。
+> 故该列填的是**可核实的代理信号**（三选一，均带出处）：
+> **有开放未验证项**（列出 ADR/待办）· **无开放未验证项** · **边界 ADR 未接受**（已提出/暂不实现）。
+> 它恰好回答了「成熟度」那一列原本要回答的问题：**哪些是「稳定但耗 token」，哪些是「接口还可能变」**。
+>
+> **「降级行为」列是 ADR-0049「缺件不静默」的一眼全览**。标 **⚠️静默** 的格子表示
+> 「关闭或缺件后行为退到某处，但**没有任何可见信号**」—— 按 ADR-0049 它们是**候选缺陷**，
+> 已单独立账（`BACKLOG.md` **T8**，共 7 条），**不在表里写一句敷衍的话盖过去**。
+
+| 能力 | 默认 | 成熟度 | 降级行为（关闭 / 缺件时退到哪） | 晋级 / 启用标准 | 开着会怎样 · 怎么开 |
+|------|------|--------|--------------------------------|------------------|----------------------|
+| 采集与落盘 | **开**（无总开关） | 有开放未验证项（ADR-0074 真机待复核 → B3） | 写失败 → `lastFlushError` + `console.error` → **读侧顶部横幅**（可见） | 仓库未定义 | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」（注②） |
+| 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ⚠️**静默** | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
+| 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 `catch {}` → 观测丢弃，读侧显示「尚无记录」→ 与「从没查过」不可区分 ⚠️**静默** | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
+| Episode 回溯 `episodes` | **开**（且**关不掉**，注①） | 无开放未验证项 | derive 抛错 / 写 `_index.md` 失败 → 仅 `console.log` ⇒ 索引可**静默陈旧**；读侧 `deriveEpisodes` 无 try/catch → 直接抛 ⚠️**静默** | 仓库未定义 | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
+| 语义召回 B 档 `recall` | 关 | 无开放未验证项 | `expandTerms → []` → 只用原词跑 A 档，**输出无任何标记** ⚠️**静默** | 仓库未定义 | 开需 `recall = { enabled: true, provider, model }` |
+| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账**读**失败 → 静默当空台账 ⇒ **冷却静默失效** ⚠️**静默** | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
+| 召回 trace `recall.debug` | 关 | 无开放未验证项 | 无降级（仅不输出 diag，答案路径不变） | 仓库未定义 | 开需 `{ debug: true }` 或 `recall.debug: true` |
+| 召回降权 `recall.deprioritize` | 空（不降权） | 无开放未验证项 | 无降级（空配置不降权）。注：**启用后**降权只在 debug 输出可见 | 仓库未定义 | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**）；如 `["references-agents", "_reports"]` |
+| 记忆遗忘 `retention` | 关 | 有开放未验证项（ADR-0067 / ADR-0068 真机待验；B3） | 关闭 → 不做 hotness 加权、`registerMeta` 直接 return ⇒ `_meta.json` 不建档；差异**不可见** ⚠️**静默** | 仓库未定义 | `retention = { enabled: true, halfLifeDays: 7 }`：hotness 加权（注③：`stale` **不是**排除项，它喂生命周期标签） |
+| GC / 归档 `forget` | 关 | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | 关闭 → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | `forget.enabled: true` 才把低价值记忆移出活跃召回集（文件保留，Forget≠Delete） |
+| Episode 收口归档 `compact` | 关 | 有开放未验证项（ADR-0068 `runCompact` delta 真机未验） | 关闭 → 直接 return，不合并（无降级） | 仓库未定义 | `compact.enabled: true` 才合并原子文件 |
+| LLM 推理导航 `llmRecall` | 关 | 无开放未验证项 | 缺 `llm`/route/解析不出编号 → `[]` → 确定性 `renderRecovery`，**无标记**；且 `label:""` 使异常**也不打日志** ⚠️**静默（最彻底）** | 仓库未定义 | 开需 `llmRecall = { enabled: true, provider, model }` |
+| Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 未接线） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 ⚠️**静默** | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
+| Knowledge Engine `knowledgeEngine` | **并非「关」——闸门不存在**（注④） | **边界 ADR 未接受**（`adr/0047` 已提出；`adr/0046` 实现计划冻结） | 读路径**无条件**建树；唯一闸门 `llmNavigate`（默认关）→ 确定性检索，**输出显式标注**「LLM 导航未启用/失败」（可见） | 仓库未定义 | `mode:"knowledge"` 直接用；`llmNavigate.enabled` 是**唯一**闸门 |
+| 工程知识图谱 `kg` | 关（注⑤：**不是 config 键**，是 per-call 参数） | 无开放未验证项（已知局限：`MEMORY.md:92` 域推导，未解决） | 未传 → 不加图谱块；传入无匹配 → 输出「暂无匹配的组件/域」（无降级） | 仓库未定义 | 按需 `read_shadow(topic, { kg: true })` |
+| 证据 Provider `evidenceProvider` | `fs` | 有开放未验证项（ADR-0059 真机 `host.fs`；V1 zg 未装未实测） | zg 未装 → `unavailable` + `zg_not_installed`；provider 拼错 → `unavailable` + `provider_unknown`；逐条 status+reason + 可执行缺件提示（可见） | 仓库未定义 | 换 `zg` 需已装 CLI；未装报 `unavailable`，不静默 fallback |
+| 索引候选 `indexEngine`（**原表缺此行**） | `fs` | 有开放未验证项（V1：本机 `zg`/`semble` 均未装 ⇒ 两条 provider 路径**未实测**） | `fs` = 全量扫描（无外部依赖）；`zg`/`semble` 未装 → `unavailable` + 缺件提示，**绝不**冒充候选（可见） | 仓库未定义 | `indexEngine.provider` = `fs`（默认）/ `zg` / `semble` |
+
+**表注（每条都对应一处实现与文档不符，或一处「看起来有开关其实没有」）**
+
+① **`episodes` 关不掉**：`showInIndex: 0` 会被 `core/writer-core.ts:69` 的 `|| 8` 吞掉 ⇒
+   `core/writer-materialize.ts:161` 的 `episodeShow > 0` 闸门**恒真**（死分支）；`gapMinutes: 0` 同样被
+   `|| 60` 吞掉（`:68` / `core/episode.ts:230`）⇒ 两处 `Math.max(0, …)` 永不生效。
+   **这是缺陷，不是设计**（用 `||` 取默认值把「显式 0」与「未传」混为一谈）⇒ 见 `BACKLOG.md` **T8**。
+② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
+③ **`retention` 的「stale 默认排除」在代码里没有对应实现**：`staleDays`/`stale` 在
+   `retention.enabled` 判断**之外**计算（`query/query.ts:275-276`），关闭 retention 也照标 stale；
+   而 `stale` 只喂生命周期标签（`observer/arbitrate.ts:15,28,39`、`core/lifecycle.ts:33`），**不做排除**。
+   唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts:279`）。
+   原表把它写在「默认」列，属**串列**。
+④ **`knowledgeEngine` 的闸门不存在（v1.15.34 实测校正的硬缺陷）**：`ShadowConfig.knowledgeEngine.enabled`
+   **生产零读取**（全仓唯一读取是 `core/writer.ts:79` 读 `.llmNavigate`）；`query/reads.ts:141`
+   **无条件**建树；且 `createKnowledgeEngine` 原本收一个 `config` 形参却**从不使用**它
+   （已删死形参）。⇒ 原表写「默认 关 / `enabled: true` 启用」描述的是**一处不存在的开关**。
+   本 mode 的**唯一**闸门是 `llmNavigate.enabled`。
+⑤ **`kg` 不是 config 键**：它不在 `ShadowConfig` 里，只是 per-call 参数（`query/query.ts:424`），
+   原表却把它排在「默认」列里，与真正的 config 默认值混用同一列。
 
 ### 采集与落盘
 
@@ -383,10 +415,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.33`（T1/T4 结案：A 类逐条分诊 —— 修 1 处真断线 + 1 处同型漂移 + 删 1 处空壳）** —— 最新几版摘要：
+**当前版本：`v1.15.34`（D8 结案：README「默认开关」表补齐三列 —— 并查出一处**不存在的开关**）** —— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.34 | **D8 结案：默认开关表补齐三列（成熟度 / 降级行为 / 晋级标准）—— 并查出一处不存在的开关**。**补列**：**成熟度**这一列**本仓填不出来** —— 仓库从不给自己打 `stable`/`beta`/`experimental`（`adr/0073:53` 自陈「0 个 ADR 带『重新评估条件』小节」），**凭空造等级就是让文档比事实强**（正是 ADR-0072 刚修的谎）⇒ 改填**可核实的代理信号**（有开放未验证项 / 无开放未验证项 / 边界 ADR 未接受，均带出处），它恰好回答了这一列原本要问的「哪些稳定但耗 token、哪些接口还会变」；**晋级标准**列 **15/16 = 仓库未定义**（唯一例外 `projectionStore` 且那是**启用触发条件**而非 beta→stable）——「查不到」如实写出来。**硬缺陷（本轮唯一代码改动）**：`knowledgeEngine.enabled` **生产零读取**（唯一读 `knowledgeEngine` 的是 `core/writer.ts:79`，读的是 `.llmNavigate`），`query/reads.ts:141` **无条件**建树，且 `createKnowledgeEngine(config)` 的**函数体从不引用 `config`** ⇒ `core/types.ts:36` 注释的「默认 off」与 README 的「`enabled: true` 启用」**三处都在描述一个不存在的开关**。**选「纠正文档」而非「补写闸门」**（与 D4 同判据）：真去实现 `enabled` 会让 `mode:"knowledge"` 默认失效（破坏现成可用功能）⇒ 校正类型注释 + **删死形参**（危害不是多一个参数，而是它**构成假象**让读者以为 `enabled` 已接线）+ 调用点注明 + README 表注④校正。**另 5 处实现与文档不符**（已在表注标明）：`episodes` **关不掉**（`showInIndex: 0` 被 `core/writer-core.ts:69` 的 `|| 8` 吞掉 ⇒ `:161` 闸门**恒真=死分支**，根因是**用 `||` 取默认把「显式 0」与「未传」混为一谈**）· 采集**无总开关**（`writeConsent` 语义不是关采集）· `retention` 的「stale 默认排除」**代码里无对应实现**（串列）· `kg` **不是 config 键**却被排在「默认」列 · 表**缺 `indexEngine` 行**（已补为第 17 行）。**立 T8**：按 ADR-0049 枚举（`unavailable`/warn/debug 三选一，**`console.log` 不算**）查出 **7 条静默降级** —— `llmRecall`（**最彻底**：回退无标记且 `label:""` 使 catch 日志分支也不触发）· `summary` · `recall` · **`queryLog`（默认开 ⇒ 优先级最高）** · `cooldownTurns` · `projectionStore`（**唯一可能属正当静默**：结果仍正确、只损失性能）· `episodes`（**`_index.md` 写失败仅 log ⇒ 可静默读到陈旧索引，与 ADR-0069 同族**）。回归 **40/40** |
 | v1.15.33 | **T1/T4 结案：A 类逐条分诊 —— 修 1 处真断线 + 1 处同型漂移 + 删 1 处空壳**。**A 段 33 条全部落格**：误报 12 · 零引用 18 符号 · 仅测试消费 4 · **真断线 1**。**补上「A 类精度低」的成因**（原 ADR 只给结论）：工具数不出三类调用 —— ① 调用点只在**注释**里（`progressiveDisclosure`/`refineTree` 命中的是 `core/knowledge-engine.ts:8` 的清单式注释）；② 经**数组/变量间接调用**（4 个长程 `assertResultNo*` 入 `resultGuards` 后循环调用、`renderExperience` 作回调传入、`sembleCandidates` 作默认参数注入）；③ 「成对导出、只接一半」的**平行 API**（delegation 7 个 `assert*` 包装，引擎只用谓词）。**真断线（唯一一处，已修）**：`countInconsistency`（`tools/toolset-authority.lib.ts:66`，注释写明「清单自洽性：`counts` 必须与 `rows` 相符」）**生产从未被执行** —— CLI 的 import 不含它，直接 `writeFileSync` ⇒ counts 与 rows 漂移无人发现。已在**写盘前**接线 + `process.exit(1)` 拒绝坏清单；锁是 **⑥ 接线棘轮**（断言 CLI **调了它**、在 `writeFileSync` **之前**、失败走 `exit(1)`；已验证**先红后绿**）。**关键点：断言的是「CLI 调了它」而非「函数存在」** —— 后者才是「机制对了、断的是谁调用它」的正解。**与 T5 同型的第二处真漂移（已修）**：`federation/contract.ts:23` 的 `isExchangeable` **再手写一遍**同一三元素数组，而 `federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 是唯一源（且零引用）。**危险点比 `c.status` 更具体**：`EXCHANGEABLE_KINDS: ExchangeableKind[]` **会被类型检查**，但内联字面量**不受该类型约束** ⇒ 加第四种可交换种类时类型系统**逼你**改前者、**不提醒**后者 ⇒ 静默漏掉。**删除空壳 `auditDrift`**：全仓零引用，判据不是「没人 import」而是它**没有信息价值**（只是打包两个检测器，CLI 本就直接调用）。**保留并注明 4 处**（`renderIntent`/`renderIdentityModel`/`core/knowledge-cost.ts`/delegation assert 家族）。**新发现（→ T7）**：`relationForProposal`（`temporal/edge.ts:30`）**忽略入参**恒返回常量 —— 与 §3 那族的危险不同：那是**口径分叉**（可加唯一源棘轮），这是**掉参数**（只能靠行为断言）。**两处对原文的更正**：`progressiveDisclosure`/`refineTree` 不是「误报」而是**仅测试消费**；`renderIntent` 不是「有生产调用点」而是**零引用**。**`ChangeSet` 与 D1 不矛盾**（一条说接口可达、一条说没人实例化）⇒ **D1 维持原判**。A 段 **33 → 31**；回归 **40/40** |
 | v1.15.32 | **T5 结案：检测 B 各键逐个复核 —— 并先修了工具自己的漏报（ADR-0070 补记）**。**先修工具**：检测 B 的正则 `\b([\w$.]+)\s*===` 字符集**不含 `?`** ⇒ `c?.status === "supported"` 只从 `status` 起匹配，与不带 `?` 的**归不到同一个键** ⇒ **静默漏报**。实测后果：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（**唯一判据源**）从 B 段**消失**，而它恰是那处真漂移的关键证据。修法：允许 `?.` 并把键里的 `?` 归一（`a?.b` 与 `a.b` 是同一条访问路径）；**键形态随之改为「接收者.字段=值」**（更精确）。回归锁 **⑤b**（夹具一侧 `x?.flag`、另一侧 `x.flag`，断言归到同一个键 `x.flag=join`）。**逐键复核（11 → 10 键）**：`c.status=supported` **真漂移（已修）**；`res.status=not_found`（v1.15.27 已修）；其余各落「正当分层」（`c.kind=*` 声明↔消费、`r.status=unavailable` 产出↔消费且该值是宿主声明类型、`err.code=ENOENT` 同一外部契约口径一致、`e.kind=user` 写侧↔读侧、`type=principle/anti_pattern` **共用同一类型声明**）或「同形不同义」（`kind=error` 是宿主流事件字段 vs 本插件局部形参；`v=string` 是回调形参别名）⇒ **1 处真漂移 + 0 处待复核**。**真漂移**：判据源已存在却在 `world/builder/representation-builder.ts:9`（**同文件已 import 该模块**）与 `query/world.ts:42` 各手写一遍 —— 性质同 ADR-0063/D5（同一条规则多份实现），已**收敛**到唯一判据源；新锁 `test/claim-admission-single-source.test.ts`（判据语义 / **源码级棘轮** / 行为反向不变量 / **正对照**）。**自曝**：该测试第一版自己写 `line.replace(/\/\/.*$/, "")` 剥注释，而本仓 `.ts` 是 **CRLF** ⇒ `.` 不匹配 `\r`、`$` 匹配不上 ⇒ **替换静默失败** ⇒ 测试**假红**；更根本地，那等于把「注释剥离」又写了一份 ⇒ 已改为**复用工具自己的 `stripComments`**。**附带**：台账「两级边界」不变量从**实测**升级为**棘轮**（`toolset-catalog.test.ts` **⑧**）。B 段 **11 键/28 处 → 10 键/25 处**；回归 **40/40** |
 | v1.15.31 | **写入省略 `sandboxPolicy` ⇒ 记忆一条都落不了盘（ADR-0074）—— 第 10 个「机制对了、断的是谁调用它」实例，但断点换成了「谁传参」**。现象两次跨版本（`11:28:02Z` / `11:35:11Z`，与升级无关）：`read_shadow` 顶部长期挂「落盘失败：`file access denied under workspace-write mode`」⇒ **读路径完好、写路径全挂**。**根因逐层读宿主编译产物核实**：`dsh-fs-sandbox:154` 取 `sandboxPolicy ?? ctx.sandboxPolicy.resolve()`（**无 session**）⇒ `dsh-sandbox-policy:141-148` 给出**部署 fallback**（`mode = DSH_PERMISSION_MODE ?? workspace-write`、`workspaceRoot = **process.cwd()**` = 服务进程启动目录），而写入目标是**会话工作区** `session.header.cwd`；两者不同时包含判定失败。**反直觉点**：本部署会话策略**本就是 `danger-full-access`**（带 session 会在 `:156` 直接放行）—— 是漏传参把本可放行的写入降级成越界写。**排除两个替代解释**（目录不存在：`dsh-fs-local:497` 写前 `mkdir recursive`，且报错出自 `!contained` 分支；落到兜底根：报错路径**就是会话 cwd**）。**两处旧记账被推翻并就地勘误**：v1.15.12 §A3 曾判「非缺陷」（理由「省略 = 用当前会话策略」）—— 契约原文是 *"Omit to leave **the backend its own default**"*，与调用方会话**无关**；v1.15.x 的归因「解析不出 session cwd、落兜底根」**说窄了**（真实触发是「会话工作区 ≠ 服务进程启动目录」，**与能否解析 cwd 无关**）。**修复**：新增 `core/fs-scope.ts`（`sessionPolicy` / `policyForAgent` / `scopedFs`），在**取得 fs 的仅有三处**（`flush(agent)` / `ensureIndex(ws, session?)` / `index.ts` 的 `queryDeps` → `makeQueryDeps(exec)`）包一层会话作用域门面 ⇒ 等价于全部 40 处写入点都补齐，**且不动任何 `persistence/*` 签名**。**四条不变量**：不越权（只补省略的，显式传入原样转发；**从不构造 `danger-full-access`**、**从不覆盖 `read-only`**）· 旧宿主零变化（无 `sandboxPolicy` 服务 ⇒ 恒等返回原 fs；且该服务缺失时**围栏根本不挂载**，故不报假 gap）· **保留「没有 stat」**（`meta.ts:50` 用 `typeof fs.stat === "function"` 判分派，门面只转发真实存在的方法）· 读侧一并修（读路径也写 `_index.md` / query-log / identity timeline）。**先复现再修**：新增 `test/fs-sandbox-scope.test.ts`，mock **忠实复刻 `checkedTarget`**（部署 root `C:/svc` **故意** ≠ 会话 cwd `D:/proj`），修复前跑出的报错**与真机横幅逐字同型**，修复后 **6/6**。回归 **39/39** |

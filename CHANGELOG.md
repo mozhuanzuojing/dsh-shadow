@@ -3,6 +3,84 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.34] D8 结案：README「默认开关」表**补齐三列** —— 并查出一处**不存在的开关**
+
+用户 2026-09-11 选定 BACKLOG 的 **D8**（ADR-0073 对标产出的唯一可借鉴项）。
+**本轮改文档（表补三列 + 5 条表注）+ 一处代码缺陷修复**，并**立 T8** 记 7 条静默降级。
+
+### 0. 一句话结论
+
+表补上了，但真正有价值的产出是**核实过程中撞到的硬缺陷**：
+**`knowledgeEngine.enabled` 生产零读取** ⇒ 文档里那个「默认 关 / `enabled: true` 启用」
+**描述的是一处不存在的开关**。表里另外还揪出 5 处**实现与文档不符**，以及 **7 条静默降级**（ADR-0049）。
+
+### 1. 三列的填法与一条**拒绝**
+
+D8 要求补 **成熟度 / 降级行为 / 晋级标准**。前两列好填，**成熟度这一列本仓填不出来** ——
+仓库**从不给自己打 `stable`/`beta`/`experimental`**（全仓 grep：`experimental` 只出现在 hl_mem 对标
+与外部 `dsh-experimental-*` 包；`adr/0073:53` 亦自陈「0 个 ADR 带『重新评估条件』小节」）。
+
+**凭空造一套等级就是让文档比事实强** —— 正是 ADR-0072 刚修过的那种谎。故该列填
+**可核实的代理信号**（三选一，均带出处）：**有开放未验证项** / **无开放未验证项** / **边界 ADR 未接受**。
+它恰好回答了这一列原本要回答的问题：**哪些是「稳定但耗 token」，哪些是「接口还可能变」**。
+**「晋级标准」列 16 条里 15 条 = 仓库未定义**（唯一例外是 `projectionStore`，且那是**启用触发条件**
+而非 beta→stable）—— 这个「查不到」本身就是要如实写出来的结论。
+
+### 2. 硬缺陷（**本轮唯一代码改动**）：`knowledgeEngine` 的闸门**不存在**
+
+| 证据 | 事实 |
+|---|---|
+| `core/types.ts:36`（原文） | 注释写「provider 仅占位，**默认 off**」 |
+| `core/types.ts:37` | 声明 `knowledgeEngine.enabled?: boolean` |
+| **全仓读取点** | **`enabled` 零读取** —— 唯一读 `knowledgeEngine` 的是 `core/writer.ts:79`，读的是 `.llmNavigate` |
+| `query/reads.ts:141` | **无条件** `createKnowledgeEngine(...).build(parsedK)` |
+| `core/knowledge-structure.ts:106` | `createKnowledgeEngine = (config: any) => ({…})` —— **函数体从不引用 `config`** |
+| `README.md`（原文） | 「Knowledge Engine `knowledgeEngine` \| 关 \| `enabled: true` 启用」 |
+
+⇒ **三处（类型注释 / README 表 / 字段声明）都在描述一个不存在的开关**。真实的唯一闸门是
+`llmNavigate.enabled`（默认关、**确实被读**、且关时**输出显式标注**「LLM 导航未启用/失败 → 确定性检索」
+= 符合 ADR-0049）。
+
+- **修法（选「纠正文档」而非「补写闸门」）**：与 **D4** 同一判据 —— 若去实现 `enabled`，
+  会让 `mode:"knowledge"` 默认失效（**破坏现有可用功能**），而该能力**实际工作正常**。
+  故：① 校正 `core/types.ts:36` 的注释（写明 `enabled` 不是闸门、唯一闸门是 `llmNavigate`）；
+  ② **删掉 `createKnowledgeEngine` 的死形参 `config`** —— 它的危害不是「多一个参数」，
+  而是它**构成假象**：让读者以为知识引擎受 config 驱动，从而以为 `enabled` 已接线；
+  ③ 更新调用点 `query/reads.ts:141` 并就地注明「此处**没有**闸门」；④ README 行 + 表注④ 校正。
+
+### 3. 另 5 处实现与文档不符（已在表注中标明）
+
+① **`episodes` 关不掉**：`showInIndex: 0` 被 `core/writer-core.ts:69` 的 `|| 8` 吞掉 ⇒
+`writer-materialize.ts:161` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
+⇒ 两处 `Math.max(0, …)` 永不生效（**用 `||` 取默认把「显式 0」与「未传」混为一谈**）。
+② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
+③ **`retention` 的「stale 默认排除」在代码里没有对应实现**：`stale` 在 `enabled` 判断**之外**计算，
+关闭也照标，且只喂生命周期标签、**不做排除**（原表把它写在「默认」列 = 串列）。
+④ `knowledgeEngine` 见 §2。
+⑤ **`kg` 不是 config 键**（只是 per-call 参数），却被排在「默认」列里。
+⑥ **表缺行**：`indexEngine` 有真实默认值（`"fs"`）却不在原 16 行内 ⇒ 已补为第 17 行。
+
+### 4. 立 T8：7 条**静默降级**（ADR-0049 的候选缺陷）
+
+判据用 ADR-0049 的枚举（`unavailable` / flush warn / debug trace **三者至少一个**）——
+**`console.log` 不算**。逐条读代码查出 7 条：`llmRecall`（**最彻底**：回退无标记且 `label:""`
+使 catch 的日志分支也不触发）· `summary` · `recall`（语义 B 档）· **`queryLog`（默认开 ⇒ 优先级最高）** ·
+`recall.cooldownTurns` · `projectionStore`（**唯一可能属正当静默**：ADR-0049:38 明列「缓存不是真相」，
+结果仍正确、只损失性能）· `episodes`（**其中 `_index.md` 写失败仅 `log` ⇒ `read_shadow()` 可静默读到
+陈旧索引，与 ADR-0069 同族** —— ADR-0069 只修了「新鲜度问源」，未给 rebuild 失败加可见信号）。
+已全部登记 `BACKLOG.md` **T8**（含完成判据），**未在本轮修**：7 条各需**不同的信号形态**，属独立工作量。
+
+### 5. 验证
+
+- `npx tsc --noEmit` / `npm run typecheck:tools` / `npm run build` 均 **exit 0**。
+- 全套回归 **40/40 `ALL PASS ✅`**（含 `knowledge-engine` 相关路径）。
+- **诚实标注**：① 「成熟度」列填的是**代理信号**而非等级（见 §1，本仓无等级口径）；
+  ② 「晋级标准」列 15/16 = 仓库未定义（**不是**「我没查」，是**仓库确实没有**）；
+  ③ 7 条静默降级**只清点未修**；④ 本文的「降级行为」列依据**源码判定语句**，
+  非运行时观测（本会话未加载插件）。
+
+---
+
 ## [v1.15.33] T1/T4 结案：A 类**逐条**分诊 —— 修 1 处真断线 + 1 处同型漂移 + 删 1 处空壳
 
 用户 2026-09-11 选定 BACKLOG 的 **T1 + T4**（A 类线索逐条分诊、零引用导出定性）。

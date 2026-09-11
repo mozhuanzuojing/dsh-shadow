@@ -90,8 +90,19 @@ export const buildTree = (doc) => {
         return buildHeadingTree(doc);
     return buildTextTree(doc);
 };
-/** TreeKnowledgeEngine：从文档/规范/决策 Atom 派生知识树（保留层级，不转 chunk）。 */
-export const createKnowledgeEngine = (config) => ({
+/** TreeKnowledgeEngine：从文档/规范/决策 Atom 派生知识树（保留层级，不转 chunk）。
+ *
+ *  ⚠ **参数已删除（v1.15.34，D8）**：原签名是 `createKnowledgeEngine(config: any)`，
+ *  而**函数体从不引用 `config`** —— 它是个**死形参**。这个死形参的危害不是「多一个参数」，
+ *  而是它**构成一个假象**：调用方写 `createKnowledgeEngine(deps.config)` 时，
+ *  读代码的人会以为「知识引擎是受 config 驱动的」；而 `ShadowConfig.knowledgeEngine.enabled`
+ *  （`core/types.ts:37`）因此看起来像个**已接线的闸门** —— 实际上**生产从不读它**。
+ *  同一处缺陷的另一半在 `core/types.ts:36` 的注释（声称「默认 off」）与 README 的表
+ *  （声称「默认 关 / `enabled: true` 启用」）—— 三处都在描述一个**不存在的开关**。
+ *  真实情况：读路径**无条件**建树（`query/reads.ts:141`），**唯一的闸门是 `llmNavigate`**
+ *  （`core/writer.ts:79-80`，默认关、且它确实被读）。
+ *  ⇒ 删掉死形参，让「它不吃配置」这件事在**签名层面**显式。 */
+export const createKnowledgeEngine = () => ({
     async build(parsed, nodes = []) {
         const docs = (parsed || []).filter((p) => nodeTypeOf(p) === "document" || /规范|spec|docs?/i.test(String(p.entry || "")));
         const sourceCount = docs.length;

@@ -33,7 +33,16 @@ export interface ShadowConfig {
   projectionStore?: { enabled?: boolean };
   /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback) | semble(本地语义检索 CLI，ADR-0054；同不 fallback)。 */
   indexEngine?: { provider?: "fs" | "zg" | "semble" };
-  /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）：provider 仅占位，默认 off。 */
+  /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）。
+   *
+   *  ⚠ **`enabled` 不是闸门（v1.15.34，D8 实测校正）**：本字段**生产零读取** ——
+   *  `mode:"knowledge"` 的读路径**无条件**建树（`query/reads.ts:141`），与 `enabled` 无关。
+   *  原注释写「默认 off」描述的是一处**不存在的开关**（同一缺陷另见 README 的表）。
+   *  **本 mode 唯一的闸门是 `llmNavigate.enabled`**（`core/writer.ts:79-80`）：默认关，
+   *  关时走确定性 `retrieveKnowledge`，且**输出显式标注**「LLM 导航未启用/失败 → 确定性检索」
+   *  （`query/reads.ts:154`，符合 ADR-0049「缺件不静默」）。
+   *  `provider` 亦为**占位**（`createKnowledgeEngine` 恒返回 `provider:"tree"`，不吃配置）。
+   *  ⇒ 保留 `enabled` 字段只为**不动类型面**（删它涉及 config 兼容）；**不要**把它当开关用。 */
   knowledgeEngine?: { enabled?: boolean; provider?: string; llmNavigate?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number } };
   /** 证据网关（v0.14）：选择证据 Provider（fs | zg | ...）。默认 "fs"。zg 是检索层，不是裁决层。 */
   evidenceProvider?: string;

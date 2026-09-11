@@ -138,7 +138,10 @@ const knowledge: ReadQuery = {
   run: async (deps, args, _exec, ctx) => {
     const { fs, ws, flushWarn } = ctx;
     const parsedK = (await materializeAtoms(fs, ws, deps.config)).parsed;
-    const tree = await createKnowledgeEngine(deps.config).build(parsedK);
+    // v1.15.34（D8）：**无条件**建树 —— 这里**没有** `knowledgeEngine.enabled` 闸门
+    //（该键生产零读取；`createKnowledgeEngine` 也不再收 config —— 它从来没用过）。
+    // 本 mode 的唯一闸门是 `llmNavigate`（`core/writer.ts:79`，默认关）。
+    const tree = await createKnowledgeEngine().build(parsedK);
     const topicK = String(args?.topic || "").trim();
     if (topicK) {
       let hits = retrieveKnowledge(tree, topicK);

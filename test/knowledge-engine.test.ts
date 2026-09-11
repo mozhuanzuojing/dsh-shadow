@@ -20,7 +20,9 @@ const SPEC = `# spec/u8-openapi-biz-sa.md
 - 用 e-Builder openApi
 `;
 const parsed = parseMemory(SPEC, ".shadow/2026-09-08/2026-09-08--111111-spec.md", "2026-09-08--111111-spec.md");
-const engine = createKnowledgeEngine({});
+// v1.15.34（D8）：`createKnowledgeEngine` 的死形参 `config` 已删 —— 它从来不被使用，
+// 而它的存在会让人以为「知识引擎受 config 驱动」（进而以为 `knowledgeEngine.enabled` 是闸门）。
+const engine = createKnowledgeEngine();
 const tree = await engine.build([parsed]);
 assert.equal(tree.provider, "tree", "provider=tree");
 assert.equal(tree.sourceCount, 1, "来源 1 个规范");
