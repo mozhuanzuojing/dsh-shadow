@@ -341,6 +341,13 @@ export async function runReadShadow(deps, args, exec) {
         s.reflection = v.reflection;
         if (v.superseded)
             s.score = s.score * 0.7;
+        // v1.15.18：把读时裁决**回填进生命周期标签**，使其与 `裁决` 一致。
+        // 根因（实测）：`ev.lifecycle` 在上面的**每记忆**循环里就算好了（第 293 行），而 superseded 裁决
+        //   要到**这里**才算得出 —— 它依赖 `newestByEntryOf(entryList)` 这个**跨记忆**视图。
+        //   ⇒ 标签先定死、之后从不回填；同一条记忆会同时显示 `生命周期 NEW · 裁决 superseded`（自相矛盾）。
+        // 为何不持久化：取代是「相对当前可见记忆集」的判断，写进 `_meta.json` 会随可见集变化而失效
+        //   （且 `meta.status === "superseded"` 在生产中从无写入者，见 `core/lifecycle.ts` 注释）。
+        s.evidence.lifecycle = lifecycleOf(meta[s.mm.rel], ageDaysOf(s.mm.rel), s.evidence.conflict || 0, s.stale, v.superseded);
         s.evidence.verdict = v.verdict;
         s.evidence.outcome = v.outcome;
         s.evidence.reflection = v.reflection;

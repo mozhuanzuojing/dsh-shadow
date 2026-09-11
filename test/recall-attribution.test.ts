@@ -1525,12 +1525,18 @@ const todayStr = todayLocal();
   store36.set("D:/ws/.shadow/2026-09-05/2026-09-05--120000-c2.md", b36("12:00:00"));
   store36.set("D:/ws/xyz/a.js", "export {}"); // 证据存在
   const r36 = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T36") });
-  assert.ok(!String(r36).startsWith("ERR"), "supersede 裁决不应报错");
+  assert.ok(String(r36).startsWith("ERR") === false, "supersede 裁决不应报错");
   assert.ok(r36.includes("裁决 superseded"), `旧记忆应判 superseded：\n${r36}`);
   assert.ok(r36.includes("裁决 fresh"), "新记忆应判 fresh");
   assert.ok(r36.includes("后续已迭代"), "旧记忆反思应提示已迭代");
   assert.ok(r36.includes("修正链"), "superseded 应带 decision lineage 修正链");
-  console.log("✔ 场景36 Memory≠Evidence supersede：同入口更新记忆 → 旧的 superseded+降权+反思，新的 fresh");
+  // v1.15.18 回归：生命周期标签必须与读时裁决一致。
+  // 修前实测同一条记忆显示 `生命周期 NEW · 裁决 superseded`（自相矛盾）——
+  // 根因是 lifecycle 在每记忆循环里先算好，而 superseded 裁决依赖跨记忆视图、之后才算得出且从不回填。
+  assert.ok(r36.includes("生命周期 SUPERSEDED"), `旧记忆生命周期应随裁决为 SUPERSEDED（修前是 NEW）：\n${r36}`);
+  const supLine = String(r36).split("\n").find((l: string) => l.includes("裁决 superseded")) || "";
+  assert.ok(supLine.includes("生命周期 SUPERSEDED"), `同一条记忆的生命周期与裁决必须一致：\n${supLine}`);
+  console.log("✔ 场景36 Memory≠Evidence supersede：同入口更新记忆 → 旧的 superseded+降权+反思+生命周期一致，新的 fresh");
 }
 
 // ─────────────────────────────────────────────
