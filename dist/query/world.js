@@ -4,7 +4,7 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runWorld(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { createRepresentationFromClaims, renderAdmission } from "../world/guard/claim-admission.js";
+import { createRepresentationFromClaims, renderAdmission, isAdmissibleClaim } from "../world/guard/claim-admission.js";
 import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../world/guard/relation-guard.js";
 import { buildRepresentationGraph } from "../world/builder/representation-builder.js";
 import { writeGraph } from "../world/persistence/persist.js";
@@ -35,7 +35,9 @@ export async function runWorld(deps, args, ctx) {
     const graph = buildRepresentationGraph(claims, validations);
     await writeGraph(fs, ws, graph);
     const subject = String(args?.subject || "");
-    const supportedSubject = claims.find((c) => c.status === "supported" && (!subject || c.subjectRef === subject || c.subject === subject));
+    // 用**唯一判据源** `isAdmissibleClaim`，不再手写 `c.status === "supported"`
+    // （v1.15.32 / ADR-0070 T5 第 4 次复核：真漂移，同 ADR-0063/D5 一族）。
+    const supportedSubject = claims.find((c) => isAdmissibleClaim(c) && (!subject || c.subjectRef === subject || c.subject === subject));
     const obss = await readObservations(fs, ws, supportedSubject ? (supportedSubject.subjectRef || supportedSubject.subject) : subject);
     return scrubFinal(RECALL_PREFIX + explain(graph, subject, obss, claims) + flushWarn);
 }

@@ -141,6 +141,11 @@ export const findFreshnessAsksProcess = (files: { file: string; text: string }[]
  * 判据：把 `字段 === "字面量"` 的比较按 `字段=字面量` 归集；若**同一个 `字段=字面量`**
  * 出现在 **≥2 个不同的生产文件**，报线索。
  *
+ * **键的形态（v1.15.32 起）**：接收者一并入键（`c.status=supported`，而不是 `status=supported`），
+ * 且 `?.` 与 `.` **归一到同一个键** —— 否则可选链写法会让同一判据被拆成两个键而**静默漏报**
+ * （修复前 `claim-admission.ts` 就是这样消失的，见下方 `findPredicateExpressedTwice` 内的注释）。
+ * 副作用：`?.` 站点的键从「字段名」变成「接收者.字段名」，这是**更精确**的形态。
+ *
  * **为什么只是线索**：生产者（`deriveX`）与消费者（`validateX`）分别表达同一条判据，
  * 在架构上**可能是正当的**（分层）。本仓 D5 的病根不是「两处表达」，而是「两处**口径不同**」——
  * 那一点本工具**测不出来**（没有类型/语义分析）。故此项必须人工复核。
@@ -149,8 +154,15 @@ export const findPredicateExpressedTwice = (files: { file: string; text: string 
   const byKey = new Map<string, { file: string; line: number; snippet: string }[]>();
   for (const { file, text } of files) {
     stripComments(text).split("\n").forEach((line, i) => {
-      for (const m of line.matchAll(/\b([\w$.]+)\s*===\s*["']([^"']+)["']/g)) {
-        const key = `${m[1]}=${m[2]}`;
+      // ⚠ v1.15.32 修一处**漏报**（T5 第 4 次复核时亲手踩到）：
+      //   原正则 `\b([\w$.]+)` 的字符集**不含 `?`**，于是 `c?.status === "supported"`（可选链）
+      //   只能从 `status` 起匹配 ⇒ 键退化成 `status=…`，与不带 `?` 的 `c.status=…` **归不到一起**。
+      //   后果：同一条判据的三处里，用 `?.` 的那一处被算成「另一个键、只出现在一个文件」⇒ **静默漏报**。
+      //   实测案例：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（正是唯一判据源本身）
+      //   就是这样从 B 段消失的 —— 而它恰恰是「两处各自重写、没用它」这条真漂移的关键证据。
+      //   修法：允许 `?.`，并把键里的 `?` **归一掉**（`a?.b` 与 `a.b` 是同一条访问路径，语义等价）。
+      for (const m of line.matchAll(/\b([\w$]+(?:\??\.[\w$]+)*)\s*===\s*["']([^"']+)["']/g)) {
+        const key = `${m[1].replace(/\?/g, "")}=${m[2]}`;
         if (!byKey.has(key)) byKey.set(key, []);
         byKey.get(key)!.push({ file, line: i + 1, snippet: line.trim().slice(0, 120) });
       }

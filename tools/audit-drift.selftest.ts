@@ -81,6 +81,7 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
 
 // ─────────────────────────────────────────────
 // ⑤ 检测 B 的夹具标定：跨文件的 `phase === "ghost"` 应报；只在本文件的键不报
+//    v1.15.32 起键的形态是「接收者.字段名=值」（原为「字段名=值」），且 `?.` 与 `.` 归一。
 // ─────────────────────────────────────────────
 {
   const files = [
@@ -89,17 +90,29 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
   ];
   const hits = findPredicateExpressedTwice(files);
   const keys = new Set(hits.map((h) => (h.detail.match(/`([^`]+)`/) || [])[1]));
-  assert.ok(keys.has("phase=ghost"), `应报跨文件的 phase=ghost；实际 ${JSON.stringify([...keys])}`);
-  assert.ok(!keys.has("only=here"), "只在一个文件出现的 only=here 不得报");
-  assert.ok(!keys.has("only2=elsewhere"), "只在一个文件出现的 only2=elsewhere 不得报");
-  const sharedFiles = [...new Set(hits.filter((h) => h.detail.includes("phase=ghost")).map((h) => h.file))];
-  assert.equal(sharedFiles.length, 2, "phase=ghost 应在两个文件里各报一条（便于定位两侧）");
-  // 反向：夹具里每条 phase=ghost 的位置都能对上标记
+  assert.ok(keys.has("p.phase=ghost"), `应报跨文件的 p.phase=ghost；实际 ${JSON.stringify([...keys])}`);
+  assert.ok(!keys.has("p.only=here"), "只在一个文件出现的 p.only=here 不得报");
+  assert.ok(!keys.has("p.only2=elsewhere"), "只在一个文件出现的 p.only2=elsewhere 不得报");
+  const sharedFiles = [...new Set(hits.filter((h) => h.detail.includes("p.phase=ghost")).map((h) => h.file))];
+  assert.equal(sharedFiles.length, 2, "p.phase=ghost 应在两个文件里各报一条（便于定位两侧）");
+  // 反向：夹具里每条 p.phase=ghost 的位置都能对上标记
   const m1 = markedLines(read(FIX_A), "MARK:B-SHARED")[0];
   const m2 = markedLines(read(FIX_B), "MARK:B-SHARED")[0];
-  const reported = hits.filter((h) => h.detail.includes("phase=ghost")).map((h) => h.line);
+  const reported = hits.filter((h) => h.detail.includes("p.phase=ghost")).map((h) => h.line);
   assert.deepEqual(reported.sort((a, b) => a - b), [m1, m2].sort((a, b) => a - b), "报出的行号应与两处标记一致");
-  console.log(`✔ ⑤ 检测 B 夹具标定：跨文件 phase=ghost 报出两侧（行 ${m1} / ${m2}），单文件键不报（共 ${hits.length} 条线索）`);
+  console.log(`✔ ⑤ 检测 B 夹具标定：跨文件 p.phase=ghost 报出两侧（行 ${m1} / ${m2}），单文件键不报（共 ${hits.length} 条线索）`);
+
+  // ⑤b **可选链不漏报**（v1.15.32 修的漏报的回归锁）：一侧 `x?.flag`、另一侧 `x.flag`
+  //    —— 同一条访问路径 ⇒ 必须归一成**同一个键** `x.flag=join` 并在两侧各报一条。
+  assert.ok(keys.has("x.flag=join"),
+    `\`x?.flag\` 与 \`x.flag\` 必须归到同一个键 x.flag=join（旧正则因字符集不含 \`?\` 而漏报）；实际 ${JSON.stringify([...keys])}`);
+  const optFiles = [...new Set(hits.filter((h) => h.detail.includes("x.flag=join")).map((h) => h.file))];
+  assert.equal(optFiles.length, 2, "x.flag=join 应跨两个夹具文件各报一条");
+  const o1 = markedLines(read(FIX_A), "MARK:B-OPT")[0];
+  const o2 = markedLines(read(FIX_B), "MARK:B-OPT")[0];
+  const optLines = hits.filter((h) => h.detail.includes("x.flag=join")).map((h) => h.line);
+  assert.deepEqual(optLines.sort((a, b) => a - b), [o1, o2].sort((a, b) => a - b), "可选链两侧报出的行号应与标记一致");
+  console.log(`✔ ⑤b 可选链与点号归一到同一个键（行 ${o1} / ${o2}）—— v1.15.32 修的漏报类有回归锁`);
 }
 
 // ─────────────────────────────────────────────

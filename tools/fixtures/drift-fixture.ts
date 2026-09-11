@@ -63,6 +63,13 @@ export const push = async (core: any, id: string) => {
 export const gateHere = (p: any) => p?.phase === "ghost";   // MARK:B-SHARED
 export const onlyLocal = (p: any) => p?.only === "here";
 
+// ── 检测 B 回归（v1.15.32）：`?.` 与 `.` 是**同一条访问路径**，必须归到**同一个键** ──
+//    旧正则 `[\w$.]+` 的字符集不含 `?` ⇒ 带可选链的一侧只能从字段名起匹配，
+//    退化成 `flag=join`，与另一侧的 `x.flag=join` 归不到一起 ⇒ **静默漏报**。
+//    真实案例：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（唯一判据源）就是这样消失的。
+//    本行与 `drift-fixture-b.ts` 的对应行配对，期望键 **`x.flag=join`**（两侧归一后合并）。
+export const joinViaOptional = (x: any) => x?.flag === "join";   // MARK:B-OPT
+
 // 占位：让夹具自洽
 declare function rebuild(x: string): Promise<void>;
 declare function shadowSourcesFingerprint(fs: any, ws: string): Promise<string | undefined>;

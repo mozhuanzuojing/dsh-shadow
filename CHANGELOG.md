@@ -3,6 +3,84 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.32] T5 结案：漂移审计检测 B 各键逐个复核 —— 并**先修了工具自己的漏报**（ADR-0070 补记）
+
+用户 2026-09-11 选定 BACKLOG 的 **T5**（漂移审计检测 B 余下各键复核 + 台账两级边界棘轮）。
+**本轮是代码 + 工具 + 测试改动**：修检测 B 一处漏报、收敛一处真漂移、加两条棘轮。
+
+### 0. 一句话结论
+
+**先修工具，再复核。** 检测 B 的正则字符集**不含 `?`** ⇒ `c?.status === "supported"` 与
+`c.status === "supported"` **归不到同一个键**，于是**判据源自己**从 B 段**消失** ——
+而它恰恰是那处真漂移的关键证据。修好后立刻多出一个**从未被复核过的键**（`r.status=validated`）。
+
+### 1. 修工具：`?.` 导致同一判据被拆成两个键 ⇒ 静默漏报
+
+- **形态**：`\b([\w$.]+)\s*===` 的字符集不含 `?` ⇒ `c?.status === "x"` 只从 `status` 起匹配。
+- **实测后果**：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（**唯一判据源**）
+  被算成「另一个键、只出现在一个文件」⇒ **静默漏报**。修复前 B 段看不到它。
+- **修法**：允许 `?.`，并把键里的 `?` **归一掉**（`a?.b` 与 `a.b` 是同一条访问路径）。
+  **键形态随之改为「接收者.字段=值」**（原为「字段=值」）—— 这是**更精确**的形态。
+- **回归锁**：`tools/audit-drift.selftest.ts` **⑤b**（夹具一侧 `x?.flag`、另一侧 `x.flag`，
+  断言归到同一个键 `x.flag=join` 且两侧各报一条）。
+
+### 2. 逐键复核结案（**11 键 → 10 键**）
+
+| 键 | 判定 | 依据（要点） |
+|---|---|---|
+| `c.status=supported` | **真漂移（已修 + 已加锁）** | 见 §3；键**已消失** |
+| `res.status=not_found` | 第 7 处真缺陷 | **v1.15.27 已修** |
+| `c.kind=provider` / `reference` | **正当分层** | `toolset.ts` 声明 ↔ `toolset-exec.ts` 消费 |
+| `r.status=unavailable` | **正当分层** | `index-engine.ts:54,66` 产出 ↔ `query.ts:222` 消费并渲染缺件提示；且该值是**宿主声明的类型**（`core/types.ts:59`） |
+| `err.code=ENOENT` | **正当分层（口径一致）** | 同一外部契约（Node `execFile` 的 `err.code`）在各自 CLI 上一致映射到 `unavailable` + provider 专属 reason |
+| `e.kind=user` | **正当分层** | `memory.ts` 写侧（线索头/统计）↔ `writer-materialize.ts:203` 读侧（`writeConsent` 门） |
+| `kind=error` | **误报（同形不同义）** | `writer-llm.ts:31` 是**宿主流事件**字段；`index.ts:61-68` 是本插件局部形参 |
+| `type=principle` / `anti_pattern` | **正当分层（类型已锁）** | `reflection/engine.ts:32` 产出 ↔ `identity/types.ts:47` 映射，**共用同一类型声明** |
+| `v=string` | **误报（短局部别名）** | 两处 `v` 都是回调形参名 |
+
+**结案**：**1 处真漂移（已修）+ 0 处待复核**；其余均落「正当分层」或「同形不同义」。
+B 段小计 **11 键/28 处 → 10 键/25 处**。
+
+### 3. 真漂移：`c.status=supported` —— 判据源已存在，两处却各自重写
+
+三处表达同一条「Representation 只接受 supported」判据：
+
+| 位置 | 形态 | 角色 |
+|---|---|---|
+| `world/guard/claim-admission.ts:6` | `isAdmissibleClaim = (c) => c?.status === "supported"` | **唯一判据源** |
+| `world/builder/representation-builder.ts:9` | 手写 `filter((c) => c.status === "supported")` | 重写（**同文件已 import 该模块**） |
+| `query/world.ts:42` | 手写 `find((c) => c.status === "supported" && …)` | 重写 |
+
+性质同 **ADR-0063 / D5**（同一条规则多份实现）。**不删任何一处**，只把两处重写**收敛**到唯一判据源。
+新锁 `test/claim-admission-single-source.test.ts`：① 判据语义（含 `null`/`undefined` 边界）
+② **源码级棘轮**「全仓生产源码里该比较只允许判据源那一处」③ 行为反向不变量
+（`candidate`/`unstable`/`rejected` 一条不得进 Representation；同 `subject` 去重）④ **正对照**。
+
+### 4. 自曝：新测试第一版**假红**，根因是我自己犯了本 ADR 记录的病
+
+第一版自己写了 `line.replace(/\/\/.*$/, "")` 剥注释 —— 而本仓 `.ts` 是 **CRLF**，
+JS 的 `.` **不匹配 `\r`** ⇒ `.*` 在 `\r` 前停住、`$` 匹配不上 ⇒ **替换静默失败**，
+注释里的代码被当成真判据 ⇒ 测试假红（一度让我以为源码残留分叉）。
+更根本的问题：那样做等于把「注释剥离」这条判据**又写了一份**。已改为**复用工具自己的 `stripComments`**
+（字符状态机，正确处理 CRLF/字符串/正则字面量，且保证行号不漂移，selftest ① 有断言）。
+
+### 5. 附带：台账「两级边界」不变量从**实测**升级为**棘轮**（T5 附带项）
+
+`core/toolset.ts:3-6, 44-46` 规定：`reference`（插件**不接线**）的 `degradesTo` 必须表明
+「不影响插件行为」；`provider`（插件**内接线**）必须给**确定性退路** + `provides` + `install`。
+v1.15.29 只做过一次实测（107 项全满足）、**无断言**。已加为 `test/toolset-catalog.test.ts` 的 **⑧**。
+
+### 6. 验证
+
+- `npx tsc --noEmit` exit 0；`npm run typecheck:tools` exit 0；`npm run build` exit 0。
+- 全套回归 **40/40 `ALL PASS ✅`**（39 + 新增 `claim-admission-single-source`）。
+- `node tools/audit-drift.selftest.ts` **ALL PASS**（7 组，含新增 ⑤b）。
+- `node tools/audit-wiring.selftest.ts` **ALL PASS**。
+- **未验证（诚实标注）**：② 的棘轮是**源码级正则**而非类型级 —— 换写法（`"supported" === c.status`、
+  经变量间接比较）会漏；工具仍未接入自动门禁（`BACKLOG.md` **V6** 未变）。
+
+---
+
 ## [v1.15.31] 写入省略 `sandboxPolicy` ⇒ **记忆一条都落不了盘**（ADR-0074）
 
 用户 2026-09-11 指令「fix 这个」—— 承接上一轮接口核验时**顺手发现**的落盘失败横幅。

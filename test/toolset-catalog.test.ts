@@ -110,6 +110,26 @@ assert.equal(wslMissing.length, 0, `docs/toolchain-wsl.md 提到但这些工具�
 console.log(`✔ ⑦ 棘轮 WSL：文档里 ${wslTools.size} 个工具全部能在台账找到条目（含别名 fdfind/batcat/z 与词边界匹配）`);
 
 // ─────────────────────────────────────────────
+// ⑧ 棘轮（台账**两级边界**）：provider 与 reference 的 `degradesTo` **语义不同**，必须各守其形
+//    T5 附带项：ADR-0055 §1 / ADR-0057 的「两级台账必须分清」此前只有一次**实测**（107 项全满足），
+//    **没有断言** ⇒ 以后加条目时可能把边界写糊。本段把它变成可回归的约束。
+//    判据（`core/toolset.ts:3-6, 44-46`）：
+//      · reference = **插件不接线**的通用 CLI 目录 ⇒ `degradesTo` 必须表明「不影响插件行为」；
+//      · provider  = **插件内接线**的可选增强，缺它 = 能力降级 ⇒ 必须给出**确定性退路** + `provides` + `install`。
+// ─────────────────────────────────────────────
+const isNullDegrade = (s: string) => !String(s || "").trim() || /^无[（(]/.test(String(s).trim()) || String(s).includes("不影响插件行为");
+const badRef = referenceCapabilities().filter((c) => !isNullDegrade(c.degradesTo));
+assert.equal(badRef.length, 0,
+  `reference 的 degradesTo 必须表明「不影响插件行为」（ADR-0055 §1）；违反：${badRef.map((c) => `${c.id} → ${c.degradesTo}`).join("；")}`);
+const badProv = providerCapabilities().filter((c) =>
+  isNullDegrade(c.degradesTo) || String(c.degradesTo).trim().length < 8 || !c.provides || !c.install);
+assert.equal(badProv.length, 0,
+  `provider 缺件 = 能力降级，必须给出**确定性退路** + provides + install（不得填「无/不影响」）；违反：${badProv.map((c) => c.id).join(", ")}`);
+assert.ok(providerCapabilities().every((c) => c.category === "插件内接线"),
+  "provider 必须归在「插件内接线」分类（两级边界的可见形态）");
+console.log(`✔ ⑧ 棘轮 两级边界：reference ${referenceCapabilities().length} 项均标「不影响插件行为」；provider ${providerCapabilities().length} 项均有确定性退路 + provides + install`);
+
+// ─────────────────────────────────────────────
 // ④ 巡检渲染：分类分组 + 「未探测」与「未检出」必须可区分
 // ─────────────────────────────────────────────
 const rows = await surveyCapabilities({ survey: "providers" });
