@@ -2,6 +2,33 @@
 
 > 用户 2026-09-02 提供的参考仓库清单，用于后续设计/实现参考（含「投影模式」预设与能力扩展）。
 
+## ★ 重点材料（2026-09-11 用户指定）
+
+> 本节是**用户点名「作为重点材料」的条目**。其余条目按时间序记在下方各节，性质是「登记备查」。
+> **重点材料 ≠ 已吸收**：它只表示**要持续跟进、优先对标**；是否吸收仍须单独立 ADR 裁决
+> （体例见 `adr/0065-absorbing-openviking.md`）。**本轮只有本节与 §6 是文档改动，无代码、无待办。**
+
+### `lohr13/hl_mem`（HL-Mem）— 证据驱动的长期记忆系统
+
+- 链接：https://github.com/lohr13/hl_mem ｜ **完整核实记录见本文 §6**
+- **为什么是重点**：与本仓**同题**（agent 长期记忆），且**在证据链与生命周期治理上走得比本仓远**——
+  每条记忆回查到 `event/<id>`、双时间模型（valid / recorded time）、`forget` 走统一删除闭包 + tombstone 且歧义一律
+  fail-closed、逐特性一张「成熟度 / 默认模式 / 是否调外部 API / 是否写库 / **降级行为** / **晋级标准**」矩阵。
+  本仓的对应面是 `evidence` 字段 + ADR-0044 + ADR-0049 ⇒ **对标价值集中在「治理形态」，不在检索算法**
+  （检索上本仓已按 ADR-0060 定形为「单索引 + 层级 + 路由」，详见 CONTEXT.md）。
+- **一条硬冲突（对标前必须先记住）**：它是「**LLM 负责提取**」；本仓铁律是**纯函数派生、不猜字段、
+  LLM 不能制造关系**（ADR-0042 / 0043 / 0051）。⇒ 对标时**只取治理与文档形态，不取它的写入路径**。
+- **两条立刻可用的借鉴**：① `docs/capability-matrix.md` 的**六列逐特性表**——比本仓「按版本记 CHANGELOG」
+  更适合回答「此刻到底是什么状态」，且**「降级行为」与「晋级标准」都是必填列**；
+  ② ADR 的**「被放弃的方案」逐条给放弃原因 + 末尾「重新评估条件」**体例（`docs/adr/0001-core-strategy.md`）。
+- **许可**：**Apache-2.0**（本仓 MIT）——与 OpenViking（AGPLv3，只可看不可抄）**不同**，它理论上可复用代码。
+  但本仓既定口径仍是「**只借鉴思想与文档结构，不引依赖**」，**本条目不改变该口径**。
+- **核实状态**：GitHub API + 仓库 raw 文档核实（2026-09-11）；**未克隆、未运行、未试装，评测分数未复现**。
+- **下一步（若决定吸收）**：按 `adr/0065` 体例单独立 ADR（含「可吸收项 / 不吸收项 + 理由 / 许可边界 / 未核实」），
+  再据 ADR 记账 `BACKLOG.md`。**本轮不立待办**——用户本轮只授权「提到首位 + 单开重点段」。
+
+---
+
 ## 完整清单
 
 - https://github.com/firecrawl/open-lovable
@@ -25,6 +52,9 @@
 - https://github.com/usestrix/strix
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
+
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6）；
+> 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
 
 ## 按与本项目（dsh-shadow / 投影模式 / 能力扩展）的关联度粗分
 
@@ -127,3 +157,32 @@
   2. **它原生支持 DSH，因而是本项目记忆层的直接替代品**：`examples/dsh-memory-plugin` 是 **Cordis 原生插件**（同进程），`dsh plugin add ./examples/dsh-memory-plugin` 安装，注册 **7 个 `viking_*` 工具**，经 `agent/pre-step` waterfall 注入召回，teardown 时 commit（3s 超时、**无阈值**），并 `ctx.provide("openvikingMemory")` 供其他 Cordis 插件二次开发。其能力对照表记录的两条本仓需要注意的边界：**dsh 不感知 compaction**（注入内容随宿主压缩一起收缩、profile 不重投）；**每个 subagent = 独立 `dsh-<id>` 会话，父子关系不保留**。
 - **许可证约束（重要）**：主项目 **AGPLv3**、本仓 **MIT** ⇒ **只可借鉴思想与文档结构，不可复制其代码**（否则触发 copyleft）。本仓既有的「不引入其代码或依赖」口径继续成立。
 - **未核实**：其自报评测数字、`Agent Plugins 1.0` 与本机 DSH 的兼容性、`examples/dsh-memory-plugin` 在 **0.1.5-rc.1** 上是否可直接装载——**均未在本机实测**。
+
+## 补充材料（2026-09-11 用户提供，本轮已核实）
+
+> 用户 2026-09-11 指定补录 `lohr13/hl_mem`。**已核实**：GitHub API + 仓库 raw 文档（抓取时间 2026-09-11；star / fork / 提交数按 API 原样记录）。**未在本机克隆、未运行、未试装**。
+
+### 6. ★ lohr13/hl_mem（HL-Mem）—— **用户指定的重点材料，摘要见本文顶部「★ 重点材料」节**
+
+- 链接：https://github.com/lohr13/hl_mem
+- **是什么**：面向 AI Agent 的**证据驱动长期记忆**系统（仓库自述「lohr 的 agent 记忆系统」；`pyproject.toml` 描述 `Evidence-aware local memory service`）。Python 3.12+，**本地优先、SQLite-first 的单机服务**：不拿对话摘要当记忆，而是把不可变 Event 经 LLM 提成结构化 Claim，落 SQLite，再用 FTS5 + 向量混合召回，最后经 REST / MCP / Hermes 适配器交给 agent。README 的定位句写得很明确——**每条记忆都可追溯到原始事件，而不是一段没有来源的模型文本**。
+- **核实**：**7** ⭐ / 0 fork / 5 open issues；创建 2026-07-19，最近推送 2026-09-08；最新 release **v1.1.7**（2026-09-08，标题「系统报告回灌修复」）；**Apache-2.0**；主语言 Python；`main` 分支 **983** 次提交，contributors API 只返回 1 人（`lohr13`）；tree 共 **1110** 个条目（含目录）——其中 `docs/superpowers/plans/` 有 20+ 篇完整计划留档、`benchmarks/archive/v030/` 是整段历史归档。
+- **核心机制**（README + `docs/architecture.md` 原文要点）：
+  - **数据流**：Event 摄入（幂等 `idempotency_key`）→ LLM 提取结构化 Claim → 准入与后处理（证据 / 时间 / 实体）→ SQLite（权威源，WAL + FTS5 + 向量 BLOB）→ 混合召回（FTS/BM25 + Dense）→ RRF / 可选 Reranker → Context Packet（REST / MCP）。
+  - **双通道**：① **事实通道** `Event → Atomic Claim → Observation → Mental Model`；② **经验通道** `Episode/Trace → Reward → Policy → Procedure/Skill`。ADR-0001 给的决策理由很直白——「避免把『用户现在喜欢什么』和『上次怎样成功部署』压进同一种记录」。
+  - **双时间模型**（valid time / recorded time，召回可 `as_of` 查历史）+ TTL / decay / archive / forget + 反馈驱动维护。
+  - **删除完整性**：`forget` 走统一删除闭包 + 独立 tombstone sidecar，**账本先写**；candidate / disputed / expired / open-manual 等歧义状态与账本失败一律 **fail-closed**，MCP 不留一条更宽松的「只撤回状态」旁路。
+  - **接口**：CLI（`hlmem remember/recall/list/explain/forget/doctor`）、FastAPI REST、**MCP stdio 7 个工具**（`memory_save` / `memory_recall` / `memory_get` / `memory_correct` / `memory_forget` / `memory_explain` / `memory_feedback`，runtime 直接复用同一份 JSON Schema，避免 transport 与业务契约各自演进）、Hermes Provider。
+  - **明确不做的**（README「质量与边界」原文）：不做 PostgreSQL / 外部图数据库 / 分布式 worker / 高可用 / 多租户隔离；`namespace` 只是相关性标签，**不是认证、授权、加密或侧信道边界**；Provider 插件是**受信任的进程内代码，不是安全沙箱**；**真实组件失败时不自动切到 Fake Provider**。
+- **值得借鉴**：
+  - **`docs/capability-matrix.md`——最值得抄的一张表**：每个特性一行，固定六列 **成熟度（stable / beta / experimental）/ 默认模式 / 是否调外部 API / 是否写数据库 / 降级行为 / 晋级标准**。比本仓现在「按版本记 CHANGELOG」更适合回答「此刻到底是什么状态」；尤其**「晋级标准」明写什么条件下才允许 beta→stable**，与本仓 ADR 的「重新评估条件」同型，但更细、可逐条核对。
+  - **「降级行为」是表里的必填列**：逐项写清「超时 / 预算耗尽 / 解析失败 → 只用原始 query」「API 失败不生成 proposal，核心 Claim 写入继续」「verifier 失败 fail-open 并记录错误」「某通道无候选则用其余通道」。与本仓 ADR-0049「缺件不静默」同一取向，且**把降级口径钉在表里**，而不是散落在代码注释里。
+  - **ADR 的「被放弃的方案」段**（`docs/adr/0001-core-strategy.md`）：把「直接用 MemOS」「直接用 Hindsight」「双 Provider 并行」「fork 上游大改」四条各自写清「优点是…**放弃原因是**…」，末尾另有**「重新评估条件」**清单（满足任一即新开 ADR 重评）。体裁与本仓 ADR 同源，可作对照范文。
+  - **README 结构**：加粗一句话定位 → mermaid 数据流 → 快速开始（三条命令）→ 能力表 → 安装与集成 → 常用配置表 → **质量与边界** → 文档索引；并明写「**README 不复制容易过期的历史分数**」（评测数与协议留在 `evaluation/results/`、`tests/eval/README.md` 索引里）。
+  - **`docs/archive/` 分层**：完成的提案 / 历史设计 / 旧 release 记录整体归档，并明写「不代表当前路线图，当前行为以 `architecture.md` + `capability-matrix.md` 为准」。
+  - **`docs/archive/research/competitor-comparison.md`**：与 Mem0 / Zep+Graphiti / LangMem / Letta 逐项对照，每行直接给「什么时候选它 / 什么时候选 HL-Mem」——一份现成的同类系统对照写法。
+- **与 dsh-shadow 的关系（三条要分清）**：
+  1. **同题不同解，且与本仓 ADR-0001 否掉的备选项同类**：ADR-0001 否掉 OpenViking 的理由是「要额外跑一个重服务（DB / RAG）」。HL-Mem 是**同一理由下的第二个样本**——常驻服务（SQLite WAL + FTS5 + 向量 BLOB + 后台 worker），且业务上要求跑 LLM 提取。差别是它**把证据链与生命周期治理放在第一位**（Event 证据、双时间、删除闭包），不是纯向量库。
+  2. **一处硬冲突、一条同向**：**硬冲突**是「LLM 负责提取」——本仓的派生原则是**纯函数、不猜字段、LLM 不能制造关系**（ADR-0042 / 0043 / 0051）；**同向**的是「无证据不返回」「删除 fail-closed」「降级必须可见」，可当这几条纪律的外部正例。另外它把「证据」做成**必须回查的 `event/<id>` 链接**，这一点值得与本仓 `evidence` 字段的呈现形态对照。
+  3. **许可证**：**Apache-2.0**（本仓 MIT）⇒ 与 OpenViking（AGPLv3）不同，**理论上可复用代码**；但本仓既定口径仍是「只借鉴思想与文档结构，不引依赖」，**本条目不改变该口径**。
+- **未核实**：它的评测分数（LongMemEval / MemDaily / PerLTQA）**未在本机复现**；未克隆、未试装，未验证其 MCP 与本机 DSH 0.1.5-rc.2 的兼容性；`docs/superpowers/plans/` 与 `benchmarks/archive/v030/` 只看了路径未逐篇读。
