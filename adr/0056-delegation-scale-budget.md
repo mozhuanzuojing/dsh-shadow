@@ -21,6 +21,7 @@ v1.15.4 曾把 persona 改成「**优先 Agent Team**」，理由是「复用省
 | 每个成员**每次请求**都背 `team:policy` + **9 个**工具 schema | 官方 README：*"Fixed policy and schema cost on every Team member request"* |
 | peer 消息**永久进对方历史**，此后每次请求都重发 | 官方 README：「每次 peer 投递都会把发送者前缀与消息内容加入 target 历史」 |
 | `maxMembers` **不是并发上限，是会话终身累计上限** | 上游 `lib/index.js`：`L564` 在**创建时**检查 `state.members.length >= this.maxMembers`（`TEAM_MEMBER_LIMIT`）；`L1244` 只 `push`；**`members.splice/pop/filter/delete` 命中 0 处**（无任何移除路径）；`L563` 重名抛错 + README「即使**创建失败**的 teammate 也保留其名字」⇒ **失败也吃名额** |
+| **（v1.15.17 补）上述四条已在本机装包后独立复核** | `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2` 装进 profile 后逐条核对：`L1594 DEFAULT_MAX_MEMBERS = 8`（默认值属实）；`L564` 创建时检查（属实）；`members.splice/pop/shift/filter` **实测命中 0 处**（无移除路径，属实）；**且机制比原说法更严格** —— `L561-570` 先把成员以 `phase:"provisioning"` **落盘**，`L572+` 才真的 spawn，失败走 `settleProvisioning`（`L708-721`）**只追加一个新版本把 phase 改成 `"failed"`，不移除条目** ⇒ **失败创建永久占一个名额**，不只是「名字被占」 |
 | `workflow` / `subagent` **不吃** teammate 名额 | `dsh-tool-workflow` / `dsh-workflow-worker-thread` / `dsh-tool-subagent` 三个包对 `agentTeams` 的引用数均为 **0** |
 | 嵌套**不是**杠杆 | 宿主 roster **扁平**，只有 Lead 能 `spawn_teammate`，不支持嵌套 Team |
 

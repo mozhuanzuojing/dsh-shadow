@@ -3,6 +3,76 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.17] 部署取证：Team 已生效（热加载）；插件代码需重启；P0 在真机复现
+
+用户第 0 轮已授权「补 agent-team 依赖 + 同步预设 + 重启 DSH」。本轮把**部署做完并逐条取证**，过程中确认了本仓 ADR-0056 的代码论断，并发现两种加载行为并存。
+
+### 一、agent-team 部署（已完成且**已生效**）
+
+| 步骤 | 结果 |
+|---|---|
+| 装包 | `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2` + `-tool-agent-team@0.1.5-rc.2`（均无 `dsh.bundle`，故按官方 warning 为普通依赖，需手工插行） |
+| 宿主行 | `cordis.patch.yml` 新增 `agent-team` 行，`maxMembers: 4`；注释记录了取 4 的依据与 `maxMembers` 的语义（读包本体核实） |
+| 同步预设 | 三文件覆盖 + **SHA256 逐文件核对一致**；改前备份 `.bak-20260911_092912` |
+
+**预检 5/5 全过**：① YAML 合法（2 个 insert 块）② `package.json` 合法、两包可解析 ③ `dump-config` 581 行无可疑错误 ④ bundles 7 个无重复 ⑤ 预设 SHA256 一致。
+
+**挂载校验**（用临时 Cordis 探针调 `agentPresets` 真实 API，验完已 `undefine`）：
+- `list()` → `projection` 在同步后路径、`broken: null`
+- `standingKeyFor('projection')` → **`mounted OK`**
+- `compositionInventory()` → 27 行全部 `enabled`，`tool-agent-team` 的 `fiberState: 2`
+- `team_task_list()` → **`{"tasks":[]}`（真活着）**
+- `Service.listService` → **`agentTeams` 在服务目录中**（"backed by the exact live Lead Session log"）
+
+> ⚠️ 注意：`standingKeyFor` 报 `mounted OK` **不能单独证明** `tool-agent-team` 激活（预设 README 自己记录过「缺 host 行时仍报成功」）。故本轮用 **`fiberState` + `team_task_list` + 服务目录**三路交叉确认。
+
+### 二、**本仓 ADR-0056 的代码论断已独立复核**（该项原为「未验证」）
+
+装包后直接读 `@0.1.5-rc.2/lib/index.js`：
+
+| ADR-0056 原断言 | 复核结果 |
+|---|---|
+| 默认上限 8 | ✅ `L1594 DEFAULT_MAX_MEMBERS = 8` |
+| 创建时检查 | ✅ `L564 state.members.length >= this.maxMembers` → `TEAM_MEMBER_LIMIT` |
+| **无任何移除路径** | ✅ `members.splice/pop/shift/filter` **命中 0 处** |
+| **失败的创建也占名额** | ✅ **且机制比原说法更严格**：`L561-570` 先把成员以 `phase:"provisioning"` **落盘**，`L572+` 才真的 spawn；失败走 `settleProvisioning`（`L708-721`）**只追加新版本把 phase 改成 `"failed"`，不移除条目** |
+
+包 README 亦独立佐证：`maxMembers | 8 | Maximum teammates a team may ever create, **including failed ones**`。
+
+### 三、**P0 在真机复现**（比代码阅读更强的证据）
+
+在**运行中的** DSH 进程里：
+
+```
+read_shadow({mode:"toolset", need:[...]})  →  返回 `_index.md` 目录（不是台账）
+Tool.listTools 的 read_shadow schema      →  含 v1.15.9 的 install/survey/category
+                                              **不含**本版的 need；mode 描述里**没有 toolset**
+```
+
+⇒ 运行中的插件是 **v1.15.12**（F1 仍在其中的那一版），**P0 按原样发生**。这是 ADR-0057 里 F1 最强的一条证据。
+
+### 四、**两种加载行为并存**（重要的运维事实）
+
+| 平面 | 热加载？ | 证据 |
+|---|---|---|
+| host 组合行 + 新装的包 | ✅ **是** | 加行装包后 `agentTeams` **立即**在服务目录、`team_task_list` **立即**可用 |
+| 插件自身的 `dist/` | ❌ **否** | live schema 与行为仍是旧版 |
+
+⇒ **改 dsh-shadow 的插件代码必须重启 DSH**；改 host 组合行不一定。已写进 ADR-0057。
+
+### 验证
+
+- 预检 5/5；预设 SHA256 三文件一致；`standingKeyFor` OK；`team_task_list` 可用；`agentTeams` 在目录。
+- 探针插件为**临时**用（`cordis_define`/`cordis_run`），取证后已 `cordis_undefine`，未留残余。
+- 提交并推送至 `origin/main`（`509b9ea..a77cfba`，v1.15.13–16 四个版本）。
+
+### 未验证（诚实标注）
+
+- **本版插件修复在真机生效后的端到端返回**——需重启 DSH，本轮未做（重启会终止当前会话）。
+- 真机 `semble` / `zg`（本机均 ENOENT）。
+- `maxMembers: 4` 的**运行时拦截行为**仍未实测（需真创建 5 个 teammate）。
+
+
 ## [v1.15.16] 多粒度检索层形态：路由已存在 + 实测否证全量扇出（ADR-0060）
 
 用户 2026-09-11 设想：**「向量化库多弄几个，片段超大/大/中/小，每次找回从这些库中都找一遍。」**
