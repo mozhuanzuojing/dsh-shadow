@@ -13,6 +13,7 @@ export function createWriterCore(opts) {
         indexCache: new Map(),
         indexCacheWarm: new Set(),
         indexDirty: new Set(),
+        indexFingerprint: new Map(),
         MAX_PENDING: 60,
         forgetCfg: config.forget ?? {},
         compactCfg: config.compact ?? {},

@@ -18,6 +18,16 @@ export interface WriterCore {
   indexCache: Map<string, Map<string, any>>;
   indexCacheWarm: Set<string>;
   indexDirty: Set<string>;
+  /**
+   * `_index.md` 构建时**所见源的指纹**（ADR-0069）。
+   *
+   * 为什么必须有它：`indexDirty` 是**进程内**的 Set，只能反映**本进程**的写入。
+   * 而记忆文件是 source of truth，**别的会话 / 子代理写入的记忆本进程的 dirty 永远看不到**
+   * ⇒ 一旦缓存预热，`_index.md` 就再也不更新（实测：`_index.md` 停在 09:34:01，
+   * 之后 623 条新记忆对索引不可见，而主题召回走 `listMemories` 读盘看得见 —— 两条读路径可见性分歧 8.54%）。
+   * ⇒ 新鲜度必须问**源**，不能只问进程。
+   */
+  indexFingerprint: Map<string, string>;
   // 配置派生
   MAX_PENDING: number;
   forgetCfg: Record<string, any>;
@@ -46,6 +56,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     indexCache: new Map(),
     indexCacheWarm: new Set(),
     indexDirty: new Set(),
+    indexFingerprint: new Map(),
     MAX_PENDING: 60,
     forgetCfg: config.forget ?? {},
     compactCfg: config.compact ?? {},

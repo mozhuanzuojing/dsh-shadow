@@ -3,6 +3,107 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.26] `_index.md` 的投影漂移 —— 新鲜度必须问源，不能只问进程（ADR-0069）
+
+延续 D5（ADR-0066）的视角「**同一份语料、两条读路径可见性不同**」，本轮在
+「`_index.md`（无 `topic` 的 `read_shadow()`）vs 主题召回」之间找到**同型问题**，且这次有实测数字。
+新增 ADR-0069 + 回归锁。
+
+### 一、实测漂移（真 `.shadow`，7297 条记忆）
+
+| 读数 | 值 |
+|---|---|
+| `_index.md` 最后写入时间 | **09:34:01** |
+| 之后写入的记忆 | `09:34:12` / `09:34:31` / `09:52:07` … |
+| 它们在 `_index.md` 里出现的次数 | **0**（磁盘上确实存在） |
+| **对索引不可见的记忆** | **623 条（8.54%）** |
+| 主题召回是否看得见 | **看得见**（走 `listMemories`，每次读盘） |
+
+⇒ **投影与源头脱钩**，差额随每次会话增长 —— 而 `read_shadow()` 给出的目录/主题索引
+正是 agent 判断「记忆里有什么」的入口。
+
+### 二、三层根因
+
+```ts
+// core/writer-materialize.ts · ensureIndex
+if (!core.indexDirty.has(ws) && core.indexCacheWarm.has(ws)) return;  // ← 第 1 层
+// core/writer-materialize.ts · ensureIndexCache
+if (core.indexCacheWarm.has(ws)) return;                              // ← 第 2 层
+```
+
+1. `indexDirty` 是**进程内** `Set`，**只反映本进程自己的写入**；**别的会话/子代理写入的记忆
+   本进程的 dirty 永远看不到** ⇒ 缓存一旦预热，`_index.md` 再也不更新。
+2. 即便上层决定重建，`ensureIndexCache` 的 `if (warm) return` 也**不会重读新文件**（只拿旧缓存重渲染）。
+3. 磁盘上已删除的文件**从不清出缓存** ⇒ 投影里留幽灵条目。
+
+### 三、修复：问**源**，并改成每次**增量对账**
+
+- **新鲜度问源**：用**已存在**的 `shadowSourcesFingerprint`（`core/projection-store.ts`，
+  `listDir` 级成本）—— 它的注释早写着纪律 *「缓存是性能特性不是真相（ADR-0046）」*，
+  但此前**只接给了 `nodes.jsonl`**（v1.15.12 修 `shadow_query` 陈旧投影时接的），**没接给 `_index.md`**
+  ⇒ 又一次「机制存在、没接到这一处」。
+- **每次增量对账**：`listMemories`（**只 listDir、不读内容**）列出磁盘 → 只为**新**文件读内容 →
+  源头已消失的清出缓存。⇒ 「跟得上源头」与「不每回合全量重读」**同时成立**。
+- **先采指纹、后读源**（与 ADR-0068 同一顺序教训）：若扫描期间源又变，记下的是**更旧**的指纹
+  ⇒ 下次必然不等 ⇒ 保守重建；反过来会把变化记成「已见过」而**永久漏掉**。
+
+### 四、真机契约核实（把「未验证」变成「已核实」）
+
+本轮**读了真机实现**（`dsh-fs-local` 的 `listDirectory`）：
+
+```js
+result.push({ name, type,
+  target: childTarget,                                          // 必给
+  ...childInfo ? { version: childInfo.version } : {},            // 可探到就给
+  ...childInfo?.type === "file" ? { size: childInfo.size } : {}  // 文件一定给
+});
+```
+
+且 `FsDirEntry.target` 在 `dsh-fs@0.1.5-rc.2` 的 `types.d.ts` 里是**必填**（*"Resolved child target
+for follow-up operations"*）⇒ 指纹**不会恒为 `undefined`** ⇒ 「源未变则跳过」在真机**成立**，
+不会退化成每次重建。**真语料实测**（`_research/fingerprint-real.ts`）：可判定 ✅、
+**7336 条目 / 517 KB**、**稳定** ✅、成本 **62 ms**（只 listDir，不读内容）。
+
+### 五、回归锁（`test/index-freshness.test.ts`）
+
+**关键**：绕过本进程 flush 直接往 mock fs 放文件（「别的会话写入」的等价物）——
+走 flush 会置 `indexDirty`，就测不到要测的分支。
+
+| # | 断言 | 结果 |
+|---|---|---|
+| ① | 首次读索引含已存在记忆并落盘 | ✅ |
+| ② | **别的会话写入的新记忆出现在索引里** | ✅ 核心 |
+| ③ | 源头删除 ⇒ 索引不留幽灵条目 | ✅ |
+| ④ | **源未变 ⇒ 不重写**（性能特性保住） | ✅ |
+| ⑤ | 幂等：无源变化时索引内容稳定 | ✅ |
+
+> **④ 一度失败并暴露了真问题**：我的 mock 的 `listDir` 条目**漏了 `target`**（契约必填）
+> ⇒ 指纹恒 `undefined` ⇒ 每次都「保守重建」⇒ ④ 永远过不了。修 mock 成**忠实契约**后 ④ 过。
+> 这正是本仓「mock 与契约不符时测的是 mock」教训的又一次生效 —— 也正是它促成了上面的真机核实。
+
+### 六、验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 漂移实测 | `_research/index-drift.ts` + 定点核实（索引里出现 0 次、磁盘存在） | ✅ **623 条 / 8.54%** |
+| 2 | 两层根因 | 读 `ensureIndex` / `ensureIndexCache` 代码 | ✅ 均确认 |
+| 3 | 真机 `listDir` 形状 | 读 `dsh-fs-local` 的 `listDirectory` 实现 + `dsh-fs` 契约 | ✅ `target` 必给 / 文件给 `size` |
+| 4 | 真语料指纹 | `_research/fingerprint-real.ts`（7336 条目） | ✅ 可判定 · 稳定 · **62 ms** |
+| 5 | 回归锁 | `node test/index-freshness.test.ts` | ✅ 5/5（含核心 ②③ 与性能 ④） |
+| 6 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 7 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0 |
+| 8 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **35/35**（34 + 新增 1） |
+| 9 | 审计工具标定 | `tools/audit-wiring.selftest.ts` | ✅ 8 组断言 + ALL PASS |
+| 10 | 三方版本一致 | `package.json` / `README` / `CHANGELOG` | ✅ 均 `1.15.26` |
+
+**未验证（诚实标注）**：① 真机**端到端**（插件 `dist/` 不热加载，需**重启**后看 `_index.md` 是否随新会话更新）；
+② **10 万级规模**的对账成本未压测（当前 7297 条 / 62 ms）；③ **幽灵条目的真机量级未报** ——
+本轮探针把 `_index.md` 的**说明文字**（`<时刻>-<入口slug>.md` 这类占位符）也算成了索引条目，
+「索引有、磁盘没有」那一桶被污染，故**不给数**（修复逻辑已被测试 ③ 覆盖）；
+④ **无 `version` 后端**下「同尺寸内容修改不触发失效」是 ADR-0046 已记录的已知降级
+（真机 `dsh-fs-local` 会探 `version`，故本部署不触发）。
+**新增固定开销**：每次读索引多一次 `listDir` 扫描（真语料 62 ms）—— 相对「静默返回不完整索引」是划算的。
+
 ## [v1.15.25] `_meta.json` 的读-改-写加版本守卫 —— 修掉 v1.15.24 连带放大的并发丢更新（ADR-0068）
 
 **这一版修的是上一版自己放大出来的风险**（ADR-0067 的连带项）。新增 ADR-0068。
