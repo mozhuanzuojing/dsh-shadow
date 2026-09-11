@@ -8,7 +8,7 @@ import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "./abstract.js";
 import { resolveWorkspace } from "./scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
 import { today, compact, slug, topicsInText } from "./util.js";
-import { readRel, listMemories } from "../persistence/files.js";
+import { readRel, listMemories, memoryFileName, timeFromName } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
@@ -104,8 +104,16 @@ export function makeMaterialize(core, hooks) {
             const atoms = (ep.memoryRefs || []).map((rel) => cache.get(rel)?.parsed).filter(Boolean);
             if (!atoms.length)
                 continue;
-            const name = `ep-${compactSlug(ep.id)}-consolidated.md`;
-            const rdate = dateOf((ep.memoryRefs || [])[0]);
+            // 时间戳必须**从 `episode.startedAt` 同时产出「文件名里的」与「缓存里的」**（v1.15.38 修复）：
+            //   原来文件名不带时间戳、缓存里放 `startedAt.slice(11,17).replace(/:/g,"")`
+            //   （`YYYY-MM-DD HH:MM:SS` 下 = `"09:00:"` → `"0900"`，**4 位、不是 HHMMSS**）⇒
+            //   重启后读侧从文件名反解得到 `""`，同一 consolidated 文件的 `time` 两套值，
+            //   而 `time` 是取代裁决的输入（`query/query.ts:299`）⇒ 跨重启裁决会变（ADR-0069 同族）。
+            //   现在：文件名带 6 位 HHMMSS，缓存 `time` **由文件名反解**（`timeFromName`），两侧同源。
+            const stamp = String(ep.startedAt || "").match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):?(\d{2}):?(\d{2})/);
+            const rdate = stamp ? stamp[1] : dateOf((ep.memoryRefs || [])[0]);
+            const rtime = stamp ? `${stamp[2]}${stamp[3]}${stamp[4]}` : "";
+            const name = memoryFileName(rdate, rtime, `ep-${compactSlug(ep.id)}-consolidated.md`);
             const rel = `${SHADOW_ROOT}/${rdate}/${name}`;
             const text = consolidateText(ep, atoms);
             const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
@@ -114,7 +122,7 @@ export function makeMaterialize(core, hooks) {
                 marks.push(a.rel);
                 cache.delete(a.rel);
             }
-            cache.set(rel, recOf({ date: rdate, time: (ep.startedAt || "").slice(11, 17).replace(/:/g, ""), name, rel }, text));
+            cache.set(rel, recOf({ date: rdate, time: timeFromName(name), name, rel }, text));
         }
         if (marks.length) {
             await mutateMeta(fs, ws, (m) => {

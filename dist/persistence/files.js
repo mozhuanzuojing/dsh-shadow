@@ -11,6 +11,20 @@ export const readRel = async (fs, ws, rel) => {
         return "";
     }
 };
+// ── 记忆文件名里的**时间判据（唯一来源）** ────────────────────────────────────────
+// `date`/`time` 是**取代裁决**的输入（`query/query.ts:299` → `verdictOf`），而裁决决定打分（×0.7）
+// 与生命周期标签。所以「同一个文件的时间」必须与「它是怎么被读到的」无关。
+//
+// 为什么必须是**函数**而不是两处各写一遍正则（v1.15.38 修复）：
+//   写侧（`core/writer-materialize.ts` 造 consolidated 文件名）与读侧（本文件的枚举）
+//   曾各自决定 `time`：写侧用 `ep.startedAt.slice(11,17).replace(/:/g,"")`（`YYYY-MM-DD HH:MM:SS`
+//   下取到 `"09:00:"` → `"0900"`，**4 位**、不是 HHMMSS），且文件名里**没有**时间戳 ⇒
+//   读侧正则 `^\d{4}-\d{2}-\d{2}--(\d{6})` 不匹配 ⇒ 重启后同一文件 `time = ""`。
+//   ⇒ 本进程判「后写的更新」，重启后判「同日并列、谁都不被取代」（判据分叉，ADR-0069 同族）。
+// 现在写侧**从文件名反解** `time`（`timeFromName(name)`），使两侧**同源**、不可能再分叉。
+export const timeFromName = (name) => (String(name || "").match(/^\d{4}-\d{2}-\d{2}--(\d{6})/) || ["", ""])[1] || "";
+/** 记忆文件名的规范形态：`<date>--<HHMMSS>-<rest>`；`time` 非 6 位时退回 `<date>--<rest>`（读侧给 `""`）。 */
+export const memoryFileName = (date, time, rest) => `${date}--${/^\d{6}$/.test(String(time || "")) ? `${time}-` : ""}${rest}`;
 export const listMemories = async (fs, ws) => {
     const out = [];
     try {
@@ -33,8 +47,7 @@ export const listMemories = async (fs, ws) => {
                 // 与 ADR-0074 的 `scopedFs`、T5 的 `isAdmissibleClaim` 同一手法（判据收一处）。
                 if (n.startsWith("_"))
                     continue;
-                const tm = n.match(/^\d{4}-\d{2}-\d{2}--(\d{6})/);
-                out.push({ date: d.name, name: n, rel: `${SHADOW_ROOT}/${d.name}/${n}`, time: tm ? tm[1] : "" });
+                out.push({ date: d.name, name: n, rel: `${SHADOW_ROOT}/${d.name}/${n}`, time: timeFromName(n) });
             }
         }
     }

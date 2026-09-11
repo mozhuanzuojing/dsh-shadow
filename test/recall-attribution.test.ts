@@ -5,6 +5,7 @@
 //   3) 无 topic 返回索引；LLM 扩词（recall.enabled）在 llm 缺失时静默降级。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
+import { today } from "../dist/core/util.js";
 const { apply, name, inject, resolveShadowScope, resolveWorkspace, firstNonEmpty, recordObservationTrace, renderReflection } = mod;
 
 const WS = "D:/ws";
@@ -1302,23 +1303,32 @@ const todayStr = todayLocal();
   const services30 = { fs: fs30, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
   const ctx30 = { get: (k) => services30[k], on: (e, fn) => listeners30.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services30[k] }) };
   const P30 = { name, inject, apply };
-  P30.apply(ctx30, { summary: { enabled: false }, recall: {} });
+  // **日期必须相对今天，不能硬编码**（v1.15.38 修复）：本场景要逐个暴露生命周期状态，而
+  //   `stale`（`query/query.ts:276`）= `ageDaysOf(rel) >= staleDays`（默认 7），且
+  //   `lifecycleOf` 里 `if (stale) return "DECAYING"` **排在** `hits>0 → OBSERVED` /
+  //   `confirms>=1 → VERIFIED` / `confirms>=2 → TRUSTED` **之前** ⇒ 一旦 fixture 的日期变旧到 7 天，
+  //   这些状态会被 DECAYING 整片盖掉。原 fixture 硬编码 `2026-09-05`，在**本地**日期滚到 2026-09-12 那天
+  //   起红（UTC 才 09-11；`today()` 用**本地**日期 ⇒ 这颗炸弹在本地零点引爆，见 ADR-0077）。
+  //   ⇒ 改成「今天」（age=0）与「30 天前」（age=30），并把 staleDays 写成显式以便阅读。
+  const D0 = today();
+  const DOLD = today(30);
+  P30.apply(ctx30, { summary: { enabled: false }, recall: {}, retention: { staleDays: 7 } });
   const body30 = (entry: string, note: string) => `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] 生命周期：${note}\n`;
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-lc-new.md", body30("lc-new", "新记忆"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-lc-obs.md", body30("lc-obs", "被观察"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090002-lc-ver.md", body30("lc-ver", "单源确认"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090003-lc-tru.md", body30("lc-tru", "多源确认"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090004-lc-sup.md", body30("lc-sup", "被取代"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090005-lc-arc.md", body30("lc-arc", "已归档"));
-  store30.set("D:/ws/.shadow/2026-09-05/2026-09-05--090006-lc-pin.md", body30("lc-pin", "固定"));
-  store30.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-lc-dec.md", body30("lc-dec", "衰减"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090000-lc-new.md`, body30("lc-new", "新记忆"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090001-lc-obs.md`, body30("lc-obs", "被观察"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090002-lc-ver.md`, body30("lc-ver", "单源确认"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090003-lc-tru.md`, body30("lc-tru", "多源确认"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090004-lc-sup.md`, body30("lc-sup", "被取代"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090005-lc-arc.md`, body30("lc-arc", "已归档"));
+  store30.set(`D:/ws/.shadow/${D0}/${D0}--090006-lc-pin.md`, body30("lc-pin", "固定"));
+  store30.set(`D:/ws/.shadow/${DOLD}/${DOLD}--000000-lc-dec.md`, body30("lc-dec", "衰减"));
   store30.set("D:/ws/.shadow/_meta.json", JSON.stringify({
-    ".shadow/2026-09-05/2026-09-05--090001-lc-obs.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: [] },
-    ".shadow/2026-09-05/2026-09-05--090002-lc-ver.md": { created: "2026-09-05", hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
-    ".shadow/2026-09-05/2026-09-05--090003-lc-tru.md": { created: "2026-09-05", hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
-    ".shadow/2026-09-05/2026-09-05--090004-lc-sup.md": { created: "2026-09-05", hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
-    ".shadow/2026-09-05/2026-09-05--090005-lc-arc.md": { created: "2026-09-05", hits: 1, status: "archived", pinned: false, confirmedBy: [] },
-    ".shadow/2026-09-05/2026-09-05--090006-lc-pin.md": { created: "2026-09-05", hits: 1, status: "active", pinned: true, confirmedBy: [] },
+    [`.shadow/${D0}/${D0}--090001-lc-obs.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: [] },
+    [`.shadow/${D0}/${D0}--090002-lc-ver.md`]: { created: D0, hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
+    [`.shadow/${D0}/${D0}--090003-lc-tru.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
+    [`.shadow/${D0}/${D0}--090004-lc-sup.md`]: { created: D0, hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
+    [`.shadow/${D0}/${D0}--090005-lc-arc.md`]: { created: D0, hits: 1, status: "archived", pinned: false, confirmedBy: [] },
+    [`.shadow/${D0}/${D0}--090006-lc-pin.md`]: { created: D0, hits: 1, status: "active", pinned: true, confirmedBy: [] },
   }));
   const r30 = await toolRegistry.get("read_shadow").execute({ topic: "生命周期", max_tokens: 8000 }, { agent: agentsById.get("T30") });
   assert.ok(!String(r30).startsWith("ERR"), "生命周期召回不应报错");

@@ -43,3 +43,12 @@ export const lifecycleOf = (rec, ageDays, conflictCount, stale, superseded) => {
         return "OBSERVED";
     return "NEW";
 };
+// ── 本状态机的**信号可达性**与**状态可达性**由声明表守住 ─────────────────────────────
+// 守在哪：`test/lifecycle-signal-table.test.ts`（吸收 hl_mem 的 `assert_transition()` 形态；ADR-0077）。
+// 那种表**刻意不放在这里**：它必须同时写出字段名与触发值，而 `tools/audit-wiring.lib.ts` 的
+// `hasProducer` 是**文本**判据 —— 字段名与字面量同行共现就会被当成「写入者」，
+// 于是审计工具会**丢掉 `status=superseded` 这个真线索**（本文件里 `rec?.status === "archived"` 这类
+// 比较式被 `stripCmp` 正确剔除，正是它被判「无写入者」的原因）。放在测试面既不影响棘轮的强制力
+// （棘轮扫的是**生产源码**），也不污染审计判据。
+// 该表已机器核实的结论：`pinned`（真值）/ `status:"archived"` / `status:"superseded"`
+// 三条触发值在**本仓库生产代码里没有任何写入者**，只保留给外部人工或夹具（D4 / ADR-0063）。
