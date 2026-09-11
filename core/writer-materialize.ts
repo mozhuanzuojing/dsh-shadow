@@ -8,7 +8,7 @@ import type { AgentLike } from "./types.js";
 import { resolveWorkspace } from "./scope.js";
 import { today, compact, slug, topicsInText } from "./util.js";
 import { readRel, listMemories } from "../persistence/files.js";
-import { readMeta, writeMeta } from "../persistence/meta.js";
+import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
 import { traceOf } from "./trace.js";
 import { streamText, textMessage } from "./writer-llm.js";
@@ -66,14 +66,17 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
   // ── Episode 收口归档（B）：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件，
   //    个体原子 mark status=compacted 并移出活跃热集（文件保留、可回放；Forget≠Delete）。默认关。
   const compactSlug = (id: string) => String(id || "ep").replace(/[^a-z0-9_-]+/gi, "-").slice(0, 32) || "ep";
-  const runCompact = async (fs: any, ws: string, cache: Map<string, any>, meta: any) => {
+  const runCompact = async (fs: any, ws: string, cache: Map<string, any>) => {
     if (core.compactCfg.enabled !== true) return;
     const parsed = [...cache.values()].map((r) => r.parsed).filter(Boolean);
     if (!parsed.length) return;
     const gap = Math.max(0, Number(core.compactCfg.gapMinutes) || core.episodeGap);
     const eps = deriveEpisodes(parsed, { gapMinutes: gap });
     if (eps.length <= 1) return; // 只有当前打开的 episode，无已完成收口的
-    let changed = false;
+    // **增量标记，不在陈旧快照上改**（ADR-0068）：本函数的写入窗口跨「重建索引 + 收口」，
+    // 拿开头读到的 meta 全量覆盖回去会丢掉期间别人的写入。故只收集 delta，最后在
+    // `mutateMeta` 的**新鲜快照**上应用。
+    const marks: string[] = [];
     const dateOf = (rel: string) => (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || today();
     for (const ep of eps.slice(0, -1)) {
       const atoms = (ep.memoryRefs || []).map((rel: string) => cache.get(rel)?.parsed).filter(Boolean);
@@ -85,13 +88,19 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       await fs.writeText(t, text);
       for (const a of atoms) {
-        if (meta) { meta[a.rel] = meta[a.rel] || { hits: 0, status: "active", pinned: false }; meta[a.rel].status = "compacted"; }
+        marks.push(a.rel);
         cache.delete(a.rel);
       }
       cache.set(rel, recOf({ date: rdate, time: (ep.startedAt || "").slice(11, 17).replace(/:/g, ""), name, rel }, text));
-      changed = true;
     }
-    if (changed) await writeMeta(fs, ws, meta);
+    if (marks.length) {
+      await mutateMeta(fs, ws, (m) => {
+        for (const rel of marks) {
+          m[rel] = m[rel] || { hits: 0, status: "active", pinned: false };
+          m[rel].status = "compacted";
+        }
+      });
+    }
   };
 
   const rebuildIndex = async (fs: any, ws: string) => {
@@ -113,7 +122,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
         for (const rel of drop) cache.delete(rel);
       }
       // Episode 收口归档：关闭的 episode → 合并成一个 consolidated 文件 + 原子归档（文件变少）。
-      await runCompact(fs, ws, cache, meta);
+      await runCompact(fs, ws, cache);
       const recs = [...cache.values()];
       const memories = recs.map((r) => ({ date: r.date, time: r.time, name: r.name, rel: r.rel }));
       const topicFiles: Record<string, string[]> = {};

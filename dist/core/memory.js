@@ -1,7 +1,7 @@
 // dsh-shadow —— core/memory.ts：记忆记录塑形（完整线索头）+ meta 注册。从 index.ts 迁出。
 import { today } from "./util.js";
 import { scrubUnsafe, referencedMaterials } from "../security/scrub.js";
-import { readMeta, writeMeta } from "../persistence/meta.js";
+import { mutateMeta } from "../persistence/meta.js";
 export const buildClueHeader = (entry, arr, srcId, extra) => {
     const mats = [];
     const prompts = [];
@@ -84,11 +84,12 @@ export const registerMeta = async (fs, ws, rel, actorId, retentionEnabled) => {
     if (!retentionEnabled)
         return;
     try {
-        const meta = await readMeta(fs, ws);
-        if (meta[rel])
-            return;
-        meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };
-        await writeMeta(fs, ws, meta);
+        // 事务（ADR-0068）：读-改-写带版本守卫，并发下不丢更新；`false` = 已存在，无需写。
+        await mutateMeta(fs, ws, (meta) => {
+            if (meta[rel])
+                return false;
+            meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };
+        });
     }
     catch (e) {
         console.log("[dsh-shadow] meta register failed:", e && e.message);

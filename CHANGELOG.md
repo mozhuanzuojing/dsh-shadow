@@ -3,6 +3,83 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.25] `_meta.json` 的读-改-写加版本守卫 —— 修掉 v1.15.24 连带放大的并发丢更新（ADR-0068）
+
+**这一版修的是上一版自己放大出来的风险**（ADR-0067 的连带项）。新增 ADR-0068。
+
+### 一、问题：v1.15.24 把一个理论竞态变成了常态
+
+| | 修复前 | v1.15.24 之后 |
+|---|---|---|
+| `_meta.json` 的 RMW 触发条件 | `servedDetail`（要求「渲染里展开了片段」）⇒ **几乎永空** | `servedRels`（每条被返回的） |
+| 读-改-写执行频率 | **几乎从不** | **每次有命中的召回** |
+
+而 `_meta.json` 是**全工作区共享的一个文件**，写入全是「**读全量 → 改 → 写回全量**」
+⇒ 并发（多会话 / teammate / 宿主与子代理同时召回）下**丢更新**。
+
+**三处 RMW 及其窗口**：`core/memory.ts`（短）/ `query/query.ts`（短，**频率最高**）/
+`core/writer-materialize.ts` 的 `runCompact`（**长** —— 读 meta → 重建索引 + Episode 收口 → 写回全量）。
+
+### 二、根因：能力就在 fs 契约里，插件一处没用
+
+已**读 `@deepseek-ai/dsh-fs@0.1.5-rc.2` 类型定义核实**（非推断）：
+
+- `writeText(target, content, expected?: FsWriteIntent, …)`
+- `FsWriteIntent = { kind: 'createIfAbsent' } | { kind: 'replaceIfVersion'; version: FsVersion }`
+- `FsInfo.version` 原文：*"Opaque freshness token of the target right now."*；
+  `FsVersion` 原文：*"the freshness token a write/edit **guards against**."*
+- `editText` 文档明写：*"the version guard is checked before matching so stale content reports `FS_STALE_VERSION`"*；
+  `FsErrorCode` 里确有 **`FS_STALE_VERSION`**。
+
+⇒ 全仓 grep `expected`：**与 fs 无关的一处都没有** —— 版本守卫从未被使用。
+
+### 三、修复
+
+1. **新增事务层** `persistence/meta.ts` 的 `mutateMeta(fs, ws, mutate, attempts=3)`：
+   `stat 取版本 → readText → mutate → 带守卫写 → FS_STALE_VERSION 时重读重试`，上限 3 次。
+   配套 `readMetaVersioned` / `writeMetaGuarded`；`readMeta` 纯读语义不变。
+2. **顺序敏感点（关键）**：**先 `stat` 取版本、再 `readText`**。
+   若期间有人写入，我们手上的版本**比内容旧** ⇒ 带守卫写**失败并重试**（不覆盖）。
+   反过来会拿到「比内容新的版本」⇒ 守卫通过而**覆盖别人的写入**。已写进代码注释，防「顺手调换」。
+3. **`runCompact` 改为收集增量标记**：不再拿开头读到的 meta 全量覆盖回去（窗口横跨索引重建 + 收口），
+   改为最后在**新鲜快照**上只应用 `status = "compacted"` 这几个标记 ⇒ 从「覆盖全量」变「应用 delta」，
+   长窗口的丢更新**在结构上消失**。**这条与正确性直接相关**：`compacted` 丢了会让已归档原子**重回活跃索引**。
+4. **`stat` 不可用时诚实降级**：版本为 `undefined` ⇒ 退化为无条件写（与旧行为一致，不更差），有测试锁住。
+
+### 四、复现与锁定（`test/meta-concurrency.test.ts`，5 组断言）
+
+**关键**：mock fs **真的实现** `stat` + `replaceIfVersion` 语义 —— 否则测的是 mock 不是系统
+（v1.15.15 踩过「不忠实 mock」的坑）。用「注入一次外部写入」**确定性地**制造版本冲突：
+
+| # | 断言 | 结果 |
+|---|---|---|
+| ① | 两次 `mutateMeta` 各自落盘且互不覆盖 | ✅ |
+| ② | `mutate` 返回 `false` ⇒ 不写 | ✅ |
+| ③ | **并发：冲突被检出并重试 ⇒ 双方更新都保住** | ✅（核心） |
+| ④ | 无 `stat` 的宿主：退化为无条件写，不崩、不改语义 | ✅ |
+| ⑤ | `readMeta` 纯读语义不变（缺文件 → `{}`） | ✅ |
+
+③ 的读法：注入后若不重试，`other.md` 会被**整份覆盖丢掉**；测试断言它仍在且 `hits === 9`。
+
+### 五、验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 契约核实（能力存在） | 读 `dsh-fs@0.1.5-rc.2` 类型定义 | ✅ `FsWriteIntent` / `FsInfo.version` / `FS_STALE_VERSION` 均在 |
+| 2 | 插件从未使用守卫 | 全仓 grep `expected` | ✅ 与 fs 相关的一处都没有 |
+| 3 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 4 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0 |
+| 5 | 并发回归锁 | `node test/meta-concurrency.test.ts` | ✅ 5/5（含核心的 ③） |
+| 6 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **34/34**（33 + 新增 1） |
+| 7 | 审计工具标定 | `tools/audit-wiring.selftest.ts` | ✅ 8 组断言 + ALL PASS |
+| 8 | 三方版本一致 | `package.json` / `README` / `CHANGELOG` | ✅ 均 `1.15.25` |
+
+**未验证（诚实标注）**：① 真机 `host.fs` 的 `stat` / `replaceIfVersion` **端到端**行为未验
+（测试是按契约写的 mock）；② `FS_STALE_VERSION` 在 mock 里触发过，**真机未触发**；
+③ 真并发时序未测（用「注入一次外部写入」确定性模拟）；④ 重试耗尽（连续 3 次冲突）只有代码路径覆盖；
+⑤ 本次改动**尚未在运行进程生效**（插件 `dist/` 不热加载，ADR-0057），需重启后复核。
+**已知代价**：并发高时同一事务可能写 2–3 次；重试耗尽会**放弃这一次更新**（宁可少记一次命中，也不覆盖别人）。
+
 ## [v1.15.24] 第五处同类缺陷：命中数累积触发条件错 —— 74.3% 的记忆永不可能被记命中（ADR-0067）
 
 延续 ADR-0066（D5）的视角「**同一策略、只在一处生效 / 判据错**」，本轮在

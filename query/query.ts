@@ -4,7 +4,7 @@ import { SHADOW_ROOT } from "../core/paths.js";
 import type { AgentLike } from "../core/types.js";
 import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
-import { readMeta, writeMeta } from "../persistence/meta.js";
+import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor, approxEntries, deprioritizeFactor } from "../retrieval/rank.js";
@@ -406,19 +406,20 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   //   被返回一条记忆就是一次命中 —— 与「是否展开了片段」无关。
   // 收敛锁定：`test/hit-accumulation.test.ts`（含「未返回者不得记 hits」的反向不变量）。
   if (servedRels.length) {
-    const next = await readMeta(fs, ws);
     const observer = agent?.id ? String(agent.id) : "";
-    for (const p of servedRels) {
-      const rec = next[p] || { created: today(), hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: "", confirmedBy: [] };
-      rec.hits = (rec.hits || 0) + 1;
-      rec.lastSeen = turn;
-      if (observer) {
-        const cb = Array.isArray(rec.confirmedBy) ? rec.confirmedBy : [];
-        if (observer !== (rec.createdBy || "") && !cb.includes(observer)) { cb.push(observer); rec.confirmedBy = cb.slice(-10); }
+    // 走事务（ADR-0068）：读-改-写带版本守卫 + 冲突重试 —— 并发会话/子代理同时召回时不丢命中。
+    await mutateMeta(fs, ws, (next) => {
+      for (const p of servedRels) {
+        const rec = next[p] || { created: today(), hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: "", confirmedBy: [] };
+        rec.hits = (rec.hits || 0) + 1;
+        rec.lastSeen = turn;
+        if (observer) {
+          const cb = Array.isArray(rec.confirmedBy) ? rec.confirmedBy : [];
+          if (observer !== (rec.createdBy || "") && !cb.includes(observer)) { cb.push(observer); rec.confirmedBy = cb.slice(-10); }
+        }
+        next[p] = rec;
       }
-      next[p] = rec;
-    }
-    await writeMeta(fs, ws, next);
+    });
   }
   const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
   const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + envelope + flushWarn);
