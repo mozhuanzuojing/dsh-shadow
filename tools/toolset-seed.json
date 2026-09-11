@@ -1,5 +1,5 @@
 {
-  "_comment": "台账扩源种子（人裁决 + 机器核验）。**pkg 必须是精确包 ID，不是搜索词**——按名字猜已被证伪。核验工具：tools/winget-verify.mjs。",
+  "_comment": "台账扩源种子（人裁决 + 机器核验）。**pkg 必须是精确包 ID，不是搜索词**——按名字猜已被证伪。核验工具：tools/winget-verify.ts。",
   "_rule": "选入判据：publisher 能证明是上游本身（如 JohnMacFarlane.Pandoc / Insecure.Nmap / Kitware.CMake），或公认的官方再打包。选不出上游的宁可不收。",
   "candidates": [
     { "id": "upx",        "pkg": "UPX.UPX",                        "bin": "upx",        "label": "UPX",              "category": "逆向与二进制分析", "flag": "--version", "provides": "可执行文件压缩/加壳", "replaces": "—", "note": "上游自维护" },

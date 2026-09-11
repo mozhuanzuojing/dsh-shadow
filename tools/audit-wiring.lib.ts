@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// dsh-shadow —— tools/audit-wiring.lib.mjs：接线审计的**纯逻辑**（CLI 与标定测试共用同一份）。
+// dsh-shadow —— tools/audit-wiring.lib.ts：接线审计的**纯逻辑**（CLI 与标定测试共用同一份）。
 //
 // 拆出来的理由：标定测试必须验**同一份逻辑**，否则测试过了产品没改、或反之。
 // 全部纯函数：输入是 `{file, text}[]`，输出是线索数组。不做 IO。

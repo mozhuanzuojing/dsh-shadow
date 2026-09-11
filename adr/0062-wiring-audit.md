@@ -22,7 +22,7 @@
 
 ## Decision
 
-### 1. 新增 `tools/audit-wiring.mjs`（+ `.lib.mjs` + `.selftest.mjs` + fixtures）
+### 1. 新增 `tools/audit-wiring.ts`（+ `.lib.ts` + `.selftest.ts` + fixtures）
 
 两类判据，纯静态、无 LLM、无网络、不改文件：
 
@@ -34,7 +34,7 @@
 初版在真仓库上报「A 类 0、B 类 10」，而其中 B 类 10 条**全是误报**——`status: violated ? "violated" : "satisfied"`
 这种**三元写**我的检测器看不到。**一个不会报警的检测器，报「0」是没有意义的。**
 
-故新增 `tools/audit-wiring.selftest.mjs`，用已知答案的夹具（`tools/fixtures/wiring-fixture.ts`）标定。
+故新增 `tools/audit-wiring.selftest.ts`，用已知答案的夹具（`tools/fixtures/wiring-fixture.ts`）标定。
 标定过程**连续暴露了 4 个工具自身的缺陷**，每一个都会导致错误结论：
 
 | # | 工具缺陷 | 后果 | 修正 |
@@ -97,7 +97,7 @@
 - **A 类精度低**（本仓特性）；**B 类噪声多**（外部输入值无本仓生产者）。工具是**线索发现器，不是缺陷清单**。
 - 只做**单行 200 字符窗口**匹配：**跨行**构造的对象会漏判。
 - **无类型分析**：不区分「哪个对象」的字段，同名字段挂不同对象时会混判。
-- 未接入 CI（本仓无 CI）；靠手动 `node tools/audit-wiring.mjs`。
+- 未接入 CI（本仓无 CI）；靠手动 `node tools/audit-wiring.ts`。
 
 ## 自检
 

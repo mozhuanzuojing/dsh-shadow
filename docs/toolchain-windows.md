@@ -146,7 +146,7 @@ WSL 那边是「用更好的工具替换已有的」，Windows 这边是「**原
 | 压缩/解压 | `7z` | `7zip.7zip` | 26.03 | `tar` / `unzip`（Windows 无 `unzip`） |
 
 ---
-true### 2.11–2.21 分类补充（v1.15.14 扩源，ADR-0058）truetrue> 以下 57 项由 `tools/winget-verify-seed.mjs` **程序化核验**后写入 —— 对每个**精确包 ID** 调 `winget show`，true> 取权威版本与许可证；核验不过的一律不采纳（本次 57/57 通过）。true> **为什么不按名字自动找包**：实测该做法会产出假阳性 ——true> `xh` 会猜成 `Mozilla.Firefox.xh`（真实 `ducaale.xh`）、`delta` 猜成 `eToro.Delta`（真实 `dandavison.delta`）、true> `choose` 猜成 `AuthenticatorChooser`、`nix` 猜成 `LabChart`。所以**包 ID 必须由人裁决、机器只做核验与取版本**。true> 版本取自核验日（2026-09-11），会随时间变化；**ID 稳定**。
+true### 2.11–2.21 分类补充（v1.15.14 扩源，ADR-0058）truetrue> 以下 57 项由 `tools/winget-verify-seed.ts` **程序化核验**后写入 —— 对每个**精确包 ID** 调 `winget show`，true> 取权威版本与许可证；核验不过的一律不采纳（本次 57/57 通过）。true> **为什么不按名字自动找包**：实测该做法会产出假阳性 ——true> `xh` 会猜成 `Mozilla.Firefox.xh`（真实 `ducaale.xh`）、`delta` 猜成 `eToro.Delta`（真实 `dandavison.delta`）、true> `choose` 猜成 `AuthenticatorChooser`、`nix` 猜成 `LabChart`。所以**包 ID 必须由人裁决、机器只做核验与取版本**。true> 版本取自核验日（2026-09-11），会随时间变化；**ID 稳定**。
 ### 2.11 逆向与二进制分析
 
 | 用途 | 工具 | winget ID | 版本（权威核验） | 替代对象 |

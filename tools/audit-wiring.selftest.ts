@@ -1,4 +1,4 @@
-// dsh-shadow —— tools/audit-wiring.selftest.mjs：接线审计工具的**标定测试**。
+// dsh-shadow —— tools/audit-wiring.selftest.ts：接线审计工具的**标定测试**。
 //
 // 为什么必须有它：本工具在真仓库上曾报「0 findings」，而我**确证过**至少有 3 处不可达分支。
 // 一个不会报警的检测器，报「0」是**没有意义的** —— 必须先证明它抓得到已知缺陷，再用它下结论。
@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites } from "./audit-wiring.lib.mjs";
+import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites } from "./audit-wiring.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
@@ -79,7 +79,7 @@ console.log("✔ ⑤ 调用点计数正确：Called/Built 有调用点，NeverCa
 // ─────────────────────────────────────────────
 const CASES = [
   ["test/foo.test.ts", false], ["./test/foo.test.ts", false], ["tools/fixtures/x.ts", false],
-  ["core/lifecycle.ts", true], ["query/query.ts", true], ["tools/audit-wiring.mjs", true],
+  ["core/lifecycle.ts", true], ["query/query.ts", true], ["tools/audit-wiring.ts", true],
   ["node_modules/x/y.ts", false], ["dist/core/x.js", false], ["a/test/b.ts", false],
 ];
 for (const [p, want] of CASES) {

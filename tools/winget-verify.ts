@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// dsh-shadow —— tools/winget-verify.mjs：工具集台账的**权威源核验器**（v1.15.14，ADR-0058）
+// dsh-shadow —— tools/winget-verify.ts：工具集台账的**权威源核验器**（v1.15.14，ADR-0058）
 //
 // 为什么需要它：台账的 `winget` 包 ID 与版本是**人工登记**的，会随上游漂移；
 // 而「按名字猜包 ID」这条路已被实测证伪 ——
@@ -14,9 +14,9 @@
 //   - **更权威**：它查的是本机**实际配置的源**，而非缓存快照。
 //
 // 用法：
-//   node tools/winget-verify.mjs            # 核验台账全部带 winget 的条目
-//   node tools/winget-verify.mjs --json     # 机器可读输出
-//   node tools/winget-verify.mjs --id jqlang.jq   # 只核验一个
+//   node tools/winget-verify.ts            # 核验台账全部带 winget 的条目
+//   node tools/winget-verify.ts --json     # 机器可读输出
+//   node tools/winget-verify.ts --id jqlang.jq   # 只核验一个
 //
 // **诚实纪律**（沿用 ADR-0049/0055）：核验失败只说「未取到」，**不说「包不存在」**——
 //   可能只是网络不通、源未配置、或 winget 未安装。判定为「不存在」需要 `winget show` 明确报未找到。
@@ -24,11 +24,14 @@ import { execFile } from "node:child_process";
 
 const TIMEOUT_MS = 60000;
 
+/** `winget` 一次调用的结果。切到 TS 后**显式声明**：原 `.mjs` 靠隐式 any，字段写错编译器抓不到。 */
+interface WingetRun { ok: boolean; code: number | string; out: string; err: string }
+
 /** 起 winget，不抛异常。 */
-const runWinget = (args) =>
-  new Promise((resolve) => {
+const runWinget = (args: string[]): Promise<WingetRun> =>
+  new Promise<WingetRun>((resolve) => {
     execFile("winget", args, { timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
-      resolve({ ok: !err, code: err?.code ?? 0, out: String(stdout || ""), err: String(stderr || "") });
+      resolve({ ok: !err, code: (err as any)?.code ?? 0, out: String(stdout || ""), err: String(stderr || "") });
     });
   });
 
@@ -37,7 +40,7 @@ const runWinget = (args) =>
  * **locale 无关**锚点：包 ID 取首行方括号（ID 恒为 ASCII）；版本取首个「值是版本形状」的行。
  * 中文/英文界面标签不同（`版本:` / `Version:`），故**不按标签匹配**。
  */
-export const parseWingetShow = (out, expectedId) => {
+export const parseWingetShow = (out: unknown, expectedId?: string) => {
   const text = String(out || "");
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   // 包 ID：首行的 [bracket]
@@ -54,7 +57,7 @@ export const parseWingetShow = (out, expectedId) => {
     if (!v || /^https?:\/\//i.test(v)) continue;                  // 跳过 URL
     if (/^\d+(\.\d+)+([\w.\-+]*)$/.test(v)) { version = v; break; } // 1.8.2 / 0.12.12 / 1.38.0-FRP-...
   }
-  const field = (re) => {
+  const field = (re: RegExp) => {
     for (const line of lines) {
       const at = line.search(re);
       if (at >= 0) return line.slice(at).replace(re, "").trim();
@@ -65,7 +68,7 @@ export const parseWingetShow = (out, expectedId) => {
 };
 
 /** 核验一个包 ID。 */
-export const verifyOne = async (pkgId, { expectedVersion } = {}) => {
+export const verifyOne = async (pkgId: string, { expectedVersion }: { expectedVersion?: string | null } = {}) => {
   const r = await runWinget(["show", "--id", pkgId, "-e", "--disable-interactivity"]);
   if (!r.ok && !r.out) {
     return { pkgId, status: "unavailable", detail: `未取到（winget exit ${r.code}）：${(r.err || "").split("\n")[0].slice(0, 120)}` };

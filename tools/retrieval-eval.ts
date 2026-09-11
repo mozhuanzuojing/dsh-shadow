@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// dsh-shadow —— tools/retrieval-eval.mjs：检索策略评测（扇出 vs 路由）。ADR-0060。
+// dsh-shadow —— tools/retrieval-eval.ts：检索策略评测（扇出 vs 路由）。ADR-0060。
 //
 // 目的：把调研标注为「属组合推理、非论文结论」的那条——**无阈值检索器做全量扇出会放大噪声**——
 // 变成在**本系统真语料**上的测量。文献给的是同向的产业级证据（2603.02153 融合增益在重排后基本被抵消；

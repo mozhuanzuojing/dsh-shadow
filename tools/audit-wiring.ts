@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// dsh-shadow —— tools/audit-wiring.mjs：**接线审计** CLI（找「机制存在但没人调用」与「分支永不可达」）。
+// dsh-shadow —— tools/audit-wiring.ts：**接线审计** CLI（找「机制存在但没人调用」与「分支永不可达」）。
 //
 // 为什么需要它（本仓已实测到三处同类缺陷，都是「机制是对的、接线断了」，且**单元测试全绿**）：
 //   ① v1.15.13：`readQueries` 漏挂 `toolset` → 整块台账三个版本无入口
@@ -8,14 +8,14 @@
 //   ③ v1.15.18：`meta.status === "superseded"` 三条分支**无写入者**
 //      （唯一写入者是测试夹具）
 //
-// 用法：node tools/audit-wiring.mjs [仓库根]
+// 用法：node tools/audit-wiring.ts [仓库根]
 // 纯静态、无 LLM、无网络、不改任何文件。
 //
-// **本工具的结论必须经标定**：见 `tools/audit-wiring.selftest.mjs`。
+// **本工具的结论必须经标定**：见 `tools/audit-wiring.selftest.ts`。
 // 一个抓不到已知缺陷的检测器，报「0 findings」是没有意义的（本仓纪律：先证工具，再用工具）。
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites } from "./audit-wiring.lib.mjs";
+import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites } from "./audit-wiring.lib.ts";
 
 const ROOT = process.argv[2] || ".";
 const walk = (d, out = []) => {
@@ -83,4 +83,4 @@ console.log("  · B 类要确认「该值是否真无写入者」：可能来自
 console.log("    审批服务的返回值），此时分支可达，只是不由本仓生产。**不得凭静态分析定罪**。");
 console.log("  · 本工具只做**单行**窗口匹配，跨行的对象构造可能漏判 —— 命中项一律人工复核。");
 console.log("");
-console.log("**工具自身经标定**：node tools/audit-wiring.selftest.mjs");
+console.log("**工具自身经标定**：node tools/audit-wiring.selftest.ts");

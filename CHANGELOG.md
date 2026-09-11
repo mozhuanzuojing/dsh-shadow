@@ -3,6 +3,107 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.22] 脚本全量切 TS + 认知门可达性实测 + 吸收 OpenViking（含一处出处勘误）；台账 22 条
+
+用户 2026-09-11 两条指令：**「所有的 js 脚本 mjs 脚本必须全部切换到 ts」**、
+**「关注 openviking 并吸收」**。另附上一轮 T1 分诊的延续。**三条 ADR：0063 / 0064 / 0065。**
+
+### 一、脚本全量切到 TypeScript（ADR-0064）
+
+- 8 个 `.mjs` 经 `git mv` 改为 `.ts`：`tools/` 6 个（`audit-wiring` ×3、`retrieval-eval`、
+  `winget-verify`、`winget-verify-seed`）+ `test/replay-metrics` / `test/replay-real`。
+  **仓库内再无手写 `.js`/`.mjs`**（机械核对：排除 `node_modules` / `dist` 后为空）。
+- **零构建、零新依赖**：靠 Node ≥22.6 的 type-stripping，`node tools/x.ts` 直跑
+  （与既有测试套 `node test/*.test.ts` **同一套机制**）。**约束**：Node 的 ESM 要求**
+  **显式扩展名**，相对导入必须写 `./audit-wiring.lib.ts`（实测写 `./audit-wiring.lib` 报 `ERR_MODULE_NOT_FOUND`）。
+- `package.json` 5 条 script 改指 `.ts`（**script 名不变**）；新增 `tsconfig.tools.json` +
+  `npm run typecheck:tools` —— **工具面第一次有类型门**。
+- **类型门当场抓到一个真漏洞**：`tools/winget-verify.ts` 的 `runWinget` 返回 `Promise<unknown>`，
+  下游 `r.out` / `r.code` / `r.err` / `{ expectedVersion }` 全是隐式 `any`（**字段写错编译器不响**）。
+  迁移后报 6 处 `TS2339/TS18046`，已补显式接口 `interface WingetRun { ok; code; out; err }`。
+- **测试套有意不加类型门**：实测 `tsconfig.tests.json` 报 **10 个文件 79 处错误**，
+  逐条看过后决定不加 —— 错误集中在**故意喂畸形输入**的守卫测试（如把 `{ status: "supported" }`
+  这种缺 8 个必填字段的形状喂给守卫，断言它拒绝）。给它们加门唯一出路是满屏 `as any`，
+  会把测试从「证明守卫挡住脏数据」退化成「证明带 cast 的脏数据被挡住」，**削弱证据力**。
+- **副作用已核对**：工具变 `.ts` 后**开始扫到自己**，B 类线索 **81 → 85**。
+  新增 4 条**全部来自 `tools/audit-wiring.lib.ts` 自身的字符状态机**（`c === "\\"`、`c2 === "*"`
+  这类单字符局部别名比较）—— 正是 ADR-0062 已记录的噪声类型。**A 类 30 → 30 不变**。
+- 文档路径引用一并归一（16 个文件，含 ADR 历史条目与 `_research/` 探针）。
+
+### 二、认知门可达性 + 读路径可见性分歧（ADR-0063，行为零改动）
+
+用真 `.shadow` 语料（**6960 条**）把三条静态线索落成实测数字：
+
+| 读数 | 值 |
+|---|---|
+| `kind === "metadata"` | **4137 条（59.4%）**，entry **全部是 `"shadow"`** |
+| 其中**有实质内容**（动作/思维/用户话） | **94.4%** |
+| 主题召回路径可见（`query.ts:263-296`，**不做 kind 过滤**） | **6960（100%）** |
+| `shadow_query` 路径可见（`deriveShadowNodes` 过 gate） | **2283（32.8%）** |
+| **两条读路径可见性差** | **67.2%** |
+
+- **根因**：`deriveAtomKind` 把 `entry === "shadow"` 当「会话元数据」的代理，
+  而 `entry` 是**写侧兜底字面量**（`core/writer-materialize.ts:175`：`primaryComp?.(id) || "shadow"`）
+  —— 语义是「**没识别出组件**」，不是「这是会话记账」。
+- **同一条规则有三份实现**：`isCognitiveAtom`（按 kind）与 `isMetadataMemoryText`（按文本启发式）
+  **生产零调用点**，真正生效的是 `validateAtomProjection`（`lineage-validator.ts:18` ← `node.ts:48`）；
+  两份零调用点实现口径还互不相同（**4137 vs 110，窄 37 倍**）。
+- **`AtomKind` 声明 5 值、生产者只出 3 值**：`session` / `artifact` **全仓无生产者**
+  ⇒ `kind === "session"` 分支**永不可达**。
+- **行为改动为零**：只在源码注释标注实测事实、加**决策锁**测试 `test/atom-kind-gate.test.ts`（第 32 个测试）。
+  **不静默改召回面** —— 是否让 `metadata` 继续挡 67.2%，是产品语义决策，升为待办 **D5**。
+
+### 三、吸收 OpenViking（ADR-0065，含一处出处勘误）
+
+- **勘误**：`README.md:177` 曾把召回衰减标成「**OpenViking 式** hotness」——**标错了**。
+  它的官方 README + Context Layers + Retrieval 三份文档里，`decay`/`hotness`/`half-life`/
+  `reinforce`/`recency` **全部 0 命中**；它的三层是**静态分层 + 目录递归 + 重排**，不含时间衰减。
+  真实出处是**同一句里本来就引了**的 **MemoryBank**（Ebbinghaus 曲线，[arXiv:2305.10250](https://arxiv.org/abs/2305.10250)）。
+  ⇒ **出处标错会让后来者去找一个不存在的先例**；归因也必须有证据。
+- **真正可吸收的三条**（升为待办 **D6**，本轮不实现）：① L0/L1 是**目录级 sidecar**
+  （`.abstract.md` 默认 256 字符 / `.overview.md` 默认 4000 字符，**不为每个文件建**，
+  文件摘要聚合进所属目录的 L1）；② **L0 从 L1 正文确定性抽取**（H1 之后、首个 `##` 之前）⇒ 层间不漂移；
+  ③ sidecar 带 **`freshness`**（直接子项覆盖率 + `pending_child_changes`）⇒ 派生件**自报是否过期**。
+  三条都须先定「**新派生文件算 Projection 还是 source**」（ADR-0003），故不能顺手做。
+- **对 ADR-0060 的精化**：它的层级分数传播是 `alpha*embedding + (1-alpha)*parent`，
+  而 **`score_propagation_alpha` 默认 `1.0`** ⇒ **默认父分权重为 0**。
+  **即层级买的是「递归下钻扩大候选」，不是「分数平滑」。**
+- **独立佐证 ADR-0060 三条建议**：检索形状 = 意图分析 → **目录递归 + 优先级队列** → 重排
+  （`GLOBAL_SEARCH_TOPK = 10`、`MAX_CONVERGENCE_ROUNDS = 3`、`if final_score > threshold`）。
+- **不取代码**：主工程 **AGPLv3**（`crates/ov_cli` / `examples` 为 Apache 2.0）。只取概念。
+- **表述止于证据强度**：「无时间衰减」的证据是「**官方文档未见**」，不是「读过全部源码」。
+
+### 四、T1 分诊续（A 类 30 条里的新结论）
+
+- **新确认的误报**：`sembleCandidates`（生产有调用点 `core/index-engine.ts:10/45`）；
+  `assertResultNoAuthorityGrowth` 等 4 个 long-horizon 守卫（`long-horizon/engine/interaction.ts:6`
+  导入后放进 `resultGuards` 数组 `for (const g of resultGuards)` 调用 —— 工具数不出这种间接调用）；
+  `apply`（命中的是 `core/writer.ts:39` 的**注释**）。
+- **新一类线索**：`progressiveDisclosure` / `refineTree` / `renderRetrieved` 在生产里
+  **只有注释提到**（`core/knowledge-engine.ts:7-8` 的清单式注释），真调用点只有测试 ——
+  属「**注释造成的假调用点**」。
+- **拆出 T4**：9 个「**生产与测试引用皆为零**」的导出符号，其中 `readTemporalGraph` / `readGraph`
+  是**只写不读**（数据落盘无人读回）—— 这是**真线索**，需定性。
+
+### 验证
+
+| # | 检查项 | 方式 | 结果 |
+|---|---|---|---|
+| 1 | 仓库内无手写 `.js`/`.mjs` | `Get-ChildItem -Recurse -Include *.js,*.mjs`（排除 `node_modules`/`dist`） | ✅ **空** |
+| 2 | 无 `.mjs` 路径引用残留 | 全仓 `*.md`/`*.json`/`*.ts` grep `.mjs` | ✅ 仅剩 1 处（`winget-verify.ts:27` 的**迁移说明文字**） |
+| 3 | 生产类型检查 | `npx tsc --noEmit` + `npm run build` | ✅ exit 0 |
+| 4 | 工具类型检查 | `npm run typecheck:tools` | ✅ exit 0（**修前 6 处错误**，已修） |
+| 5 | 全套回归 | `test/**/*.test.ts` 逐个 `node` | ✅ **32/32**（新增 `atom-kind-gate`） |
+| 6 | 审计工具标定 | `node tools/audit-wiring.selftest.ts` | ✅ 8 组断言 + `ALL PASS ✅` |
+| 7 | 审计计数变化已解释 | `node tools/audit-wiring.ts .` | ✅ A **30**（不变）/ B **85**（+4，全来自工具自身字符比较） |
+| 8 | 核验器行为未变 | `node tools/winget-verify.ts --id jqlang.jq` | ✅ `status: "ok"`、`1.8.2`、`MIT License` |
+| 9 | 评测器行为未变 | `node tools/retrieval-eval.ts` | ✅ 复现同量级读数（A 单库有阈值 recall 0.358±0.033、离题噪声 0.000） |
+| 10 | 三方版本一致 | `package.json` / `README` 当前版本行 / `CHANGELOG` 首条 | ✅ 均 `1.15.22` |
+
+**未验证（诚实标注）**：`test/replay-*.ts` **不在任何类型门内**（在 `test/` 下，测试面有意不加门）
+⇒ 这两个脚本的 `.ts` 后缀**只带来语法检查，不带来类型检查**；type-stripping **不做类型检查**
+（`node x.ts` 跑过 ≠ 类型正确，必须另跑 `typecheck:tools`）。
+
 ## [v1.15.21] BACKLOG 分诊结案：`pinned` / `archived` 无入口 —— 升为 D4 决策项（19 条）
 
 用户 2026-09-11：**「待办记录好后，提交，结束」**。故本轮不新增功能，只把 `BACKLOG.md` 里
@@ -54,7 +155,7 @@
 
 - `npx tsc --noEmit` clean（exit 0）。
 - **全套回归 31 个测试文件全过**（`test/**/*.test.ts` 逐个 `node` 执行，31/31）。
-- 审计工具标定 `node tools/audit-wiring.selftest.mjs` → **8 组断言 + ALL PASS ✅**。
+- 审计工具标定 `node tools/audit-wiring.selftest.ts` → **8 组断言 + ALL PASS ✅**。
 - 本轮**只改文档**（`BACKLOG.md` / `CHANGELOG.md` / `README.md` / `package.json` 版本号），无 `src` 改动 ⇒ `dist` 不变。
 
 ## [v1.15.20] 新增 BACKLOG.md：待办与未决事项的唯一台账（18 条）
@@ -88,7 +189,7 @@
 - 待办里引用的 **8 处行号逐个核实通过**：`core/memory.ts:74`、`query/query.ts:401`、
   `core/writer-materialize.ts:88` 与 `:213`、`core/forget.ts:18`、`core/lifecycle.ts:28`、
   `retrieval/rank.ts:103`、`delegation/engine/delegated-execution.ts:6`。
-- T1/T2 的计数为 **2026-09-11 实跑** `node tools/audit-wiring.mjs .` 所得（**30 / 81**），
+- T1/T2 的计数为 **2026-09-11 实跑** `node tools/audit-wiring.ts .` 所得（**30 / 81**），
   **不写「约」**；并注明语料随仓库变化、重跑可能不同（避免以后有人拿旧数字当准）。
 
 ### 其他
@@ -115,7 +216,7 @@
 **机制是对的、执行函数是对的，断的是「谁调用它」或「谁写这个值」**（测试往往直接 import 执行函数，测执行不测接线）。
 故做一个**专门审计工具**：目的不是抓这四个（已修），而是**下一次能自动发现同类**。
 
-### 一、新增 `tools/audit-wiring.mjs`（+ `.lib.mjs` + `.selftest.mjs` + fixtures）
+### 一、新增 `tools/audit-wiring.ts`（+ `.lib.ts` + `.selftest.ts` + fixtures）
 
 两类判据，纯静态、无 LLM、无网络、不改文件：
 
@@ -127,7 +228,7 @@
 初版在真仓库报「A 类 0、B 类 10」，**而 B 类 10 条全是误报** —— `status: violated ? "violated" : "satisfied"`
 这种**三元写**检测器看不到。**一个不会报警的检测器，报「0」是没有意义的。**
 
-故加 `tools/audit-wiring.selftest.mjs`，用已知答案夹具标定。标定**连续暴露 4 个工具自身缺陷**，每个都会导致错误结论：
+故加 `tools/audit-wiring.selftest.ts`，用已知答案夹具标定。标定**连续暴露 4 个工具自身缺陷**，每个都会导致错误结论：
 
 | # | 工具缺陷 | 后果 | 修正 |
 |---|---|---|---|
@@ -317,7 +418,7 @@ core/index-engine.ts:47 const provider = config?.indexEngine?.provider || "fs";
 ```
 工厂按配置路由到**恰好一个** provider。⇒ 用户的设想**不是「加能力」，而是对现有设计的退步**。
 
-### 二、真语料实测（新增 `tools/retrieval-eval.mjs`）
+### 二、真语料实测（新增 `tools/retrieval-eval.ts`）
 
 把调研标注为「属组合推理、**非论文结论**」的那条（无阈值检索器 + 扇出）变成**测量**：
 语料 = 真 `.shadow` 1500 条；检索器**按 ADR-0054 实测性质建模**（Semble 无阈值、无负信号）；同候选预算；3 个种子报极差。
@@ -352,7 +453,7 @@ core/index-engine.ts:47 const provider = config?.indexEngine?.provider || "fs";
 
 ### 验证
 
-- `tools/retrieval-eval.mjs` 可复现（确定性 PRNG、多种子、同预算）；`npm run eval:retrieval` 已加。
+- `tools/retrieval-eval.ts` 可复现（确定性 PRNG、多种子、同预算）；`npm run eval:retrieval` 已加。
 - 实验过程中**修掉两处自己的方法学缺陷并记入代码注释**：① off-topic 查询最初用两条真实文档的词拼接 → 「正确答案为空」不成立；② 收紧「2-gram 全局频率 ≤1」→ **一条都构造不出**（常用 2-gram 遍地都是），已回退并记录。
 - `npx tsc` clean；全量回归 30 个测试文件全过（本次为工具 + 文档，未改运行时行为）。
 
@@ -466,7 +567,7 @@ CDN 索引解出后按 moniker/命令/名称/ID 后缀自动解析，**立刻产
 | 分类 | 13 | **17**（新增 容器与编排 / 安全与供应链 / 文档与转换 / 媒体处理） |
 | 带许可证 | 0 | **57** |
 
-新增 `tools/winget-verify.mjs`（**locale 无关**解析：不按「版本:」/「Version:」标签匹配，改用「值像版本形状」+ 首行 `[ID]` 锚点）+ `tools/winget-verify-seed.mjs`。**57/57 核验通过**。
+新增 `tools/winget-verify.ts`（**locale 无关**解析：不按「版本:」/「Version:」标签匹配，改用「值像版本形状」+ 首行 `[ID]` 锚点）+ `tools/winget-verify-seed.ts`。**57/57 核验通过**。
 
 ### 四、拐点口径澄清（避免误用证据）
 

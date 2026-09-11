@@ -55,7 +55,7 @@ if (smProbe.available) {
 //    注意：没有任何一种结果里出现 `allowed-once`，所以安装器永远不会被执行 —— 测试不改变机器。
 // ─────────────────────────────────────────────
 const savedCli = process.env.DSH_SHADOW_ZG_CLI;
-process.env.DSH_SHADOW_ZG_CLI = join(dirname(process.execPath), "__dsh-nonexistent-cli__.mjs");
+process.env.DSH_SHADOW_ZG_CLI = join(dirname(process.execPath), "__dsh-nonexistent-cli__.ts");
 
 const zgMissing = await probeCapability("zg");
 assert.equal(zgMissing.available, false, "打偏后 zg 应探测为不可用（这样才走得到审批门）");

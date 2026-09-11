@@ -6,7 +6,7 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-11（`v1.15.21`）—— 现存 **19 条**（B 2 / T 3（其中 T3 已结案） / D 4 / V 6 / G 4）；T1 / T2 仍未分诊。
+> 最后整理：2026-09-11（`v1.15.22`）—— 现存 **22 条**（B 2 / T 4（T3 已结案）/ D 6 / V 6 / G 4）；T1 / T2 / T4 仍未完成。
 
 ---
 
@@ -33,7 +33,7 @@
 - **关键实测**（真 `.shadow` 语料 1500 条、按 ADR-0054 实测性质建模的检索器、同候选预算、3 种子）：
   - 离题噪声：有阈值单库 **0.000** vs 无阈值 **1.000**（扇出只是把噪声**乘以库数**）；
   - 扇出即便含互补来源**也不升召回**（0.347 vs 0.358，落在 ±0.053 种子极差内）；
-  - 复现命令：`npm run eval:retrieval`（`tools/retrieval-eval.mjs`）。
+  - 复现命令：`npm run eval:retrieval`（`tools/retrieval-eval.ts`）。
 - **另一条事实**：现有 `indexEngine.provider` 是**单值**，工厂只路由到**一个**来源
   ⇒ 全量扇出**不是加能力，是对现有设计的退步**。
 - **三个选项**：① 按证据改（推荐：单索引 + 层级表示 + 路由）② 先装 semble 用同一工具复测再定
@@ -47,26 +47,44 @@
 
 > 背景：`v1.15.13`–`v1.15.18` 连续挖出**四类同源缺陷**，共同特征是「**机制是对的，
 > 断的是谁调用它 / 谁写这个值**」，而**单元测试全绿**。故做了审计工具
-> `tools/audit-wiring.mjs`（A 类「导出但生产无调用点」、B 类「只被读、无写入点的判断值」）。
+> `tools/audit-wiring.ts`（A 类「导出但生产无调用点」、B 类「只被读、无写入点的判断值」）。
 > **工具已标定**（`npm run audit:wiring:selftest`，8 组断言全过），但其输出是**线索不是结论**，
 > 必须逐条人工分诊 —— 这部分**只做了一小部分**。
 
 ### T1. 审计 A 类线索未逐条分诊（30 条）
 
 - **依据**：`adr/0062-wiring-audit.md`「未验证」第 1 条；`npm run audit:wiring` 输出 A 段。
-  **计数为 2026-09-11 实跑所得**（`node tools/audit-wiring.mjs .`）；语料随仓库变化，重跑可能不同。
-- **已核实的两类处置**：
-  - **误报**：本仓有意导出大量**面向测试的包装 API**。典型 `delegation/guard/*` 的 `assert*`
-    （返回 `{ok, reason}`）只被测试调用，但其包裹的**判定函数**
-    （`contextHasNoExpansionField` / `resultNoPermissionUpgrade` …）在生产**确有**被
-    `delegation/engine/delegated-execution.ts:6` 导入使用 ⇒ **不是断线**。
-  - **真发现**：`ChangeSet`（见 D1）。
+  **计数为 2026-09-11 实跑所得**（`node tools/audit-wiring.ts .`，生产源码 **196** 个）；
+  语料随仓库变化，重跑可能不同。**注意**：`v1.15.22` 把 `tools/*.mjs` 切到 `.ts` 后，
+  工具开始扫到自己，但 **A 类计数不变（30）**。
+- **本轮（v1.15.22）新增的分诊结果**（用 `_research/triage-a.ts` 逐条查生产调用点）：
+  - **`progressiveDisclosure` / `refineTree`（`core/knowledge-cost.ts`）、`renderRetrieved`（`core/knowledge-retrieval.ts`）**
+    —— 生产里**只有注释提到**它们（`core/knowledge-engine.ts:7-8` 的清单式注释），
+    唯一真调用点是测试 ⇒ 属「**注释造成的假调用点**」，实际是**仅测试消费**（误报，但值得记）。
+  - **`sembleCandidates`** —— **有生产调用点**（`core/index-engine.ts:10/45`）⇒ 误报。
+  - **`apply`（`index.ts`）** —— 命中的是 `core/writer.ts:39` 的**注释**「apply 清理」⇒ 误报。
+  - **`assertResultNoAuthorityGrowth` / `assertResultNoSelfConfidence` / `assertResultNoInferredObjective`
+    / `assertResultNoIdentityChain`** —— **有生产调用点**：`long-horizon/engine/interaction.ts:6` 导入后
+    放进 `resultGuards` 数组并在 `buildContinuityEvent` / `buildInteractionAdaptationLink` 里
+    `for (const g of resultGuards)` 逐个调用 ⇒ **误报**（与 `delegation/guard/*` 同类：
+    经数组间接调用，工具数不出 `Name(` 形态）。
+  - **`hasNoUpgradeApi` / `isCognitiveAtom` / `isMetadataMemoryText` / `renderIntent` /
+    `isExchangeable` / `renderIdentityModel` / `relationForProposal` / `readTemporalGraph` / `readGraph`**
+    —— **生产与测试引用皆为零**（全仓 grep 各只命中定义行本身，`isExchangeable` 仅多一个测试）。
+    这是**新一类线索**：既非「忘了接线」也非「测试面」，而是**导出了但谁都没用的公开面**。
+    ⇒ **升为 T4**（见下）。
+- **仍待处置**：`ChangeSet`（见 D1）。
 - **为什么没做**：逐条核实成本高，且 A 类**精度本身低**（工具无类型分析）。
-- **完成判据**：每条落「误报（给出生产使用点）/ 真断线（给出处置）」二选一，结果回写 `adr/0062`。
+- **完成判据**：每条落「误报（给出生产使用点）/ 真断线（给出处置）/ 零引用（进 T4）」三选一，
+  结果回写 `adr/0062`。
 
-### T2. 审计 B 类线索未逐条分诊（81 条）
+### T2. 审计 B 类线索未逐条分诊（**85 条**）
 
-- **依据**：同 T1；`npm run audit:wiring` 输出 B 段（**计数同为 2026-09-11 实跑所得**）。
+- **依据**：同 T1；`npm run audit:wiring` 输出 B 段（**计数为 2026-09-11 实跑所得**）。
+  **`v1.15.22` 起为 85 条**（原 81）：`tools/*.mjs` 切 `.ts` 后工具开始扫自己，
+  新增的 4 条**全部来自 `tools/audit-wiring.lib.ts` 自身的字符状态机**
+  （`c === "\\"`、`c2 === "*"` 这类**单字符局部别名比较**）—— 正是下面「短局部变量别名」已记录的噪声类型。
+  ⇒ **计数变化有解释、已核对，不是新缺陷**（见 ADR-0064）。
 - **已知的主要噪声来源**（不必再逐条看）：
   - `typeof x === "object" | "string" | "number"` 形态（`agent=object`、`nested=string`、`v=object`…）；
   - `mode=*`（mode 由**调用方/模型**传入，属外部输入，分支可达）；
@@ -113,6 +131,33 @@
 
 - 第 8 轮审计输出：`status=archived 读于 core/forget.ts:18, core/lifecycle.ts:28`；
   全仓 `"archived"` 只出现在**读侧**与 `retrieval/rank.ts:103` 的**权重表**，生产无写入点。
+
+### T4. A 类里 9 个「生产与测试引用皆为零」的导出符号（本轮从 T1 拆出）
+
+- **依据**：本轮 A 类逐条核实（`_research/triage-a.ts` → `triage-a-out.json`）。
+- **清单**（全部只命中定义行；`isExchangeable` 另有 1 处测试引用）：
+
+  | 符号 | 文件 | 所在文件行数 |
+  |---|---|---|
+  | `hasNoUpgradeApi` | `agency/guards.ts:22` | 56（整文件） |
+  | `isCognitiveAtom` | `core/episode.ts:97` | — |
+  | `isMetadataMemoryText` | `core/episode.ts:100` | — |
+  | `renderIntent` | `core/intent.ts:54` | 61（同文件只有 `intentOf` 在用） |
+  | `isExchangeable` | `federation/contract.ts:23` | 31（整文件） |
+  | `renderIdentityModel` | `identity/timeline.ts:64` | 73（整文件） |
+  | `relationForProposal` | `temporal/edge.ts:30` | 30（整文件） |
+  | `readTemporalGraph` | `temporal/persistence.ts:16` | 32（**只写不读**） |
+  | `readGraph` | `world/persistence/persist.ts:13` | 29（**只写不读**） |
+
+- **两个子类（性质不同，须分开处置）**：
+  - **(a) 成对的读/写不对称**：`readTemporalGraph` / `writeTemporalGraph`、
+    `readGraph` / `writeGraph` —— **只写不读**。这是**真线索**：数据落盘但无人读回，
+    要么是「读回来做校验」忘了接，要么是「只做审计留痕、本就不读」。**需定性**。
+  - **(b) 无关口的认知门 / 渲染器**：`isCognitiveAtom` / `isMetadataMemoryText` 已由 **D5** 覆盖；
+    `renderIntent` / `renderIdentityModel` 是「算了但没渲染出去」。
+- **为什么没做**：需要**逐个追作者意图**（前瞻 / 遗漏 / 有意公开面）；本轮只交付了
+  「生产与测试引用皆为零」这一定量事实，**未逐个定性**。
+- **完成判据**：9 个各落「接线 / 删除 / 保留并注明理由」；其中 (a) 两条优先（可能涉及「写了不读」）。
 
 ---
 
@@ -173,6 +218,49 @@
 - **完成判据**：选定其一并落地；若选 ③，需同步改 `README.md` 三处（`:35` / `:177` / `:178`）+ `MEMORY.md:90`，
   并在 `adr/0062` 记「T3 已分诊并处置」；若选 ①，需先起 ADR 论证「外部权威状态落在哪一层」。
 
+### D5. `metadata` 认知门该不该继续挡住 **67.2%** 的库？
+
+- **依据**：`adr/0063-cognitive-gate-reachability.md`（含真语料实测表）。
+- **现状（实测，非推断）**：`deriveAtomKind` 把 `entry === "shadow"` 当「会话元数据」的代理，
+  而 `entry` 的来源是写侧兜底字面量（`core/writer-materialize.ts:175`）——语义是「**没识别出组件**」。
+  真语料 6960 条：判 `metadata` 的 **4137 条（59.4%）**，其中 **94.4% 有实质内容**；
+  投影路径据此只产出 2283 个节点 ⇒ **主题召回可见 100%，`shadow_query` 只可见 32.8%**。
+- **三条路**：
+
+  | 选项 | 做什么 | 代价 / 风险 |
+  |---|---|---|
+  | **① 换信号** | 不再用 `entry === "shadow"`，改由**内容信号**判会话元数据（如「无动作 + 无材料 + 无决策 + 无目标」） | 需先定**新信号**并证明它在真语料上的判准（可复用本轮三个探针）；会**扩大召回面**，需评估噪声 |
+  | **② 保留但收紧** | 承认 `entry === "shadow"` 是弱信号，**只有同时满足其它条件**才判 metadata | 改动最小；但「多弱条件叠加」仍需用真语料标定，否则是拍脑袋 |
+  | **③ 维持现状 + 记清代价** | 不改行为，只在文档与召回输出里**显式说明**「投影路径只覆盖 32.8%」 | 零风险；但两个读路径可见性差 67.2% 这一事实会长期存在 |
+
+- **建议倾向**：**先做 ① 的信号实验（用现有探针量判准），再决定 ①/②**；**不建议长期停在 ③**
+  —— 同一份语料两条读路径可见性差 3 倍，会让「召回看得见、shadow_query 看不见」变成使用者踩不完的坑。
+  **但这涉及召回语义，决策权在用户**（本仓纪律：不静默改已冻结行为）。
+- **连带**：`isCognitiveAtom` 与 `isMetadataMemoryText` **生产零调用点**且口径与生效实现不一致
+  （实测 4137 vs 110，窄 37 倍）。选定 ①/② 后须**同时决定这两份实现**的去留（删 / 接线 / 保留标注）。
+- **完成判据**：选定其一并落地；若选 ①/②，需附**真语料前后对照**（调用同一组探针），
+  并同步改 `test/atom-kind-gate.test.ts`（该测试是**决策锁**，D5 落地后必须一起改，否则假红）。
+- **另一条附带事实（本轮分诊得出，不需决策）**：`AtomKind` 声明 5 值，
+  而唯一生产者只能产出 3 值 —— `session` 与 `artifact` **全仓无生产者**，
+  故 `core/lineage-validator.ts:18` 的 `kind === "session"` 分支**永不可达**。已在源码注释标注。
+
+### D6. 是否吸收 OpenViking 的三条做法（ADR-0065）
+
+- **依据**：`adr/0065-absorbing-openviking.md`（一手材料：官方 README + Context Layers + Retrieval 文档）。
+- **三条待裁决项**：
+  1. **目录级（`entry` 级 / 日期级）abstract + overview sidecar** —— 今天判断相关**必须先读记忆文件**，
+     只能靠全局 `_index.md`；OpenViking 是**每层目录都带 L0/L1**。
+  2. **上层由下层确定性派生**（它的 L0 是从 L1 正文里抽的）—— 消除层间漂移；本仓三层各自从原文派生。
+  3. **派生件自报覆盖率与待处理变更**（它的 sidecar `freshness`：子项覆盖数 + `pending_child_changes`）
+     —— 比单一源指纹更能回答「这份摘要是基于哪几个子项得出的」。
+- **为什么现在不能顺手做**：这三条都要**新增一类派生文件**，必须先定它在 ADR-0003 下算
+  **Projection**（可重建）还是 **source**（事实源）—— 定错就会造出「没有生产者」的死类型，
+  或把 source 当投影（ADR-0051 走过一次这个弯路）。
+- **顺带记一条对 ADR-0060 的精化（不需决策）**：OpenViking 的层级分数传播公式是
+  `alpha * embedding + (1-alpha) * parent`，而 **`score_propagation_alpha` 默认 `1.0`**
+  ⇒ **默认父分权重为 0**。即：**层级在它那里买的是「递归下钻扩大候选」，不是「分数平滑」**。
+- **完成判据**：三选三（各做 / 各不做）；若做，先起 ADR 定「新派生文件的归类」。
+
 ---
 
 ## 四、未验证（需真机条件或需装依赖，代码侧已完成）
@@ -220,7 +308,7 @@
 ### V6. 审计工具未接入任何自动门禁
 
 - **依据**：`adr/0062`「负 / 已知边界」。
-- **现状**：本仓无 CI；`tools/audit-wiring.mjs` 与 `tools/audit-wiring.selftest.mjs` 靠手动跑
+- **现状**：本仓无 CI；`tools/audit-wiring.ts` 与 `tools/audit-wiring.selftest.ts` 靠手动跑
   （`npm run audit:wiring` / `audit:wiring:selftest`）。**标定测试本身是绿的**，但没有自动执行。
 - **完成判据**：确定一处会执行它的地方（提交前脚本 / hooks / CI），否则工具会随时间失效。
 

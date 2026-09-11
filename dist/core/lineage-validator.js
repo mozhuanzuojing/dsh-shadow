@@ -1,4 +1,9 @@
 export const validateAtomProjection = (atom) => {
+    // ⚠ `kind === "session"` 这一支**永不可达**（ADR-0063 实测）：`AtomKind` 声明了 5 个值
+    //   （`core/lineage.ts:14`），而 `deriveAtomKind`（唯一生产者）只能产出 `experience|task|metadata`
+    //   —— `session` 与 `artifact` **全仓无生产者**（探针复核：`node _research/measure-path-visibility.ts`）。
+    //   保留该分支无害（要么是前瞻、要么是遗漏），但不得据它推论「session 原子被挡住了」。
+    //   另：`kind === "metadata"` 这一支**是可达的且当前拦掉 67.2% 的库** —— 见 ADR-0063 与待办 D5。
     if (atom.type === "memory" && (atom.kind === "metadata" || atom.kind === "session")) {
         return { allowed: false, reason: `memory kind=${atom.kind} 不进入默认认知查询（Atom 保留）` };
     }

@@ -35,7 +35,7 @@ ADR-0055 曾**否决**「台账用外部数据源（npm/winget 实时查询）�
 | Repology API | ✅ 123 个 repo，**确认 `has_winget=False`** —— **给不了 winget ID** | 仅 Linux/WSL 侧 |
 | **`api.winget.run`** | ❌ **数据冻结在 2023-03-16**（fzf/ripgrep/neovim 的 `UpdatedAt` 全是 `2023-03-16T14:34:1x`） | **已废，不可用** |
 
-⇒ **修正 ADR-0055 的否决**：否决的是「**让插件在运行时依赖网络查询**」——那条仍然成立，**本轮不放宽**。新增的是**构建期工具**：`tools/winget-verify*.mjs` 在**开发时**核验台账，产物是静态 TS 数据，**插件运行时零新增依赖**。
+⇒ **修正 ADR-0055 的否决**：否决的是「**让插件在运行时依赖网络查询**」——那条仍然成立，**本轮不放宽**。新增的是**构建期工具**：`tools/winget-verify*.ts` 在**开发时**核验台账，产物是静态 TS 数据，**插件运行时零新增依赖**。
 
 ### 2. Q2：**按名字猜包 ID 已被实测证伪** —— 这是本 ADR 最重要的一条
 
@@ -61,7 +61,7 @@ CDN 索引解出后，按 moniker / 命令名 / 名称 / 包 ID 后缀 自动解
 
 ### 3. 核验纪律：**核验不过的一律不写入**
 
-`tools/winget-verify.mjs` + `winget-verify-seed.mjs`：
+`tools/winget-verify.ts` + `winget-verify-seed.ts`：
 
 - 对每个**精确包 ID** 调 `winget show`，解析 **locale 无关**（不按「版本:」/「Version:」标签匹配，改用「值像版本形状」+ 首行 `[ID]` 锚点）；
 - **诚实区分版本出处**：`verSrc="实测"`（本机跑 `--version` 得到）vs `"权威核验"`（来自 `winget show` 目录，**不代表本机已装**）。新增条目一律标后者。
@@ -113,7 +113,7 @@ CDN 索引解出后，按 moniker / 命令名 / 名称 / 包 ID 后缀 自动解
 
 ### 负 / 已知边界
 - **扩源靠人工裁决 publisher**：57 条是逐个判断的，新条目仍需人给包 ID。**这不是自动化，是核验自动化**。
-- 版本取自核验日，**会随时间漂移**；`winget-verify.mjs` 可重跑，但**没有 CI 自动跑**（会依赖网络与本机 winget）。
+- 版本取自核验日，**会随时间漂移**；`winget-verify.ts` 可重跑，但**没有 CI 自动跑**（会依赖网络与本机 winget）。
 - `probe` 旗标正确性仍未逐项实测（沿用 ADR-0055 的诚实标注）；新条目 `--version` 多数未在本机真跑（本机未装）。
 - 台账变大后，`read_shadow({mode:"toolset", survey:"all"})` 会起更多子进程（105 项），**默认仍只探 2 个 provider**，不受影响。
 
@@ -121,7 +121,7 @@ CDN 索引解出后，按 moniker / 命令名 / 名称 / 包 ID 后缀 自动解
 
 - [x] 与 ADR-0055 一致：仍**不代装**、**宁缺勿编**、双向棘轮保护未变；仅把「数据源」从「否决」修正为「构建期可用、运行期仍不依赖」。
 - [x] 与 ADR-0057 一致：预检是让工具面保持小的接口；本 ADR 明令禁止把条目暴露成工具。
-- [x] 与 ADR-0049 一致：核验失败只说「未取到」，**不说「包不存在」**（`winget-verify.mjs` 区分 `unavailable` 与 `not-found`）。
+- [x] 与 ADR-0049 一致：核验失败只说「未取到」，**不说「包不存在」**（`winget-verify.ts` 区分 `unavailable` 与 `not-found`）。
 - [x] 实测证据齐备：CDN 字节数/时间戳、14,816 包数、api.winget.run 冻结时间戳、Repology `has_winget=False`、9 例假阳性、57/57 核验、棘轮 101 个 ID 双向通过。
 - [x] 全套回归 29 个测试文件通过。
 - [ ] **未验证**：新条目 `probe` 旗标在真机（多数工具本机未装，只会显示「未检出」）；`winget show` 解析在其他 winget 本地化（非中/英）下的表现。

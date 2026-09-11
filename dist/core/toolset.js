@@ -38,7 +38,7 @@ const tool = (id, bin, label, category, pkg, ver, flag, provides, replaces, note
  * 版本号出处（v1.15.14）。**必须诚实区分**，否则「实测」会说谎：
  *   - `"实测"`（默认）：在本机 `--version` 跑出来的 —— 2026-09-10 那批。
  *   - `"权威核验"`：取自 `winget show` 的权威目录输出，**不代表本机已装该版本**。
- * 由 `tools/winget-verify-seed.mjs` 写入的那批用后者。
+ * 由 `tools/winget-verify-seed.ts` 写入的那批用后者。
  */
 verSrc = "实测") => {
     const providesText = `${provides}${replaces && replaces !== "—" ? `（替代：${replaces}）` : ""}`;
@@ -132,7 +132,7 @@ const REFERENCE_TOOLS = [
     // ── 逆向与二进制分析 ──
     tool("jadx", "jadx", "jadx", "逆向与二进制分析", "Skylot.jadx", "1.5.6", "--version", "Dex/APK → Java 反编译", "—", "**需 Java 11+ 64 位**；作者警告无法 100% 反编译，报错属预期。GUI 为 jadx-gui"),
     // ═══════════════════════════════════════════════════════════════════════════
-    // v1.15.14 扩源（ADR-0058）：以下条目由 tools/winget-verify-seed.mjs **程序化核验**后写入。
+    // v1.15.14 扩源（ADR-0058）：以下条目由 tools/winget-verify-seed.ts **程序化核验**后写入。
     // 选入判据：publisher 能证明是上游本身或公认官方再打包；**按名字猜包 ID 已被证伪**
     //   （xh→Mozilla.Firefox.xh、delta→eToro.Delta、choose→AuthenticatorChooser、nix→LabChart…）。
     // 版本与许可证取自 `winget show` 权威输出（核验日 2026-09-11）；版本会随时间变化，ID 稳定。

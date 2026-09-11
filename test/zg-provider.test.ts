@@ -54,7 +54,7 @@ console.log("✔ ① parseZgMatches：解析 zg 真实两行格式（路径切�
 //    这条锁住 v1.15.7 修的根因：execFile("zg") 在 Windows 必 ENOENT、execFile("zg.cmd") 必 EINVAL。
 // ─────────────────────────────────────────────
 const dir = mkdtempSync(join(tmpdir(), "dsh-zg-"));
-const fakeCli = join(dir, "fake-cli.mjs");
+const fakeCli = join(dir, "fake-cli.ts");
 writeFileSync(fakeCli, 'process.stdout.write("core/fake.ts\\n  12:hit line\\n")\n');
 process.env.DSH_SHADOW_ZG_CLI = fakeCli;
 resetZgInvocationCache();
@@ -71,7 +71,7 @@ console.log("✔ ② resolveZgInvocation 覆盖 → node 起 CLI JS；端到端 
 // ⑤ 路径语义：ref.path 有值时，**别的文件**命中不得冒充该路径 verified
 //    （与 fsEvidenceProvider「只答这条路径还在不在」同义；否则会把 stale 证据判成 fresh）
 // ─────────────────────────────────────────────
-const otherCli = join(dir, "other-cli.mjs");
+const otherCli = join(dir, "other-cli.ts");
 writeFileSync(otherCli, 'process.stdout.write("other/file.ts\\n  5:hit line\\n")\n');
 process.env.DSH_SHADOW_ZG_CLI = otherCli;
 resetZgInvocationCache();
@@ -83,7 +83,7 @@ assert.equal(rWs.status, "verified", "path 为空（index-engine 工作区级发
 assert.ok(rWs.matches.length > 0, "工作区级发现应有命中");
 
 // 绝对路径 vs zg 相对路径：应按后缀判同一条
-const absCli = join(dir, "abs-cli.mjs");
+const absCli = join(dir, "abs-cli.ts");
 writeFileSync(absCli, 'process.stdout.write("core/fake.ts\\n  7:hit line\\n")\n');
 process.env.DSH_SHADOW_ZG_CLI = absCli;
 resetZgInvocationCache();
@@ -95,11 +95,11 @@ console.log("✔ ⑤ 路径语义：别的文件命中不冒充；path 空保持
 // ─────────────────────────────────────────────
 // ③ 配置写错必须**可见地失败**，不得静默回退到另一个 zg（ADR-0049）
 // ─────────────────────────────────────────────
-process.env.DSH_SHADOW_ZG_CLI = join(dir, "definitely-missing.mjs");
+process.env.DSH_SHADOW_ZG_CLI = join(dir, "definitely-missing.ts");
 resetZgInvocationCache();
 const bad = resolveZgInvocation();
 assert.equal(bad.cmd, process.execPath, "错误的覆盖仍走 node（不静默回退到裸 zg）");
-assert.equal(bad.prefix[0], join(dir, "definitely-missing.mjs"), "保留用户给错的路径，让失败可见");
+assert.equal(bad.prefix[0], join(dir, "definitely-missing.ts"), "保留用户给错的路径，让失败可见");
 const badRes = await zgVerify({ path: "core/fake.ts", query: "hit" }, { ws: dir });
 assert.notEqual(badRes.status, "verified", "指向不存在的 CLI 时**不得**报 verified");
 assert.ok(badRes.provenance.reason, `失败原因必须可见（ADR-0049），实际 provenance=${JSON.stringify(badRes.provenance)}`);

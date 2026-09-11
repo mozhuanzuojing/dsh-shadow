@@ -16,7 +16,7 @@ export interface ShadowProjectionStore {
   /**
    * ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。
    *
-   * ⚠ **生产中未接线**（v1.15.19 用 `tools/audit-wiring.mjs` 审计确认，见 ADR-0062）：
+   * ⚠ **生产中未接线**（v1.15.19 用 `tools/audit-wiring.ts` 审计确认，见 ADR-0062）：
    *   本方法的**唯一调用点是测试**（`test/projection-store.test.ts`）。生产走的是
    *   `invalidateProjection` 的**粗粒度清空**（`invalidate()`）——见 `writer-materialize.ts` 的
    *   `ensureIndex`：它在 `rebuildIndex` 后清整个缓存，而 `rebuildIndex` 本身是**全量扫描**
