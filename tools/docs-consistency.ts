@@ -19,6 +19,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// ── 公共：读文件并**归一化行尾** ─────────────────────────────────────────────
+/**
+ * 本仓的工作副本是 **CRLF**（每次 `git` 操作都会打印
+ * `warning: LF will be replaced by CRLF`）。**这不是细节** —— v1.15.68 的检查③
+ * 就在这里栽过一次：分隔行是 `|----|\r`，而 `^\|[\s:|-]+\|$` 的 `$`（无 `m` 标志）
+ * 只匹配「串尾或串尾的 `\n` 之前」，**不匹配 `\r` 之前** ⇒ 分隔行被当成数据行，
+ * 于是「声明 18 行 / 实际 19 行」的**假警报**。
+ * 当时我的第一反应是去改 README 的数字 —— 幸好先手工数了一遍（真值就是 18），
+ * 才没把**对的文档改错**。⇒ 规则：**解析前先归一化行尾**；报「不一致」之前先怀疑测量。
+ */
+const readText = (root: string, rel: string): string => readFileSync(join(root, rel), "utf8").replace(/\r\n?/g, "\n");
+const readLines = (root: string, rel: string): string[] => readText(root, rel).split("\n");
+
 // ── 检查 1：三方版本一致 ─────────────────────────────────────────────────────
 /**
  * 判据（三条必须**逐字**相等）：
@@ -35,7 +48,7 @@ import { join } from "node:path";
  * 「过期行号只按文档分层不够、必须精确到行区间」是同一个坑。
  */
 export const checkVersionConsistency = (root: string): { ok: boolean; code: number; lines: string[] } => {
-  const read = (rel: string) => readFileSync(join(root, rel), "utf8");
+  const read = (rel: string) => readText(root, rel);
   const norm = (s: string) => s.replace(/^v/, "").trim();
 
   let pkgVersion: string;
@@ -100,7 +113,7 @@ export const checkVersionConsistency = (root: string): { ok: boolean; code: numb
  * **别手写**：文档只说「全部确定性检查，数量以 `npm run verify` 输出为准」。
  */
 export const checkVerifyChainDocumented = (root: string): { ok: boolean; code: number; lines: string[] } => {
-  const read = (rel: string) => readFileSync(join(root, rel), "utf8");
+  const read = (rel: string) => readText(root, rel);
 
   /** 从 `text` 里取出「必须列全 verify 步骤」的那一块；取不到则返回 null（⇒ 结构缺失）。 */
   const gateBlock = (rel: string, text: string): string | null => {
@@ -136,6 +149,8 @@ export const checkVerifyChainDocumented = (root: string): { ok: boolean; code: n
   ];
   const missing: string[] = [];
   const noAnchor: string[] = [];
+  /** 反向：文档里点名了、但 `verify` 里**没有**这一步。 */
+  const ghost: string[] = [];
   for (const d of docs) {
     const text = read(d.rel);
     const block = gateBlock(d.rel, text);
@@ -145,6 +160,19 @@ export const checkVerifyChainDocumented = (root: string): { ok: boolean; code: n
     // 混成同一个退出码会让「有人把标题改名了」看起来像「漏了一步」，修法完全不同。
     if (block === null) { noAnchor.push(`${d.label} —— **找不到这一块**（锚点被改名/删掉了？）`); continue; }
     for (const step of required) if (!block.includes(step)) missing.push(`${d.label} 未点名 \`${step}\``);
+    // ── **反向检查**（v1.15.68 补）：文档点名了、而 `package.json` 的 `verify` 里没有 ──
+    //
+    // 为什么必须有：正向检查（`verify` → 文档）**挡不住「门被从 `verify` 里摘掉」** ——
+    // 摘掉之后 `required` 少一项，正向检查反而更宽松、照样全绿，而文档里那一行**变成死指针**
+    // （历史实例：`CHANGELOG` 的 v1.15.22 条目把「三方版本一致」当成仪式的一步记着，
+    //  而仪式停掉之后没有任何东西发现 —— 同一个盲区的另一种表现）。
+    // 只看这个块里的名字，且只在它确实是「本仓脚本」时才报（`npm run` 之后的那一段）。
+    for (const m of block.matchAll(/^[+=]\s*npm run ([A-Za-z0-9:_-]+)/gm)) {
+      const name = m[1];
+      if (!npmSteps.includes(name) && !ghost.includes(`${d.label} 点名了 \`${name}\`，但 \`verify\` 里没有它`)) {
+        ghost.push(`${d.label} 点名了 \`${name}\`，但 \`verify\` 里没有它`);
+      }
+    }
   }
 
   if (noAnchor.length) {
@@ -154,7 +182,19 @@ export const checkVerifyChainDocumented = (root: string): { ok: boolean; code: n
     };
   }
 
-  const header = `✔ ② \`verify\` 的 ${required.length} 步都被**该列它的那一块**点名：${required.join(" · ")}`;
+  if (ghost.length) {
+    return {
+      ok: false, code: 1,
+      lines: [
+        "❌ ② **文档点名了 `verify` 里没有的步骤**（门被摘掉 / 名字改了，而文档没跟上）：",
+        ...ghost.map((m) => `     · ${m}`),
+        "",
+        `  当前 \`verify\` 的全部步骤：${required.join(" · ")}`,
+      ],
+    };
+  }
+
+  const header = `✔ ② \`verify\` 的 ${required.length} 步都被**该列它的那一块**点名，且两块的每个 \`npm run\` 都在 \`verify\` 里（双向）：${required.join(" · ")}`;
   if (!missing.length) return { ok: true, code: 0, lines: [header] };
   return {
     ok: false, code: 1,
@@ -168,11 +208,57 @@ export const checkVerifyChainDocumented = (root: string): { ok: boolean; code: n
   };
 };
 
+// ── 检查 3：README 默认开关表**声明的行数** = 实际数据行数 ────────────────────
+/**
+ * 判据：`README.md` 的表注 ⓪ 声明「⇒ **现 N 行**」，而那张表（表头 `| 能力 | 默认 |` 起、
+ * 到 `**表注` 止）**实际的数据行数**必须等于 N。
+ *
+ * 这是「**计数字段**」这一类的最小可机械化样本（v1.15.68 补）：
+ * v1.15.67 只给**链路清单**配了门，而**计数**只立了规则、没有落地 ——
+ * 实测本仓至少还有两处手写计数在腐烂（`README` 的「现 18 行」、`BACKLOG` 头部的「现存 20 条」）。
+ * 本仓无法给「任意计数」写通用门，但**这一处**有稳定的结构（表 + 声明的行数）⇒ 可以机械化。
+ * ⇒ 它的价值不只是「守住这一个数」，更是**给出模式**：**能被数出来的东西，就去数它，别抄它。**
+ *
+ * 注意：**只认表注 ⓪ 那一句**（`现 N 行`），不认别处的「N 行」（README 里还有「原表 16 行」这类历史叙述，
+ * 那属于**归档叙述**，不该跟着变）。用「⇒ **现 N 行**」这个具体形态锚定。
+ */
+export const checkDeclaredTableRows = (root: string): { ok: boolean; code: number; lines: string[] } => {
+  const text = readText(root, "README.md");
+  const lines = readLines(root, "README.md");
+
+  const declared = text.match(/⇒\s*\*\*现\s*(\d+)\s*行\*\*/);
+  if (!declared) {
+    return { ok: false, code: 2, lines: ["❌ ③ **结构缺失**：`README.md` 里找不到「⇒ **现 N 行**」这句声明。"] };
+  }
+  const want = Number(declared[1]);
+
+  const headerIdx = lines.findIndex((l) => l.startsWith("| 能力 | 默认 |"));
+  if (headerIdx < 0) return { ok: false, code: 2, lines: ["❌ ③ **结构缺失**：找不到「默认开关」表的表头 `| 能力 | 默认 |`。"] };
+  const noteIdx = lines.findIndex((l, i) => i > headerIdx && l.startsWith("**表注"));
+  if (noteIdx < 0) return { ok: false, code: 2, lines: ["❌ ③ **结构缺失**：找不到该表的结束锚点 `**表注`。"] };
+
+  // 数据行 = 表头之后、表注之前的 `|` 行，减去分隔行（`|---`）
+  const rows = lines
+    .slice(headerIdx + 1, noteIdx)
+    .filter((l) => l.startsWith("|") && !/^\|[\s:|-]+\|$/.test(l));
+
+  if (rows.length === want) {
+    return { ok: true, code: 0, lines: [`✔ ③ README 默认开关表：声明 **${want} 行** = 实际 **${rows.length} 行**`] };
+  }
+  return {
+    ok: false, code: 1,
+    lines: [
+      `❌ ③ **README 默认开关表的行数不一致**：声明 **${want} 行**，实际 **${rows.length} 行**。`,
+      "  怎么修：加/删行之后**同时**改表注 ⓪ 的「现 N 行」；或**删掉那个数字**（本仓规则：能数出来的别抄）。",
+    ],
+  };
+};
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop()!);
 if (isMain || process.argv[1]?.endsWith("docs-consistency.ts")) {
   const ROOT = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
-  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT)];
+  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT)];
   for (const r of results) for (const l of r.lines) console.log(l);
   const failed = results.find((r) => !r.ok);
   if (!failed) {

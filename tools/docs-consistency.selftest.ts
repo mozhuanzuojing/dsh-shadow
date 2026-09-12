@@ -26,6 +26,9 @@ interface Fixture {
   verify?: string;                 // scripts.verify；undefined ⇒ 用默认全链路
   readmeGateBlock?: string | null; // README 的 ```text 块内容；null ⇒ 整块不写（测锚点消失）
   agentsChain?: string;            // AGENTS 段里的链路行
+  tableRows?: number;              // 默认开关表的**实际**数据行数（默认 2）
+  declaredRows?: number | null;    // 表注声明的行数；null ⇒ 不写声明（测结构缺失）
+  crlf?: boolean;                  // 用 CRLF 写全部文件（本仓工作副本就是 CRLF）
 }
 
 const FULL_VERIFY = "npm run a:x && npm run b:y && npx tsc --noEmit";
@@ -35,23 +38,39 @@ const run = (f: Fixture) => {
   const dir = mkdtempSync(join(tmpdir(), "dsh-doc-"));
   try {
     const verify = f.verify ?? FULL_VERIFY;
-    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "x", version: f.pkg ?? "1.2.3", scripts: { verify } }));
+    const actualRows = f.tableRows ?? 2;
+    const declared = f.declaredRows === undefined ? actualRows : f.declaredRows;
+
+    // 默认开关表 + 表注 ⓪（检查③的对象）。**每个 fixture 都要有** ——
+    // 否则检查③会以「结构缺失(2)」退出，把① ② 的断言全短路掉。
+    const table =
+      `### 默认开关\n\n| 能力 | 默认 |\n|---|---|\n` +
+      Array.from({ length: actualRows }, (_, i) => `| cap${i + 1} | 开 |`).join("\n") +
+      `\n\n` +
+      (declared === null ? "" : `**表注** ⓪ **行数**：原表 1 行 ⇒ **现 ${declared} 行**。\n`);
 
     const decoy = f.decoyAbove ? `> 说明：本仓的「当前版本：\`v0.0.1\`」是举例，不是真的。\n\n` : "";
     const verLine = f.readmeVersion === undefined ? "" : `**当前版本：\`v${f.readmeVersion}\`** —— 最新几版摘要：\n`;
-    let readme = `# x\n\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n| v0.0.1 | 旧行（归档层，**不该**参与判据） |\n`;
+    let readme = `# x\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n| v0.0.1 | 旧行（归档层，**不该**参与判据） |\n`;
     if (f.readmeGateBlock !== null) {
       const block = f.readmeGateBlock ?? verify.split(" && ").map((s) => (s.startsWith("npm run ") ? `+ ${s}` : `+ npx ${s}`)).join("\n");
-      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${decoy}${verLine}`;
+      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}`;
     }
-    writeFileSync(join(dir, "README.md"), readme);
 
     const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n正文\n`;
     const older = f.changelogVersion === undefined ? "" : `## [v0.0.1] 更旧的一条\n`;
-    writeFileSync(join(dir, "CHANGELOG.md"), `# Changelog\n\n${head}${older}`);
+    const changelog = `# Changelog\n\n${head}${older}`;
 
     const chain = f.agentsChain ?? verify.split(" && ").map((s) => s.replace(/^npm run /, "").replace(/^npx npx /, "")).join(" \u2192 ");
-    writeFileSync(join(dir, "AGENTS.md"), `# dsh-shadow\n\n## 本仓库常用的构建与验证\n\n- 验证：\`npm run verify\` \u2014\u2014 \u4e32\u884c\u8dd1 ${chain}\u3002\n\n## \u5176\u4ed6\n\n\u6b63\u6587\u3002\n`);
+    const agents = `# dsh-shadow\n\n## 本仓库常用的构建与验证\n\n- 验证：\`npm run verify\` \u2014\u2014 \u4e32\u884c\u8dd1 ${chain}\u3002\n\n## \u5176\u4ed6\n\n\u6b63\u6587\u3002\n`;
+
+    // **CRLF 组**（⑭）：本仓工作副本是 CRLF，而 `$\u0000` 锚定的正则**不匹配 `\r` 之前** ——
+    // v1.15.68 的检查③就是因此把分隔行当成数据行、报了「声明 18 / 实际 19」的**假警报**。
+    const enc = (s: string) => (f.crlf ? s.replace(/\n/g, "\r\n") : s);
+    writeFileSync(join(dir, "package.json"), enc(JSON.stringify({ name: "x", version: f.pkg ?? "1.2.3", scripts: { verify } })));
+    writeFileSync(join(dir, "README.md"), enc(readme));
+    writeFileSync(join(dir, "CHANGELOG.md"), enc(changelog));
+    writeFileSync(join(dir, "AGENTS.md"), enc(agents));
 
     let code = 0, out = "";
     try {
@@ -151,6 +170,50 @@ const run = (f: Fixture) => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
   assert.equal(code, 1, `**假绿对照**：步骤名出现在闸门块**之外**必须仍然红（旧判据会放行）；实际 ${code}：${out}`);
   console.log("✔ ⑪ 假绿对照：步骤名出现在闸门块**之外** ⇒ 仍然红（判据已限定到该列它的那一块）");
+}
+{
+  // ⑫ **反向**：README 的闸门块点名了一个 `verify` 里**没有**的步骤 ⇒ 必须红。
+  //    为什么必须：正向检查（verify → 文档）挡不住「门被从 verify 里摘掉」——
+  //    摘掉之后 required 少一项，正向检查反而更宽松、照样全绿，而文档里那一行成了**死指针**。
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", readmeGateBlock: "+ npm run a:x\n+ npm run b:y\n+ npm run c:ghost\n+ npx tsc --noEmit" });
+  assert.equal(r.code, 1, `文档点名了 verify 里没有的步骤必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /c:ghost/, `报文应指出是哪一个：${r.out.slice(0, 300)}`);
+  assert.match(r.out, /文档点名了 `verify` 里没有的步骤/, "应说清是反向检查失败（不是漏写）");
+  console.log("✔ ⑫ 负对照（反向）：闸门块点名了 `verify` 里没有的 `c:ghost` ⇒ 1");
+}
+{
+  // ⑫b 反向的**假阳性对照**：块里出现 `npm run verify` 自身、以及内联的 `= npm run build && …`
+  //     都**不得**被当成「多出来的闸门」（第一版正向/反向都曾被这两个误报）。
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", readmeGateBlock: "+ npm run a:x\n+ npm run b:y\n+ npm run test:all             = npm run build && node tools/run-tests.ts\n+ npx tsc --noEmit", verify: "npm run a:x && npm run b:y && npm run test:all && npx tsc --noEmit" });
+  assert.equal(r.code, 0, `\`npm run build\`（内联提到）与块头 \`npm run verify\` 不得被当成闸门；实际 ${r.code}：${r.out}`);
+  console.log("✔ ⑫b 假阳性对照：内联的 `= npm run build …` 与块头 `npm run verify` 都不算闸门");
+}
+
+// ── 检查 3：声明行数 = 实际行数 ──
+{
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", tableRows: 2, declaredRows: 2 });
+  assert.equal(r.code, 0, `声明 = 实际必须放行（0）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /声明 \*\*2 行\*\* = 实际 \*\*2 行\*\*/);
+  console.log("✔ ⑬a 正对照：声明行数 = 实际行数 ⇒ 0");
+}
+{
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", tableRows: 3, declaredRows: 2 });
+  assert.equal(r.code, 1, `声明 2 / 实际 3 必须红（1）；实际 ${r.code}`);
+  assert.match(r.out, /声明 \*\*2 行\*\*，实际 \*\*3 行\*\*/, `报文应同时给出声明值与实际值：${r.out.slice(0, 300)}`);
+  console.log("✔ ⑬b 负对照：声明 2 行 / 实际 3 行 ⇒ 1（并同时打印两个值）");
+}
+{
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", declaredRows: null });
+  assert.equal(r.code, 2, `缺「现 N 行」声明应报结构缺失（2）；实际 ${r.code}`);
+  assert.match(r.out, /找不到「⇒ \*\*现 N 行\*\*」/);
+  console.log("✔ ⑬c 负对照：README 缺行数声明 ⇒ 2（结构缺失 ≠ 数字不一致）");
+}
+{
+  // ⑭ **CRLF 组**（锁住 v1.15.68 修掉的**假警报**）：整份语料用 CRLF 写，
+  //    声明与实际都是 2 ⇒ 必须**放行**。修前（分隔行 `|----|\r` 不匹配 `$`）这里会报「实际 3 行」。
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", tableRows: 2, declaredRows: 2, crlf: true });
+  assert.equal(r.code, 0, `**CRLF 不得造成假警报**（本仓工作副本就是 CRLF）；实际 ${r.code}：${r.out}`);
+  console.log("✔ ⑭ CRLF：整份语料 CRLF ⇒ 行数判定仍然正确（不再把分隔行当数据行）");
 }
 
 console.log("ALL PASS ✅");
