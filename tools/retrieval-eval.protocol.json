@@ -1,0 +1,19 @@
+{
+  "protocol_version": "retrieval-eval-v1",
+  "baseline_tag": "local-dev-v1",
+  "gated_metrics": ["recall_mean", "noise_offtopic_mean", "avg_returned_mean"],
+  "metric_directions": {
+    "recall_mean": "higher",
+    "noise_offtopic_mean": "lower",
+    "avg_returned_mean": "exact"
+  },
+  "tolerances": {
+    "recall_mean": 0.01,
+    "noise_offtopic_mean": 0.01,
+    "avg_returned_mean": 0
+  },
+  "required_external_model_calls": 0,
+  "k": 5,
+  "seeds": [1, 2, 3],
+  "max_docs": 1500
+}

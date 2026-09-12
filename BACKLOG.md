@@ -592,7 +592,7 @@
   —— **已在 v1.15.41 落地**（见 ②）；③ **纪律写成元测试**（`test_test_suite_policy.py:20-22`）。
   **照抄形状时不要照抄它自己的洞**（逐条见 §6.6 表）：比较器零调用、棘轮基线缺件即通过、同一判据两处数值。
 
-### T14. **确定性基准门**：签入基线 + compare 子命令 + 「外部调用即失败」（v1.15.39 新开，来源 `adr/0078` D3）
+### T14. **确定性基准门**：签入基线 + compare 子命令 + 「外部调用即失败」 —— ✅ **已落地（v1.15.42）**，但**本部署里回归门恒「不可比」**（见下「活语料结论」）
 
 - **依据**：`adr/0078` D3。hl_mem 的 `docs/benchmark/core-v1.md`（**我一手读完全文**）：
   `:3-8`「deterministic, public, **zero-network** regression gate … **any external model call fails the run**」；
@@ -632,6 +632,51 @@
   **逐 slice 门控且缺 slice 即失败**（`:66-78`）。
   **它自己缺的两件事（本仓必须补，否则同样是假闸门）**：`compare_core_v1.py` **在任何 workflow 里零调用**；
   「两次运行功能字段逐字相同」**只有散文、无脚本**（`docs/benchmark/core-v1.md:21-22`）。
+
+#### ✅ 进度 D（v1.15.42）：**已实现并接线** —— 含一条**本仓特有、必须写下来的结论**
+
+**落地物**：`tools/retrieval-eval.lib.ts`（纯逻辑）· `tools/retrieval-eval.protocol.json`（**冻结协议**：
+`gated_metrics` = `recall_mean` / `noise_offtopic_mean` / `avg_returned_mean`，方向 `higher`/`lower`/`exact`，
+容差 `0.01`/`0.01`/`0`，`required_external_model_calls: 0`）· `tools/retrieval-eval.baseline.json`（**签入基线**，
+`provenance: local_dev_aggregate_only`）· `tools/retrieval-eval.selftest.ts`（**12 组标定测试**）·
+`tools/retrieval-eval.ts` 新增 5 个模式（`--json` / `--check-baseline` / `--update-baseline` / `--compare` / `--determinism-check`）。
+
+**逐条兑现完成判据**：① 基线含 `dataset_sha256`（`sha256-utf8-lf-v1`，用**仓库相对路径**⇒ 与机器/盘符无关）+
+`protocol_sha256` + `case_count`；② `npm run eval:retrieval:compare`（退出码 **0 通过 / 1 违规 / 3 不可比**）；
+③ 给 T9 / T11① 提供可机器判读的读数面。
+
+**同时补掉 hl_mem 自己的两个洞**：**(a)** 比较器**不再零调用** —— `--check-baseline`（完整性：协议自检 / 基线只含聚合面 /
+协议同源 / 门控读数齐备）**已接进 `npm run verify`**，标定测试也自动进 `run-tests`；
+**(b)** 「两跑功能字段逐字相同」**从散文变成脚本** —— `--determinism-check` 在同一进程跑两遍并逐字节比对，真仓库**通过**。
+
+**「外部调用即失败」**：运行期把 `globalThis.fetch` 换成**抛错桩 + 计数**（hl_mem 同形），
+计数进入结果对象并由比较器再判一次（`required_external_model_calls: 0`）。
+
+**🔴 本仓特有的一条（与 hl_mem 的冻结语料根本不同，必须记住）**：
+> hl_mem 的语料是**冻结数据集**，所以基线可以用 dataset 哈希钉死。本仓语料是**活的 `.shadow` 记忆**
+> （插件每个回合都在写新记忆 —— 实测两次调用之间语料就从 1414 条涨到 1435 条）。
+> ⇒ **哈希钉死的基线在本部署里恒「不可比」**（这正是 `--compare` 的实测输出）。
+> 故本模块把「不可比」做成**显式的第三种结论**（退出码 3，既不是通过也不是失败），
+> 与已吸收的「分母为 0 要报『不可测』而非 0」同一条纪律。
+>
+> **可执行的判据因此分两层**：
+> | 层 | 命令 | 在本部署是否可用 |
+> |---|---|---|
+> | **确定性**（同输入两跑逐字相同） | `npm run eval:retrieval:determinism` | ✅ **恒可用**（与语料是否变化无关） |
+> | **完整性**（协议/基线形状/同源/读数齐备） | `npm run eval:retrieval:check`（**已在 `verify` 里**） | ✅ 恒可用（不依赖语料数值） |
+> | **回归**（比基线、超容差即失败） | `npm run eval:retrieval:compare` | ⚠ **只在语料冻结时可用**；本部署的正常结论是「不可比」 |
+>
+> **要真正启用回归门，唯一路径是「冻结语料」**：把一份 `.shadow` 快照放到别处，
+> 用 `SHADOW_EVAL_ROOT=<冻结工作区>` + `--update-baseline` + `--compare`。
+> **是否物化这样一份冻结副本＝用户取舍**（会把真实记忆复制一份到新目录），**故本轮没有替用户做**。
+
+**顺路修的真缺陷**：`retrieval-eval.ts` 的默认语料根**硬编码 `D:/project/dsh1`**，而本机工作区在 `G:\`
+⇒ `npm run eval:retrieval` 此前一直在**空语料**上跑（`docs=0` 还「跑得通」）。现默认由文件位置推导 + 环境变量可覆盖 +
+**找不到 `.shadow` 或语料为空时非零退出**（缺件不静默）。
+
+**本轮自我暴露（留档）**：把全文件的 `console.log(` 批量替换成 `emit(` 时**把 `emit` 自己的函数体也换掉了**
+⇒ `emit` 递归自调 ⇒ `Maximum call stack size exceeded`。**改名/批量替换是「断的是谁调用它」的高发区**，
+已在代码注释里写明，并靠 `--determinism-check` 的一次真实运行抓到。
 
 ### T15. **兼容性与弃用纪律**（本仓**完全没有**；v1.15.39 新开，来源 `adr/0078` D4c）
 

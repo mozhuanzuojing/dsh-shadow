@@ -3,6 +3,67 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.42] **确定性基准门**（T14 落地）：协议 + 签入基线 + 比较器 + 双跑逐字比 + 接进 `verify`
+
+**一句话**：本仓唯一的评测（`tools/retrieval-eval.ts`）此前**只打印读数** —— 「这次比上次好还是坏」**无法由机器回答**。
+本轮按 hl_mem 的门禁形状做成可执行门，并**补掉它自己的两个洞**（比较器零调用、「两跑逐字相同」只有散文）；
+同时在实测中发现**本仓语料是活的** ⇒ 回归门在本部署恒「不可比」，于是把「不可比」做成**显式的第三种结论**。
+
+### 1. 落地物
+
+| 文件 | 职责 |
+|---|---|
+| `tools/retrieval-eval.lib.ts`（新） | 纯逻辑：稳定序列化 / 语料指纹 / 协议自检 / **基线只含聚合面**白名单 / 比较器（先证同源再比数值） |
+| `tools/retrieval-eval.protocol.json`（新） | **冻结协议**：门控指标显式列名（`recall_mean`·`noise_offtopic_mean`·`avg_returned_mean`）+ 方向 + 容差 + **外部调用必须 0** |
+| `tools/retrieval-eval.baseline.json`（新） | **签入基线**（`provenance: local_dev_aggregate_only`）：只有聚合数字 + 哈希 + 计数 |
+| `tools/retrieval-eval.selftest.ts`（新） | **12 组标定测试**（全合成夹具）：每一类判据的**负例** |
+| `tools/retrieval-eval.ts`（改） | 新增 `--json` / `--check-baseline` / `--update-baseline`（**拒绝覆盖**，需 `--force`）/ `--compare` / `--determinism-check`；**修默认语料根** |
+
+### 2. 逐条兑现 T14 完成判据
+
+- ① **基线含身份字段**：`dataset_sha256`（`sha256-utf8-lf-v1`，用**仓库相对路径** ⇒ 与机器/盘符无关）+ `protocol_sha256` + `case_count`。
+- ② **`npm run eval:retrieval:compare`**：退出码 **0 通过 / 1 违规 / 3 不可比**（合取式判据）。
+- ③ 给 T9（sidecar 读路径收益）与 T11① 的评测提供**可机器判读**的读数面。
+
+### 3. 补掉 hl_mem 自己的两个洞
+
+- **(a) 比较器不再零调用**：`npm run eval:retrieval:check`（协议自检 / 基线只含聚合面 / 协议同源 / 门控读数齐备）**已接进 `npm run verify`**；标定测试自动进 `run-tests`。
+- **(b)「两跑功能字段逐字相同」从散文变成脚本**：`--determinism-check` 同进程跑两遍并**逐字节比对**，真仓库**通过 ✅**。
+- 「**外部调用即失败**」：运行期把 `globalThis.fetch` 换成**抛错桩 + 计数**，比较层再判一次（hl_mem 同形）。
+
+### 4. 🔴 本仓特有结论：语料是**活的**，哈希钉死的基线恒不可比
+
+实测：两次调用之间语料从 **1414 → 1435** 条（插件每回合都在写新记忆）⇒ `--compare` 的实测输出就是 **「不可比」**。
+hl_mem 的语料是冻结数据集，所以它的做法（dataset 哈希钉死基线）**在本仓不成立**。
+故把「不可比」做成**显式的第三种结论**（退出码 3，既不是通过也不是失败），与已吸收的
+「分母为 0 要报『不可测』而非 0」同一条纪律。可执行判据因此分两层：
+
+| 层 | 命令 | 本部署可用性 |
+|---|---|---|
+| **确定性**（两跑逐字相同） | `npm run eval:retrieval:determinism` | ✅ 恒可用（与语料无关） |
+| **完整性**（协议/基线/同源/读数齐备） | `npm run eval:retrieval:check`（**在 `verify` 里**） | ✅ 恒可用 |
+| **回归**（比基线） | `npm run eval:retrieval:compare` | ⚠ 只在**冻结语料**上可用；本部署正常结论是「不可比」 |
+
+**要真正启用回归门，唯一路径是冻结一份语料快照**（`SHADOW_EVAL_ROOT=<冻结工作区>` + `--update-baseline` + `--compare`）；
+**是否物化这样一份副本＝用户取舍**（会把真实记忆复制到新目录）⇒ **本轮没有替用户做**，留在 T14 作为唯一未决项。
+
+### 5. 顺路修的真缺陷 + 自我暴露
+
+- **默认语料根硬编码 `D:/project/dsh1`**，本机工作区在 `G:\` ⇒ `npm run eval:retrieval` 此前一直在**空语料**上跑
+  （`docs=0` 且「跑得通」）。现默认由文件位置推导 + 环境变量可覆盖 + **找不到 `.shadow` 或语料为空时非零退出**。
+- **标定测试当轮抓到的两处自身问题**：① 容差边界用十进制直觉数值（`0.5-0.01` 在 IEEE754 下是 `-0.010000000000000009`）⇒
+  「恰好等于容差」断言**假红**，改用二进制可精确表示的值；② 把全文件 `console.log(` 批量换成 `emit(` 时**把 `emit` 函数体也换了**
+  ⇒ `emit` 递归自调 ⇒ `Maximum call stack size exceeded`（**改名/批量替换是「断的是谁调用它」的高发区**）。
+- **门禁状态**：`npm run verify` = **47/47**（46 → 47）；`npm run eval:retrieval:check` 通过；`--determinism-check` 通过；
+  `--compare` = 「不可比」（退出码 3，符合设计）；`--update-baseline` 二次运行**被拒绝**（退出码 1）。
+
+### 6. 变更文件
+
+`tools/retrieval-eval.lib.ts` / `tools/retrieval-eval.protocol.json` / `tools/retrieval-eval.baseline.json` /
+`tools/retrieval-eval.selftest.ts`（四者新增）· `tools/retrieval-eval.ts`（改）· `package.json`（`version` → 1.15.42；
+新增 4 个 script；`verify` 加一步）· `BACKLOG.md`（T14 改写）· `CHANGELOG.md`（本条）· `README.md`（版本表 + 评测门小节）。
+**未改动**：`index.ts` 与任何业务源码、`dist/`。
+
 ## [v1.15.41] **结构门**`audit-layers`：把「结构纪律」从散文做成可执行判据（T13 落地）
 
 **一句话**：本仓此前**一条结构纪律都没有可执行形态**（「`core/` 是纯函数」「层间不许成环」都只是散文）。
