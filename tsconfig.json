@@ -16,6 +16,6 @@
     "allowSyntheticDefaultImports": true,
     "types": ["node"]
   },
-  "include": ["index.ts"],
+  "include": ["index.ts", "core/proposal.ts"],
   "exclude": ["node_modules", "dist", "test", "*.test.ts"]
 }

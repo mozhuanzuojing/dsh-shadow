@@ -3,6 +3,58 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.50] **P1①② 落地：语义防火墙**（`core/proposal.ts` + 11 组闸）—— Fact 是**投影**，不是可写入的记录
+
+**一句话**：用户批准「先做纯类型 + 解析 + 闸，不等 Confirmation 载体」。本轮把 `adr/0082` 的原语做成代码与闸：
+**任何写入者（LLM / CLI / 人工 / MCP / 外部工具）都不能绕过这条边界**。`npm run verify` = **50/50**。
+
+### 1. 实现选择：用**结构**而非字段校验来防伪装（比要求更强）
+
+用户点名的两种伪装，我用更强的形式一次解决 —— **Fact 根本没有写入路径**：
+
+> **输入只接受 `proposal` / `confirmation`；`type:"fact"` 一律拒收。Fact 只由 `projectFacts(P, C)` 派生。**
+
+| 伪装 | 结果 |
+|---|---|
+| `{type:"fact", source:"model-proposal"}` | **拒收**（不是「字段有问题」，而是**没有这条写入路径**）|
+| `{type:"proposal", status:"validated"}` | **伪装字段**拒收；**且即使再给一条 confirmation 也不得复活**（被拒的 proposal 不进索引）|
+
+「Fact 是投影」还顺带吻合 **ADR-0003（派生件不是 source）**：`id = fact-<proposalId>`，**同输入同结果**。
+
+### 2. 机械不变量（逐字实现用户给出的形式）
+
+```text
+FACT ⇔ 存在有效 Confirmation ∧ Confirmation 指向 Proposal ∧ Proposal 有 inputRefs
+```
+- 有效动作 = 按 `timestamp` 升序取**最后一条**，**同刻按 `id` 升序** ⇒ **与插入顺序无关**（已成测试）。
+- `reject` / `revoke` ⇒ **不产生事实**（撤销即事实消失，**历史保留**）。
+
+### 3. 按用户追加冻结的两条
+
+| 追加要求 | 落地 |
+|---|---|
+| **Confirmation 是「授权事件」，不是事实状态** | `{id, proposal, actor, action, timestamp, reason?}`，`actor ∈ human/tool/ci`（**没有 `model`** —— 模型不能确认自己），`action ∈ confirm/reject/revoke`。**Fact 是其投影** ⇒ 未来 **M4 Memory Revision 直接落在 `revoke` 上**，不需要新机制。**载体刻意不决定**（等 M1 真实场景）|
+| **候选层不得成为黑盒（防 Silent Candidate Graveyard）** | `candidateStats(records, now)` 输出 `candidates / confirmed / rejected / pendingConfirmation / oldestCandidateDays / acceptanceRate / rejectionRate`；**待确认不计入分母**（否则「还没人看」会被算成「被拒」=伪造精度）、**分母 0 报 `null`（不可测不报 0）**、**`now` 由调用方传入（不读时钟）**；**不进普通召回，但必须可见** |
+
+### 4. 闸（11 组，`test/proposal-firewall.test.ts`）
+
+正例：`P+C(confirm)` ⇒ 1 事实、P→C→F 可追、id 确定性。负例：`type:"fact"` 拒收 · `status` 伪装字段拒收 ·
+缺 `inputRefs` 拒收 · confirmation 指向不存在的 proposal 违规 · `actor:"model"` 拒收 · 未白名单字段拒收 ·
+**核心不变量**（候选=0 / 确认=1 / 撤销=0）· 同刻裁决与插入顺序无关 · 分母 0 ⇒ `null`。
+
+**诚实标注（写进 ADR §7.5）**：① `factualOnly` 目前是**约定**的唯一统计入口，**尚无机械手段**阻止未来统计直接吃 `records`
+（留到 P1 接入 M3 时补结构门）；② 本闸只覆盖**内存中的校验与投影**，**不涉及落盘**（存储位置未定）；
+③ **没有真实 LLM 产生者与 Confirmation 入口**，故 `inputRefs` 只验「在场」，未验内容可信。
+
+### 5. 门禁与变更文件
+
+- `tsconfig.json` 的 `include` 增加 `core/proposal.ts`（它尚未被 `index.ts` 引用，而测试按本仓约定 import **编译产物** ⇒ 必须显式纳入编译面）。
+- **棘轮如实变红并按规程重录**：`a1 17 → 19`、`a_total 31 → 33`（新模块的导出**尚无生产调用点**，待 M1 接线）；
+  这正是 V6/V7 设计的路径 —— **合法上升必须有人确认后再重录**，而不是静默通过。`drift` 同步重录（`11 键/28 处`）。
+- 变更文件：`core/proposal.ts`（新）· `test/proposal-firewall.test.ts`（新）· `dist/core/proposal.{js,d.ts}`（新，dist 与源码同步提交）·
+  `tsconfig.json` · `tools/audit-ratchet.baseline.json` · `adr/0082`（§7 实现 + 7.1–7.5）· `BACKLOG.md`（P1 状态）· `CHANGELOG.md` · `README.md` · `package.json`（1.15.50）。
+- **未改动**：`index.ts` 与任何既有业务路径（本层**尚未接线**，是刻意的：先有闸、再接能力）。
+
 ## [v1.15.49] **`Proposal → Confirmation → Fact` 升为通用原语**（`adr/0082`）：Inference is cheap; facts are expensive
 
 **一句话**：用户选 **A**（两层），并要求把这条边界**从 M1 的特殊处理升为所有 Memory Intelligence 能力的共同纪律**。

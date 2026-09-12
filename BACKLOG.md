@@ -1213,20 +1213,26 @@ V/G/T6 真机与外部条件项
 🧠 Memory Track   : P1 → M1 → M2 → M3 → M4 → M5
 ```
 
-### P1. **Proposal → Confirmation → Fact 原语**（**Inference is cheap; facts are expensive.**）—— ✅ **已冻结（v1.15.49，`adr/0082`）**
+### P1. **Proposal → Confirmation → Fact 原语**（**Inference is cheap; facts are expensive.**）—— 🟢 **原语已冻结（v1.15.49，`adr/0082`）；P1①② 已落地并进 `verify`（v1.15.50）**
 
 - **地位**：**Memory Track 第 0 项，先于 M1** —— 它是**所有 Memory Intelligence 能力的共同架构纪律**，M1 只是第一个使用者。
-- **来源**：M1 的「结果从哪来」争议逼出来的（用户先选「允许 LLM 归属」，我提出四条异议，用户接受并**把它推广成通用原语**）。
-- **单一升级路径**：`Proposal →（Confirmation）→ Fact`；事实层只能由「**显式外部来源**」或「**同入口+时间窗的确定性规则**」写入；
-  **`model-proposal` 永不直接进 Fact**。
+- **落地物（P1①②）**：`core/proposal.ts`（纯函数：严格白名单校验 / `projectFacts` 投影 / **唯一统计入口** `factualOnly` / 候选可见性 `candidateStats`）
+  + `test/proposal-firewall.test.ts`（**11 组闸**）+ `tsconfig.json` 显式 include（该模块尚未被 `index.ts` 引用，而测试按约定 import 编译产物）。
+  **`npm run verify` = 50/50**。
+- **关键实现选择（比字段校验更强）**：**`type:"fact"` 一律拒收、Fact 只由投影派生** ⇒ **Proposal 冒充 Fact 在结构上不可能**（没有写入路径）。
+  两条伪装负例都已成闸：`{type:"fact",source:"model-proposal"}`、`{type:"proposal",status:"validated"}`（**且被拒的 proposal 即使有 confirmation 也不得复活**）。
+- **机械不变量**：`FACT ⇔ 有效 Confirmation ∧ 指向 Proposal ∧ Proposal 有 inputRefs`；有效动作按 `timestamp` 升序取最后一条、**同刻按 id 升序**（**与插入顺序无关**，已成测试）；`reject`/`revoke` ⇒ 事实消失但**历史保留**。
 - **六条硬禁令**：proposal **不得**参与 `Pattern count` / `influenced_decision` / `confidence` / `ratchet baseline` /
   `knowledge fact` / `identity`。**核心不变量：只有 FACT 能改变系统认知统计；CANDIDATE 只能改变「待确认候选」的统计。**
-- **proposal 必填**：`source` / `model` / `prompt_version` / `input_refs[{file,line}]` / `proposed_relation`（缺一不得入库 ⇒ 可回答「模型为什么提这个候选」）。
-- **升级链**：`P ──confirmed_by──→ C ──→ F`，三段可追；**没有 C 的 F 不存在**。
-- **唯一允许的 proposal 统计**：`candidate coverage` / `acceptance rate` / `rejection rate`（度量**模型能力**，不改世界状态）⇒ **这三项可以进棘轮**。
-- **通用化**：`subject / relation / outcome / pattern / knowledge` 五类 proposal 共用同一条路径，**不得为任何一类开直通口**。
-- **主人干**：`Memory → Evidence → Inference → Confirmation → Knowledge`。
-- **待建验证（含负例）**：① proposal 计入 Pattern ⇒ 必须失败；② 缺 `input_refs` ⇒ 拒收；③ 无 confirmation 的 Fact 出现在事实视图 ⇒ 必须失败；④ P→C→F lineage 可追；⑤ `pending_age_p90` **为 derived、不写回状态**。
+- **proposal 必填**：`source` / `model` / `prompt_version` / `inputRefs[{file,line}]` / `proposedRelation`（缺一不得入库 ⇒ 可回答「模型为什么提这个候选」）。
+- **Confirmation = 授权事件**（`{id, proposal, actor, action, timestamp, reason?}`，**actor 无 model**；`action ∈ confirm/reject/revoke`）——
+  **Fact 是它的投影** ⇒ 未来 **M4 Memory Revision 直接落在 `revoke` 上**，不需要新机制。
+- **候选可见性**（防 **Silent Candidate Graveyard**）：`candidateStats` 输出 `candidates · confirmed · rejected · pendingConfirmation · oldestCandidateDays · acceptance/rejectionRate`；
+  **待确认不入分母**、**分母 0 报 `null`（不可测不报 0）**、**`now` 由调用方传入（不读时钟）**；**不进普通召回，但必须可见**。
+- **⏭ 下一步（P1③④）**：LLM 产生者（候选层，写入候选视图）· Confirmation 入口（载体**刻意延迟决定**，等 M1 真实场景）。
+- **待建验证（含负例）**：① proposal 计入 Pattern ⇒ 必须失败（**当前靠 `factualOnly` 约定 + M3 接入时补结构门**）；② 缺 `input_refs` ⇒ 拒收 **✅ 已做**；
+  ③ 无 confirmation 的 Fact 进事实视图 ⇒ 必须失败 **✅ 已做**；④ P→C→F lineage 可追 **✅ 已做**；⑤ `pending_age_p90` 为 derived、不写回状态（**留给 M1**）。
+  **诚实边界**：`factualOnly` 目前**只是约定**，尚无机械手段阻止未来统计直接吃 `records`（见 `adr/0082` §7.5）。
 
 
 **核心思想转变**：**Recall 不是 Memory 的终点**。目标是完整生命周期 ——

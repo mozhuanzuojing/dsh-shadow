@@ -142,3 +142,66 @@ Memory → Evidence → Inference → Confirmation → Knowledge
 2. **`prompt_version` 的记录方式**：手写常量还是从提示词文件哈希派生？——**待定**（倾向前者，简单且可 diff）。
 3. **`pending_age_p90` 的窗口**：全部 pending 还是仅近 N 天？——**待定**（实现时给一个可解释默认并走 config）。
 4. **proposal 的存储位置**：与记忆同目录（加前缀区分）还是独立区？——**待定**；无论哪种，**都不得进入 `listMemories` 的语料**（否则候选会污染召回 —— 这与 ADR-0075 的 `_` 前缀纪律同族）。
+
+## 7. 实现（P1①② 已落地，v1.15.50）+ 用户追加冻结的两条
+
+**落地物**：`core/proposal.ts`（纯函数：严格白名单校验 / `projectFacts` 投影 / 唯一统计入口 `factualOnly` / 候选可见性 `candidateStats`）
++ `test/proposal-firewall.test.ts`（**11 组闸，含用户点名的两条伪装负例**）+ `tsconfig.json` 显式把该模块纳入编译面
+（它尚未被 `index.ts` 引用，而测试按本仓约定 import 编译产物 ⇒ 必须显式 include，否则 `dist` 里没有它）。
+`npm run verify` = **50/50**。
+
+### 7.1 「Fact 是投影」⇒ 冒充在**结构上不可能**（比字段校验更强）
+
+用户要求「不能只防 Fact 没有 Confirmation，还要防 Proposal 通过改字段伪装成 Fact」。本实现用的是更强形式：
+
+> **输入只接受 `proposal` / `confirmation` 两种记录；`type:"fact"` 一律拒收。**
+> **Fact 只由 `projectFacts(P, C)` 派生**（`id = fact-<proposalId>`，确定性）⇒ **没有写入路径**。
+
+于是两种伪装**都在门口被拒**（均已成测试负例）：
+`{type:"fact", source:"model-proposal"}` ⇒ 拒收；`{type:"proposal", status:"validated"}` ⇒ **伪装字段**拒收，
+且**即使再给一条 confirmation 也不得复活**（被拒的 proposal 不进索引）。
+
+### 7.2 机械不变量（用户给出，已逐条实现对）
+
+```text
+FACT ⇔ 存在有效 Confirmation ∧ Confirmation 指向 Proposal ∧ Proposal 有 inputRefs（基于什么提议）
+```
+实现细节：有效动作按 `timestamp` 升序取**最后一条**，**同刻按 `id` 升序** ⇒ **与插入顺序无关**（已成测试）；
+`reject` / `revoke` ⇒ **不产生事实**（撤销即事实消失，**历史保留**）。
+
+### 7.3 **Confirmation 是「授权事件」，不是事实状态**（用户追加冻结）
+
+```yaml
+confirmation:
+  id: C-001
+  proposal: P-001
+  actor: human        # 枚举 human / tool / ci —— **没有 model**（模型不能确认自己）
+  action: confirm     # confirm / reject / revoke
+  timestamp: ...
+  reason: ...         # 可选
+```
+**为什么这样定**：若 Confirmation 本身是状态，那么「张三确认 / 李四反对 / 后来撤销」会立刻混乱；
+把它做成「**谁在什么时间、对哪个 Proposal、做了什么动作**」，则**多事件天然可叠加**，
+而 **Fact 是投影** ⇒ 未来的 **M4 Memory Revision 正好落在 `revoke` 上**（不需要新机制）。
+**载体（谁触发 Confirmation）刻意不决定** —— P1①② 只定义 `schema / validation / lineage / invariants`；
+等 M1 第一个真实场景跑起来，再看「是否高频 / 是否要批量 / 是否要展示证据 / 是否要 diff / 是否需要 approve-reject-revise」。
+
+### 7.4 候选层的可见性要求（防 **Silent Candidate Graveyard**，用户提醒）
+
+只规定「proposal 不进 `listMemories`」会带来第二个失效模式：
+**事实层很干净 → 候选层没人看 → proposal 无限积压 → 模型覆盖率很好看 → 实际没人确认**。
+故候选层**必须可见**（但**不进普通召回**）—— 本实现已提供纯读数函数 `candidateStats(records, now)`：
+
+```text
+candidates · confirmed · rejected · pendingConfirmation · oldestCandidateDays · acceptanceRate · rejectionRate
+```
+- **待确认不计入分母**（否则「还没人看」会被算成「被拒」＝伪造精度）；**分母为 0 ⇒ 报 `null`（不可测，不报 0）**。
+- **`now` 由调用方传入** ⇒ 本层**不读时钟**，读数可复现。
+- **哲学与 `pending_age_p90` 一致：不污染主认知，但必须可见。**
+
+### 7.5 已记录的两个「尚未强制」边界（诚实标注）
+
+1. `factualOnly` 目前是**约定的**唯一统计入口，**尚无机械手段**阻止未来某个统计直接吃 `records` ——
+   该强制留到 P1 接入 M3 时做（可加「统计模块只能经该入口读取」的结构门）。
+2. 本闸只覆盖**内存中的记录校验与投影**，**不涉及落盘**（存储位置未定，见 §6）；
+   也**没有真实 LLM 产生者与 Confirmation 入口**，故 `inputRefs` 只验到「在场」，未验其内容可信。
