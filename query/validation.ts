@@ -7,7 +7,7 @@ import { scrubFinal } from "../security/scrub.js";
 import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../validation/evidence.js";
 import { validateHypothesis, toArtifact, renderValidation } from "../validation/validate.js";
 import { writeValidation } from "../validation/persist.js";
-import { appendValidationEvent, readTimeline, renderTimeline } from "../validation/history.js";
+import { appendValidationEvent, readTimelineDetailed, renderTimeline } from "../validation/history.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface ValidationCtx { fs: any; ws: string; flushWarn: string }
@@ -34,6 +34,11 @@ export async function runValidation(deps: ShadowQueryDeps, args: any, ctx: Valid
     return scrubFinal(RECALL_PREFIX + renderValidation(result) + flushWarn);
   }
   // timeline
-  const tl = await readTimeline(fs, ws, String(args?.hypothesisId || ""));
-  return scrubFinal(RECALL_PREFIX + renderTimeline(tl) + flushWarn);
+  const hid2 = String(args?.hypothesisId || "");
+  const { timeline: tl, corrupt } = await readTimelineDetailed(fs, ws, hid2);
+  // 坏件**不得**被渲染成「events 0」（那等于说「这段历史不存在」）—— 报出来，别静默（ADR-0049）。
+  const corruptNote = corrupt
+    ? `\n⚠ validation timeline **存在但读不出**（坏件）：${hid2}.timeline.json —— 上面的 events 数**不代表真实历史**，请人工修复（本路径不会覆盖它）。\n`
+    : "";
+  return scrubFinal(RECALL_PREFIX + (corrupt ? corruptNote : "") + renderTimeline(tl) + flushWarn);
 }

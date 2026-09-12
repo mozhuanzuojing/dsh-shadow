@@ -13,11 +13,11 @@
     "findingsB": 103,
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
-      "dirs": 427,
-      "files": 784,
-      "findingsA": 37,
-      "findingsB": 105,
-      "fingerprint": "cce8084adbe97e7da0fd90754646e502642856f0d1fac0424fd9a796a0722346"
+      "dirs": 428,
+      "files": 787,
+      "findingsA": 39,
+      "findingsB": 107,
+      "fingerprint": "fd98f8e3d00bb8c6e214f0a9d7553c57d9f1f60becfb1984fa561accc499b242"
     }
   },
   "drift": {
@@ -25,11 +25,11 @@
     "drift_sites": 28
   },
   "wiring": {
-    "a1": 23,
-    "a2a": 3,
+    "a1": 24,
+    "a2a": 4,
     "a2b": 0,
     "a3": 11,
-    "a_total": 37,
-    "b_keys": 105
+    "a_total": 39,
+    "b_keys": 107
   }
 }

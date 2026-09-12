@@ -16,6 +16,7 @@
 //
 // 另：**一个决策可以有多个结果事实**（多个观察都归属它）—— 本模块**不挑选「那个」结果**（挑选＝判断）。
 import type { Proposal, ProposalInputRef, Confirmation } from "./proposal.js";
+import { daysBetween, hoursBetween } from "./util.js";
 
 /** 归属键的**来源**。本模块只接受显式键；没有键的决策/观察一律不参与归属。 */
 export const ATTRIBUTION_RULE = "same-key-window/v1";
@@ -79,18 +80,10 @@ const ms = (iso: string): number => {
   const t = Date.parse(iso);
   return Number.isFinite(t) ? t : NaN;
 };
-const days = (a: string, b: string): number | null => {
-  const x = ms(a);
-  const y = ms(b);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return Math.floor((y - x) / 86_400_000);
-};
-const hours = (a: string, b: string): number | null => {
-  const x = ms(a);
-  const y = ms(b);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return Math.floor((y - x) / 3_600_000);
-};
+// 天/小时粒度**不再在本模块实现**：与 `core/proposal.ts` 曾各写一份同样的判据（判据分叉风险），
+// 现已收进 `core/util.ts` 的 `daysBetween` / `hoursBetween`（floor，不插值；不可解析 ⇒ null）。
+const days = daysBetween;
+const hours = hoursBetween;
 
 /**
  * 按 `same-key-window/v1` 归属。**纯函数、不看时钟、不读文件**。
@@ -220,6 +213,11 @@ export interface OutcomeReadout {
   readonly pendingOpen: number;
   /** **刻意不做/刻意推迟**的决策（F6）—— 它们的年龄**不算积压风险**，故与 `open` 分开报。 */
   readonly pendingDeferred: number;
+  /**
+   * `disposition` 是**枚举外的值**（既不是缺省/`"open"`，也不是 `"deliberate-deferral"`）。
+   * **不得**让它静默落进 `open` 桶（那会污染 buckets / 最老 / p90）—— 见 `adr/0081` §11。
+   */
+  readonly invalidDisposition: number;
   /** 未参与本次归属的决策（没有归属键，或**不在本次 `result` 的决策集内**）⇒ 不判断，也不计入 pending。 */
   readonly unconsidered: number;
   /** `at` 无法解析 ⇒ 年龄**不可测**的条数（**缺件不静默**，ADR-0049）。 */
@@ -262,7 +260,12 @@ export const outcomeReadout = (
   const unconsidered = input.decisions.filter((d) => !considered.has(d.id)).length;
   const pendingRecords = input.decisions.filter((d) => considered.has(d.id) && !settledIds.has(d.id));
 
-  const open = pendingRecords.filter((d) => d.disposition !== "deliberate-deferral");
+  // 只有**明确的** `open`（含缺省）才算「在等」；枚举外的值既不算 open 也不算 deferred，
+  // 单列出来（**未知枚举不得落回默认值** —— 否则它会静默污染 buckets / 最老 / p90）。
+  const open = pendingRecords.filter((d) => d.disposition === undefined || d.disposition === "open");
+  const invalidDisposition = pendingRecords.filter(
+    (d) => d.disposition !== undefined && d.disposition !== "open" && d.disposition !== "deliberate-deferral",
+  ).length;
   let unmeasurable = 0;
   const ages: number[] = [];
   for (const d of open) {
@@ -282,7 +285,8 @@ export const outcomeReadout = (
     settled: settledIds.size,
     pending: pendingRecords.length,
     pendingOpen: open.length,
-    pendingDeferred: pendingRecords.length - open.length,
+    pendingDeferred: pendingRecords.length - open.length - invalidDisposition,
+    invalidDisposition,
     unconsidered,
     unmeasurable,
     ambiguous: input.result.ambiguous.length,
@@ -309,6 +313,7 @@ export const renderOutcomeReadout = (r: OutcomeReadout): string => {
   ];
   if (r.oldest !== null) parts.push(`最老 ${r.oldest.at}（${r.oldest.ageDays}d）`);
   if (r.pendingDeferred > 0) parts.push(`刻意推迟 ${r.pendingDeferred}（不计入积压）`);
+  if (r.invalidDisposition > 0) parts.push(`disposition 非法 ${r.invalidDisposition}（**未计入任何桶**）`);
   if (r.unconsidered > 0) parts.push(`未参与归属 ${r.unconsidered}（无键或不在本次 result 内）`);
   if (r.unmeasurable > 0) parts.push(`年龄不可测 ${r.unmeasurable}`);
   if (r.ambiguous > 0) parts.push(`歧义 ${r.ambiguous}`);

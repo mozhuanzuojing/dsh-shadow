@@ -3,6 +3,39 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.54] **对抗性审查（按缺陷类全仓扫）**：修 7 类 + **三条新纪律** + 一份未修线索台账 —— `verify` 52/52
+
+**一句话**：用户说「review fix all」。第一轮只审了两个新模块；本轮**按缺陷类**扫全仓，三个角度**并行只读审查**：
+①「报错却仍生效」②「静默丢弃」③「判据分叉」。**每一条动手前我都自己读过原文核实**（不据别人的报告直接改）。
+三份报告共**排除** 30 余条可疑点并给出理由（`adr/0083`）。
+
+### 1. 已修（每条都有闸，见 `adr/0083` §1）
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| ① | **判据分叉**：正/负结果分类器在**三处**各写一份且**答案不同**（实测 `"依赖降低"` 一边 true 一边 false；`"unstable"` 因 `includes("stable")` 恰好相反）⇒ 同一份 trace 一处记成功、一处记反例 | 收进 **`core/polarity.ts`**（词表**并集** + 负向**一票否决**），三个消费方改 import。**已知语义变化已标注**（`依赖降低/solved/…` 由反例改正支持；`unstable` 由支持改正反例；**未回溯重算历史**） |
+| ② | **`_meta.json` 坏件 ≡ 空件**：解析失败返回空快照且不报，`mutateMeta` 把它**整体写回** ⇒ 一条坏字节把全工作区 pinned/archived/compacted/hits **清零** | `MetaSnapshot.corrupt` 显式标记；遇坏件**直接放弃**（不调 mutate、不写） |
+| ③ | **validation timeline 坏件被覆盖**：解析失败返回空历史，`appendValidationEvent` 用 1 条新事件覆盖文件 ⇒ **append-only 历史永久销毁** | 新增 `readTimelineDetailed` 区分「还没有」/「读不出」；坏件**拒绝覆盖**；读路径显式播报 |
+| ④ | **写失败报成功**：`writeMetaGuarded` 非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」 | 三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false |
+| ⑤ | **未知枚举落回默认值**：枚举外的 `disposition` 静默落进 `open` 桶 ⇒ 污染 buckets/最老/p90（**本轮新加的字段，审查当场指出**） | 只有明确 `open`（含缺省）才算在等；非法值单列 `invalidDisposition` 且**不进任何桶** |
+| ⑥ | **证据路径漏一道过滤**：`query/query.ts:220` 漏 `isConcreteLocator`（另三处都有）⇒ glob 被当路径去验，必然 `not_found` | 补 `.filter(isConcreteLocator)` |
+| ⑦ | **测试面从不被类型检查**（`test/*.ts` 不被任何 tsconfig 覆盖，而用 `node x.ts` 跑）⇒ v1.15.52 手写 fixture 少一个必填字段，**静默变成错的语义** | 新增 `tsconfig.test.json` + `typecheck:tests`，**接入 `verify`** |
+
+### 2. 由此新增的三条纪律（`adr/0083` §2）
+
+1. **坏件 ≠ 空件**：「读→改→写回整份」的路径，解析失败**必须让上层知道**，且**禁止把空对象写回**。
+2. **未知枚举不得落回默认值**：单列并播报，不得并入任何合法桶。
+3. **判据收一处要说清「怎么收」**：写明合并规则并**标注会改变哪些历史分类**。
+
+### 3. 证据与边界
+
+- `npm run verify` = **52/52**（+`test/review-fixes.test.ts`）；闸组数 `decision-outcome` **16**。
+- 棘轮**如实变红 4 处并逐条点名后重录**（`b_keys 105→107` 的两个新键就是本轮引入的 **`outcome=ok` / `outcome=failed`**）。
+- **未修**：审查另撞出 **约 30 条确证问题** + **169 个既存测试类型错误** + **整目录未读**（`adaptation/`、`agency/`、`federation/`、
+  `long-horizon/`、`simulation/`、`soul/`，`tools/*.selftest.ts` 全部未读）⇒ **逐条带 `文件:行号` 记入 `BACKLOG.md` §六「审查线索」**，
+  **不得读成「已修」或「不存在」**。**本 ADR 不主张审查已穷尽**，也未做端到端复现（坏件发生率、真语料影响面均未量化）。
+
+
 ## [v1.15.53] **对抗性审查 + 全部修复**：原语 4 处真缺陷、M1 读数 3 处缺维度 —— `verify` 51/51，棘轮如实变红并按规程重录
 
 **一句话**：对 `core/proposal.ts` / `core/decision-outcome.ts` 逐行做对抗性审查（判据：**同一份数据会不会给出两个答案**、

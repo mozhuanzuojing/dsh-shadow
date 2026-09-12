@@ -1,0 +1,57 @@
+# ADR-0083: 对抗性审查 2026-09-12 —— 三类缺陷、三条新增纪律、以及一份**未修线索台账**
+
+- **状态**：已生效（v1.15.54）
+- **触发**：M1-A′ dry run 之后，用户说「review fix all」。第一轮只审了两个新模块（`adr/0082` §8、`adr/0081` §10）；
+  第二轮**按缺陷类**全仓扫（而不是按文件扫），三个角度并行：①「报错却仍生效」②「静默丢弃」③「判据分叉」。
+- **方法**：三名审查者各自**只读**（不写、不 git、不 build、不跑会写基线的命令），产出**带 `文件:行号` + 原样片段 + 置信度**的报告；
+  **每一条我在动手前都自己读过原文核实**（不据别人的报告直接改代码 —— 本仓有过子代理结论错误的先例）。
+- **纪律**：报告必须单列「**已排除（追下去发现是对的）**」。三份报告一共排除了 30 余条可疑点并给了理由；
+  排除项与命中项**同等重要** —— 没有排除节的审查报告不可用。
+
+---
+
+## 1. 本轮**已修**（每条都有闸）
+
+| # | 缺陷 | 为什么是真缺陷 | 修法 | 闸 |
+|---|---|---|---|---|
+| 1 | **判据分叉**：正/负结果分类器在**三处**各写一份 | `validation/validate.ts` 与 `dream/compress.ts` 逐字相同，且与 `reflection/patterns/success-rate.ts` **给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false；`"unstable"` 因 `"unstable".includes("stable")` 恰好相反）⇒ **同一份 trace 一处记成功、一处记反例** | 收进 `core/polarity.ts`：词表**并集** + 负向**一票否决**；三个消费方改为 import | `test/review-fixes.test.ts` ① |
+| 2 | **`_meta.json` 坏件 ≡ 空件** | `readMetaVersioned` 解析失败返回空快照且不报，`mutateMeta` 随后把**空快照整体写回** ⇒ **一条坏字节把全工作区 pinned/archived/compacted/hits 清零** | `MetaSnapshot.corrupt` 显式标记；`mutateMeta` 遇坏件**直接放弃**（不调 mutate、不写） | `review-fixes` ② |
+| 3 | **validation timeline 坏件被覆盖** | 解析失败返回空历史，`appendValidationEvent` 用「1 条新事件」覆盖文件 ⇒ **append-only 历史永久销毁**，从外面看只是「历史变短了」 | 新增 `readTimelineDetailed` 区分「还没有」与「读不出」；坏件**拒绝覆盖**；读路径显式播报 | `review-fixes` ③ |
+| 4 | **写失败报成功** | `writeMetaGuarded` 在非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」⇒ `mutateMeta` 判定事务已提交，`hits`/`compacted` 标记**静默不落盘** | 引入三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false（不重试、**绝不报成功**） | 见 §5 线索（未单列闸） |
+| 5 | **未知枚举落回默认值** | `disposition` 枚举外的值（如少写一个词的 `"deferred"`）会静默落进 `open` 桶 ⇒ 污染 buckets / 最老 / p90。**这是本轮新加的字段，审查当场指出** | 只有明确的 `open`（含缺省）才算在等；非法值单列 `invalidDisposition` 且**不进任何桶** | `decision-outcome.test.ts` ⑯ |
+| 6 | **证据路径漏一道过滤** | `arbitrate`/`judgment`/`core/context` 都有 `isConcreteLocator`，`query/query.ts:220` **漏了** ⇒ glob / git-ref 被当路径去验，必然 `not_found`：同一处证据一处算 `missing=0`、另一处报 not_found | 补 `.filter(isConcreteLocator)` | 未单列闸（需真 host；见 §5） |
+| 7 | **测试面从不被类型检查** | `test/*.ts` 不被任何 tsconfig 覆盖，而测试用 `node x.ts` 跑 ⇒ **类型错误在测试里完全不可见**。实测代价：v1.15.52 加必填字段后手写 fixture 少了它，测试**静默变成错的语义**却没报错 | 新增 `tsconfig.test.json` + `npm run typecheck:tests`，**接入 `verify`** | 门禁本身 |
+
+## 2. 由此新增的三条纪律（**要遵守的是这三条**）
+
+1. **坏件 ≠ 空件**（ADR-0049 的延伸）：任何「读→改→写回整份」的路径，**解析失败必须让上层知道**，
+   并且**禁止把解析失败后的空对象写回**。「读不出」与「不存在」是两个不同的事实，混同的代价是**静默清零**。
+2. **未知枚举不得落回默认值**：枚举字段出现枚举外的值时，**单列并播报**，不得并入任何一个合法桶。
+   落回默认值是「缺件不静默」最常见的伪装形态（它让非法输入看起来像一个正常取值）。
+3. **判据收一处要说清「怎么收」**：发现同一判据多写一份时，单纯合并**两处都在用的词表/阈值**可能改变语义
+   ⇒ 必须写明合并规则（本例 = **并集 + 否决**）并**标注它会改变哪些历史分类**。见 `core/polarity.ts` 头部注释。
+
+## 3. `core/polarity.ts` 的合并规则与**已知语义变化**（诚实标注）
+
+- **规则**：正 = 任一处 POS 命中；负 = 任一处 NEG 命中；**有负即负**。理由：两份词表都是**人工列举的证据清单**（非穷举），
+  「一边认为它是正面」本身就是证据 ⇒ 并集；负向是否决票 ⇒ 一票否决。
+- **变化**（`validateHypothesis` 侧，**这是修正不是回归，但确实改变口径**）：
+  `依赖降低 / solved / 成本下降 / 维护成本下降 / 验收通过` 由「反例」改为「支持」；
+  `unstable` 由「支持」（子串误命中 `stable`）改为「反例」。
+- **未做**：没有回溯重算历史 ValidationArtifact。**过去的结论仍是按旧分类算出来的**，不做静默改写。
+
+## 4. 证据（可复现）
+
+- `npm run verify` = **52/52**（新增 `test/review-fixes.test.ts`）；闸组数：`proposal-firewall` 14 · `decision-outcome` **16**。
+- 棘轮**如实变红 4 处并逐条点名后重录**：`a1 23→24`（`core/util.ts` 的 `hoursBetween`：新导出，唯一消费者是 `core/decision-outcome.ts`）、
+  `a2a 3→4`（`isPositiveOutcome` 的再导出形态）、`a_total 37→39`、`b_keys 105→107`（**`outcome=ok` / `outcome=failed`** ——
+  正是本轮引入的三态写入判据）。**没有一条是「忘了接线」**，故按 V6/V7 规程记录理由后重录。
+
+## 5. 未修线索（**已逐条带 `文件:行号` 记入 `BACKLOG.md`**，本节不重复）
+
+本轮**只修了 7 类**。审查另外撞出 **约 30 条确证但未修**的问题（多为「受影响面较小」或「需要先决定语义」），
+以及**整目录未读**的范围边界（`adaptation/`、`agency/`、`federation/`、`long-horizon/`、`simulation/`、`soul/` 等，
+`tools/*.selftest.ts` 全部未读）与 **169 个既存测试类型错误**。
+
+**这些不得被读成「已修」或「不存在」** —— 台账见 `BACKLOG.md`「审查线索」一节。
+**本 ADR 不主张审查已穷尽**：三名审查者各自只读了一部分，且**都未做端到端复现**（坏件发生率、真语料影响面均未量化）。

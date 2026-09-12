@@ -1,7 +1,8 @@
 import { MAX_EVIDENCE_N } from "./types.js";
-const POS = ["成功", "下降", "通过", "解决", "优化", "提升", "改进", "稳定", "improved", "fixed", "passed", "optimized", "stable", "success", "reduced"];
-const NEG = ["失败", "瓶颈", "恶化", "故障", "回退", "出错", "复杂", "increased", "failed", "failure", "complexity", "issue", "bottleneck"];
-const isPositive = (s) => { const t = String(s || "").toLowerCase(); return POS.some((p) => t.includes(p.toLowerCase())) && !NEG.some((n) => t.includes(n.toLowerCase())); };
+// 「正/负结果」的判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
+// 本文件原有一份**与 `dream/compress.ts` 逐字相同**的 `POS`/`NEG`/`isPositive`，且与
+// `reflection/patterns/success-rate.ts` 的 `isPositiveOutcome` **给出不同答案**（实测，见该文件注释）。
+import { isPositiveOutcome as isPositive } from "../core/polarity.js";
 export const validateHypothesis = (h, evidences) => {
     const support = evidences.filter((e) => isPositive(e.actualOutcome)).length;
     const contradiction = evidences.filter((e) => !isPositive(e.actualOutcome)).length;

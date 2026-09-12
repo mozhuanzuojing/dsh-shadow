@@ -1,3 +1,4 @@
+import { daysBetween } from "./util.js";
 /** 严格白名单：未列出的字段一律拒收（这是防「伪装」的机械手段）。 */
 const PROPOSAL_FIELDS = [
     "type", "id", "kind", "source", "model", "promptVersion", "inputRefs", "proposedRelation", "subject", "createdAt",
@@ -80,6 +81,7 @@ const collect = (records) => {
     const violations = [];
     const proposals = new Map();
     const confirmations = [];
+    const confirmationIds = new Set(); // 去重判据（**非** O(n²) 线性扫描：记录量大时那是可被放大的开销）
     for (const r of records) {
         const bad = validateRecord(r);
         if (bad.length > 0) {
@@ -98,10 +100,11 @@ const collect = (records) => {
         }
         else {
             const id = rec.id;
-            if (confirmations.some((c) => c.id === id)) {
+            if (confirmationIds.has(id)) {
                 violations.push(`confirmation id 重复：${id} —— **不覆盖**，保留首见（并列裁决会让事实不可复现）`);
                 continue;
             }
+            confirmationIds.add(id);
             confirmations.push(rec);
         }
     }
@@ -170,13 +173,6 @@ export const projectFacts = (records) => {
 /** **唯一**允许认知统计消费的入口（Pattern / M5 / 棘轮都必须走这里，不得直接吃 records）。 */
 export const factualOnly = (records) => projectFacts(records).facts;
 const ACTOR_ORDER = ["human", "tool", "ci"];
-const daysBetween = (fromIso, toIso) => {
-    const a = Date.parse(fromIso);
-    const b = Date.parse(toIso);
-    if (!Number.isFinite(a) || !Number.isFinite(b))
-        return null;
-    return Math.floor((b - a) / 86_400_000);
-};
 /**
  * 候选可见性。`now` **由调用方传入**（本层不读时钟 ⇒ 可复现）。
  *
@@ -234,7 +230,7 @@ export const candidateStats = (records, now) => {
         rejected,
         revoked,
         pendingConfirmation: pending,
-        oldestPendingDays: pendingAges.length > 0 ? Math.max(...pendingAges) : null,
+        oldestPendingDays: pendingAges.length > 0 ? pendingAges.reduce((m, a) => (a > m ? a : m), pendingAges[0]) : null,
         unmeasuredAges,
         acceptanceRate: human === undefined ? null : rate(human.confirmed, humanDen),
         rejectionRate: human === undefined ? null : rate(human.rejected, humanDen),

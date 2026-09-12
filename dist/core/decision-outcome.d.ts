@@ -94,6 +94,11 @@ export interface OutcomeReadout {
     readonly pendingOpen: number;
     /** **刻意不做/刻意推迟**的决策（F6）—— 它们的年龄**不算积压风险**，故与 `open` 分开报。 */
     readonly pendingDeferred: number;
+    /**
+     * `disposition` 是**枚举外的值**（既不是缺省/`"open"`，也不是 `"deliberate-deferral"`）。
+     * **不得**让它静默落进 `open` 桶（那会污染 buckets / 最老 / p90）—— 见 `adr/0081` §11。
+     */
+    readonly invalidDisposition: number;
     /** 未参与本次归属的决策（没有归属键，或**不在本次 `result` 的决策集内**）⇒ 不判断，也不计入 pending。 */
     readonly unconsidered: number;
     /** `at` 无法解析 ⇒ 年龄**不可测**的条数（**缺件不静默**，ADR-0049）。 */

@@ -36,6 +36,7 @@ export const PURE_MODULES = [
   "core/paths.ts",
   "core/types.ts",
   "core/util.ts",
+  "core/polarity.ts",
   "security/scrub.ts",
 ];
 

@@ -1,23 +1,14 @@
+import { daysBetween, hoursBetween } from "./util.js";
 /** 归属键的**来源**。本模块只接受显式键；没有键的决策/观察一律不参与归属。 */
 export const ATTRIBUTION_RULE = "same-key-window/v1";
 const ms = (iso) => {
     const t = Date.parse(iso);
     return Number.isFinite(t) ? t : NaN;
 };
-const days = (a, b) => {
-    const x = ms(a);
-    const y = ms(b);
-    if (!Number.isFinite(x) || !Number.isFinite(y))
-        return null;
-    return Math.floor((y - x) / 86_400_000);
-};
-const hours = (a, b) => {
-    const x = ms(a);
-    const y = ms(b);
-    if (!Number.isFinite(x) || !Number.isFinite(y))
-        return null;
-    return Math.floor((y - x) / 3_600_000);
-};
+// 天/小时粒度**不再在本模块实现**：与 `core/proposal.ts` 曾各写一份同样的判据（判据分叉风险），
+// 现已收进 `core/util.ts` 的 `daysBetween` / `hoursBetween`（floor，不插值；不可解析 ⇒ null）。
+const days = daysBetween;
+const hours = hoursBetween;
 /**
  * 按 `same-key-window/v1` 归属。**纯函数、不看时钟、不读文件**。
  * @param windowDays - 时间窗（天）。由调用方给出（走 config，**不是这里的硬编码魔数**）。
@@ -148,7 +139,10 @@ export const outcomeReadout = (input, now) => {
     const considered = new Set(input.result.considered);
     const unconsidered = input.decisions.filter((d) => !considered.has(d.id)).length;
     const pendingRecords = input.decisions.filter((d) => considered.has(d.id) && !settledIds.has(d.id));
-    const open = pendingRecords.filter((d) => d.disposition !== "deliberate-deferral");
+    // 只有**明确的** `open`（含缺省）才算「在等」；枚举外的值既不算 open 也不算 deferred，
+    // 单列出来（**未知枚举不得落回默认值** —— 否则它会静默污染 buckets / 最老 / p90）。
+    const open = pendingRecords.filter((d) => d.disposition === undefined || d.disposition === "open");
+    const invalidDisposition = pendingRecords.filter((d) => d.disposition !== undefined && d.disposition !== "open" && d.disposition !== "deliberate-deferral").length;
     let unmeasurable = 0;
     const ages = [];
     for (const d of open) {
@@ -168,7 +162,8 @@ export const outcomeReadout = (input, now) => {
         settled: settledIds.size,
         pending: pendingRecords.length,
         pendingOpen: open.length,
-        pendingDeferred: pendingRecords.length - open.length,
+        pendingDeferred: pendingRecords.length - open.length - invalidDisposition,
+        invalidDisposition,
         unconsidered,
         unmeasurable,
         ambiguous: input.result.ambiguous.length,
@@ -196,6 +191,8 @@ export const renderOutcomeReadout = (r) => {
         parts.push(`最老 ${r.oldest.at}（${r.oldest.ageDays}d）`);
     if (r.pendingDeferred > 0)
         parts.push(`刻意推迟 ${r.pendingDeferred}（不计入积压）`);
+    if (r.invalidDisposition > 0)
+        parts.push(`disposition 非法 ${r.invalidDisposition}（**未计入任何桶**）`);
     if (r.unconsidered > 0)
         parts.push(`未参与归属 ${r.unconsidered}（无键或不在本次 result 内）`);
     if (r.unmeasurable > 0)

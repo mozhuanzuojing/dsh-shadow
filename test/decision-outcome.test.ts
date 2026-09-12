@@ -208,6 +208,25 @@ const O = (over: Partial<OutcomeObservation> = {}): OutcomeObservation => ({
   console.log("✔ ⑭ F7：lagHours 补上整日粒度丢失的分辨率（floor，不插值）");
 }
 
+// ⑯ **枚举外的 `disposition` 不得落回默认值**（审查发现：我自己新加的这个字段原先没有校验点）
+{
+  const decisions = [
+    D({ id: "ok", at: "2026-09-01T00:00:00Z" }),
+    D({ id: "defer", at: "2026-09-01T00:00:00Z", disposition: "deliberate-deferral" }),
+    D({ id: "bogus", at: "2026-01-01T00:00:00Z", disposition: "deferred" as never }), // 枚举外（少写了 deliberate-）
+  ];
+  const r = outcomeReadout({ decisions, result: attributeOutcomes({ decisions, observations: [], windowDays: 30 }) }, "2026-09-12T00:00:00Z");
+  assert.equal(r.pending, 3);
+  assert.equal(r.pendingOpen, 1, "只有明确的 open 才算「在等」");
+  assert.equal(r.pendingDeferred, 1);
+  assert.equal(r.invalidDisposition, 1, "★ 枚举外的值必须**单独报**，不得静默落进 open 桶");
+  assert.equal(r.pendingOpen + r.pendingDeferred + r.invalidDisposition, r.pending, "三段之和 = pending（可机械断言）");
+  assert.equal(r.oldest?.id, "ok", "★ 非法值那条（2026-01-01，254d）**不得**成为「最老」污染积压读数");
+  assert.equal(r.buckets.ge90, 0, "★ 非法值不得进任何年龄桶");
+  assert.ok(renderOutcomeReadout(r).includes("disposition 非法 1"));
+  console.log("✔ ⑯ 枚举外的 disposition 单列，不污染 buckets / 最老 / p90");
+}
+
 // ⑮ `missing`：归属引用了、调用方没传的观察 ⇒ **报出来**，不静默少一条事实
 {
   const decisions = [D({ id: "d1" })];

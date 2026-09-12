@@ -4,11 +4,9 @@ import type { DreamPattern, Hypothesis, DreamResult, AlternativeExplanation } fr
 import { readObservationTraces } from "../observer/trace.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
 import { today } from "../core/util.js";
-
-const POS = ["成功", "下降", "通过", "解决", "优化", "提升", "改进", "稳定", "improved", "fixed", "passed", "optimized", "stable", "success", "reduced"];
-const NEG = ["失败", "瓶颈", "恶化", "故障", "回退", "出错", "复杂", "increased", "failed", "failure", "complexity", "issue", "bottleneck"];
-
-const isPositive = (s: string) => { const t = String(s || "").toLowerCase(); return POS.some((p) => t.includes(p.toLowerCase())) && !NEG.some((n) => t.includes(n.toLowerCase())); };
+// 「正/负结果」判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
+// 本文件原有的一份与 `validation/validate.ts` **逐字相同**，且与 `reflection/patterns/success-rate.ts` 答案不同（实测）。
+import { isPositiveOutcome as isPositive } from "../core/polarity.js";
 
 // A) Recuorrence + B) Expectation Gap + C) Cross Domain 的确定性聚合（Observation output）。
 export const detectPatterns = (traces: any[]): DreamPattern[] => {

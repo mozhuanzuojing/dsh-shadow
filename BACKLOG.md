@@ -1306,3 +1306,61 @@ V/G/T6 真机与外部条件项
   它可复现，但属过程材料，不是包的构成。
 - **已完成的版本历史**：见 `CHANGELOG.md`（v1.15.13–v1.15.19 逐版记录，含每一条的
   「验证」与「未验证（诚实标注）」）。
+
+---
+
+## 六、审查线索（2026-09-12 对抗性审查，**确证但未修**）
+
+> **这不是「已知问题清单」的完整版，只是一次抽样审查的台账。** 三条纪律见 `adr/0083`。
+> 写法纪律：**每条必须带 `文件:行号` 与后果**；「确证但未修」与「已修」不得混排（已修的 7 类见 `adr/0083` §1）。
+> 审查范围**不完整**：`adaptation/` · `agency/` · `federation/` · `long-horizon/` · `simulation/` · `soul/` · `world/`(部分) ·
+> `delegation/guard/*` · `tools/*.selftest.ts`（全部未读）——**未读 ≠ 无问题**。
+
+### 6.1 高危（会**永久**改变可见状态，且当前不出声）
+
+| 线索 | 位置 | 后果 |
+|---|---|---|
+| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer-materialize.ts:223-225` + `:311-312`，消费方 `query/query.ts:141` | serve **陈旧索引**且无告警；下一次也不再重建 |
+| flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer-materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
+| FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
+| hypothesis 落盘失败后仍打印 `hypotheses N` | `validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
+| 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/query.ts:321-322` | **已冷却的记忆被重新返回**（召回输出变） |
+| meta 注册失败只 log | `core/memory.ts:77-79`（`writer-materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
+
+### 6.2 中危（报告/统计面偏差，或需先决定语义）
+
+| 线索 | 位置 | 后果 |
+|---|---|---|
+| `manifest.failures` **恒为 `[]`**（唯一诊断通道从不传参） | `core/node.ts:49` + `projection-store.ts:70`；`buildManifest("1", nodes)` 少第三参 | `renderManifest` 报「失败项 0」，而约 9% 原子被 reject（该 9% 引自 `core/episode.ts:96-107` 注释，**未复算**）⇒ **两条读路径可见性分歧且无人知** |
+| `_index.md` 内容**不进指纹** | `query/query.ts:141` + `projection-store.ts:135,:139` | 同进程预热后清空 `_index.md` ⇒ 几千条库报「暂无 shadow 索引」 |
+| query-log 单行坏 JSON 无计数 | `query/observatory.ts:92`，消费方 `:100` | 覆盖率/drift 读数基于**被削样本** |
+| 证据路径上限 `.slice(0, 12)` 无披露 | `observer/arbitrate.ts:92` | 第 13 条起的证据路径静默消失 |
+| 「候选相关」报 `min(命中, 8)`，读失败项连 excluded 都不进 | `observer/projection.ts:19,:34,:48,:63` | 观测报告与主题召回**可见性不一致** |
+| 快照坏 JSON 静默回退到**更旧**快照 | `persistence/snapshots.ts:41-45` | `temporal`/`world` 基于陈旧图推理（**当前生产无调用方**，接线即生效） |
+| `shadow_query` 截断只写 query-log，不写进返回文本 | `query/reads.ts:116-118` + `core/node.ts:79-80`（对照 `retrieval/render.ts:26` 的 `truncationNote`） | 两条读路径披露不一致 |
+| 「这条记忆没有时刻」这个事实被默认值掩盖 | `core/episode.ts:208,:216-218` + `persistence/files.ts:29-30` | `"2026-01-01 "` 恒序小于带时刻串 ⇒ **恒判 superseded（×0.7）**；需写出侧产出非 6 位 `time` 才触发 |
+| zg 报错被改写成「证据不存在」 | `evidence/zg.ts:72` + `:146`，消费方 `observer/arbitrate.ts:98` | `reason:"error"` → `status:"not_found"` ⇒ score×0.5 + 判 stale（**真机频率未测**） |
+| 「读失败」与「不存在」不可区分 | `evidence/filesystem.ts:27-31` | 存在但不可读 ⇒ 判 not_found ⇒ 假漂移 |
+| 缺 locator 被当成「存在」 | `evidence/filesystem.ts:22`（`if (!fs \|\| !rel) return true`）→ `status: verified, confidence: 0.99` | 缺件伪装成「已核实」；**可达性未确证**（默认 provider 是 zg） |
+| `all-document text` 截断到 600 字**无标记** | `core/collect.ts:25` | 长用户消息尾部**从未落盘**，读的人以为这就是全文 |
+| 结构门解析不到的 import **不进图**、退出码 0 | `tools/audit-layers.lib.ts:134-137` + `tools/audit-layers.ts:83-84` | 把一个 import 路径改坏，就能让一条违规边从判据里消失 ⇒ **门可静默放行** |
+| `--json --update-ratchet` 会把**空 drift 表**写进基线 | `tools/audit-drift.ts:27,:90,:134` | 记账失真（下一次 `--ratchet` 会响，非静默） |
+| `falseMeasured` 标红**晚于**清单落盘 | `tools/toolset-authority.ts:128` vs `:134-136` | 签入的 `toolset-authority.json` 已含坏清单（退出码非 0，测试会红） |
+| `factualOnly` / `candidateStats` 丢弃 `violations` | `core/proposal.ts:249`,`:306` | 「唯一统计入口」的消费者拿到干净数字，**不知有记录被拒** |
+
+### 6.3 待定语义（**不修，需先拍板**）
+
+| 线索 | 位置 | 为什么要先决定 |
+|---|---|---|
+| identity 闸门参数两层各有默认值，且 falsy 语义不同 | `query/observer-kernel.ts:37-40`（`\|\| 5` / `\|\| 0.4`）vs `identity/evaluator.ts:20-22`（`?? 5` / `?? 0.4`） | 传 `minRecency: 0` 时 kernel 实际用 **0.4**：是「参数默认」还是「闸门下限」？**先决定语义再改** |
+| `status:"compacted"` 在三个谓词里三种答案 | `core/forget.ts:18` · `:34` · `query/query.ts:279` | 审查者**未确证可达性**（compacted 在 `query.ts:260` 已被移除）⇒ 建议**只加注释**，不修 |
+| `successRate` 渲染 `toFixed(2)` 后回读 `/100` | `reflection/engine.ts:29,:79` vs `:93` | 往返误差 ≤0.005，可能跨过 `0.6`/`0.4` 边界 ⇒ 同一反思在生成侧判 principle、消费侧判 anti_pattern（**真语料是否踩过边界未验证**） |
+| 「重复」=2 次 vs 「模式」=3 次 | `reflection/patterns/decision-outcome.ts:12` vs `reflection/engine.ts:27`（+`identity/candidate.ts:27`） | 两个不同统计量各有理由；若要收，提命名常量而**不是**统一成同一个数 |
+| `scope` 校验里 `s.includes(action)` 让任意子串（含空串）通过 | `delegation/guard/scope-guard.ts:6` | 属「校验器不健全（假阴性）」，不是本轮缺陷类；**未确证影响面** |
+| `_index.md`/`authz` 相关的两个默认放行 | `core/index-engine.ts:57,:68` + `core/authorization.ts:23`（`return !scope.workspace`） | `ctx.workspace` 缺失时**授权过滤整体放行**；未追到生产上是否可能为空 |
+
+### 6.4 测试面类型检查缺口（**已收窄，未收完**）
+
+- `tsconfig.test.json` 现在只覆盖**本轮三道闸**；对 `test/**/*.ts` 全量开启会立刻报 **169 个既存类型错误**（涉及多数测试文件的夹具与真实接口不匹配）。
+- **这正是 v1.15.52 那类「夹具悄悄失真」的温床**，但**未修** —— 修它要逐个改夹具，属独立工作项。
+- 未读：`tools/*.selftest.ts` **全部**（审查者主动标注：**审计工具的标定测试本身可能是最高危的假绿源**）。

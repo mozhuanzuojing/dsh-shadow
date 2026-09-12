@@ -25,7 +25,7 @@ import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText, truncationNote } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
-import { evidencePathsOf, isPathLike } from "../evidence/paths.js";
+import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
 import { unavailableHint } from "../core/toolset.js";
 import { kgTrace } from "../observer/observer.js";
@@ -217,7 +217,10 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     // 记下第一处 unavailable 及其 provider/reason：缺件处置要按 provider 给（ADR-0049 延伸）。
     let unavailableRef: { provider?: string; reason?: string } | undefined;
     for (const text of texts.slice(0, 3)) {
-      for (const p of evidencePathsOf(text).filter(isPathLike).slice(0, 6)) {
+      // `isConcreteLocator`（ADR-0059 的判据）：`arbitrate` / `judgment` / `core/context` 三处都有，
+      // 这里原先**漏了** ⇒ glob / git-ref 这类非具体 locator 会被当路径去验，必然 `not_found`，
+      // 于是「同一处证据」在一处算 missing=0、在另一处报 not_found（**判据收一处**，ADR-0063/0070）。
+      for (const p of evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator).slice(0, 6)) {
         const r = await deps.verifyEvidence({ path: p, kind: "path" }, ctx);
         if (r.status === "unavailable" && !unavailableRef) unavailableRef = { provider: r.source, reason: r.provenance?.reason };
         // 原因也要露出来（此前被吞：真机只看到一句 unavailable，无从排查）。

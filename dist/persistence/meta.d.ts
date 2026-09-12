@@ -4,6 +4,11 @@ export interface MetaSnapshot {
     target: any;
     /** 写守卫用的版本令牌；`undefined` = 后端不支持 `stat`（此时退化为无条件写）。 */
     version: any;
+    /**
+     * 文件**存在但读不出**（不是合法 JSON）。
+     * `true` ⇒ `meta` 是**空的占位**，**不得写回**（写回＝把全工作区元数据清零）。
+     */
+    corrupt: boolean;
 }
 /**
  * 读 `_meta.json` 的**带版本快照**。
@@ -15,10 +20,17 @@ export interface MetaSnapshot {
 export declare const readMetaVersioned: (fs: any, ws: string) => Promise<MetaSnapshot>;
 /** 读 `_meta.json`（纯读侧用；需要「读-改-写」时请用 `mutateMeta`）。 */
 export declare const readMeta: (fs: any, ws: string) => Promise<any>;
-/** 带守卫的一次写。返回 `true` = 落盘成功；`false` = 版本冲突（调用方应重读重试）。 */
-export declare const writeMetaGuarded: (fs: any, ws: string, meta: any, version: any) => Promise<boolean>;
-/** 无条件写（保留给「明确要覆盖」的场景；正常改 meta 用 `mutateMeta`）。 */
-export declare const writeMeta: (fs: any, ws: string, meta: any) => Promise<void>;
+/**
+ * 一次守卫写的**三种**结果。
+ *
+ * 旧版把「写失败」也 `return true`（`true` 的语义是**落盘成功**）⇒ 磁盘满 / EACCES 时
+ * `mutateMeta` 报成功、`hits`/`compacted` 标记**静默不落盘**。布尔量根本装不下三种含义，故改成三态。
+ */
+export type MetaWriteOutcome = "ok" | "stale" | "failed";
+/** 带守卫的一次写。`"ok"` = 落盘成功；`"stale"` = 版本冲突（调用方应重读重试）；`"failed"` = **没写成功**。 */
+export declare const writeMetaGuarded: (fs: any, ws: string, meta: any, version: any) => Promise<MetaWriteOutcome>;
+/** 无条件写（保留给「明确要覆盖」的场景；正常改 meta 用 `mutateMeta`）。返回本次写入结果。 */
+export declare const writeMeta: (fs: any, ws: string, meta: any) => Promise<MetaWriteOutcome>;
 /**
  * **事务式**修改 `_meta.json`：读 → 在快照上改 → 带守卫写；`FS_STALE_VERSION` 时重读重试。
  *
