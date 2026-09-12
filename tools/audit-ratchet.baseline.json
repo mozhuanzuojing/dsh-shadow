@@ -2,22 +2,22 @@
   "corpus": {
     "dirs": 420,
     "drift": {
-      "dirs": 424,
-      "files": 194,
+      "dirs": 426,
+      "files": 195,
       "findingsA": 0,
       "findingsB": 28,
-      "fingerprint": "4aa5ae8af89341ff2f87e470928df660abea873e27e33060943d16084e21861b"
+      "fingerprint": "6f609cc704a14ab10302040aff5794c4b27068d9dff909309f4f3ac640c668e9"
     },
     "files": 778,
     "findingsA": 32,
     "findingsB": 103,
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
-      "dirs": 424,
-      "files": 781,
-      "findingsA": 33,
-      "findingsB": 103,
-      "fingerprint": "b74bafd7d66c4b8f2ca8a314129369865f25f52e4850a57b97f4823856c62673"
+      "dirs": 426,
+      "files": 784,
+      "findingsA": 37,
+      "findingsB": 104,
+      "fingerprint": "cce8084adbe97e7da0fd90754646e502642856f0d1fac0424fd9a796a0722346"
     }
   },
   "drift": {
@@ -25,11 +25,11 @@
     "drift_sites": 28
   },
   "wiring": {
-    "a1": 19,
+    "a1": 23,
     "a2a": 3,
     "a2b": 0,
     "a3": 11,
-    "a_total": 33,
-    "b_keys": 103
+    "a_total": 37,
+    "b_keys": 104
   }
 }

@@ -3,6 +3,63 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.51] **M1-A：把 M1 接到原语上**（`core/decision-outcome.ts` + 11 组闸）—— 确定性归属，`verify` 51/51
+
+**一句话**：用户选 A。本轮实现 **M1 的「决策 → 结果」确定性写入路径**，并**让结果事实只能经 `core/proposal.ts` 的
+`projectFacts` 产生** —— 即 **P1 原语得到第一个真消费者**（那 4 条新 A 类线索本就是「等 M1 接线」，现在仍是待接线状态，见下）。
+
+### 1. 归属规则 `same-key-window/v1`（确定性 + 保守）
+
+```text
+观察结果 O 归属决策 D ⇔ ① 同一归属键 key ② O.at ≥ D.at 且 lag ≤ windowDays
+                      ③ 取窗内**最晚前驱** ④ **最晚前驱并列 ⇒ 不归属**（记为 ambiguous，可见）
+```
+
+| 设计点 | 为什么 |
+|---|---|
+| **归属键 `key` 由调用方显式传入** | `ObservationTrace` 里**没有 `entry`** 字段（只有 `id`/`observerId`/`createdAt`/`decision?`/`outcome?`）⇒ **我不发明 entry 的推导**（那正是「不得推断」的边界），与「`subject` 只接受显式提供」一致 |
+| **并列 ⇒ 不归属**（而不是任选一个） | 与 ADR-0061「**错误关链是静默破坏；并存噪音是可观察问题**」同一条不对称：**宁可少归属，不可错归属**；且 ambiguous **计数可见**（ADR-0049） |
+| **一个决策可有多个结果事实** | 本模块**不挑「那个」结果**（挑选＝判断）；所有窗内观察都各自成为候选 |
+| **`windowDays` 由调用方给** | 不硬编码（`adr/0081` §5 待定项）|
+
+### 2. 接线：**本模块不返回事实**
+
+```
+attributeOutcomes(...)  ──→ Attribution（**候选层**）
+        │
+        └─ toPrimitiveRecords() ──→ Proposal(source=观察来源 user/tool/ci · inputRefs 必填)
+                                    + Confirmation(actor="tool", reason="rule:same-key-window/v1 key=… lag=…d window=…d")
+                                            │
+                                            └─ core/proposal.ts#projectFacts ──→ **Fact**
+```
+- **内容来源 = 观察者**（user/tool/ci）；**确认 = 确定性规则**（`actor: "tool"`），`reason` 写明规则与数字 ⇒ **可审计**；
+- 测试 ⑧ 直接验证：本模块**不得返回 `facts`**，且**直接写 `type:"fact"` 仍被拒**（P1 的防火墙照样生效）。
+
+### 3. `pending` 读数（年龄只暴露风险，**不改变状态**）
+
+`outcomeReadout({decisions, result}, now)` → `decisions / settled / pending / ambiguous / unattributed` +
+**年龄分布**（<7d · 7–30d · 30–90d · ≥90d）+ **最老一条** + **`pendingAgeP90`**（nearest-rank，**不插值** —— 插值会造出不存在的年龄）+ 一行渲染。
+**硬边界（测试 ⑩ 验证）**：换 `now` **只改读数、不改状态**；**无 pending ⇒ p90 报 `null`（不可测，不报 0）**。
+
+### 4. 门禁与棘轮（如实变红 → 按规程重录）
+
+- `npm run verify` = **51/51**（50 → 51）。
+- 棘轮**再次如实变红**：`a1 19 → 23`、`a_total 33 → 37`、`b_keys 103 → 104` ⇒ **因为这两个新模块尚未接进任何读路径**
+  （无生产消费者）。**这是刻意的**：契约先落地、消费者后接；重录已按 V6/V7 的规程执行并在此说明理由。
+
+### 5. 诚实边界（写进测试尾注与 `adr/0081` §8）
+
+- **「`key` 从哪来」这条链未接**（属 M1③ 的**显式入口**设计：用户/工具显式给出，或采集时原文明确存在）；
+- **没有落盘**：结果事实目前只存在于内存记录里；
+- **没有接进任何读路径**（`read_shadow` 尚未渲染这些事实与读数）⇒ **目前没有生产消费者**，故 A 段线索仍是待接线；
+- `windowDays` 取多少**未定**（须走 config）。
+
+### 6. 变更文件
+
+`core/decision-outcome.ts`（新）· `test/decision-outcome.test.ts`（新）· `dist/core/decision-outcome.{js,d.ts}`（新，dist 同步）·
+`tsconfig.json`（include 再增一项）· `tools/audit-ratchet.baseline.json` · `adr/0081`（§8 实现）· `BACKLOG.md`（M1 状态）·
+`CHANGELOG.md` · `README.md` · `package.json`（1.15.51）。**未改动**：`index.ts` 与任何既有业务路径。
+
 ## [v1.15.50] **P1①② 落地：语义防火墙**（`core/proposal.ts` + 11 组闸）—— Fact 是**投影**，不是可写入的记录
 
 **一句话**：用户批准「先做纯类型 + 解析 + 闸，不等 Confirmation 载体」。本轮把 `adr/0082` 的原语做成代码与闸：

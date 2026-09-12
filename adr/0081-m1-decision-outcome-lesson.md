@@ -199,3 +199,41 @@ LLM 提议的归属 ──→ 【候选层】proposal（source=model-proposal, c
 **本 ADR 的 §3 契约据此收窄**：`decision-outcome` 的 `forbidden changes` **保留**第 ④ 条禁令（不用相似度/LLM 做归属），
 并把「LLM 归属」**移到候选层**（`adr/0082`）。
 
+## 8. 实现（M1-A 已落地，v1.15.51）：确定性归属 + 接进原语
+
+**落地物**：`core/decision-outcome.ts`（纯函数：归属规则 / 原语记录构造 / `pending` 读数 / `p90`）
++ `test/decision-outcome.test.ts`（**11 组闸**）；`tsconfig.json` 显式纳入编译面。`npm run verify` = **51/51**。
+
+### 8.1 归属规则 `same-key-window/v1`（**确定性 + 保守**）
+
+```text
+观察 O 归属决策 D ⇔ ① 同一 key ② O.at ≥ D.at ∧ lag ≤ windowDays
+                    ③ 取窗内**最晚前驱** ④ **并列 ⇒ 不归属**（计入 ambiguous，可见）
+```
+- **`key` 由调用方显式传入**：`ObservationTrace` 里**没有 `entry`**（只有 `id`/`observerId`/`createdAt`/`decision?`/`outcome?`）
+  ⇒ **本 ADR 明确不发明 entry 的推导**（那正是「不得推断」的边界），与 §7.2「`subject` 只接受显式提供」一致。
+  ⚠ **因此「`key` 从哪来」这条链仍未接** —— 那是 **M1③ 的显式入口**设计。
+- **并列不归属**而不是任选：与 ADR-0061「**错误关链是静默破坏**」的不对称一致 —— **宁可少归属，不可错归属**；
+  且 `ambiguous` **计数可见**（ADR-0049）。
+- **一个决策可有多个结果事实**：本模块**不挑「那个」结果**（挑选＝判断）。`windowDays` 由调用方给（§5 待定项）。
+
+### 8.2 「结果事实只能经原语产生」已接线
+
+```text
+attributeOutcomes ─→ Attribution（**候选层**）─→ toPrimitiveRecords
+   ─→ Proposal(source=user/tool/ci · inputRefs 必填) + Confirmation(actor="tool", reason="rule:… key=… lag=…d")
+   ─→ core/proposal.ts#projectFacts ─→ **Fact**
+```
+**内容来源 = 观察者**（外部）；**确认 = 确定性规则**（`actor:"tool"`，`reason` 写明规则与数字 ⇒ 可审计）。
+闸 ⑧ 直接验证：本模块**不返回 `facts`**，且**直接写 `type:"fact"` 仍被拒**。
+
+### 8.3 `pending` 读数（年龄**只暴露风险、不改变状态**）
+
+`decisions / settled / pending / ambiguous / unattributed` + 年龄分布（<7d · 7–30d · 30–90d · ≥90d）+ **最老一条** + **`pendingAgeP90`**
+（nearest-rank，**不插值**）+ 一行渲染。闸 ⑩ 验证：**换 `now` 只改读数、不改状态**；**无 pending ⇒ p90 = `null`（不可测不报 0）**。
+
+### 8.4 §5 的三处待拍板仍然待定（未替用户决定）
+
+`key`（≈`subject`）的**显式入口**在哪 · `windowDays` 取多少 · 是否落盘与落在哪（`adr/0082` §6）。
+**未做**：M1③ 的显式入口、落盘、读路径渲染（**故当前没有生产消费者** ⇒ A 段线索仍待接线，棘轮已按规程重录并说明）。
+
