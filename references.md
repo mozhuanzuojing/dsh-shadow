@@ -275,7 +275,7 @@
 | `docs/benchmark/core-v1.md` | 1 | 2.8 KB | ✅ **全文** | 零网络基准门 |
 | `docs/research/p1-extraction-ab-v2-protocol.md` | 1 | 7.5 KB | ⚠ **只读 `:1-42`** | 预注册 + 冻结臂 |
 | `src/`（其余 ~344 文件 / 2.41 MB） | 344 | 2.41 MB | ❌ **未读** | —— |
-| `tests/` | 384 | 3.17 MB | ❌ **未读** | —— |
+| `tests/` | 384 | 3.17 MB | ⚠ **门禁面已读**（v1.15.43：`tests/eval/` 的 `ci_gate.py` / `gate_check.py` / `README.md` / `relation_chain_holdout_manifest.json` / `test_test_suite_policy.py` / `test_default_zero_model_calls.py` + `conftest.py`）；其余 ~375 个测试体**未读** | 见 `references.md` §6.6 |
 | `docs/superpowers/plans/` | 22 | 492 KB | ✅ **全部读完**（子代理，父代理抽查引用） | 撤回台账**不在**此目录 |
 | `docs/superpowers/specs/` | 11 | 112 KB | ✅ **全部读完**（子代理） | 取代/生命周期/证据三主题在 `2026-09-01-...completion-design.md` 最集中 |
 | `docs/research/` | 7 | 106 KB | ✅ **全部读完**（子代理） | A/B 协议、TTL 评测、回归诊断 |
@@ -283,11 +283,14 @@
 | `docs/*.md` 顶层（除 `capability-matrix.md`） | 13 | 287 KB | ❌ **未读** | 含 `architecture.md`（41 KB） |
 | `docs/dev/` + `docs/benchmark/` | 2 | 11 KB | ✅ 读完（子代理） | `patch-points-v0293.md` 与本主题无关 |
 | `storage/migrations/` | 69 | 147 KB | ✅ **读完**（子代理，父代理核计数） | 60 `.sql`(001-060) + 9 `.py` |
-| `evaluation/` | 67 | 8.15 MB | ⚠ **只读两个 README** | **`evaluation/results/` 实测只有 `README.md`（2130 B）** ⇒ 公开分数**无原始结果可核** |
+| `evaluation/` | 67 | 8.15 MB | ⚠ **门禁面已读**（v1.15.43：`scripts/` 11 个 `check_*.py` + 5 个 workflow + `benchmarks/release/` 的协议/比较器/签入 results）；`evaluation/tools/` 其余 **15 个 runner 未读**；**`evaluation/results/` 实测只有 `README.md`（2130 B）** ⇒ 公开分数**无原始结果可核** | 见 `references.md` §6.6 |
 | `benchmarks/` | 46 | 512 KB | ⚠ 部分（子代理） | `archive/v030/` 是被撤回批次的归档 |
+| `.github/workflows/` | **5** | —— | ✅ **全部读完**（v1.15.43；此前题面误记 ~25 个） | `publish` / `quality-smoke` / `release-gates` / `security` / `test` |
 
-**本轮之后仍未读**（诚实边界）：`src/` 绝大部分（~344 文件）、`tests/` 全量（384）、`docs/archive/`（21）、`docs/*.md` 顶层（13）、`evaluation/` 的 65 个文件。
+**本轮之后仍未读**（诚实边界）：`src/` 绝大部分（~344 文件）、`tests/` 的 ~375 个测试体（**门禁面已读**）、
+`docs/archive/`（21）、`docs/*.md` 顶层（13）、`evaluation/tools/` 其余 15 个 runner、`benchmarks/archive/v030/*`。
 **纪律**：本台账的数字来自 `git ls-files` + `Get-ChildItem` 实测；**任何一轮改这张表必须重跑枚举命令**，不得凭记忆改数。
+**v1.15.43 回填**：只改「已读/未读」状态与来源指针，**未改任何计数**（文件数与字节数与首版一致，未重跑枚举）。
 
 ### 6.4 **MemStrata 论文（2026-09-12 第 3 轮；裁定 `adr/0080`）** —— 并**认领本仓早已引用的「0.59」的原始出处**
 

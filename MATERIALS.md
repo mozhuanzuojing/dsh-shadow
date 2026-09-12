@@ -35,17 +35,25 @@
 
 | 面 | 规模 | 状态 |
 |---|---|---|
-| `docs/` | **357 文件 / 3.85 MB** | 🔄 **本轮深读中**（架构 / cordis-primer / capability-seams / agent-lifecycle / config-catalog / api-gateway） |
-| `vendor/cordis` + 另 8 包 | 218 文件 / 1.4 MB | 🔄 **本轮深读中**（框架契约：`apply`/`inject`/`effect`/Service/isolate/hmr） |
-| `.agents/` | **2,459 文件 / 12.5 MB** | 🔄 **本轮结构索引中**（agent 预设/技能/指令层的组织方式） |
-| `packages/` | 12,492 文件 / 94 MB | ❌ 未读（源码面，按需局部） |
+| `docs/` | **357 文件 / 3.85 MB** | ✅ 部分深读（架构 / cordis-primer / capability-seams / agent-lifecycle / config-catalog / api-gateway / **postmortem 0001**）；未读面仍大 |
+| `vendor/cordis` + 另 8 包 | 218 文件 / 1.4 MB | ✅ **已读关键面**：`loader/src/config/isolate.ts`（隔离继承）、`loader/src/index.ts:192-199`（`unwrapExports`）、`cordis/src/reflect.ts`（`get` 与代理陷阱）——**三处与运行面 0.1.5-rc.2 逐字节相同**（v1.15.43 核对） |
+| `.agents/` | **2,459 文件 / 12.5 MB** | ⚠ 只做**结构索引**（agent 预设/技能/指令层的组织方式），未逐个读 |
+| `packages/` | 12,492 文件 / 94 MB | ⚠ 按需局部读了：`runtime-diagnostics/invariants`（全文）、`bundle/{base,web-app,sdk-minimal}/cordis.patch.yml`、`preset/agent-presets/presets/*`、`packages/AGENTS.md`；**其余未读** |
 | `apps/` `native/` `python/` `website/` `snapshots/` | 545 / 54 / 36 / 8 / 626 文件 | ❌ 未读 |
 
 **⚠ 必须先标定的一条**：本地克隆是 **0.1.2-alpha.1**，而**运行中的宿主是 `dsh-web-app@0.1.5-rc.2`**
 ⇒ **本地文档可能落后于运行体**。任何据此得出的结论都要问「运行版是否仍这样」。
-**已吸收痕迹**：本项目曾用它做过一次会话接口核对（`CHANGELOG.md` v1.15.1 段：「检查 dsh-shadow 对 dsh 会话的接口」），
-但那是**对照 GitHub 官方源码 + 运行时**，**不是**读这个本地克隆。
-**下一步**：把「平台契约」的权威答案收进 `references.md` 或单开 ADR；**并用运行体（`cordis_inspect_*`）复核版本偏差**。
+**✅ 已逐项核对（v1.15.43，8 个平面；见 `BACKLOG.md` T16 第 4 项）**：**机制面零漂移**
+（`isolate` 继承 / `export default` 丢命名空间 / `ctx.get` vs 属性代理 三处源码哈希与克隆面相同）⇒ **克隆面行号可继续引用**；
+但**组合/产物面全漂移**（base −2 行、web-app +10−1 行、sdk-minimal +16 行含 `invariants` 装配、
+agent preset 内容 6 文件不同）。
+**一条会误导下游的纪律偏差（已记 `BACKLOG.md` T16）**：`packages/AGENTS.md` 末条写「**Every package owns `./invariant`**」，
+而 0.1.5-rc.2 的**发布产物**上 `dsh-invariants` / `dsh-base` / `dsh-web-app` 都**不再发** `./invariant` 与 `lib/invariant.js`
+（0.1.1-rc.x 是发的；服务包如 `dsh-session` 四版本都发）⇒ **引用该纪律时必须注明版本与包型**。
+**已吸收痕迹**：本项目曾用它做过一次会话接口核对（`CHANGELOG.md` v1.15.1 段），但那是对照 GitHub 官方源码 + 运行时，
+**不是**读这个本地克隆。
+**下一步**：`apps/` / `packages/` 其余面**按需局部读**（不为覆盖率而读）；平台契约的权威答案已收进
+`references.md` §6.5 与 `adr/0074` 补记。
 
 ### 2.2 `hl_mem`（**重点材料**，已三轮）
 
@@ -55,9 +63,13 @@
 | v1.15.37（ADR-0076） | 补齐 `docs/adr/0004`（26 KB）+ `capability-matrix` 全文 + 评测治理 |
 | v1.15.39（ADR-0078） | **首次克隆后一手读源码**：三处自我更正（守卫不是写侧 / 协议是窄面+默认 observe / 路径计数错） |
 
-**已吸收**：D8（README 表补三列）、ADR-0077 三件（信号表棘轮 / `verify` 冒烟门 / 错误方向不对称）。
-**未读（诚实边界）**：`tests/`(384 文件) · `src/` 其余 ~344 文件 · `docs/*.md` 顶层(13) · `evaluation/` 65 文件。
-**下一步**：按需局部读（`tests/` 的**测试纪律**与 `evaluation/` 的**门禁脚本**最可能喂养 T13/T14）。
+**已吸收**：D8（README 表补三列）、ADR-0077 三件（信号表棘轮 / `verify` 冒烟门 / 错误方向不对称）、
+**ADR-0078 的门禁形状已在 v1.15.41/v1.15.42 落地两处**（结构门 `audit-layers` / 确定性基准门 `retrieval-eval`）。
+**门禁面已读（v1.15.43，`references.md` §6.6）**：`scripts/` 11 个 `check_*.py` + **5 个 workflow** +
+`benchmarks/release/`（协议 JSON / 比较器 / 签入 results）+ `tests/eval/`（第二套更严的 gate）。
+**未读（诚实边界）**：`tests/` 其余 ~375 个测试体 · `src/` 其余 ~344 文件 · `docs/*.md` 顶层(13) ·
+`evaluation/tools/` 其余 15 个 runner · `benchmarks/archive/v030/*`。
+**下一步**：**按需局部读**（已不再为覆盖率而读；凡要吸收的形态，当轮必须落到本仓代码并过 `verify`）。
 
 ### 2.3 `openviking`（**吸收最深的一份**）
 
@@ -92,7 +104,12 @@
 - 现状：本项目全部文档里**零提及**。610 MB / 56,514 文件；`package.json` 为 `voyager@1.7.1`、版权 Jonathan Braat ⇒ **上游 fork**，而远端是 `Nagi-ovo/voyager`，其提交含 `docs(dsh):` ⇒ 该 fork 做了 DSH 适配。
 - **下一步**：定位「它到底是 DSH 的什么」（前端？插件？）再定优先级。
 
-### 2.8 本轮并行深读（**四路全部回报**，2026-09-12）
+### 2.8 并行深读（**四路全部回报**，2026-09-12）
+
+> **时态说明（v1.15.44 回填）**：本节各条里「本轮 / 子代理在查 / 下一步」的**将来时措辞**是**第一轮当时**的原文，
+> 已全部兑现 —— 四路回报**均已整合**（结论落 `adr/0074` 补记、`adr/0078`、`adr/0080`、`BACKLOG.md` T13–T16、
+> `references.md` §6.2–§6.6）。**第 5 轮又追加三路并行查证**（A 段残余 18 条 / T12 时间炸弹 / T16 版本偏差），
+> 结论见 `CHANGELOG.md` v1.15.43。**§2.3–§2.7 的「下一步」均已执行到「定位」这一步为止**，未再深入。
 
 | 路线 | 对象 | 交付 | 最要紧的产出 |
 |---|---|---|---|
@@ -142,7 +159,7 @@ the configured root is the fallback for agentless calls and sessions without a c
 | RAPTOR / HeteRAG / UMG-RAG | ADR-0060 多粒度检索层的学术等价物 | 见 `CONTEXT.md` |
 | LongMemEval | 长期记忆评测口径（hl_mem 用过） | 见 hl_mem `evaluation/results/README.md` |
 
-### 3.2 本轮检索到的**新线索**（**仅检索到，未读全文** —— 诚实标注）
+### 3.2 检索到的**新线索**（**MemStrata 已一手读完**；其余仍**仅检索、未读全文** —— 诚实标注）
 
 | 论文 | 为什么对本项目重要 |
 |---|---|
@@ -152,7 +169,10 @@ the configured root is the fallback for agentless calls and sessions without a c
 | **Caching for the Future: Scrub Jay Episodic Memory Principles for Agent Memory Systems** | 从动物认知取原则（**缓存/前瞻性记忆**）——与「什么该忘、什么该留」的判据可能有关 | [arXiv:2608.04746](https://arxiv.org/abs/2608.04746) |
 
 **纪律**（沿用 0073 起）：**未读全文前不得引用其结论**；读到后必须区分「它声称的」与「有原始数据的」，
-并**不得把别家读数当作本系统的证据**。**下一步**：先读 `2606.26511`（与 D3 同题），再读两篇综述做空白核对。
+并**不得把别家读数当作本系统的证据**。**进度**：✅ `2606.26511`（MemStrata）**已读完正文 + Appendix B/C/D +
+Table 1/2/3**（裁定 `adr/0080`；**A.1/A.2 表体与 Table 4/5 仍未读到**，HTML 截断）；其**后续论文**
+（*Temporal Validity on Real Software Histories*）**未读**；**分数未复现**。
+**下一步**：两篇综述（`2602.06052` / ACL 2026 Findings）只用来做 **G1–G4 的空白核对**，**不**作为本系统证据。
 
 ### 3.3 检索到但**判为不相关**（登记以便不再重复检索）
 
@@ -167,16 +187,26 @@ the configured root is the fallback for agentless calls and sessions without a c
 | harness `docs/` + `vendor/cordis` + `.agents/` | **平台契约**（工具注册 / fs 契约 / 组合与 preset / 能力接缝） | **审查 + 纠错**（若下游理解有错，最高价值） |
 | harness 运行体（`cordis_inspect_*`） | 版本偏差与**契约语义**的**唯一裁判**（克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2） | **标定** |
 
-**运行体 Service 目录的两个结论（v1.15.40 第 2–3 轮，均取自运行体而非文档）**：
-1. `ctx.sandboxPolicy` / `invariants` / `jobs` / `storage` / `storageDomain` / `sessionProjections` **都存在且可见**
-   （access 同时给出 `optional: ctx.get(...)` 与 `hardDependency: inject:[...]`）。
-2. 但「**平台已有 ⇒ 本仓可能在重造**」这个怀疑，**四项里只对一项成立**：
-   `sessionProjections`（本仓是**文件派生**、非会话事件折叠）· `storage`/`storageDomain`（会撞 ADR-0001 的
-   「人类可读文件树」）· `jobs`（本仓无后台长任务）**三项均不适用**；
-   唯一候选是 **`invariants`**（可把本仓**只活在测试里**的不变量注册成宿主可执行的检查），
-   但**有两条前置未确认**（失败是否阻断宿主 / 选择机制由谁配置）⇒ 入 T16 第 3 条。
-   ⇒ **教训（可复用）**：怀疑「重造」时，**先取契约判用途，再判是否重造**——
-   服务同名不等于用途相同（本条避免了一次无效改造）。
+**运行体 Service 目录的两个结论（v1.15.40 第 2–3 轮，均取自运行体而非文档）—— ⚠ 第 2 条的表述已被 v1.15.42 的运行时可读读取推翻**：
+1. ✅ **仍成立**：`ctx.sandboxPolicy` / `invariants` / `jobs` / `storage` / `storageDomain` / `sessionProjections`
+   都在**声明的契约目录**里（access 同时给出 `optional: ctx.get(...)` 与 `hardDependency: inject:[...]`）。
+   ⚠ **但「目录」不是活性表**（见第 3 条）。
+2. ❌ **已被推翻（原写「四项里只对一项成立，唯一候选 `invariants`」）**：`invariants` 的注册表
+   **在正在运行的 web 部署里根本没有被挂载** —— 用**只读动态 Host 插件**逐名读 `ctx.get` 得
+   `ctx.get('invariants') === undefined`，而同一次探测里**只在宿主/Web 层挂载、任何预设都不提供**的
+   `spillStore`/`tokenMeter`/`shellEnv`/`codeRuntime`/`webServer`/`clientModules`/`sessionTitle`/`sessionQuery`
+   **全部读到** ⇒ 沙箱 `ctx.get` 读的是**全局服务表**，`undefined` 就是**真的没挂**。
+   ⇒ **`invariants` 判「暂不吸收」**（本仓写 `ctx.get('invariants')?.register(...)` 在此部署＝**静默 no-op＝假闸门**）；
+   重启该项的前置 = **同时把挂载行写进部署组合**（范本 `dsh-sdk-minimal/cordis.patch.yml:103-104`）或**缺件响亮报告**（ADR-0049）。
+   另三项（`sessionProjections` 文件派生 ≠ 会话事件折叠 / `storage` 会撞 ADR-0001 / `jobs` 无后台长任务）**判定不变**。
+3. ⭐ **新增纪律（比上面两条都重要）**：**Service 目录 ≠ 活性表**。反例三条：
+   **`e2b` 在目录里而 `dsh-e2b` 在本 profile 里根本没安装**（`Test-Path` = `False`）；
+   `dsh-invariants` **装了但没挂**；`authorization` / `inspector` 在目录里而 `ctx.get` 均 `undefined`
+   （`inspector` 尤其反直觉：它是 Inspect 自身的宿主侧门面）。
+   ⇒ **凡结论是「某能力运行体里有没有」，唯一判据是运行时读取**；不得用目录、文档或「安装包里存在」代替。
+   （细节与读数表：`references.md` §6.5.1。）
+4. **一条教训（可复用）**：怀疑「重造」时，**先取契约判用途，再判是否重造** —— 服务同名不等于用途相同
+   （本条避免了一次无效改造，也避免了一次假闸门）。
 | hl_mem（余下 `tests/` + `evaluation/`） | T13（结构性门禁）/ T14（确定性基准门）/ T11①（评测纪律） | 吸收（形态） |
 | openviking（未吸收面） | T9 / T13 / T14 / T15 / G1 / D3 | 吸收（**只取概念**，AGPL） |
 | archify / ppt-master / voyager / awesome-dsh-plugin | DSH 插件工程的**对照样本** + 生态索引可信度 | 定位 → 按需审查 |
@@ -206,9 +236,14 @@ Get-ChildItem <repo> -File | Where-Object { $_.Name -match '^(LICENSE|LICENCE|CO
 
 ## 6. 诚实边界（本台账**尚未**回答的）
 
-- 除 hl_mem / openviking 外，**其余材料的「内容」尚未深读**（本轮只做定位与名册；四路深读在跑）。
-- **论文全部未读全文**（§3.2 只是检索线索）。
-- harness 是 **0.1.2-alpha.1 的克隆**，与运行体 **0.1.5-rc.2** 的偏差**未逐项核对**。
+- 除 hl_mem（含其**门禁面**）/ openviking / harness 的**关键面**外，**其余材料的「内容」尚未深读**
+  （§2.4–§2.7 只做定位；§2.8 四路回报的结论已分别落 ADR / BACKLOG）。
+- **论文**：MemStrata **已读完正文 + Appendix B/C/D + Table 1/2/3**（`adr/0080`）；
+  **A.1/A.2 表体与 Table 4/5 未读到**（HTML 截断）；**后续论文未读**；**分数未复现**；
+  §3.2 其余三篇（两篇综述 + Scrub Jay）**仍只检索未读全文**。
+- harness 是 **0.1.2-alpha.1 的克隆**，与运行体 **0.1.5-rc.2** 的偏差**已逐项核对（v1.15.43，8 个平面，T16 结案）**
+  —— 机制面零漂移、组合/产物面全漂移；**未纳入**运行中会话**实际挂载**的组合（用户 profile patch / 自制预设 / 动态插件）。
 - 名册的**文件计数包含 `node_modules`**（harness / ppt-master / voyager / archify 等前端/TS 仓库），
   ⇒ **不能直接与「源码规模」混用**；口径洁净的数字见 §2 的分面表与子代理回报。
-- 本台账**不登记**「是否已吸收」之外的**结论**——结论一律落在 `adr/`、`BACKLOG.md`、`references.md`。
+- **本台账只登记「读了什么、吸收了什么、还差什么」**——结论与判据一律落在 `adr/`、`BACKLOG.md`、`references.md`。
+- **本轮的台账更新只改「状态列与结论」，未改任何计数**（按 §5 纪律：**改数必须重跑枚举命令**）。
