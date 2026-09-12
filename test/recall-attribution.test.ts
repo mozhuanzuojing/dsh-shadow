@@ -2065,7 +2065,7 @@ const reflType = "principle";
 const putReflection = (store: Map<string, string>, id: string, opts: { type?: string; statement: string; evidenceCount: number; corr?: any[]; deviations?: string[]; periodTo?: string }) => {
   store.set(`D:/ws/.shadow/reflection/2026-09-05/${id}.md`, renderReflection({
     id, observerId: "T", sourceTraces: [],
-    period: { from: "2026-01-01", to: opts.periodTo || "2026-09-05" },
+    period: { from: "2026-01-01", to: opts.periodTo || today() },
     observation: { repeatedDecisions: [], repeatedOutcomes: [], deviationPatterns: opts.deviations || [] },
     pattern: { decisionOutcomeCorrelation: opts.corr || [] },
     learning: { statement: opts.statement, type: (opts.type || reflType) as any, evidenceCount: opts.evidenceCount },

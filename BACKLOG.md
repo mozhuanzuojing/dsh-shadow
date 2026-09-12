@@ -6,8 +6,9 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-12（`v1.15.40`）—— **现存 25 条**（T 11 / D 6 / V 6 / G 4 + **T7**–**T16**；**B3 已闭环**）；
-> 已结案 **18 条**（B1 / B2 / **B3** / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
+> 最后整理：2026-09-12（`v1.15.43`）—— **现存 23 条**（T 11 / D 6 / V 6 / G 4 + **T7**–**T11**、**T13 后半**–**T15**；
+> **B3 / T12 / T16 已闭环**，**T13 前半 / V6 部分完成**）；
+> 已结案 **20 条**（B1 / B2 / **B3** / **T12** / **T16** / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
 > 漂移审计工具 / 图快照顺序 / 台账版本出处 / **T5 漂移键复核** / **T1 A 类分诊** / **T4 零引用定性** /
 > **D8 能力矩阵补三列** / **D6 吸收 OpenViking 三条** / **W1 审计工具漏报** / **countInconsistency 接线**）。
 > **T5 已结案**（v1.15.32）· **T1/T4 已结案**（v1.15.33）· **D8 已结案**（v1.15.34）·
@@ -37,6 +38,34 @@
 ---
 
 ## 〇、已结案（保留结论，便于回溯）
+
+### ✅ **A 段残余 18 条（A2b/A1）逐条分诊**（v1.15.43）—— 1 处真断线（已修）+ 工具口径缺陷（已修）
+
+> 背景：T1/T4 结案后 A 段还剩 **A2b 1 + A1 17 = 18 条**「需人工逐条查」。本轮逐条判完，
+> 判据 = 读定义 + 读 JSDoc + 搜生产面调用点 + 查同文件成对谓词 + 查同名第二份实现。
+
+**先修工具口径（本轮新增证据）**：`audit-wiring` 的「测试引用 N」**此前不可采信** ——
+`tools/audit-wiring.ts:37` 原写成 `!isProductionPath(...)` 即算「测试」，而 `isProductionPath` 只排除
+`node_modules/dist/test/...` ⇒ **`dist/**` 的 `.d.ts` 与 `node_modules/**` 的 `.d.ts` 都被算进「测试引用」**。
+实测：`hasNoUpgradeApi` 的「1」全来自 `dist/agency/guards.d.ts`；`apply` 的「230」里 15 来自 `node_modules`。
+**已修**：判据改为**只认 `test/` 下的文件**（`dist/`、`node_modules/` 两边都不算），并把口径打进输出行；
+修后 `hasNoUpgradeApi`/`renderIntent`/`progresssiveDisclosure` 等的「测试引用」如实变成 **0**。
+
+**逐条结论（汇总）**：**真断线 1** · **配对包装一半 4** · **仅测试/公开面正当 7** · **无法判定 6**。
+
+| 分类 | 符号（文件） |
+|---|---|
+| **真断线（1，已修）** | `ledgerMismatch`（`tools/toolset-authority.lib.ts:47`）：CLI **import 了却另写内联过滤**（`:99-102`）⇒ 判据分叉隐患（离线棘轮走 lib、CLI 走内联）。`git log -S "ledgerMismatch("` **为空** ⇒ 属「import 了但忘了接线」。**已改为 CLI 直接调 lib 那份**，并加**源码级棘轮** ⑦（`test/toolset-authority.test.ts`：断言 CLI 调它 + `--check` 分支内**不得**再有 `ledgerVerSrc !==` 内联比对） |
+| **配对包装一半（4）** | `renderRetrieved`（窄版，生产用带 `__path` 的 `renderKnowledgeRetrieval`）· `assertNoExpansionField` · `assertLifecycleActive` · `assertScopeWithin`（引擎只 import 谓词，包装零消费者）⇒ **一处家族级决定**，不是 N 处缺陷 |
+| **仅测试消费 / 公开面（7）** | `sidecarDrift`（JSDoc 明写消费者是棘轮）· `isMetadataMemoryText` · `isExchangeable` · `apply`（**Cordis 宿主入口，零仓库内调用是设计**）· `writeMeta`（文档明示的逃生舱）· `readTemporalGraph` · `readGraph`（world 只写不读，读 API 留公开面） |
+| **无法判定（6，全部缺「产品决策」而非代码证据）** | `hasNoUpgradeApi`（恒 `true` 的见证函数，真实测试引用 **0** ⇒ 是「删」还是「补一条源码级棘轮」）· `renderIntent`（`observer/core.ts:31` 只内联渲染 `goal`+`question`，是否改调它）· `renderIdentityModel` · `progressiveDisclosure` + `refineTree`（ADR-0048 成本折叠是否进默认读路径，**同一处决定**）· `relationForProposal`（T7 三选一） |
+
+**同轮记账（不是接线任务）**：
+- `isMetadataMemoryText` 的注释/ADR-0066 口径称它「服务不 `parseMemory` 的读路径」，而生产读路径**全走 `parseMemory`**
+  （`query/materialize.ts:24-26`、`query/reads.ts:113`）⇒ **该句当前不实**，应改为「文本面孪生，仅由一致性测试锁住」。
+- **T10 的实例（新证据）**：`persistence/snapshots.ts:26 readLatestSnapshot` 的生产可达路径只有那两个零引用 reader
+  ⇒ ADR-0071 那次「读逻辑收敛」在**当前生产运行时收益为 0**（与 `BACKLOG.md` 自述一致）；工具抓不到这一类（已自曝盲区）。
+- 11 个 `assert*` 的「测试引用 1」**全部来自 `dist/*.d.ts`** ⇒ 「给测试用」这半目前不成立，理由应改为「给将来调用方」。
 
 ### ✅ 台账「实测」标签比事实强（ADR-0072，v1.15.29）—— **量证·改正默认值·签入离线棘轮**
 
@@ -514,25 +543,37 @@
   （避免 `new` 命中 `renew`）；③ **量化污染**：去掉一个 `[OUTDATED]` 标记后，重排臂掉 **14 点**、纯门控臂掉 **18 点**，
   而时间法只动 **-4** ⇒ **用「对照组掉多少」证明污染真实存在**。（原文见 `adr/0080` §5 引用。）
 
-### T12. **时间炸弹 fixture**：测试里硬编码的「最近日期」会随时间静默变红（v1.15.38 新发现）
+### T12. **时间炸弹 fixture** —— ✅ **已闭环（v1.15.43）**：22 个文件逐条判定，**只有 1 个真炸弹（2 处断言，已修）**，引爆日 **2027-01-02**
 
-- **依据**：`CHANGELOG.md` v1.15.38 §5；`adr/0077` D4.2（含完整根因与引爆时刻）。
-- **已引爆的一颗（已修）**：`test/recall-attribution.test.ts` 场景 30 硬编码 `2026-09-05`，而
-  `stale = ageDaysOf(rel) >= staleDays`（默认 **7**）、`lifecycleOf` 里 `DECAYING` **排在**
-  `OBSERVED`/`VERIFIED` **之前** ⇒ 本地日期一到 `2026-09-12`（UTC 才 09-11，`today()` 用**本地**日期）
-  就整片塌成 `DECAYING`。已改为**相对今天**（`today()` / `today(30)`）+ 显式 `retention: { staleDays: 7 }`。
-- **为什么之前没人发现**：本仓此前**没有一条「把全部检查跑一遍」的命令**（正是 T11② 要解决的）；
-  而它**恰好**在本轮建门当天引爆 ⇒ 门第一次运行就报出来。
-- **风险面（已扫，非已确认缺陷）**：`test/*.test.ts` 里硬编码日期的清单 ——
-  `2026-09-01`(11) / `09-02`(2) / `09-03`(2) / `09-04`(3) / `09-05`(127) / `09-06`(15) / `09-07`(85) /
-  `09-08`(75) / `09-09`(6) / `09-10`(8) / `09-11`(19) / `09-12`(1)，跨 8 个文件。
-  **多数命中不是缺陷**（多为期望输出字符串里的日期或与 age 判据无关的 fixture）；
-  **只有场景 30 被确认与 `age`/`stale` 判据耦合**。
-- **为什么现在没做**：其余 11 个日期的**耦合性需逐个判定**（读每条断言是否依赖 `stale`/`ageDays`/
-  `hotness`/`halfLife`）——**那是逐条核实，不是批量替换**；盲目把日期改成相对值属「未经复现的改」。
-- **完成判据**：① 对上述 8 个文件逐个判定「是否与 age/stale 判据耦合」并记录结论；
-  ② 耦合的改成相对日期，不耦合的给出**一句为什么**（避免下一轮再扫一遍）；
-  ③ 可选：加一条**棘轮**，禁止在 fixture 里新写「距今 < 阈值」的硬编码日期（需先有 ①②的结论面）。
+- **依据**：`CHANGELOG.md` v1.15.38 §5；`adr/0077` D4.2。**已引爆的一颗（v1.15.38 已修）**：
+  `test/recall-attribution.test.ts` 场景 30 硬编码 `2026-09-05` 而 `stale = ageDaysOf(rel) >= staleDays`（默认 7）
+  ⇒ 本地 `2026-09-12` 当天整片塌成 `DECAYING`。已改为**相对今天**。
+- **本轮口径修正（先纠自己的数）**：题面记「12 日期 / 354 处 / **8 个文件**」，**实测是 12 日期 / 357 处 / 22 个文件**
+  （口径：`test/` 下 `*.ts`，occurrence 级 `[regex]::Matches`；`09-07` 实为 **87**、`09-01` 实为 **12**，其余 10 个吻合）。
+- **判定方法（可复现）**：① 逐文件读断言，看是否依赖「今天」与某阈值之差（`ageDays`/`staleDays`/`hotness`/`halfLife`/
+  `recency`/`today()`/`Date`）；② **行为探针**：把 `new Date()`/`Date.now()` 钉到假日期后逐文件 import 运行，
+  在 **2027-06-01 / 2027-10-01 / 2028-06-01 / 2030-01-01** 各跑一遍（约 60 次，零文件写入）；
+  ③ 机制探针直接 import `dist/identity/evaluator.js` 打印 `days/recency/status/reasons`。
+- **逐条结论**：**耦合（炸弹）1 个**，其余 **21 个文件全部不耦合**，理由逐文件记在
+  `CHANGELOG.md` v1.15.43 的表里。357 处的成分：**路径/文件名 264（74%）** + 记忆正文文本 25（7%）+
+  assert 期望串 15（4%）= **304 处（85%）不参与任何阈值运算**；余 53 处（15%）是 fixture 元数据，
+  **其中只有 `periodTo` 的默认值这 1 处被「今天」消费 —— 那就是这颗炸弹**。
+- **真炸弹（已修）**：`test/recall-attribution.test.ts` 场景 58（`:2153`）与场景 60（`:2196`），**同一根因**：
+  `putReflection` 的默认 `period.to = "2026-09-05"`（`:2068`）被 `identity/evaluator.ts:48` 当作 `lastSeen`，
+  `recency = exp(-ln2·days/90)`，闸门 `recency >= 0.4` ⇒ **本地日期 ≥ 2027-01-02 时 days=119 →
+  recency=0.39992 < 0.4 ⇒ status 由 `accepted` 变 `candidate` ⇒ 不提 v2 / `learned` 不增**。
+  实测 bisect：`2026-12-31`/`2027-01-01` **PASS**、`2027-01-02`/`01-03`/`01-10` **FAIL**。
+  **修法**：`:2068` 一行 `to: opts.periodTo || today()`（与场景 30 的既有修法同形）。场景 60 此前**被 58 掩盖**
+  （文件在 58 先抛错中止），同一行修法一并解决。**修复后 `node test/recall-attribution.test.ts` = ALL PASS ✅**。
+- **同轮记账（语义漂移，不是红）**：场景 55/56/57（同样用默认 `periodTo`）在 2027-01-02 之后 reasons 会**多出**
+  「时间稳定不足」，但断言只查「重复性不足 / 反证过多 / 无 v2」⇒ 仍绿，**测试名所述闸门不再是唯一拦截者**。
+- **未判定（诚实标注）**：① **未做逐日全量 sweep**（理论存在「非单调窗口」：两项 base 分差为 1 时 recency 加成
+  可在 0/1 间振荡）——已逐条排除排序类断言（`recall-envelope:188` 两侧 base 相等、`recall-routing-eval` 的
+  entry 命中与次优项 base 差 ≥2、`recall-attribution` 全文件无 `indexOf(` 排序断言），故风险未证为 0 但已无已知路径；
+  ② `replay-real.ts` / `replay-metrics.ts` 的 `DATE` 默认值（09-07）是否失真需真实语料才能判（它们**不是断言**，不影响红绿）。
+- **完成判据**：① 8 文件 → **实测 22 文件逐个判定** ✅；② 耦合的改成相对日期（1 个文件、2 处断言）✅，
+  不耦合的给出理由 ✅（见 CHANGELOG 表）；③ 可选棘轮**未做**（需先有长期稳定的结论面；且真实炸弹已修）。
+
 
 ### T13. **结构性门禁**：分层方向 / 复杂度预算 —— 🟡 **前半已落地（v1.15.41）；后半（复杂度预算）仍未做**
 
@@ -699,7 +740,7 @@
   ② 给出一条**最小弃用流程**（旧名保留一个版本 + 输出可见提示 + CHANGELOG 写迁移说明），
   并说明**「无替代品」时怎么写**；③ 把清单放进 `README.md`（而非另开一份易漂移的文档）。
 
-### T16. **平台契约核对与纠错**（v1.15.39 新开，来源 `adr/0078` D3 + `MATERIALS.md` §2.8）
+### T16. **平台契约核对与纠错**（v1.15.39 新开）—— ✅ **已结案（v1.15.43，四项全闭）**
 
 - **依据**：v1.15.39 深读 DSH 本体（本地克隆 `dsh-w/deepseek-harness`，`cd5ef81481` = **0.1.2-alpha.1**；
   **运行体是 `dsh-web-app@0.1.5-rc.2`**）⇒ 四路回报里**7 条「下游可能理解错」**。已自查 1 条、已裁定 1 条：
@@ -772,11 +813,32 @@
      ⇒ 凡结论是「某能力运行体里有没有」，**唯一判据是运行时读取**。
      **✅ 附带好处**：第 1 条（`sandboxPolicy` 可见）在本次探测里**被更硬的判据复核**——
      `ctx.get('sandboxPolicy')` 读到对象 ⇒ **ADR-0074 结论不变、证据从「目录」升级为「运行时读取」**。
-  4. **版本偏差**：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2 ⇒ 上述结论凡未回运行体核对的，**一律标注未核对**。
-     **进度**：本节第 1/3 条的契约**都取自运行体**（`cordis_inspect_query`），不是文档；
-     第 3 项第 4 轮**又加一个数据点**：`dsh-invariants` 0.1.5-rc.2 的 `files` **不发布** `lib/invariant.js`（0.1.1-rc.x 发布）
-     ⇒ 「每个包都发布 `./invariant`」这条纪律在**发布产物上并不统一**，引用时要注明版本。
-     **同时新立一条枚举纪律**（方法层，已复现）：**PowerShell `Get-ChildItem -Recurse` 默认不跟随 junction**
+  4. ✅ **已逐项核对（v1.15.43，8 个平面，克隆面 vs 运行面 0.1.5-rc.2）** —— 结论：**机制面零漂移，组合/产物面全漂移**。
+     **口径**：递归枚举一律 `-FollowSymlink` 并给计数（`[LINKS]` 70 条 / `[DLX]` 239 条；
+     bundle patch 的 `invariant` 命中：克隆面 0（语料 118/501/438 行），运行 `dsh-sdk-minimal` 10）；
+     profile junction 实际解析目标已用 `Get-Item Target` 验过（loader **1.0.3** / cordis **4.0.2**）。
+
+     | # | 平面 | 结论 | 关键证据 |
+     |---|---|---|---|
+     | 1 | `isolate` 继承语义 | **一致** | 运行面 `cordis-plugin-loader/src/config/isolate.ts` 与克隆面 `vendor/loader/src/config/isolate.ts` **SHA256 相同**（各 173 行；loader 1.0.2/1.0.3 该文件都同哈希）⇒ 克隆面行号（`:98`/`:99-101`/`:123`）**可直接引用** |
+     | 2 | `export default` 丢命名空间（含 `inject`） | **一致** | 运行面 `src/index.ts:192-199` 与克隆面**逐字相同**，`exports = exports.default ?? exports` 仍在（`:194`）；`lib/index.js:746` 亦有 ⇒ postmortem 0001 的结论**对运行面仍成立** |
+     | 3 | `ctx.get` vs 属性代理 | **一致** | 运行面 `cordis/src/` **9/9 文件**与克隆面同哈希；`get` 在 `reflect.ts:233-243`、代理陷阱 `:136-171`（ancestor-only 走链 `:155-166`）⇒ `packages/AGENTS.md` 的说法仍准确 |
+     | 4 | `dsh-base` 组合行 | **已变** | 克隆 86 id / 运行 84 id；**只在克隆面有**：`tool-str-replace-editor`（克隆 `base:428`）、`tool-subagent-report`（`:376`）；只在运行面有 **0**。`dsh-tool-subagent-report` **包已退役**（双树均无），`str-replace-editor` 包仍在磁盘但**无任何行挂载** |
+     | 5 | `dsh-web-app` 组合行 | **已变** | 克隆 85 / 运行 94；**只在运行面有 10**（`open-in-app:65`、`ui-open-in-app:72`、`session-turn-outline:91`、`workspace-files:110`、`file-upload:192`、`resources:217`、`ui-sidebar-right:224`、`ui-sidebar-documentpreview:230`、`ui-sidebar-files:234`、`ui-schedule:306`）；只在克隆面有 1（`tool-str-replace-editor`） |
+     | 6 | `dsh-sdk-minimal` 的 `invariants` 装配 | **已变（二次确认）** | 运行面 `:103-104` `- id: invariants` / `name: '@deepseek-ai/dsh-invariants'`；`:106/:109/:112/:115` 为 `dsh-session`/`dsh-agent`/`dsh-scope`/`dsh-agent-loop` 的 `/invariant` 行；**4 个 `*/invariant` 子路径在运行面确实可解析**（非死引用） |
+     | 7 | agent preset | **清单一致 / 内容已变** | 两侧同为 4 目录 10 文件；**6 个文件内容不同**（4 个 `agent.cordis.yml` 全不同）。漂移方向：`text:` → `prefix:`+`suffix:` 拆分、新增 `- id: present`、删掉 `tool-subagent-report` 那段注释、`minimal` 删掉 `filesystem` 隔离组与编辑器行 |
+     | 8 | 「每个包都发 `./invariant`」 | **已变，且是系统性丢失** | `files` 含 `lib/invariant.js` / `exports` 含 `./invariant`：`dsh-invariants`、`dsh-base`、`dsh-web-app` 三者在 **0.1.1-rc.x = 是 → 0.1.5-rc.x = 否**；`dsh-sdk-minimal` 恒否；而 **`dsh-session`/`dsh-agent`/`dsh-scope`/`dsh-agent-loop` 四个版本全「是」**（`lib/invariant.js` 实在磁盘）⇒ **服务包遵守、bundle 家族与注册表包本身不遵守**，而 `packages/AGENTS.md` 末条仍写 `Every package owns ./invariant` |
+
+     **对下游结论的影响（三条）**：
+     ① 以「运行面 loader/cordis 与克隆面同名机制安全」为前提的推论（第 1/2/3 项）**成立，可继续引用克隆面行号**；
+     ② 以「bundle id 集合未变」为前提的推论**必须重做**（base −2 / web-app +10−1 / sdk-minimal +16）；
+     ③ 以「每个包都发 `./invariant`」为前提的推论**在 0.1.5-rc.2 上不成立** —— 涉及 bundle 包与 `dsh-invariants` 本身时按「无该子路径」处理。
+     **未核对（诚实标注）**：运行中会话**实际挂载**的组合（用户 profile patch / 自制预设 / 动态插件）不在本次 8 项内；
+     `lib/` 产物未逐行行为比对（选择读 `src/`，因发布物同时带 `src/` 且与克隆面哈希一致）；
+     `@deepseek-ai/dsh` CLI 本体与 `dist/` 压缩产物未纳入。
+     **口径纠正（我上一轮的一条表述不精确）**：原型链挂在 **isolate 符号表**上（`Object.create(entry.parent.ctx[Context.isolate])`），
+     **不是**挂在 `entry.realm` 上（`entry.realm` 是 `LocalRealm` 普通实例）——结论方向对、对象不准，已按此更正。
+     **同时保留一条枚举纪律**（方法层，已复现）：**PowerShell `Get-ChildItem -Recurse` 默认不跟随 junction**
      —— 实测该目录 **70 条里 69 条是 reparse point**，不加 `-FollowSymlink` 的递归 grep 会**静默跳过 69 个包**
      并给出**看似确凿的 0 命中**。⇒ 凡以「0 命中」为结论的搜索，**必须先证明枚举到了非空且完整的语料**。
 - **为什么现在没做**：① 每条都要**回运行体**核对（文档可能落后），属逐条实测，不是批量替换；

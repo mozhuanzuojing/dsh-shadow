@@ -122,6 +122,26 @@ const { CAPABILITIES } = await import("../dist/core/toolset.js");
   console.log("✔ ⑥ 接线棘轮：CLI 真的调用 countInconsistency，且**在写盘前**用 process.exit(1) 拒绝坏清单");
 }
 
+// ─────────────────────────────────────────────
+// ⑦ **判据收一处棘轮**（v1.15.43）：`--check` 的差异判据必须来自 lib 的 `ledgerMismatch`
+//    背景（接线审计 A2b 唯一命中，BACKLOG T2）：CLI import 了 `ledgerMismatch` 却**另写一份内联过滤**，
+//    lib 那份只被测试调用 ⇒ 两处口径一旦分叉就**静默不一致**（离线棘轮走 lib、CLI 走内联）。
+//    判据不是「函数存在」，而是「CLI 调它、且看不到第二份实现」。
+// ─────────────────────────────────────────────
+{
+  const src = readFileSync(join(repoRoot, "tools", "toolset-authority.ts"), "utf8");
+  assert.ok(/import\s*\{[^}]*\bledgerMismatch\b[^}]*\}\s*from/.test(src),
+    "tools/toolset-authority.ts 必须 import ledgerMismatch");
+  assert.ok(/\bledgerMismatch\s*\(/.test(src),
+    "tools/toolset-authority.ts 必须**调用** ledgerMismatch（不能只 import）");
+  // 反向不变量（这次的关键）：`--check` 分支里**不得**再出现内联的那份字段比对。
+  const checkAt = src.indexOf("if (checkOnly)");
+  const branch = src.slice(checkAt, src.indexOf("\n}", checkAt));
+  assert.ok(!/ledgerVerSrc\s*!==/.test(branch) && !/ledgerVersion\s*!==/.test(branch),
+    "--check 分支里不得再手写 ledgerVerSrc/ledgerVersion 比对（判据必须收在 lib 一处）");
+  console.log("✔ ⑦ 判据收一处棘轮：`--check` 直接调 lib 的 ledgerMismatch，分支内无第二份实现");
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · **本机读数不重新探测** —— `machineVersion` 是生成时那台机器的留档；");

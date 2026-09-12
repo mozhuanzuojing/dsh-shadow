@@ -3,6 +3,68 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.43] **三路并行查证落账**：A 段残余 18 条分诊（1 处真断线已修）· T12 时间炸弹闭环（引爆日 2027-01-02）· T16 版本偏差逐项核对
+
+**一句话**：本轮把三件「只差逐条核实」的事一次做完 —— **18 条 A 段残余线索**、**22 个含硬编码日期的测试文件**、
+**8 个平台契约平面的版本偏差** —— 并修掉其中**唯一两处真缺陷**（一处判据分叉、一颗定时炸弹），
+外加一处**工具口径缺陷**（它**持续误导了我两轮**）。
+
+### 1. A 段残余 18 条（A2b 1 + A1 17）→ 真断线 1 · 配对包装 4 · 正当 7 · 待决策 6
+
+- **先修工具口径（本轮最实用的一条）**：`tools/audit-wiring.ts` 原把 `!isProductionPath(...)` 当「测试」，
+  于是 **`dist/**` 与 `node_modules/**` 的 `.d.ts` 全被算进「测试引用」** ⇒ 「测试引用 N」**虚高**。
+  实测：`hasNoUpgradeApi` 的「1」全来自 `dist/agency/guards.d.ts`；`apply` 的「230」里 15 来自 `node_modules`。
+  **已修为「只认 `test/` 下」，并把判据打进输出行**。修后 A2b 从 1 → **0**。
+- **唯一真断线（已修）**：`ledgerMismatch`（`tools/toolset-authority.lib.ts:47`）被 CLI **import 了却另写内联过滤**
+  （`toolset-authority.ts:99-102`）⇒ 判据分叉隐患（离线棘轮走 lib、CLI 走内联）。
+  `git log -S "ledgerMismatch("` **为空** ⇒ 「import 了但忘了接线」。**已改为 CLI 直接调 lib 那份**，
+  并加**源码级棘轮** ⑦（断言 CLI 调它、且 `--check` 分支内**不得**再出现 `ledgerVerSrc !==` 内联比对）。
+- **4 条配对包装**（`assertNoExpansionField`/`assertLifecycleActive`/`assertScopeWithin`/`renderRetrieved`）：
+  属**一处家族级决定**，不是 N 处缺陷 —— 引擎只 import 谓词，包装零消费者。
+- **7 条正当**（`apply` 是 Cordis 入口、`writeMeta` 是文档明示逃生舱、`readGraph`/`readTemporalGraph` 是公开读 API 等）。
+- **6 条待产品决策**（`hasNoUpgradeApi` 恒 `true` 且**真实测试引用 0**；`renderIntent`；`renderIdentityModel`；
+  `progressiveDisclosure`+`refineTree` 同一处决定；`relationForProposal`＝T7 三选一）——**缺的是决策不是代码证据**。
+- **两处「注释不实」记账**：`isMetadataMemoryText` 声称服务「不 `parseMemory` 的读路径」，而生产读路径**全走** `parseMemory`。
+
+### 2. T12 时间炸弹 → **闭环**（22 个文件判定，只有 1 个真炸弹，**引爆日 2027-01-02**）
+
+- **先纠自己的数**：题面记「12 日期 / 354 处 / **8 个文件**」，**实测 12 日期 / 357 处 / 22 个文件**
+  （`09-07` 实为 87、`09-01` 实为 12）。
+- **判定方法**：逐文件读断言 + **行为探针**（把 `new Date()`/`Date.now()` 钉到 2027-06-01 / 2027-10-01 /
+  2028-06-01 / 2030-01-01 各跑一遍，约 60 次，零文件写入）+ 机制探针直接读 `dist/identity/evaluator.js`。
+- **成分**：357 处里 **304 处（85%）不参与任何阈值运算**（路径/文件名 264 + 正文文本 25 + 期望串 15）；
+  余 53 处是 fixture 元数据，**只有 `periodTo` 的默认值 1 处被「今天」消费 —— 就是那颗炸弹**。
+- **真炸弹（已修）**：`test/recall-attribution.test.ts` 场景 58（`:2153`）与 60（`:2196`），同一根因：
+  `putReflection` 默认 `period.to = "2026-09-05"` → `identity/evaluator.ts:48` 当作 `lastSeen` →
+  `recency = exp(-ln2·days/90)`，闸门 `>= 0.4` ⇒ **本地日期 ≥ 2027-01-02 时 days=119 → recency=0.39992 < 0.4
+  ⇒ status 由 `accepted` 变 `candidate` ⇒ 不提 v2 / `learned` 不增**。
+  实测 bisect：`2026-12-31`/`2027-01-01` **PASS**，`2027-01-02`/`01-03`/`01-10` **FAIL**。
+  **修法一行**：`to: opts.periodTo || today()`（与场景 30 的既有修法同形）。场景 60 此前**被 58 掩盖**。
+- **未判定（诚实）**：未做逐日 sweep（理论存在「非单调窗口」；已逐条排除排序类断言，无已知路径）。
+
+### 3. T16 版本偏差 → **8 个平面逐项核对，T16 结案**（结论：**机制面零漂移，组合/产物面全漂移**）
+
+| 平面 | 结论 |
+|---|---|
+| `isolate` 继承 / `export default` 丢命名空间 / `ctx.get` vs 属性代理 | **三者 SHA256 与克隆面相同**（源码逐字节一致）⇒ **可继续引用克隆面行号** |
+| `dsh-base` 组合行 | 克隆 86 → 运行 84（**去掉** `tool-str-replace-editor`、`tool-subagent-report`；后者包已退役） |
+| `dsh-web-app` 组合行 | 克隆 85 → 运行 94（**新增 10 个客户端行**：`open-in-app`/`workspace-files`/`file-upload`/`resources`/`ui-schedule` 等） |
+| `dsh-sdk-minimal` | 运行面新增 `invariants` + 4 个 `*/invariant` 行；**4 个子路径确实可解析**（非死引用） |
+| agent preset | **清单一致、内容已变**（4 目录 10 文件，6 个文件内容不同；`text:` → `prefix:`/`suffix:`） |
+| 「每个包都发 `./invariant`」 | **系统性丢失**：`dsh-invariants`/`dsh-base`/`dsh-web-app` 在 0.1.1-rc.x **是** → 0.1.5-rc.x **否**；**服务包四版本全「是」** ⇒ 纪律在发布产物上**不统一**，而 `packages/AGENTS.md` 仍写 `Every package owns ./invariant` |
+
+**口径纠正**：原型链挂在 **isolate 符号表**上，**不是** `entry.realm`（方向对、对象不准，已更正）。
+
+### 4. 变更文件与门禁
+
+`tools/audit-wiring.ts`（测试引用口径）· `tools/toolset-authority.ts`（接线 `ledgerMismatch`）·
+`test/toolset-authority.test.ts`（新增 ⑦ 判据收一处棘轮）· `test/recall-attribution.test.ts`（时间炸弹一行修法）·
+`BACKLOG.md`（新增「A 段残余 18 条」结案节；T12 / T16 结案；头部计数 25 → 23 / 18 → 20）·
+`CHANGELOG.md`（本条）· `README.md`（版本表 + 行）· `package.json`（`version` → 1.15.43）。
+**门禁**：`node test/toolset-authority.test.ts` **ALL PASS**（含新棘轮）· `node test/recall-attribution.test.ts` **ALL PASS**
+（修前在 2027-01-02 会红）· `npm run audit:wiring` 的 A2b 由 1 → **0**。
+**未改动**：`index.ts` 与业务源码、`dist/`。
+
 ## [v1.15.42] **确定性基准门**（T14 落地）：协议 + 签入基线 + 比较器 + 双跑逐字比 + 接进 `verify`
 
 **一句话**：本仓唯一的评测（`tools/retrieval-eval.ts`）此前**只打印读数** —— 「这次比上次好还是坏」**无法由机器回答**。

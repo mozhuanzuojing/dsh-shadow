@@ -96,16 +96,20 @@ try { prev = JSON.parse(readFileSync(MANIFEST, "utf8")); } catch { /* 首次生�
 console.log("");
 if (checkOnly) {
   if (!prev) { console.log("清单不存在 —— 请先不带 --check 跑一次生成。"); process.exit(1); }
-  const changed = rows.filter((r) => {
-    const p = prev.rows.find((x: Row) => x.id === r.id);
-    return !p || p.ledgerVersion !== r.ledgerVersion || p.ledgerVerSrc !== r.ledgerVerSrc;
-  });
-  console.log(`--check：台账侧（版本/出处）与清单的差异 ${changed.length} 条`);
-  for (const c of changed) console.log(`   ${c.id}: ${c.ledgerVerSrc} ${c.ledgerVersion}`);
+  // **判据收一处**（v1.15.43 接线）：差异判据必须来自 `toolset-authority.lib.ts#ledgerMismatch`。
+  // 此前这里**另写了一份内联过滤**，而 lib 里那份只被测试调用（接线审计 A2b「导入即闲置」唯一命中，
+  // 见 BACKLOG T2）⇒ 两处口径一旦分叉就会**静默不一致**（离线棘轮走 lib、CLI 走内联）。
+  // 现在 CLI 直接调 lib 那份；`test/toolset-authority.test.ts` 的 ⑦ 棘轮锁住「CLI 必须调它」。
+  const mismatches = ledgerMismatch(
+    (targets as { id: string; note: unknown; winget?: string }[]),
+    Array.isArray(prev?.rows) ? prev.rows : [],
+  );
+  console.log(`--check：台账侧（版本/出处）与清单的差异 ${mismatches.length} 条`);
+  for (const c of mismatches) console.log(`   ${c.id}: ${c.now}（清单记 ${c.was}）`);
   console.log(`权威侧老化（台账版本 < winget 现值）：${aged.length} 条`);
   console.log("");
   console.log("提示：若「台账侧差异」非 0，说明台账被改过但未重跑本工具 —— 离线棘轮会红。");
-  process.exit(changed.length ? 1 : 0);
+  process.exit(mismatches.length ? 1 : 0);
 }
 
 // **清单自洽门**（v1.15.33 接线）：`counts` 是**派生自 `rows` 的汇总**，两者一旦漂移，
