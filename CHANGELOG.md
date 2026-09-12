@@ -3540,3 +3540,53 @@ ADR-0023.1 的 5 条边界固化为**不可回退测试**（invariant 111–115�
 - **第 2 条**：读 `vendor/loader/src/config/isolate.ts:98/99-101/123` 后**推翻子代理的说法**——
   子行**通过原型链继承**父行 realm（`Object.create(entry.parent.ctx[Context.isolate])`）
   ⇒ 本仓预设 `group + isolate + 子行` 的写法**本来就对**，技能散文**准确**；「逐行声明（可覆盖）」那半才对。
+
+### 10.（第 4 轮追加，同日）两条独立产出：**`invariants` 前置两问结案 + 一个阻塞项** · **hl_mem 门禁形状清单**
+
+**本轮无代码 / 行为改动**（纯查证 + 台账）。目标轮次第 4 轮。
+
+**A. 平台 `invariants`：两条前置已结案，第三问成为阻塞项（细节 `references.md` §6.5）**
+
+- **(b) 默认执行 —— 是**：`packages/runtime-diagnostics/invariants/src/index.ts:96,115` `enabled` 默认 `true`；
+  `:120-126` 无过滤器即全接纳；**安装体 `dsh-invariants@0.1.5-rc.2/lib/index.js:45,62,67-70` 与源码逐字同构**
+  ⇒ **版本偏差不影响本项**。选择由**挂载该行的组合**给（实例：安装体 `dsh-sdk-minimal/cordis.patch.yml:103-104`，
+  **无 config ⇒ 全默认**）；过滤器在服务生命周期内固定（`README.zh.md:153`）。
+- **(a) 失败 = dispose 子 fiber + 回滚保留 + 注册方自身 `apply` 失败**：
+  `:161-163` `fail()` 抛 `InvariantError` → `:172-175` `await child.dispose()` 后 **rethrow** →
+  从 `ctx.effect(async …)` 冒出 → `register()` 的 thenable **reject** ⇒ 调用方（配套入口自己的 `apply`）失败。
+  **⚠ 仍未验证**「是否阻断整个宿主启动」（取决于 Loader 对单行激活失败的处置，属运行体实验）——**未写成已知**。
+- **新查到的第三条（比 (a)(b) 更影响裁决）**：**「只挂服务不挂配套入口 == 没有检查」**
+  （`README.zh.md:12,156`：注册表自身不携带产品检查）⇒ 检查是否真跑，取决于**本仓自己有没有 `register()`**，
+  不取决于服务在不在 ⇒ 对本仓**有利**（不必改宿主组合）。
+- **🔴 阻塞项（未定位）**：运行中的 web 宿主**确实有** `invariants` 服务（运行体 Service 目录可证），
+  但我**在它声明的每一层组合里都没找到挂载行**——已逐项排除 `dsh-base` / `dsh-web-app` / `archify-dsh` /
+  `dsh-shadow` 的 patch、用户补丁层、4 个随包 agent preset、部署闭包内**任何 `*.js` 对 `dsh-invariants` 的引用**；
+  **唯一含该行的 `dsh-sdk-minimal/cordis.patch.yml:103-118` 不是 web profile 的 bundle**。
+  ⇒ **必须定位「挂在宿主根上下文还是会话/`isolate` realm 内」**：本仓是 **host-plane bundle 插件**，
+  若服务只在会话 realm 内则 `ctx.get('invariants')` **取不到** ⇒ **定位之前 T16 第 3 项不开工**。
+
+**B. 新增一条枚举纪律（方法层，已复现）**
+
+- **PowerShell `Get-ChildItem -Recurse` 默认不跟随 junction**：实测
+  `…\dsh\0.1.5-rc.2\…\node_modules\@deepseek-ai` **70 条里 69 条是 reparse point**；不加 `-FollowSymlink`
+  的递归 grep **静默跳过 69 个包**并给出**看似确凿的 0 命中**（加 flag 后立刻命中）。
+  ⇒ 这是 ADR-0074 补记那次「只 grep 三个包就断言不存在」的**第二个变体**：**不是范围写小了，而是工具静默缩小了范围**。
+  **纪律**：凡以「0 命中」为结论的搜索，**必须先证明枚举到了非空且完整的语料**（给出计数，或第二种工具交叉验证）。
+
+**C. hl_mem 测试面 / 评测门禁的形状清单（服务 T13 / T14 / T11① / V6；细节 `references.md` §6.6）**
+
+- **最值钱三件**：① **「生成器 + 签入产物 + 门禁逐字比对」三件套**（同形 6 次，唯一更新入口 `--update`/`--write`，
+  确定性序列化是前提，**缺件即非零**且失败文案自带更新指引）；② **allowlist 腐化自检**（白名单里的路径/函数不存在
+  **也算违规**）+ **棘轮只降不升**；③ **协议常量与代码分离 + 先证同源再比数值 + 门控指标显式列名**。
+- **它自己没接上的线（照抄形状时勿照抄这些洞）**：比较器 `compare_core_v1.py` **零 workflow 调用**；
+  「两次运行功能字段逐字相同」**只有散文无脚本**；覆盖率地板 CI 80 vs 本地 60（同判据两处数值）；
+  棘轮基线缺件时 `return 0`（缺件即通过）；一个 `check_*.py` **无任何 workflow 调用**。
+- **落点**：T13（+ 元测试把纪律写成检查项的形态）、T14（+ 签入基线 / 拒绝覆盖 / 基线来源档位 / 缺 slice 即失败）、
+  V6（+ **合取式退出码**样板：`run_extraction_quality_smoke.py:255-257`「全通过 ∧ 恰好 1 次外部调用 ∧ 保留 ≤16」）。
+- **T11① 的实情（诚实标注）**：hl_mem 在此**只有文档纪律**（「同缓存同 scorer 才可判回归」「改门禁常量须同时提交同快照
+  A/B 证据」）+ 一个可执行字段（`relation_chain_holdout_manifest.json:17` `access_policy: sealed_..._only`），
+  **无强制机制** ⇒ 本仓若要，必须**自建**。
+
+**本轮变更文件**：`references.md`（**新增 §6.5**：`invariants` 三面互核 + 枚举纪律；**新增 §6.6**：hl_mem 门禁形状清单）·
+`BACKLOG.md`（T16 第 3/4 项 + T13 / T14 / V6 各加一节进度）· `CHANGELOG.md`（本块）。
+**未改动**：任何 `*.ts` / `dist/` / `cordis.patch.yml` / `agent-presets/`。

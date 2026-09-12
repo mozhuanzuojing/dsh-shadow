@@ -307,3 +307,96 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 **其余可吸收项**（指标与协议，见 `adr/0080`）：`stale-fact-error rate` + 允许/强制作答**两 regime 同报**；
 **marker-free 不变式 + 词边界 tell 自检**（T11①）；**两侧夹逼的消融形态**（G1）。
 **边界**：A.1/A.2 表体与 Table 4/5 **未读到**（HTML 截断，尝试路径见 `adr/0080`）；**本版无任何可克隆地址**（双盲）。
+
+### 6.5 **平台 `invariants` 契约实测**（2026-09-12 第 4 轮，T16 第 3 项前置）—— 两问已答，一问**仍未定位**
+
+**为什么单列**：`BACKLOG.md` T16 第 3 项把 `ctx.invariants` 列为本仓**唯一**值得吸收的平台服务，但挂了
+**两条前置未确认**（(a) 失败是否阻断宿主启动；(b) 选择由谁配置、默认是否执行）。若 (b) 的答案是「默认不跑」，
+注册了就是**假闸门**。本轮**回运行体与安装体**逐条查证。
+
+**证据面（三处，互不依赖）**：
+| 面 | 路径 | 用途 |
+|---|---|---|
+| 源码（克隆 0.1.2-alpha.1） | `dsh-w/deepseek-harness/packages/runtime-diagnostics/invariants/src/index.ts` | 读实现与默认值 |
+| **安装体**（运行版 0.1.5-rc.2） | `…\pnpm\store\v11\links\@deepseek-ai\dsh-invariants\0.1.5-rc.2\…\lib\index.js` | **核对源码结论和运行体一致** |
+| 包文档（同仓 `README.zh.md`） | 同包 `README.zh.md:36,46-53,90,118,153,156` | 官方口径（默认值表 + 失败语义 + 限制） |
+
+**逐条结论（每条带 `文件:行号`）**：
+
+1. **(b) 默认执行 —— 是。**`src/index.ts:96` `enabled: z.boolean().default(true)`；`:115` `config.enabled ?? true`；
+   `:120-126` `selected()`：`enabled` 为真、`package_allowlist` 为空 ⇒ **全部接纳**；blocklist 后置排除。
+   **安装体 `lib/index.js:45,62,67-70` 与源码逐字同构** ⇒ **版本偏差不影响本项结论**（0.1.2-alpha.1 → 0.1.5-rc.2 未改语义）。
+   官方口径同：`README.zh.md:36`「注册表默认启用，并在没有过滤器的情况下检查每个已注册的包」；`:46-50` 默认值表。
+   **选择由谁配置**：由**挂载该行的组合**用 `config` 给 —— 实例见安装体 `dsh-sdk-minimal/cordis.patch.yml:103-104`
+   （`- id: invariants` / `name: '@deepseek-ai/dsh-invariants'`，**无 config ⇒ 全默认**）。
+   过滤器在**服务生命周期内固定**（`:153`），改它要 reload。
+2. **(a) 失败不只是 dispose 子 fiber —— 还会让注册方自己的 `apply` 失败。**`src/index.ts:136-197` 的调用链：
+   `:149` 先**保留包名**（`registrations.add`，与是否被过滤无关）；`:154-158` 未选中 ⇒ 返回一个**只删保留**的 disposer，
+   **不建子 fiber、不跑检查**；`:166-168` 选中 ⇒ `ctx.plugin(installer)` 建**子 fiber**（`inject` 取 `installer.inject`）；
+   `:171` `await child` **join 其启动**；`:161-163` `fail()` 的实现是 `throw new InvariantError(...)`；
+   `:172-175` 子 fiber 抛错 ⇒ `await child.dispose()` **并 rethrow**；`:184-187` 再删保留并 rethrow。
+   该 rethrow 从 `ctx.effect(async …)` 冒出 ⇒ `register()` 返回的 thenable **reject** ⇒
+   调用方（`Promise.resolve(ctx.invariants.register(...))`，即**配套入口自己的 `apply`**）**失败**。
+   ⇒ **准确表述：失败 → dispose 子 fiber + 回滚保留 + 注册方自身激活失败**。
+   官方口径同：`README.zh.md:90`「installer 本身失败的配套入口会被释放，其注册会回滚」；`:118`「失败会释放子级并原子地收回保留」。
+   ⚠ **仍未验证的一半**：**是否阻断整个宿主启动**（`dsh web` 是否退出）——这取决于 Loader 对**某一行激活失败**的处置，
+   属**运行体实验**（要另起一个 profile 才敢试）。**不得写成已知。**
+3. **新查到的、比 (a)(b) 更影响裁决的一条**：**「只挂服务不挂配套入口 == 没有检查」**。
+   `README.zh.md:12`「单独加载服务不会安装任何检查」；`:156`（已知限制）「**没有配套入口就没有检查**——注册表自身不携带
+   产品检查；只挂载服务的组合观察不到任何行为」。⇒ 即使拿到 registry，**检查是否真的跑，取决于 `register()` 是否被调用**，
+   而不是取决于服务在不在。对本仓的含义：**必须在插件体里主动 `register()`**（别人不会替本仓挂配套入口），
+   这反而是**有利**的——不需要改宿主组合。
+4. **仍未定位（诚实标注，不猜）**：**运行中的 web 宿主确实有 `invariants` 服务**（`cordis_inspect_query` 宿主
+   Service 目录里有该项，描述逐字为「Package-owned invariant registry with global and regex-based selection」），
+   但**我没有在它声明的任何一层组合里找到挂载行**。已排除（逐项 grep，见下）：`dsh-base` / `dsh-web-app` /
+   `@tt-a1i/archify-dsh` / `dsh-shadow` 的 `cordis.patch.yml`、用户在 `~/.dsh/profiles/web/cordis.patch.yml` 的补丁层、
+   随包发布的 4 个 agent preset（`presets/{cordis,minimal,ptc,standard}/*.yml`）、
+   以及部署闭包里**任何 `*.js` 对 `dsh-invariants` 的引用**（仅 `package.json` 的依赖声明命中）。
+   **唯一含该行的是 `dsh-sdk-minimal/cordis.patch.yml:103-118`，而它不是 web profile 的 bundle。**
+   ⇒ **待查**：它挂在**宿主根上下文**还是**会话/`isolate` realm 内**。这一条对本仓是**决定性**的：
+   `dsh-shadow` 是 **host-plane bundle 插件**，若服务只在会话 realm 内，`ctx.get('invariants')` 在宿主面**取不到** ⇒
+   本仓用不了。**在定位之前，T16 第 3 项不得开工。**
+5. **顺带核对（版本偏差面，T16 第 4 项的一个数据点）**：`dsh-invariants` 0.1.5-rc.2 的 `files` 只发布
+   `lib/index.js` + `lib/types/**/*.d.ts`（安装体 `package.json:24-27`）——**不含 `lib/invariant.js`**；
+   而 0.1.1-rc.x 的安装体**含** `lib/invariant.js`。即该包**自己的空配套入口**在新版里不再随包发布，
+   但 `src/invariant.ts` 仍在源码里（`:1-30`）。**这不算缺陷**（其 installer 是空的、`README.zh.md:71` 明说其余包是空配套入口），
+   但说明**「每个包都发布 `./invariant`」这条纪律在发布产物上并不统一** ⇒ 引用该纪律时要注明版本。
+
+**本轮新增的枚举纪律（方法层，已复现）**：
+> **PowerShell 的 `Get-ChildItem -Recurse` 默认不跟随 junction/symlink。**
+> 实测：`…\dsh\0.1.5-rc.2\…\node_modules\@deepseek-ai` 下 **70 个条目里 69 个是 reparse point**；
+> 用它做递归 grep 会**静默跳过 69 个包**，得出**看似确凿的 0 命中**。加 `-FollowSymlink` 后同一个搜索
+> 立刻命中 `dsh-sdk-minimal/cordis.patch.yml`。
+> ⇒ 与 ADR-0074 补记里那次「只 grep 三个包就断言环境变量不存在」是**同一族错误的第二个变体**：
+> **不是范围写小了，而是工具静默缩小了范围**。**纪律**：凡以「0 命中」为结论的搜索，
+> 必须**先证明枚举到了一个非空且完整的语料**（计数、或同时用第二种工具交叉验证）。
+
+### 6.6 **hl_mem 测试面/评测门禁的可移植机制**（2026-09-12 第 4 轮，服务 T13 / T14 / T11① / V6）
+
+**为什么单列**：T13（结构门）、T14（确定性基线门）、V6（审计门）此前只有**判据**没有**形状**。
+本轮把 hl_mem 的门禁面读完（`scripts/` 11 个 `check_*.py` + 5 个 workflow + `benchmarks/release/` + `tests/eval/`），
+得到一份**可照抄的形状清单**。**纪律不变：这是「别家」的机制，不是本系统的证据；也不代表它自己接对了线。**
+
+**最值钱的三件事（按收益排序）**：
+1. **「生成器 + 签入产物 + 门禁逐字比对」三件套**，同形复制 6 次，**唯一更新入口是 `--update`/`--write`**
+   （`check_openapi_snapshot.py:27,36-42` 的确定性序列化 `sort_keys` + 固定 indent + 尾换行；`check_provider_plugin_api.py:139-144`
+   的**缺件即 1** + 失败文案自带更新指引）。⇒ **正对本仓 T13**，且与 ADR-0049「缺件不静默」同源。
+2. **allowlist 反向自检**（`check_complexity_budget.py:221-229`：白名单里的路径/函数**不存在也算违规**）
+   —— 这条最容易漏、收益最大；配套还有**棘轮只降不升**（`:297-326`）。
+3. **协议文件与代码分离 + 先证同源再比数值**（`benchmarks/release/core_v1_protocol.json:1-9` 9 行冻结常量；
+   `compare_core_v1.py:28-30` 先校验 `dataset_sha256`/`protocol_sha256`/`case_count` **逐字相等**，
+   `:38-41` 容差失败信息同时给**实测退化量与允许量**，`:43-55` 把「外部调用必须为 0」**在比较层再判一次**）。
+
+**它自己没接上的线（照抄形状时不要照抄这些洞）**：
+| 洞 | 证据 | 对本仓的含义 |
+|---|---|---|
+| 比较器 `compare_core_v1.py` **在任何 workflow 里零调用** | 仅 `docs/`、`tests/` 引用 | T14 要**把比较器挂进 `npm run verify`**，不是重写比较器 |
+| 「两次运行功能字段逐字相同」**只有散文、无脚本** | `docs/benchmark/core-v1.md:21-22` | T14 后半要**自写双跑逐字比** |
+| 同一判据两处数值（覆盖率地板 CI 80 vs 本地 60） | `test.yml:56` vs `pyproject.toml:81` | 本仓 ADR-0063/0070「判据收一处」的现成反例 |
+| 缺件即通过（棘轮基线缺失时 `return 0`） | `check_complexity_budget.py:396-400` | 与「缺件不静默」直接冲突 |
+| 一个检查脚本**没有任何 workflow 调用** | `check_usage_pricing_schema.py` | —— |
+
+**T13/T14/V6 的落点（已写进 `BACKLOG.md` 对应条目）**：T13 = `check_imports.py:12-19`（分层禁令表）
++ `check_complexity_budget.py:25-27,221-229`（预算 + 白名单腐化自检）；T14 = 协议 JSON + 比较器 + **签入 `results/*.json`**
++ **双跑逐字比**；V6 = 退出码用**合取式**表达（`run_extraction_quality_smoke.py:255-257`
+「全通过 ∧ 恰好 1 次外部调用 ∧ 保留 ≤16」）。
