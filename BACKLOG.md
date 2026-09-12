@@ -26,6 +26,9 @@
 > **✅ B3 已闭环（v1.15.40 第 4 轮）**：宿主于 2026-09-12 `16:40:02` 重启（PID 全新），重启后逐条实测通过
 > （横幅消失 / 当天新记忆文件真的在写且与本轮改过的文件一一对应 / `_index.md` mtime 同步更新）；
 > 唯判据 4（宿主日志侧检索）**未单独核验**，原因见该条。**ADR-0074 的修复在真机生效。**
+> **v1.15.41：T13 前半落地** —— **结构门 `audit-layers`**（文件级无环 / 纯模块白名单零副作用 + 腐化自检 / 方向禁令），
+> 已接进 `npm run verify`（**46/46**）。**关键一改**：原「按目录分层」的草案**实测即被否掉**
+> （`core/` 是**混合脊柱**，不是纯函数层）⇒ **换判据对象**，只保留实测为真的三条。详见 T13「进度 A」。
 > **注意**：ADR-0074 **不列在本台账的「已结案」里** —— 它从来不是待办项，是本轮**新发现的真缺陷**
 > （完整记录见 `CHANGELOG.md` v1.15.31）；本台账只登记它**遗留的两件事**（B3 / T6）。
 > **同理**：v1.15.38 修的两处真缺陷（consolidated `time` 两路径分叉 / 时间炸弹测试）**是缺陷不是待办**，
@@ -531,7 +534,7 @@
   ② 耦合的改成相对日期，不耦合的给出**一句为什么**（避免下一轮再扫一遍）；
   ③ 可选：加一条**棘轮**，禁止在 fixture 里新写「距今 < 阈值」的硬编码日期（需先有 ①②的结论面）。
 
-### T13. **结构性门禁**：分层方向 / 复杂度预算（v1.15.39 新开，来源 `adr/0078` D3）
+### T13. **结构性门禁**：分层方向 / 复杂度预算 —— 🟡 **前半已落地（v1.15.41）；后半（复杂度预算）仍未做**
 
 - **依据**：`adr/0078-hl-mem-third-read-clone.md` D3（hl_mem 的 `scripts/check_*.py` 共 **11 个**）。
   最可移植的两个是：
@@ -540,27 +543,54 @@
   这条纪律** —— 目前**只是散文**（`AGENTS.md` / 各 ADR），没有任何可执行检查。
   ② **复杂度预算只能降** —— `check_complexity_budget.py`（16 KB）+ `complexity_budget.json`；
   hl_mem 的 plans 写「本期每个热点上限**只能下调**」（`2026-08-30-...phase-5-architecture.md:20`，子代理回报）。
-- **本仓可行性（已看成本，不空谈）**：TypeScript 是**已有 devDependency**（`typescript@^7.0.2`）⇒
-  可用 `ts.createSourceFile` 解析 import 做分层检查，**不需要新依赖**；复杂度预算可用「每文件行数 / 导出数」当代理，不必引入真圈复杂度。
-- **为什么现在没做**：① 本仓**没有 DB schema / OpenAPI / MCP 契约**可快照 ⇒ hl_mem 那 11 个里**多数无对象**，照搬是过度设计；
-  ② 分层表**要先定**（`core/`、`query/`、`persistence/`、`world/`、`observer/`、`federation/`、`retrieval/`、`index.ts` 的允许方向），
-  而定表本身是一次架构决策，不是实现；③ 直接照搬会造出一个**跑不起来的假闸门**（本仓最忌）。
 - **完成判据**：① 先写一版 `FORBIDDEN_IMPORTS` 表的**草案并实测存量违规数**（若存量违规很多，说明表定错了，先改表）；
   ② 真违规清零后，把它接进 `npm run verify`（v1.15.38 已有单一入口）；③ 复杂度预算**只在该文件当轮变小时才下调**，
   并在测试里锁「不得上调」。
-- **进度（v1.15.40 第 4 轮：把 hl_mem 的门禁面读完，得到形状清单；全文 `references.md` §6.6）**：
-  除上面两条外，本轮又拿到**三个可直接照抄的形状**：
-  ① **「生成器 + 签入产物 + 门禁逐字比对」三件套**，hl_mem 同形复制了 **6 次**，唯一更新入口是 `--update`/`--write`，
-  确定性序列化是前提（`check_openapi_snapshot.py:27` `sort_keys=True` + 固定 indent + 尾换行；`:36-42` 同一函数里
-  「带 flag 就写盘并 `return 0`，否则逐字符比对不等 `return 1`」）；**缺件即 1 + 失败文案自带更新指引**
-  （`check_provider_plugin_api.py:139-144`）。⇒ 本仓的对应对象是**派生件格式**（`_index.md` / `_meta.json` /
-  `ep-*-consolidated.md`）与**工具 schema**；`--update` 单入口是防静默刷基线的关键。
-  ② **allowlist 腐化自检**（`check_complexity_budget.py:221-229`：白名单里的路径/函数**不存在也算违规**）
-  —— **最容易漏、收益最大**；配套是**棘轮只降不升**（`:297-326`，对比 git base 的另一份预算）。
-  ③ **纪律写成元测试**（`tests/unit/test_test_suite_policy.py:20-22` 用元测试断言三个模块必须带 `release_only` 标记）
-  —— 这正是「把纪律变成检查项」的可执行形态，本仓可用「元测试断言每个 `mode` 都在声明表里」同形落地。
-  **照抄形状时不要照抄它自己的洞**（逐条带行号，见 §6.6 表）：比较器零调用、棘轮基线缺件即通过、
-  同一判据两处数值、一个检查脚本无任何 workflow 调用。
+
+#### ✅ 进度 A（v1.15.41）：**草案实测即被否掉 → 换判据对象 → 三条门落地并接进 `verify`**
+
+- **① 草案实测**（口径：`*.ts` 递归，排除 `dist / node_modules / .git / .docs / agent-presets / docs / _research / test / tools`；
+  **193 文件 / 523 条 import 边**）：
+  | 草案禁令 | 存量违规 | 例子 |
+  |---|---:|---|
+  | `core` 不得碰 `node:fs` | 1 | `core/toolset-exec.ts:19`（它是**执行器**，不是纯派生） |
+  | `core` 不得碰 `node:child_process` | 1 | 同上 `:18` |
+  | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts:12,13` |
+  | `query` 不得 import `persistence` | 4 | `query/materialize.ts:4,5` / `query/query.ts:6,7`（读路径**本来就要**读落盘文件） |
+  ⇒ **`core/` 不是「纯函数层」，是「脊柱」**（`paths`/`types`/`util` 无依赖；`memory`/`writer-materialize`/`toolset-exec` 有副作用）。
+  **照搬目录分层 = 当轮就红的门 = 假闸门** ⇒ **改判据对象**（完成判据 ① 的「先改表」即此）。
+- **② 换成三条实测为真的判据，并接进 `npm run verify`**：
+  ① **文件级依赖图无环**（实测 **0** 个强连通分量 —— 文件级是 DAG）；
+  ② **纯模块白名单零副作用**（`core/paths.ts` / `core/types.ts` / `core/util.ts` / `security/scrub.ts` import 数均为 **0**；
+  **带腐化自检**：路径不存在即违规 —— 本轮用不存在的 `core/lexicon.ts` 实测到它**真的会报**）；
+  ③ **方向禁令**（当前 **0** 违规：`core↛query` / `core↛tools` / `persistence↛query` / `query↛tools` /
+  **任何层↛`index.ts`** / 任何层↛`agent-presets`）。
+  **明确不判层间环**：实测**存在** `{core, evidence, persistence}` 层间环，成因就是「core 是混合层」，
+  **不是**文件级环 ⇒ 写成禁令则门当场就红（又是假闸门）。CLI 会**打印成因**并留档。
+- **③ 落地物**：`tools/audit-layers.lib.ts`（纯逻辑；**复用** `audit-wiring.lib.ts#stripComments`，不写第二份注释剥离器）+
+  `tools/audit-layers.ts`（CLI，打印**口径**与非零退出）+ `tools/audit-layers.selftest.ts`（**8 组标定测试**，全合成夹具）+
+  `package.json` 新增 `audit:layers` / `audit:layers:selftest`，并把 `npm run audit:layers` 接进 `verify`。
+  **门禁状态**：`npm run verify` = **46/46**；`npm run audit:layers` 在真仓库**通过**（193 文件 / 523 边 / 0 环 / 0 方向违规 / 0 未解析）。
+- **④ 两个当轮自我暴露（留档）**：**(a)** 标定测试当轮抓到我自己的真 bug —— 层边曾写成
+  `.map((e) => ({ from: layerOf(e.from), to: layerOf(e.to), ...e }))`，**`...e` 在后把层名覆盖成文件路径**
+  ⇒ **方向禁令永不命中、门恒绿**（正是本仓最爱的「机制对了、断的是谁调用它」那一族；没有标定测试，这个门会安静地什么都不查）。
+  **(b)** 默认白名单在**合成夹具**上会**正确地**逐条自曝「腐化」⇒ 想要「零违规」的正对照必须显式清空判据表（已写成断言）。
+- **⑤ 方法边界（诚实）**：**不用 TypeScript 编译器 API** —— 本仓 `typescript@7.0.2` 是 **native(Corsa) 移植**，
+  包根 `.` **只导出 `version`**（连 `ScriptTarget` 都没有），AST API 在 `typescript/unstable/ast` 这类 unstable 子路径
+  ⇒ 说明符抽取是**剥注释后的正则**，不是 AST。**已知边界**：字符串里形如 `from "./x"` 的文本会误命中，命中项须人工复核。
+
+#### ⬜ 进度 B（未做）：复杂度预算 + 拆 `core/`
+
+- **复杂度预算**：hl_mem 靠 AST 量「行数 / 参数数 / 函数体行数」+ 棘轮只降不升。本仓无可用 AST（见 ⑤）
+  ⇒ 要么用「文件行数 / 导出数」当代理（**弱判据**，须先说明它与哪种风险对应），要么等 `unstable/ast` 稳定。
+  **不先定判据就不写表** —— T13 前半的教训正是「表定错了，门就是红的」。
+- **拆 `core/`**：这是消掉层间环的唯一办法，属**架构决策**（把 `paths`/`types`/`util` 这类纯模块与
+  `memory`/`writer-materialize`/`toolset-exec` 分开），**不是门禁问题**，故作为候选留在此条下。
+- **进度 C（v1.15.40 第 4 轮，hl_mem 门禁面深读的形状清单；全文 `references.md` §6.6）**：
+  三个可照抄形状 —— ① **「生成器 + 签入产物 + 门禁逐字比对」三件套**（同形 6 次，唯一更新入口 `--update`/`--write`，
+  **缺件即非零** + 失败文案自带更新指引）；② **allowlist 腐化自检**（白名单里的路径/函数**不存在也算违规**）
+  —— **已在 v1.15.41 落地**（见 ②）；③ **纪律写成元测试**（`test_test_suite_policy.py:20-22`）。
+  **照抄形状时不要照抄它自己的洞**（逐条见 §6.6 表）：比较器零调用、棘轮基线缺件即通过、同一判据两处数值。
 
 ### T14. **确定性基准门**：签入基线 + compare 子命令 + 「外部调用即失败」（v1.15.39 新开，来源 `adr/0078` D3）
 

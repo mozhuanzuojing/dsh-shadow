@@ -3,6 +3,71 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.41] **结构门**`audit-layers`：把「结构纪律」从散文做成可执行判据（T13 落地）
+
+**一句话**：本仓此前**一条结构纪律都没有可执行形态**（「`core/` 是纯函数」「层间不许成环」都只是散文）。
+本轮**先实测再定表**——一份「按目录分层」的草案**实测即为红**，据此**换掉了判据对象**，
+落下三条**实测为真**的门（文件级无环 / 纯模块白名单零副作用 / 方向禁令），并接进 `npm run verify`。
+
+### 1. 先实测，结果**否掉了**原来的草案（这是本轮最重要的结论）
+
+按 hl_mem `check_imports.py` 的形状起草的表是「`core/` 不得碰 `node:fs`、不得 import `persistence/`」。
+用一次性只读探针（AST 不可用，见 §4）量真实仓库（**193 文件 / 523 条 import 边**）后，**草案当场为红**：
+
+| 草案禁令 | 存量违规 | 说明 |
+|---|---:|---|
+| `core` 不得碰 `node:fs` | 1 | `core/toolset-exec.ts:19` —— 它是**执行器**，不是纯派生 |
+| `core` 不得碰 `node:child_process` | 1 | 同上 `:18` |
+| `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts:12,13` |
+| `query` 不得 import `persistence` | 4 | `query/materialize.ts:4,5` / `query/query.ts:6,7`（读路径**本来就要**读落盘的文件） |
+
+⇒ **`core/` 不是「纯函数层」，是「脊柱」**（`paths.ts`/`types.ts`/`util.ts` 无依赖；`memory.ts`/`writer-materialize.ts`/`toolset-exec.ts` 有副作用）。
+**照搬目录分层会造出一个当轮就是红的门**，也就是本仓最忌的**假闸门**。故**改判据对象**，不照抄它的形状。
+
+### 2. 实测得到的**为真**的三条判据（基线全绿 ⇒ 接进去就是棘轮）
+
+| 判据 | 实测 | 为什么它是对的 |
+|---|---|---|
+| ① **文件级依赖图无环** | **0 个**强连通分量（193 文件 / 523 边） | 环会让初始化顺序与判据来源不可推理；这是**当前事实**，接进去只防退化 |
+| ② **纯模块白名单零副作用** | `core/paths.ts` / `core/types.ts` / `core/util.ts` / `security/scrub.ts` **import 数均为 0** | 「派生可复算」的前提就是这几个文件没有环境；白名单**带腐化自检**（路径不存在即违规） |
+| ③ **方向禁令** | 4 条 + 2 个全局禁用目标，**均 0 违规** | `core↛query`（ADR-0003）/ `core↛tools` / `persistence↛query` / `query↛tools` / **任何层↛`index.ts`** / 任何层↛`agent-presets` |
+
+**明确不判**：**层间环**。实测**存在**一个 `{core, evidence, persistence}` 层间环 —— 其成因就是 §1（`core/` 是混合层），
+**不是**文件级环。把它写成禁令 ⇒ 门**当场红** ⇒ 又是假闸门。故只**留档**（CLI 会打印成因），要消掉它得先拆 `core/`，那是架构决策。
+
+### 3. 落地与接线
+
+- `tools/audit-layers.lib.ts`（**纯逻辑**：建图 / Tarjan 强连通 / 判据表 / 违规汇总；不做 IO；**复用** `audit-wiring.lib.ts#stripComments`，不写第二份注释剥离器）；
+- `tools/audit-layers.ts`（CLI：收集语料 / 打印**口径** / 非零退出）；
+- `tools/audit-layers.selftest.ts`（**8 组标定测试**，全用合成夹具：环的正反例 / 纯模块副作用 / **白名单腐化** / 方向禁令三向 / 相对解析 / **注释里的幽灵 import 不得计入** / 说明符分类 / 判据表非空且带 `why` / Tarjan 正反例）；
+- `package.json`：新增 `audit:layers` 与 `audit:layers:selftest`，并把 **`npm run audit:layers` 接进 `npm run verify`**（在 `typecheck:tools` 之后）。
+- **门禁状态**：`npm run verify` = **46/46**（45 → 46：多一个 `tools/*.selftest.ts`）；`npm run audit:layers` 在真仓库**通过 ✅**（193 文件 / 523 边 / 0 环 / 0 方向违规 / 0 未解析）。
+
+### 4. 两个当轮自我暴露（留档）
+
+- **标定测试当轮抓到我自己的一个真 bug**：`auditLayers` 里层边曾写成
+  `.map((e) => ({ from: layerOf(e.from), to: layerOf(e.to), ...e }))` —— **`...e` 在后会把层名覆盖成文件路径**，
+  于是**方向禁令永不命中**（门恒绿，正是「机制对了、断的是谁调用它」那一族）。是 `audit-layers.selftest.ts` 的 ③ 当场抓到并修。
+  **没有标定测试，这个门会安静地什么也不检查。**
+- **判据表在合成夹具上会「正确地」自曝**：默认白名单指向真仓库文件，合成夹具下每条都报「白名单腐化」
+  ⇒ 想要「零违规」的正对照必须显式清空判据表。这条已写进测试注释与 ⑦ 的断言。
+
+### 5. 方法与未做（诚实边界）
+
+- **不用 TypeScript 编译器 API**：本仓 `typescript@7.0.2` 是 **native(Corsa) 移植**，包根 `.` **只导出 `version`**
+  （连 `ScriptTarget` 都没有），AST API 在 `typescript/unstable/ast` 这类 unstable 子路径
+  ⇒ 说明符抽取是**剥注释后的正则**，不是 AST。**已知边界**：字符串里形如 `from "./x"` 的文本会误命中，命中项须人工复核。
+- **语料口径**：`*.ts` 递归，**排除** `dist/node_modules/.git/.docs/agent-presets/docs/_research/test/tools`
+  —— 测试与工具允许 import 任何东西，算进来会让本门失去意义（口径由 CLI **打印出来**）。
+- **未做**：① **复杂度预算**（T13 原文第二条，hl_mem 靠 AST 量行数/参数数）——本仓无 AST，需另想代理判据；
+  ② **拆 `core/`** 以消掉层间环（架构决策，不是门禁）；③ 未把 `audit:layers` 接进 `tools/run-tests.ts`（走的是 `verify` 的独立步骤，与 `typecheck:tools` 同形）。
+
+### 6. 变更文件
+
+`tools/audit-layers.lib.ts`（**新增**）· `tools/audit-layers.ts`（**新增**）· `tools/audit-layers.selftest.ts`（**新增**）·
+`package.json`（`version` → 1.15.41；新增 2 个 script；`verify` 加一步）· `BACKLOG.md`（T13 改写）· `CHANGELOG.md`（本条）· `README.md`（版本表 + 结构门一行）。
+**未改动**：`index.ts` 与任何业务源码、`dist/`（`tsconfig.json` 的 `include` 只有 `index.ts`，tools 不进产物）。
+
 ## [v1.15.40] **本地全部材料**总台账 + 平台契约纠错（`MATERIALS.md` 建立，T16）
 
 用户 2026-09-12 立目标：「**本地全部材料深入分析 整合 吸收 审查 以及 论文 github**」（目标轮次第 1 轮）。
