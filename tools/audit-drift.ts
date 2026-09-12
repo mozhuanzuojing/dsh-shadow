@@ -58,6 +58,21 @@ if (prod.length === 0) {
   process.exit(2);
 }
 
+// **B 段的分组与计数必须在分支之前算好**（v1.15.56 修）：
+// 此前 `driftCounts` 只在「人读」分支（`else`）里赋值 ⇒ 走 `--json`（含 `--json --update-ratchet`）时
+// 它保持初始的 `{}`，**空表被写进棘轮基线**，而工具照样打印「已写入棘轮基线（drift 段 + corpus 段）」
+// ⇒ 记账与事实不符（下一次 `--ratchet` 会因桶消失而报红，故不是静默，但**基线是错的**）。
+// 现在两个分支**共用同一份**派生（判据收一处）。
+const byKey = new Map<string, { files: Set<string>; hits: typeof preds }>();
+for (const h of preds) {
+  const k = (h.detail.match(/`([^`]+)`/) || [])[1] || "?";
+  if (!byKey.has(k)) byKey.set(k, { files: new Set(), hits: [] });
+  byKey.get(k)!.files.add(h.file);
+  byKey.get(k)!.hits.push(h);
+}
+const keys = [...byKey].sort((a, b) => b[1].files.size - a[1].files.size || a[0].localeCompare(b[0]));
+driftCounts = { drift_keys: keys.length, drift_sites: preds.length };
+
 if (asJson) {
   console.log(JSON.stringify({ productionFiles: prod.length, freshness: fresh, predicateLeads: preds }, null, 2));
 } else {
@@ -73,14 +88,7 @@ if (asJson) {
   console.log(`  小计 ${fresh.length} 条`);
 
   // ── B：同一条判据在 ≥2 个模块被表达（**线索级**）──
-  const byKey = new Map<string, { files: Set<string>; hits: typeof preds }>();
-  for (const h of preds) {
-    const k = (h.detail.match(/`([^`]+)`/) || [])[1] || "?";
-    if (!byKey.has(k)) byKey.set(k, { files: new Set(), hits: [] });
-    byKey.get(k)!.files.add(h.file);
-    byKey.get(k)!.hits.push(h);
-  }
-  const keys = [...byKey].sort((a, b) => b[1].files.size - a[1].files.size || a[0].localeCompare(b[0]));
+
   console.log("");
   console.log("═".repeat(100));
   console.log("B. 同一条判据在 **≥2 个生产模块**被表达（线索级 —— **一律人工复核**，见下）");
@@ -90,7 +98,7 @@ if (asJson) {
     console.log(`  ${k.padEnd(26)} 文件 ${v.files.size}: ${[...v.files].join(", ")}`);
   }
   console.log(`  小计 ${keys.length} 个键 / ${preds.length} 处`);
-  driftCounts = { drift_keys: keys.length, drift_sites: preds.length };
+  // `driftCounts` 已在分支之前赋值（两条路径共用），此处不再改。
 
   console.log("");
   console.log("判定纪律（**本条最重要**）：以上都是**线索不是结论**。");

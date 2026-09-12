@@ -170,7 +170,13 @@ export const projectFacts = (records) => {
     facts.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     return { facts, violations };
 };
-/** **唯一**允许认知统计消费的入口（Pattern / M5 / 棘轮都必须走这里，不得直接吃 records）。 */
+/**
+ * **唯一**允许认知统计消费的入口（Pattern / M5 / 棘轮都必须走这里，不得直接吃 records）。
+ *
+ * ⚠ **本函数只返回事实**：被拒记录（`violations`）**不在此返回**。需要它们时请直接用
+ * `projectFacts(records).violations`；`candidateStats` 亦已把条数露为 `violations`（v1.15.56）。
+ * 这样写是为了让「事实面」保持单一职责，同时**不把「有记录被拒」这件事藏起来**。
+ */
 export const factualOnly = (records) => projectFacts(records).facts;
 const ACTOR_ORDER = ["human", "tool", "ci"];
 /**
@@ -181,7 +187,7 @@ const ACTOR_ORDER = ["human", "tool", "ci"];
  * 比率的分母为 0 ⇒ `null`（**不可测不报 0**）；**待确认不计入分母**（否则「还没人看」会被算成「被拒」）。
  */
 export const candidateStats = (records, now) => {
-    const { proposals, byProposal } = collect(records);
+    const { proposals, byProposal, violations } = collect(records);
     const effective = effectiveConfirmations(proposals, byProposal);
     const perActor = new Map();
     const pendingAges = [];
@@ -235,5 +241,6 @@ export const candidateStats = (records, now) => {
         acceptanceRate: human === undefined ? null : rate(human.confirmed, humanDen),
         rejectionRate: human === undefined ? null : rate(human.rejected, humanDen),
         byActor,
+        violations: violations.length,
     };
 };

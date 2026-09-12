@@ -11,6 +11,7 @@ export function createWriterCore(opts) {
         cwdBySession: new Map(),
         lastFlushError: undefined,
         lastIndexError: undefined,
+        lastMetaError: undefined,
         indexCache: new Map(),
         indexCacheWarm: new Set(),
         indexDirty: new Set(),

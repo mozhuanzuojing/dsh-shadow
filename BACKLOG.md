@@ -1380,9 +1380,26 @@ V/G/T6 真机与外部条件项
 | 结构门解析不到的 import **不进图**、退出码 0 | ✅ **已修**：判据移进 `audit-layers.lib.ts`（不是 CLI）⇒ **未解析即违规**；`audit-layers.selftest.ts` ⑨ 标定 |
 | **V7 语料闸把 `.git` 当语料**（`git gc` ⇒ 假 PARTIAL） | ✅ **已修**：两个工具遍历排除 `.git` |
 | **PARTIAL 拒绝录基线 ⇒ 闸堵死自己的修正** | ✅ **已修**：目录数判据改用**文件面定案**（文件健康 ⇒ 口径变化，NORMAL + 印理由）；保留文件面掉/目录 <10% 两档；`corpus-health.selftest.ts` ⑪ 标定 |
-| `core/memory.ts:77-79` meta 注册失败只 log | ⬜ **未修**（与上列同族，下一轮候选） |
+| `core/memory.ts:77-79` meta 注册失败只 log | ✅ **已修（v1.15.56）**：`registerMeta` 返回 boolean + `core.lastMetaError`，读侧独立提示「元数据未登记」 |
 
 **新增线索（本轮发现，未修）**：
 - `tools/audit-drift.ts` 的 `--json --update-ratchet` 仍会把**空 drift 表**写进基线（记账失真，非静默）；
 - `tools/toolset-authority.ts:128` 清单落盘**早于** `falseMeasured` 标红；
 - `corpus-health` 的指纹**只覆盖路径集合**（不含内容）⇒ 「同路径改了内容」不在该闸覆盖内（已在输出提示，属**已知边界**而非缺陷）。
+
+### 6.6 状态更新（v1.15.56）：又修 5 处（**报告面/闸面**优先）
+
+| 原线索 | 状态 |
+|---|---|
+| `tools/audit-drift.ts` 的 `--json --update-ratchet` 把**空 drift 表**写进基线 | ✅ **已修**：B 段派生提到分支之前，两条路径共用；端到端验证写出 `drift_keys=11 / drift_sites=28` |
+| `tools/toolset-authority.ts:128` 清单落盘**早于** `falseMeasured` 标红 | ✅ **已修**：改为**先判后写**（拒绝产出坏清单），与同文件 `countInconsistency` 的既有先例一致 |
+| `core/memory.ts:77-79` meta 注册失败只 log | ✅ **已修**：返回 boolean + `core.lastMetaError` + 读侧独立 ⚠（与「落盘失败」分开） |
+| `query/observatory.ts:92` query-log 单行坏 JSON 无计数 | ✅ **已修**：`badLines` 计数 + `badLinesNote` 披露 |
+| `core/proposal.ts` `factualOnly`/`candidateStats` 丢 `violations` | ✅ **已修**：`candidateStats.violations` 露出；`factualOnly` 写明边界与取用路径 |
+
+闸：`test/review-fixes.test.ts` ⑥（violations 两面一致）⑦（坏行计数与披露）。
+
+**仍未修（台账剩余）**：`manifest.failures` 恒空 · `_index.md` 不进指纹 · 证据路径上限无披露 ·
+`observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 · `reads.ts` 截断只写 log ·
+`episode.ts` 缺时刻被默认值掩盖 · zg 报错→not_found · `filesystem.ts` 读失败/不存在不分 ·
+缺 locator 当存在 · §6.3 六条待定语义 · **169 个测试类型错误** · 整目录未读。

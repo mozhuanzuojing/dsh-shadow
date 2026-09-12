@@ -93,3 +93,30 @@
 缺 locator 当存在 · audit-drift `--json --update-ratchet` 写空表 · toolset-authority 落盘早于标红 ·
 `factualOnly`/`candidateStats` 丢 `violations` · 以及 §6.3 的六条**待定语义**。
 **未读范围与 169 个测试类型错误同样未变**（见 §5）。
+
+---
+
+## 7. 第四轮（v1.15.56）：继续修**报告面/闸面**会说谎的地方
+
+挑选原则：**报告的诚实性优先于功能** —— 一个报告「失败项 0」而实际有失败的系统，会让人做出错误决定。
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **`audit-drift --json --update-ratchet` 把空表写进基线** | `driftCounts` 只在**人读分支**（`else`）里赋值 ⇒ 走 `--json` 时保持初始 `{}`，**空 drift 表被写进棘轮基线**，而工具照样打印「已写入棘轮基线（drift 段 + corpus 段）」。下一次 `--ratchet` 会因桶消失报红（故不是静默），但**基线是错的** | B 段分组与计数**提到分支之前**，两条路径共用同一份派生 ⇒ **端到端验证**：`--json --update-ratchet` 现在写出 `drift_keys=11 / drift_sites=28` |
+| **`toolset-authority` 坏清单先落盘、后标红** | 顺序是「`writeFileSync` → 再判 `falseMeasured` → 置退出码 1」⇒ **它自己声明「必须为 0」的坏清单已经被签进仓库**，离线棘轮与人读消费的都是那份坏清单 | 与同文件上方 `countInconsistency` 的既有先例一致：**先判后写，拒绝产出坏清单**（`process.exit(1)`） |
+| **`registerMeta` 失败只 log** | 记忆文件与索引缓存**已写入** ⇒ 这条记忆在索引/召回里活跃，而 `_meta.json` 里没有它 ⇒ `hits` 永远不计、生命周期恒判 NEW、遗忘判据落回默认值 | 返回 `boolean`；`flush` 据此设 `core.lastMetaError`，`getFlushWarn()` 渲染**独立的一条**⚠（与「落盘失败」分开，因为这是不同的事实） |
+| **query-log 坏行无计数** | `catch { /* 单行坏跳过 */ }` 只丢不报 ⇒ `total` / 覆盖率 / drift 统计建立在**被削过的样本**上，读数字的人无从知道丢了几行 | `badLines` 计数 + `badLinesNote` 披露（0 行时**不带**该字段，免得误以为有坏行） |
+| **`candidateStats` / `factualOnly` 丢掉 `violations`** | 「唯一统计入口」的消费者拿到**干净的数字**，不知道有记录被拒 —— 「有记录被拒」与「本来就没那些记录」是两件事 | `candidateStats` 露出 `violations: number`；`factualOnly` 写明边界并给出取用路径（`projectFacts(records).violations`） |
+
+**标定**：`test/review-fixes.test.ts` 新增 **⑥**（候选统计的 `violations` 与事实面一致 —— 判据收一处）与 **⑦**（坏行计数 + 披露；无坏行时不带该字段）。
+
+**证据**：`verify` 52/52；`--json --update-ratchet` 写出的 drift 表经**真跑核对**（并已还原基线）；两条棘轮通过。
+
+### 7.1 仍未修（台账剩余，**未缩小承诺**）
+
+`manifest.failures` 恒空（`core/node.ts:49` + `projection-store.ts:70`）· `_index.md` 不进指纹 ·
+证据路径上限无披露 · `observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 ·
+`reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · zg 报错 → not_found ·
+`filesystem.ts` 读失败/不存在不分 · 缺 locator 当存在 · §6.3 六条**待定语义** ·
+**169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
+以及审查者点名「可能是最高危假绿源」的 `tools/*.selftest.ts`）。

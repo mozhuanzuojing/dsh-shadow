@@ -317,7 +317,12 @@ export function makeMaterialize(core, hooks) {
             // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
             cacheFor(ws).set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
             core.indexDirty.add(ws); // 索引懒构建：不在此处重建，待 read_shadow 读索引时再 ensureIndex。
-            await registerMeta(fs, ws, rel, id, core.retentionCfg.enabled === true);
+            // 记忆文件与索引缓存已写入；**元数据登记失败必须留痕**（否则这条记忆在索引里活跃、
+            // 而 `_meta.json` 里没有它 ⇒ hits 永远不计、生命周期恒 NEW、遗忘判据落回默认值）。
+            if (!(await registerMeta(fs, ws, rel, id, core.retentionCfg.enabled === true))) {
+                core.lastMetaError = { at: Date.now(), err: `元数据未登记（${rel}）：hits/生命周期/遗忘判据都看不到这条记忆` };
+                console.error("[dsh-shadow][error]", core.lastMetaError.err);
+            }
             void patchSummary(fs, ws, rel, entry, arr);
         }
         catch (e) {

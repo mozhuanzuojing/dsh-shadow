@@ -3,6 +3,27 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.56] **继续 review fix all：修 5 处「报告面/闸面会说谎」** —— `verify` 52/52
+
+**挑选原则**：**报告的诚实性优先于功能** —— 一个报告「失败项 0」而实际有失败的系统，会让人做出错误决定。
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **`audit-drift --json --update-ratchet` 写空表** | `driftCounts` 只在**人读分支**赋值 ⇒ 走 `--json` 时保持 `{}`，**空 drift 表被写进基线**，工具却照样打印「已写入棘轮基线」。下次 `--ratchet` 会红（非静默）但**基线是错的** | B 段派生**提到分支之前**，两路径共用 ⇒ **端到端核对**：现在写出 `drift_keys=11 / drift_sites=28` |
+| **`toolset-authority` 坏清单先落盘后标红** | `writeFileSync` 在 `falseMeasured` 判定**之前** ⇒ **它自己声明「必须为 0」的坏清单已被签进仓库** | 与同文件 `countInconsistency` 既有先例一致：**先判后写**，拒绝产出坏清单 |
+| **`registerMeta` 失败只 log** | 记忆文件与索引**已写入** ⇒ 该记忆在索引里活跃、`_meta.json` 里没有它 ⇒ `hits` 永不计、生命周期恒 NEW、遗忘判据落默认值 | 返回 `boolean`；`flush` 设 `core.lastMetaError`，读侧**独立一条**⚠（与「落盘失败」分开 —— 是不同的事实） |
+| **query-log 坏行无计数** | `catch { /* 单行坏跳过 */ }` 只丢不报 ⇒ `total`/覆盖率/drift 建立在**被削样本**上 | `badLines` + `badLinesNote` 披露（0 行时**不带**该字段） |
+| **`candidateStats`/`factualOnly` 丢 `violations`** | 「唯一统计入口」的消费者拿到干净数字，不知有记录被拒 —— 「有记录被拒」≠「本来没那些记录」 | `candidateStats.violations` 露出；`factualOnly` 写明边界与取用路径 |
+
+**闸**：`test/review-fixes.test.ts` ⑥（`violations` 在事实面与统计面一致 —— 判据收一处）⑦（坏行计数 + 披露）。
+**证据**：`verify` **52/52**；两条棘轮通过；语料健康双方 NORMAL。
+
+**仍未修（不缩小承诺）**：`manifest.failures` 恒空 · `_index.md` 不进指纹 · 证据路径上限无披露 ·
+`observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 ·
+zg 报错→`not_found` · `filesystem.ts` 读失败/不存在不分 · 缺 locator 当存在 · `adr/0083` §6.3 六条待定语义 ·
+**169 个既存测试类型错误** · **整目录未读**（含审查者点名「可能是最高危假绿源」的 `tools/*.selftest.ts`）。
+
+
 ## [v1.15.55] **修台账里的高危条目（6 类）＋ 修闸自身的 2 处缺陷** —— `verify` 52/52
 
 **一句话**：继续 `review fix all`，这次动手的对象是**上一轮自己记下的高危线索**（会永久改变可见状态、当前不出声），

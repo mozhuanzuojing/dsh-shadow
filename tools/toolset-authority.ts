@@ -125,16 +125,22 @@ if (inconsistent.length) {
   process.exit(1);
 }
 
+// v1.15.56：**「实测」不能自证时也必须拒绝写入** —— 与上面的自洽门同一个道理（先判后写）。
+// 此前顺序是「先 `writeFileSync` 落盘，再到下面把 `falseMeasured` 标红并置退出码 1」：
+// 于是**它自己声明「必须为 0」的坏清单已经被签进仓库**，离线棘轮与人读消费的都是这份坏清单。
+if (falseMeasured.length) {
+  console.error("");
+  console.error(`「实测」但本机读数不能佐证：${falseMeasured.length} 条 —— **拒绝写入**（该数必须为 0）：`);
+  for (const r of falseMeasured) console.error(`  · ${r.id.padEnd(16)} 台账 ${r.ledgerVerSrc} ${r.ledgerVersion} · 本机 ${r.machineVersion ?? "(未检出)"}`);
+  process.exit(1);
+}
+
 writeFileSync(MANIFEST, JSON.stringify(manifest, null, 1) + "\n", "utf8");
 console.log("");
 console.log(`已写入 ${MANIFEST}`);
 console.log(`  共 ${rows.length} · 台账==权威 ${okRows.length} · **老化 ${aged.length}** · 未取到/异常 ${bad.length}`);
-console.log(`  **「实测」但本机读数不能佐证：${falseMeasured.length}** ${falseMeasured.length ? "← 必须为 0！" : "✅"}`);
+console.log(`  **「实测」但本机读数不能佐证：${falseMeasured.length}** ✅`);
 console.log(`  清单自洽（counts ↔ rows）：✅ ${inconsistent.length === 0 ? `已校验 ${Object.keys(manifest.counts).length} 个计数` : ""}`);
-if (falseMeasured.length) {
-  for (const r of falseMeasured) console.log(`     ${r.id.padEnd(16)} 台账 ${r.ledgerVerSrc} ${r.ledgerVersion} · 本机 ${r.machineVersion ?? "(未检出)"}`);
-  process.exitCode = 1;
-}
 console.log("");
 console.log("判定纪律：");
 console.log("  · 「老化」= 台账版本落后于 winget 现值 —— 这是**目录在推进**的正常现象，**不是错误**；");

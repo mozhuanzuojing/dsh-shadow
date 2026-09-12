@@ -17,6 +17,8 @@ export interface WriterCore {
   lastFlushError: { at: number; err: string } | undefined;
   /** 索引重建失败（读侧据此提示「你读到的索引可能是旧的」）。与 lastFlushError 分开：这是**读路径**的失败。 */
   lastIndexError: { at: number; err: string } | undefined;
+  /** 元数据（`_meta.json`）登记失败：记忆文件已写入但 meta 没有它 ⇒ hits/生命周期/遗忘判据都看不到。 */
+  lastMetaError: { at: number; err: string } | undefined;
   indexCache: Map<string, Map<string, any>>;
   indexCacheWarm: Set<string>;
   indexDirty: Set<string>;
@@ -58,6 +60,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     cwdBySession: new Map(),
     lastFlushError: undefined,
   lastIndexError: undefined,
+  lastMetaError: undefined,
     indexCache: new Map(),
     indexCacheWarm: new Set(),
     indexDirty: new Set(),

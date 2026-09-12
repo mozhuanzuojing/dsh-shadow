@@ -80,18 +80,29 @@ export const buildClueHeader = (entry, arr, srcId, extra) => {
         lines.push(`> 目标：${scrubUnsafe(String(extra.goal)).slice(0, 80)}`);
     return lines.join("\n") + "\n";
 };
+/**
+ * 登记 `_meta.json` 里的一条。**返回是否登记成功**（v1.15.56）。
+ *
+ * 旧版把失败吞成一行 `console.log` ⇒ 记忆文件与索引缓存**早已写入**，于是这条记忆在索引/召回里
+ * 是「活跃」的，而 `_meta.json` 里没有它 ⇒ `hits` 永远不计、生命周期恒判 NEW、遗忘判据落回默认值。
+ * 调用方（`flush`）据此留痕，读侧才能提示「元数据未登记」。
+ */
 export const registerMeta = async (fs, ws, rel, actorId, retentionEnabled) => {
     if (!retentionEnabled)
-        return;
+        return true; // 未开启保留策略 ⇒ 本来就不需要 meta（不是失败）
     try {
         // 事务（ADR-0068）：读-改-写带版本守卫，并发下不丢更新；`false` = 已存在，无需写。
-        await mutateMeta(fs, ws, (meta) => {
+        const ok = await mutateMeta(fs, ws, (meta) => {
             if (meta[rel])
                 return false;
             meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };
         });
+        if (!ok)
+            console.log(`[dsh-shadow] meta register 未落盘（写失败或坏件）：${rel}`);
+        return ok;
     }
     catch (e) {
         console.log("[dsh-shadow] meta register failed:", e && e.message);
+        return false;
     }
 };

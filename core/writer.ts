@@ -60,6 +60,10 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     if (core.lastIndexError) {
       parts.push(`\n\n> ⚠ shadow 最近一次**索引重建失败**（${new Date(core.lastIndexError.at).toISOString()}：${core.lastIndexError.err}）。下面的索引可能**不是最新的**；主题召回走逐文件读盘，两者可能不一致。`);
     }
+    // 元数据未登记：记忆**存在**但 hits/生命周期/遗忘判据看不到它 —— 与「落盘失败」是不同的事，故分开提示。
+    if (core.lastMetaError) {
+      parts.push(`\n\n> ⚠ shadow 最近一次**元数据未登记**（${new Date(core.lastMetaError.at).toISOString()}：${core.lastMetaError.err}）。记忆本体已写入，但命中计数与生命周期标签对它不生效。`);
+    }
     return parts.join("");
   };
 

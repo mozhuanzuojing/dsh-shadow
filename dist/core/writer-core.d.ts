@@ -16,6 +16,11 @@ export interface WriterCore {
         at: number;
         err: string;
     } | undefined;
+    /** 元数据（`_meta.json`）登记失败：记忆文件已写入但 meta 没有它 ⇒ hits/生命周期/遗忘判据都看不到。 */
+    lastMetaError: {
+        at: number;
+        err: string;
+    } | undefined;
     indexCache: Map<string, Map<string, any>>;
     indexCacheWarm: Set<string>;
     indexDirty: Set<string>;

@@ -51,6 +51,7 @@ export const recordQueryObservation = async (fs, ws, cfg, obs) => {
 /** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
 export const summarizeQueryLog = async (fs, ws) => {
     const obs = [];
+    let badLines = 0; // 无法解析的行数（**必须披露**，见下）
     try {
         const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/query-log`, { cwd: ws });
         const files = await fs.listDir(root);
@@ -63,15 +64,20 @@ export const summarizeQueryLog = async (fs, ws) => {
                 const t = line.trim();
                 if (!t)
                     continue;
+                // **坏行必须计数**（v1.15.56）：旧版 `catch { /* 单行坏跳过 */ }` 只丢不报，
+                // 于是 `total` / 覆盖率 / drift 统计都建立在**被削过的样本**上，读数字的人无从知道丢了几行。
                 try {
                     obs.push(JSON.parse(t));
                 }
-                catch { /* 单行坏跳过 */ }
+                catch {
+                    badLines += 1;
+                }
             }
         }
     }
     catch { /* query-log 目录不存在（尚未采集） */ }
-    return aggregateObservations(obs);
+    const agg = aggregateObservations(obs);
+    return badLines > 0 ? { ...agg, badLines, badLinesNote: `⚠ query-log 有 ${badLines} 行**无法解析**（已从统计中剔除）：下面的 total/覆盖率/drift 基于**被削过的样本**，不代表全部采集。` } : agg;
 };
 const aggregateObservations = (obs) => {
     const total = obs.length;

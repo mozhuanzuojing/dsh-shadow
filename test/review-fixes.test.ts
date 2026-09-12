@@ -168,6 +168,46 @@ import assert from "node:assert/strict";
   console.log("✔ ⑤ 假设/证据：落盘失败返回 false/persisted=false，调用方得以改写播报");
 }
 
+// ── ⑥ 报告不得说谎：候选统计必须暴露「有记录被拒」，观测统计必须暴露「有坏行被剔除」 ──
+{
+  const { candidateStats, projectFacts } = await import("../dist/core/proposal.js");
+  const P = (id: string) => ({ type: "proposal", id, kind: "outcome", source: "user", inputRefs: [{ file: "a.ts", line: 1 }], proposedRelation: "x", createdAt: "2026-09-01T00:00:00Z" });
+  const C = (id: string, proposal: string) => ({ type: "confirmation", id, proposal, actor: "human", action: "confirm", timestamp: "2026-09-02T00:00:00Z" });
+  const good = [P("p1"), C("c1", "p1")];
+  assert.equal(candidateStats(good, "2026-09-12T00:00:00Z").violations, 0, "干净输入 ⇒ 0 违规");
+
+  // 一条 `type:"fact"` 冒充（会被拒收）+ 一条缺 inputRefs 的 proposal
+  const dirty = [...good, { type: "fact", id: "f1", source: "model-proposal" } as any, { ...P("p2"), inputRefs: [] } as any];
+  const s = candidateStats(dirty, "2026-09-12T00:00:00Z");
+  assert.ok(s.violations >= 2, "★ 被拒记录必须露出条数（旧版把 collect() 的 violations 直接丢掉）");
+  assert.equal(s.confirmed, 1, "统计口径不受坏记录影响（它们本来就进不来）");
+  assert.equal(projectFacts(dirty).violations.length, s.violations, "事实面与统计面看到的违规数必须一致（判据收一处）");
+  console.log("✔ ⑥ 候选统计露出 `violations`：有记录被拒 与 本来就没那些记录 是两件事");
+}
+
+// ── ⑦ query-log 坏行必须计数并披露（统计不得基于「被削过的样本」而不出声） ──
+{
+  const mkFs = (lines: string[]) => {
+    const files = new Map<string, string>([["D:/ws/.shadow/query-log/2026-09-01.jsonl", lines.join("\n")]]);
+    return {
+      async resolve(p: string) { return { displayPath: p }; },
+      async readText(t: any) { return files.get(t.displayPath) ?? ""; },
+      async listDir() { return [{ name: "2026-09-01.jsonl" }]; },
+      async writeText(t: any, c: string) { files.set(t.displayPath, c); return { operation: "create", version: 1 }; },
+    };
+  };
+  const { summarizeQueryLog } = await import("../dist/query/observatory.js");
+  const ok = await summarizeQueryLog(mkFs(['{"type":"recall","latencyMs":10}', '{"type":"query","latencyMs":20}']) as any, "D:/ws");
+  assert.equal(ok.badLines, undefined, "没有坏行 ⇒ 不带该字段（不是 0，免得误以为有坏行）");
+  assert.equal(ok.total, 2);
+
+  const bad = await summarizeQueryLog(mkFs(['{"type":"recall","latencyMs":10}', "{ 半截", "not json at all"]) as any, "D:/ws");
+  assert.equal(bad.badLines, 2, "★ 坏行必须计数");
+  assert.equal(bad.total, 1, "统计只用能解析的行");
+  assert.ok(String(bad.badLinesNote).includes("无法解析"), "★ 而且必须**说清楚**统计基于被削样本");
+  console.log("✔ ⑦ query-log 坏行计数 + 披露（覆盖率/drift 不再无声地基于残缺样本）");
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · 本轮审查是**抽样**的：三名审查者各只读了一部分目录（`adaptation/`、`agency/`、`federation/`、");
