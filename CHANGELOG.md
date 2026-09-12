@@ -3,6 +3,61 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.47] **双泳道 + M1 契约草案**（`adr/0081`）：决策 → 结果 → 经验 —— 并清点出「M1 已有一半，且是最难的那一半」
+
+**一句话**：用户修正了上一轮的表述 —— **不是「先治理、不做新 Memory 能力」，而是两条泳道并行**，
+新能力**纵向生长**（`M1 决策 → M2 结果 → M3 经验 → M4 修正 → M5 有用性`）而不是横向堆功能。
+本轮**没有写任何新能力代码**：先把 M1 的现状清点做透，并**按 T15 的规格把 M1 写成第一条真契约**。
+
+### 1. 最重要的清点结论：**M1 最难的那条边界已经冻结了**
+
+| 用户要的字段 | 现状 | 证据 |
+|---|---|---|
+| `decision` 决定本身 | ✅ **写侧一等事件**，落盘 `> 决策：〔source〕statement` | `adr/0037` |
+| `reasoning` 为什么 | ✅ **已冻结**：落盘 `> 决策理由：〔source〕reason`，且 **「绝不生成理由」**（原文明确存在才算） | `adr/0037:29-42` |
+| `alternatives` 当时有哪些选择 | ❌ **缺**（`dream/types.ts:19` 的 `alternatives` 是**假设的替代解释**，不是决策备选） | `dream/types.ts:19` |
+| 决策的依据（evidence 引用） | 🟡 半有（理由是原文事实，但**无显式证据引用**） | `adr/0037` / `validation/types.ts:3` |
+| **`outcome` 决策后来怎样** | ❌ **缺关键的一半：没有「决策 → 结果」这条边**。现有 `outcome` 是**别的**东西：`observer/trace.ts:26` 的轨迹 `{expected,actual}`、`validation` 的**假设**验证结论 | `observer/trace.ts:26,62`、`validation/types.ts:23` |
+| `lesson` | 🟡 有但不合格：`lessonOf` 派生自**取代/证据存活状态**，不是「这个决策执行得怎样」 | `observer/arbitrate.ts:71` |
+
+**⇒ M1 的缺口只有三件**（都不推倒已有）：**① 决策→结果 的边**；**② 结果结算状态机**（`pending → observed → settled`，
+**并允许 `unresolved` 而不是编一个结果**）；**③ `alternatives`（可选，同受「只收原文明确存在」的纪律）**。
+
+### 2. M2–M5 的清点（结论：**大多不是「新建」，而是「接上」**）
+
+- **M2 Outcome**：**不新建对象** —— `validation/types.ts:23` 已有完整 outcome 状态机 + append-only 历史（实测场景 88 保留 observed→rejected），
+  `observer/trace.ts:26` 已有 `expected/actual`，`long-horizon` 已有 ActionFeedback。**要做的只是把已有形态接到 Decision 上**
+  （否则就是**第二个平行 outcome 概念 = 判据分叉**）。
+- **M3 Pattern**：**算法内核已存在**（`reflection/patterns/success-rate.ts` 的 decision→outcome 相关性、`decision-outcome.ts` 的重复 tally、
+  `dream/compress.ts` 的 cross-domain 抽象）。**真缺口**是 Pattern 不是一等对象，且 `reflection/types.ts:8` **没有反例字段** ——
+  用户要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺，撞「不伪造精度」）。
+- **M4 Revision**：**机制已有**（`Forget ≠ Delete`、`superseded`、append-only、取代的确定性 —— `adr/0080` 还给了「阈值不可达」的证明）。
+  **真缺口**：`revision` 不是一等对象，**没留下「因哪条证据而改判」的可追溯对象**。
+- **M5 Utility**：只有 `recall_count` 的雏形（`hits` + `queryLog`）+ 衰减；`useful_count` / `influenced_decision` /
+  `prevented_duplicate_work` / `caused_rework` **全缺** —— **其前提是 M1**。
+
+### 3. M1 契约按 T15 规格写成**第一条真条目**（`adr/0081` §3）
+
+十字段齐备：`id = decision-outcome-lesson-v1` · surface（落盘格式 + 工具 schema + 派生件）· owner（`observer/`，
+并给出**模块归属表**含「Must not own」）· semantic meaning · stability（`hard`：事实/理由分离与「绝不生成理由」；
+`soft`：字段名与落盘行格式）· allowed changes（**additive only**）· **forbidden changes（四条）** ·
+evidence（逐条 `文件:行号`）· verification（**待建 4 条，含负例**）· ratchet（暂用现有两门 + 待建「有决策无结果」计数桶）。
+**四条禁令**：① 不让系统推断结果的优劣或理由；② 不为已有决策编造 outcome/lesson（缺就写「未观察到」）；
+③ 不新建第二个 outcome 概念；④ 不用相似度/LLM 做「结果归属哪个决策」的判断。
+
+### 4. 待用户拍板（三处，缺一不动手）
+
+1. **结果从哪来**：只收显式外部来源 / 允许「同入口+时间窗」的确定性自动归属 / 允许 LLM 归属（**建议否决**，撞 ADR-0059）。
+2. **`subject` 要不要**（决策挂 subject，还是继续挂 entry+时间？与 Episode 坐标并存还是取代？）。
+3. **结算窗口**：多久没结果标 `unresolved` 而非 `pending`（走 config，**不做硬编码魔数**）。
+
+### 5. 变更文件与边界
+
+`adr/0081-m1-decision-outcome-lesson.md`（新）· `BACKLOG.md`（🧠 M1–M5 泳道 + 两泳道交汇 + 明确「不做 KG / 不做 Soul」）·
+`CHANGELOG.md` · `README.md` · `package.json`（1.15.47）。
+**未改动**：任何 `*.ts` 业务源码、`dist/`、任何门禁 —— 本轮是**契约与清点**，不是实现。
+**诚实标注**：现状清点只凭**源码与 ADR 阅读**，**没有跑过任何真实决策链路**，故「已有」= 机制存在，不等于端到端跑通。
+
 ## [v1.15.46] **V7 语料健康门**（Partial Corpus）+ 五级审计口径 + 阶段路线与 T15 契约登记册规格
 
 **一句话**：V6 只防住「语料**全空**」；本轮补上它的危险兄弟 —— **Partial Corpus**（工具坏了给出一个「看起来合理」

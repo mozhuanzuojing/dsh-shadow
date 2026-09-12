@@ -1202,6 +1202,31 @@ V/G/T6 真机与外部条件项
 **核心契约冻结**；此后新功能必须**证明不破坏 Contract** 才能进 `main`。
 **T14 的语料快照必须排在冻结之后** —— 否则冻结的是「当前实现」而不是「契约语料」。
 
+### 🧠 **M1–M5 Memory Evolution 泳道**（用户 2026-09-12 确立；与上面 🛡️ 契约泳道**并行**）
+
+> **用户修正了上一轮的表述**：不是「先做治理、暂不做新 Memory 能力」，而是
+> **两条泳道并行，但新能力必须围绕一个新核心方向纵向生长，不再横向堆功能**。
+> **两条泳道在此交汇**：**M1 的契约条目就是 T15 Registry 的第一条真条目**。
+
+```text
+🛡️ Contract Track : T8 → T15(Registry) → D1/D2/D3 → Contract Freeze → T14
+🧠 Memory Track   : M1 → M2 → M3 → M4 → M5
+```
+
+**核心思想转变**：**Recall 不是 Memory 的终点**。目标是完整生命周期 ——
+`发生 → 记录 → 理解 → 形成决策 → 执行 → 观察结果 → 形成经验 → 修正认知 → 再影响未来决策`。
+
+| # | 能力 | 状态 | 现状清点结论（逐条带证据，详见 `adr/0081` §2） |
+|---|---|---|---|
+| **M1** | **Decision Memory**（决策 → 结果 → 经验） | 🟡 **契约草案已出（`adr/0081`）**，**待用户拍板 3 处** | **已有 50%**：`DecisionEvent`/`DecisionReason` 的**分离**与「**绝不生成理由**」**已由 ADR-0037 冻结**（`adr/0037:29-42`）；缺的只有三件 —— **① 决策→结果这条边**、**② 结果结算状态机（`pending → observed → settled`，允许 `unresolved`）**、**③ `alternatives`（可选）**。**不推倒已有**。 |
+| **M2** | **Outcome Memory**（记结果 + 评价 + 以后是否继续相信） | ⬜ 待 M1 拍板后 | **不新建对象**：`validation/types.ts:23` 已有完整 outcome 状态机（`validated/observed/rejected/expired`）+ append-only 历史（实测场景 88）；`observer/trace.ts:26` 已有 `outcome{expected,actual}`；`long-horizon` 已有 ActionFeedback。**唯一要做的**：把已有 outcome 形态**接到 Decision 上**（否则就是第二个平行 outcome 概念＝判据分叉）。 |
+| **M3** | **Pattern Memory**（从 N 个 Episode 产生经验） | ⬜ | **算法内核已存在**：`reflection/patterns/success-rate.ts`（decision→outcome 相关性，纯统计、确定性标记集、无 AI）+ `decision-outcome.ts`（重复决策/结果 tally）+ `dream/compress.ts`（cross-domain 抽象）。**真缺口**：Pattern 不是一等对象，且 `reflection/types.ts:8` 的结构**没有反例字段** —— 用户 schema 要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺）。 |
+| **M4** | **Memory Revision**（记忆自己纠错，保留时间连续性） | ⬜ | **机制已有**：`Forget ≠ Delete`（ADR-0031）、`superseded` 生命周期（`core/lifecycle.ts`、ADR-0061）、append-only 历史、取代的确定性（ADR-0059/0061，`adr/0080` 给了「阈值不可达」的证明）。**真缺口**：`revision` 不是一等对象 —— **没有留下「因哪条证据而改判」的可追溯对象**（裁决只给 verdict/outcome/reflection，不改写原记忆，这是对的）。 |
+| **M5** | **Memory Utility**（让系统知道什么值得记） | ⬜ | **只有 `recall_count` 的雏形**（`hits` 累积，见 D7；`queryLog`）+ 衰减（MemoryBank hotness）。`useful_count` / `influenced_decision` / `prevented_duplicate_work` / `caused_rework` **全缺**。**前提是 M1**：没有「决策→结果」就无从判断某条记忆**是否影响了决策**。 |
+
+**明确不做（用户指定）**：现在**不做 KG**、**不做 Soul** —— 先做 **Decision → Outcome → Lesson** 这一条闭环。
+
+
 ---
 
 ## 五、已知空白（文献层面就没有答案，需自己实验证明）
