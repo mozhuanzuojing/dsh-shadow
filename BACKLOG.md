@@ -6,7 +6,7 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-12（`v1.15.39`）—— **现存 25 条**（T 10 / D 6 / V 6 / G 4 + **B3** + **T7**–**T15**）；
+> 最后整理：2026-09-12（`v1.15.39`）—— **现存 26 条**（T 11 / D 6 / V 6 / G 4 + **B3** + **T7**–**T16**）；
 > 已结案 **17 条**（B1 / B2 / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
 > 漂移审计工具 / 图快照顺序 / 台账版本出处 / **T5 漂移键复核** / **T1 A 类分诊** / **T4 零引用定性** /
 > **D8 能力矩阵补三列** / **D6 吸收 OpenViking 三条** / **W1 审计工具漏报** / **countInconsistency 接线**）。
@@ -19,6 +19,8 @@
 > ① `assert_transition()` 不是写侧守卫（写原语不强制、≥2 处绕过）；② ADR-0004 的协议在生产里是
 > **窄面 + 默认只建议**（一个 slot、`observe`）⇒ **实质改写 D3 的对照面**；③ 路径/计数记错；
 > 另把「覆盖率台账」改为**磁盘枚举生成**，**新开 T13 / T14 / T15**，并把 **T11①** 推进为「有可照抄形态」）。
+> **本地全部材料总台账**（v1.15.39 起，[`MATERIALS.md`](./MATERIALS.md)：DSH 本体 + 6 个外来 repo 的
+> 名册/许可/规模/已吸收/未读/优先级；**由磁盘枚举生成**）——首轮四路深读回报后**新开 T16**（平台契约核对与纠错）。
 > **本轮新增 B3 + T6**（ADR-0074：写入缺 `sandboxPolicy` ⇒ **记忆一条都落不了盘**；修复已提交，
 > 但插件 `dist/` 不热加载 ⇒ 需重启宿主才能在真机复核）。
 > **注意**：ADR-0074 **不列在本台账的「已结案」里** —— 它从来不是待办项，是本轮**新发现的真缺陷**
@@ -565,6 +567,34 @@
 - **完成判据**：① 列出本仓的**受保护契约面清单**（工具名/mode 串/配置键/落盘格式/派生件格式，逐项标 stable 或 experimental）；
   ② 给出一条**最小弃用流程**（旧名保留一个版本 + 输出可见提示 + CHANGELOG 写迁移说明），
   并说明**「无替代品」时怎么写**；③ 把清单放进 `README.md`（而非另开一份易漂移的文档）。
+
+### T16. **平台契约核对与纠错**（v1.15.39 新开，来源 `adr/0078` D3 + `MATERIALS.md` §2.8）
+
+- **依据**：v1.15.39 深读 DSH 本体（本地克隆 `dsh-w/deepseek-harness`，`cd5ef81481` = **0.1.2-alpha.1**；
+  **运行体是 `dsh-web-app@0.1.5-rc.2`**）⇒ 四路回报里**7 条「下游可能理解错」**。已自查 1 条、已裁定 1 条：
+  - ✅ **已自查（无缺陷）**：本仓 `index.ts` / `dist/index.js` **无 `export default`**
+    ⇒ `unwrapExports` 会「静默丢弃整个命名空间（含 `inject`）」那条缺陷**不适用**（`postmortem/0001:110-111`）。
+  - ✅ **已裁定并落 `adr/0074` 补记**：省略 `sandboxPolicy` **合法**（`dsh-fs-sandbox/index.js:158` 用 `??` 回退），
+    但**无参 `resolve()` 取服务级根**（`dsh-sandbox-policy/lib/index.js:116-117` `config.workspaceRoot ?? process.cwd()`），
+    只有 **`resolve({session})`** 才用 `session.header.cwd`（`:138-142`）⇒ **ADR-0074 结论成立、机制表述已修正**。
+- **待办（逐条可核，未做）**：
+  1. **`ctx.sandboxPolicy` 是否对普通插件可见**：`capability-seams.md:515` 称「only the sandboxed executor and provider
+     read the service」；若**被 restrict**，则本仓 `core/fs-scope.ts` 的显式传参是唯一解；**若可见**，应改为
+     **向平台要策略**（`ctx.sandboxPolicy.resolve({session})`）而非自己推导 mode/root（判据收一处）。
+     **方法**：在运行体里实测 `ctx.get("sandboxPolicy")`（或 `cordis_inspect_query` 的 Service 目录）。
+  2. **`isolate` 是行级 option，`group` 不继承**（`vendor/loader/src/config/isolate.ts:79`）⇒
+     `editing-cordis-compositions` 技能里「wrap the provider **and every consumer** in one group carrying an isolate realm」
+     这句**散文不精确**：**每一行都要各自写 `isolate`**。若本仓/本用户预设里有 `group + isolate` 的写法，需按此复核。
+     （**注意**：技能文件位于 harness 侧，**不在本仓**；本轮只记录，不改外来仓。）
+  3. **评估「平台已有而本仓可能在重造」的四项**：`ctx.sessionProjections`（纯 fold 单元 ⇒ 取代自建
+     `ctx.on('session/event')` + 缓存 + 推送）、`ctx.storageDomain`（非会话持久数据）、`ctx.invariants`（注册不变量）、
+     `ctx.jobs`（后台任务）。**判据**：先用运行体确认可见性与语义，再判「重造 vs 委派」，**不凭文档直接改**。
+  4. **版本偏差**：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2 ⇒ 上述结论凡未回运行体核对的，**一律标注未核对**。
+- **为什么现在没做**：① 每条都要**回运行体**核对（文档可能落后），属逐条实测，不是批量替换；
+  ② 涉及**改变本仓写入路径**（`core/fs-scope.ts`）与**引入平台服务**，须先有可见性结论，否则会引出新的
+  「机制存在但读不到」的假闸门。
+- **完成判据**：① 四条待办各自给出「可见/不可见 + 实测命令 + 结论」；② 结论为「可见且应委派」的，落一条 ADR 并改代码；
+  ③ 「不可见」的写明理由并**在代码注释里标注为什么不能委派**（防后来者重复尝试）。
 
 
 ---

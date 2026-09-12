@@ -190,3 +190,39 @@ AssertionError: 会话工作区 ≠ 服务启动目录时，记忆仍必须落�
 - [x] 未改任何 `mode` / 读侧语义 / API；新增一个模块 + 三处接入 + 一个测试。
 - [ ] **未验证**：真机（需重启宿主，**B3**）；真沙箱而非 mock。
 - [ ] **未做**：兜底根场景（**T6**）。
+
+## 补记（v1.15.39，ADR-0078 D3 的连带审查）：机制**写精确**，结论**不变**（这回有运行体证据）
+
+v1.15.39 深读 DSH 本体时，平台文档（`docs/subsystems/filesystem.md:415-417`，克隆 v0.1.2-alpha.1）写：
+`@param sandboxPolicy - the per-call mode and workspace root this write runs under; ... **Omit to leave the backend its own default.**`
+⇒ 初看像是「本 ADR 的因果链错了：省略本来就合法」。**故按纪律回到运行体核对**（`dsh-web-app@0.1.5-rc.2` 的实体代码，非旧文档）：
+
+**① 省略确实合法（参数可选）** —— `@deepseek-ai/dsh-fs-sandbox/…/index.js`（0.1.5-rc.2）：
+```
+:108  static inject = ["sandboxPolicy"];
+:125  * @param sandboxPolicy - the per-call mode and workspace root; omit to use
+:158  const policy = sandboxPolicy ?? this.ctx.sandboxPolicy.resolve();
+```
+
+**② 但「合法」≠「取到对的根」** —— `@deepseek-ai/dsh-sandbox-policy/lib/index.js`（0.1.5-rc.2）：
+```
+:116-117  this.defaultMode = config.mode;
+          this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd());
+:138-142  resolve(request = {}) {
+            mode: request.mode ?? (session === void 0 ? void 0 : this.overrideOf(session)) ?? this.defaultMode,
+            workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
+```
+⇒ **无参** `resolve()` 返回的是**服务级** `workspaceRoot`（部署配置，最后兜底才是 `process.cwd()`）；
+只有 **`resolve({ session })`** 才会用 **`session.header.cwd`**（= 会话工作区）。
+而沙箱 fence 的语义文本说的是「may modify files under **the session workspace**」（`:86`）。
+
+**③ 结论**：本 ADR 的**因果链成立**（省略 ⇒ 用**非会话级**的根 ⇒ 写会话工作区内的 `.shadow/` 被拒），
+**但要写精确**：原表述「用部署 fallback（`DSH_PERMISSION_MODE ?? 'workspace-write'`）」把机制说成了「插件自己读环境变量」；
+真实机制是「**平台的 `ctx.sandboxPolicy` 服务在无 session 时按进程级解析**」。
+**修法不变**（写侧显式传 `sandboxPolicy`），因为**插件无法把 session 注入沙箱内部的回退调用**（那行不在本插件里）。
+
+**④ 由此产生一条新的待办（→ `BACKLOG.md` T16）**：本仓 `core/fs-scope.ts` **自己重造了 mode/root 的推导**，
+而平台**已有** `ctx.sandboxPolicy`（可 inject、有 `.defaultMode`、有 `.resolve({session})`）。
+两条待查：**(a)** 该服务是否对**普通插件**可见（`capability-seams.md:515` 称「only the sandboxed executor and provider read the service」——若被 restrict，则委派不可行，现有显式传参就是唯一解）；
+**(b)** 若可见，应改为**向平台要策略**而非自己推导（判据收一处）。
+**方法**：`ctx.get("sandboxPolicy")` 实测 + 查 `capability-seams` 的 restrict 名单（本轮未做，诚实标注）。

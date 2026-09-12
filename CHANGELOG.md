@@ -3,6 +3,82 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.40] **本地全部材料**总台账 + 平台契约纠错（`MATERIALS.md` 建立，T16）
+
+用户 2026-09-12 立目标：「**本地全部材料深入分析 整合 吸收 审查 以及 论文 github**」（目标轮次第 1 轮）。
+**纯文档 + 待办登记：无代码 / 行为改动。**
+
+### 0. 一句话结论
+
+**先做「整合」**：把「本地全部材料」的定义从「hl_mem 一份」扩到**磁盘上真实的 8 项**
+（DSH 本体 + 6 个外来 repo + 本仓），并**建账**；然后**四路并行深读**，回报里有 **7 条「下游可能理解错」**
+——**已自查 1 条、已回运行体裁定 1 条**，其余入 T16。
+
+### 1. 名册（`MATERIALS.md`，**磁盘枚举生成**）
+
+| 材料 | 远端 | HEAD / 版本 | 许可 | 规模 |
+|---|---|---|---|---|
+| `dsh-w/deepseek-harness` | `deepseek-ai/deepseek-harness` | `cd5ef81481` / **0.1.2-alpha.1** | **MIT** | 74,163 文件 / 1.64 GB |
+| `hl_mem` | `lohr13/hl_mem` | `aa5d068` / v1.1.7 | Apache-2.0 | 1,025 文件 / 16.8 MB |
+| `openviking` | `volcengine/OpenViking` | `592c0fe` | **AGPL-3.0** | 3,891 文件 / 93 MB |
+| `archify` | `tt-a1i/archify` | `82e63c9` | MIT | 422 文件 / 36 MB |
+| `awesome-dsh-plugin` | `mozhuanzuojing/awesome-dsh-plugin` | `271834d5` | CC0 | 1,726 文件 / 8.5 MB |
+| `ppt-master` | `hugohe3/ppt-master` | `a160e776` | MIT | 14,354 文件 / 725 MB |
+| `voyager` | `Nagi-ovo/voyager`（fork） | `b68eeac` / `voyager@1.7.1` | GPL-3.0 | 56,514 文件 / 610 MB |
+
+**⚠ 第一条必须标定的事**：harness 克隆是 **0.1.2-alpha.1**，**运行体是 `dsh-web-app@0.1.5-rc.2`**
+⇒ 凡据本地文档得出的结论，**必须回运行体核对**（本轮已用这条纪律裁定了 ADR-0074）。
+
+### 2. 已自查 / 已裁定（两条）
+
+- ✅ **`export default` 静默丢 `inject`**（`postmortem/0001:110-111`）——**本仓不适用**：
+  `index.ts` / `dist/index.js` **无 `export default`**（只有命名导出）。
+- ✅ **`sandboxPolicy` 省略是否合法** —— 平台文档说合法，**回运行体核对**：
+  `dsh-fs-sandbox/index.js:158` `sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()`（省略确实合法）；
+  但 `dsh-sandbox-policy/lib/index.js:116-117` 的**无参**解析取**服务级**根（`config.workspaceRoot ?? process.cwd()`），
+  只有 `:138-142` 的 **`resolve({session})`** 才用 `session.header.cwd`
+  ⇒ **ADR-0074 的结论成立、机制表述已修正**（已落 `adr/0074` 补记）。
+
+### 3. 本轮最有价值的其它回报（入 T16 / 材料台账）
+
+- **`isolate` 是行级 option，`group` 不继承**（`vendor/loader/src/config/isolate.ts:79`）⇒
+  `editing-cordis-compositions` 技能那句「wrap the provider **and every consumer** in one group carrying an
+  isolate realm」**散文不精确**（**每行都要各自写 `isolate`**）。
+- **平台已有、本仓可能在重造的四项**：`ctx.sessionProjections`（纯 fold ⇒ 取代自建事件折叠 + 推送）、
+  `ctx.storageDomain`、`ctx.invariants`、`ctx.jobs`。
+- **openviking**（AGPL ⇒ 只取概念）：8 条可移植 + 一张 8 行「**设计承诺 vs 落地**」不一致表
+  （如 `hotness_alpha` **默认 0.0 = 默认关闭且无对照消融**；CLI 兼容门是 `|| true` + 缺件即 `exit 0`）。
+  最值得抄的一条：**用子进程起新解释器验证依赖方向/循环导入**（同进程断言会被 import 顺序掩盖）。
+- **四个 DSH 生态仓**：**只有 `archify` 是真 DSH 插件**（`dsh.bundle` + `cordis.patch.yml` + 适配器测试 + 独立 CI）；
+  `awesome-dsh-plugin` 是「手写 YAML + 脚本生成 README + CI 强校验」（1556/1556 一一对应，但 3 个 `.pyc` 入库）；
+  `voyager` 与 DSH 的关系是**文档级 + DOM 级**（**不是插件**）；`ppt-master` 与 DSH **零关系**。
+
+### 4. 论文层（`arXiv`）
+
+已在用：MemoryBank（`2305.10250`，hotness 的**真实出处**）、工具数量拐点（`2606.30317`）、RAPTOR/HeteRAG/UMG-RAG、LongMemEval。
+**本轮检索到的新线索（仅检索，未读全文 —— 诚实标注）**：
+- ⭐ [arXiv:2606.26511](https://arxiv.org/abs/2606.26511)「Temporal Validity in Retrieval Memory」——
+  副标题「**A deterministic supersession layer that retrieval-augmented generation cannot match by construction**」
+  ⇒ **与 D3 直接同题**，可能为本仓 ADR-0059 + ADR-0061 补独立证据；
+- [arXiv:2602.06052](https://arxiv.org/abs/2602.06052) 与 [ACL 2026 Findings](https://aclanthology.org/2026.findings-acl.2069/) 两篇**记忆机制综述**；
+- [arXiv:2608.04746](https://arxiv.org/abs/2608.04746)（Scrub Jay 情节记忆原则）。
+**纪律不变**：未读全文前不得引用其结论；别家读数**不得当作本系统的证据**。
+
+### 5. 变更文件
+
+`MATERIALS.md`（**新增**：材料总台账）· `adr/0074`（**补记**：运行体证据 + 机制修正）·
+`BACKLOG.md`（**新开 T16** + 头部 25→26 条）· `references.md`（加指向 `MATERIALS.md` 的指针，避免两处重复登记）·
+`CHANGELOG` / `README` / `package.json`（`1.15.40`）。**无代码改动**；门禁 **45/45** 未受影响（本轮跑过一次确认）。
+
+### 6. 未验证 / 未做（诚实标注）
+
+- **四路回报中的 5 条未回运行体核对**（版本偏差：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2）⇒ 一律标注，入 T16。
+- **论文全部未读全文**（§4 只是检索线索）；**harness `packages/`（12,492 文件）与 `apps/` 未读**；
+  `.agents/notes` 的 2,431 个 md/yaml 未逐篇读（只有结构索引与计数）。
+- **`ppt-master` / `voyager` 的源码未读**（只做定位）；`archify` 只读了 DSH 适配层。
+- **未运行任何外来仓库的代码；未安装任何依赖。**
+
+
 ## [v1.15.39] hl_mem **第三轮深读（首次本地克隆、一手读源码）** —— 三处自我更正（ADR-0078）
 
 用户 2026-09-12 指令「**继续深入研究资料**」，并在方法选项中选定「**本地克隆 hl_mem 到工作区**」
