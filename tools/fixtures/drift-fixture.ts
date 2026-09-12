@@ -59,6 +59,28 @@ export const push = async (core: any, id: string) => {
   await rebuild(id);
 };
 
+// ── NEG-6 + POS-4：**差分对**，专门标定判据 ③「条件含**探针赋值的局部名**」
+//    为什么需要这一对（v1.15.58）：原来的 NEG-2 条件里**没有 `.has(`**，于是它在判据 ②
+//    （要求条件里出现进程内集合）就被 `continue` 掉了，**根本走不到 ③** ——
+//    也就是说 `audit-drift.lib.ts:111-117` 收集 `probeVars` 与 `:131` 用它排除这一整段，
+//    **没有任何夹具能落到它上面**：把它删掉、或把它写成恒空集合，标定测试仍全绿。
+//    这一对只差**一处**：条件里有没有出现「由探针赋值出来的局部名」。
+//      · NEG-6：有 ⇒ 是 ADR-0069 修复后的正当写法 ⇒ **不得报**
+//      · POS-4 ：没有（同样的 `.has(` 形状）⇒ **必须报**
+//    两者一起通过，才证明 ③ 真的在起作用（而不是被 ② 顺手挡掉）。
+export const ensureThingG = async (fs: any, ws: string) => {
+  const warm2 = new Set<string>();
+  const fpNow2 = await shadowSourcesFingerprint(fs, ws);
+  if (warm2.has(ws) && fpNow2 !== undefined) return; // MARK:NEG-6
+  await rebuild(ws);
+};
+
+export const ensureThingH = async (ws: string, other: string | undefined) => {
+  const warm3 = new Set<string>();
+  if (warm3.has(ws) && other !== undefined) return; // MARK:POS-4
+  await rebuild(ws);
+};
+
 // ── 检测 B：同一 `字段=字面量` 跨文件出现 ──
 export const gateHere = (p: any) => p?.phase === "ghost";   // MARK:B-SHARED
 export const onlyLocal = (p: any) => p?.only === "here";

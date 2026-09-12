@@ -127,9 +127,10 @@ const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
 
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
-console.log("  · 四个消费者（`audit-wiring` / `audit-drift` / `audit-layers` / `retrieval-eval`）的**接线**靠真实运行验证；");
-console.log("  · `audit-layers` 与 `retrieval-eval` 走的是**无基线**路径（前者自比 + 哨兵，后者协议常量下限），");
-console.log("    故本文件里 NORMAL/PARTIAL 的**基线带**判据对它们不生效；");
+console.log("  · `audit-wiring` / `audit-drift` / `audit-layers` 三个消费者**接线**靠真实运行（`npm run verify`）验证；");
+console.log("  · ⚠ **`retrieval-eval` 并不调用 `classifyCorpus`** —— 它走自己的一份内联实现（`retrieval-eval.ts:117-120`");
+console.log("    读协议常量 `min_corpus_files` 再判「语料过小 ⇒ PARTIAL」）⇒ **该判据目前有两份实现**，");
+console.log("    本文件只标定 `classifyCorpus` 那一份（另一份未标定，已记入 BACKLOG 的判据分叉线索）；");
 console.log("  · 指纹只覆盖**文件路径集合**（不含内容）⇒ 「同路径内容变了」不在本闸覆盖内（已在输出里显式提示）；");
 console.log("  · 阈值（0.9 / 0.9 / 0.2）是**默认值**，本轮未做过「多真实故障回放」来标定它们的最优值。");
 console.log("ALL PASS ✅");

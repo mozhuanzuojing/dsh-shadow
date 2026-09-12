@@ -4,6 +4,9 @@ export declare const projectContext: (fs: any, ws: string, memories: any[], task
     avoided?: string[];
 }, identity?: Identity | null, intent?: Intent | null) => Promise<{
     rel: any[];
+    relTotal: number;
+    unreadable: string[];
+    capDropped: number;
     experiences: any[];
     principles: any;
     taste: any;

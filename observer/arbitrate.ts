@@ -84,18 +84,27 @@ export const lineageOf = (list: { date: string; time: string; decision?: string 
   return chain.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 };
 
+/** 一次裁决最多核验多少条具体路径（上限存在的理由是成本：每条都要走一次 provider）。 */
+export const EVIDENCE_PATH_CAP = 12;
+
 export const conflictOf = async (fs: any, ws: string, text: string, verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>) => {
   // **双条件**（ADR-0059，借 CASCADE/FSE 2026 的思路）：只有在
   //   ① 引用是**可检查的具体路径**（`isConcreteLocator` 排除通配符 `scripts/*.ps1`、git ref `origin/main`）
   //   ② 它确实解析不到
   // 同时成立时，才判「证据缺失」。缺 ① 就去验存在性必然判缺失 → 会误降权（见 `evidence/paths.ts` 注释）。
-  const paths = evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator).slice(0, 12);
-  if (!paths.length) return { missing: [] as string[] };
+  //
+  // **上限必须披露**（v1.15.58）：超过 `EVIDENCE_PATH_CAP` 的具体路径**没有核验** ——
+  // 旧实现只是 `.slice(0, 12)`，调用方拿到 `missing: []` 会以为「全查过了、都没有缺失」，
+  // 而真实含义是「**前 12 条**都不是缺失的」。故把被截掉的条数一并返回（`droppedByCap`）。
+  const concrete = evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator);
+  const paths = concrete.slice(0, EVIDENCE_PATH_CAP);
+  const droppedByCap = Math.max(0, concrete.length - paths.length);
+  if (!paths.length) return { missing: [] as string[], droppedByCap: 0 };
   const missing: string[] = [];
   for (const p of paths) {
     const res = await verifyEvidence({ path: p, kind: "path" }, { fs, ws });
     // zg 未装/unavailable → 不当作"缺失"（避免把"证据不可验证"猜成"证据已失效"）。
     if (res.status === "not_found") missing.push(p);
   }
-  return { missing };
+  return { missing, droppedByCap };
 };

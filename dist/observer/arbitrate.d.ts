@@ -32,6 +32,9 @@ export declare const lineageOf: (list: {
     time: string;
     decision: string;
 }[];
+/** 一次裁决最多核验多少条具体路径（上限存在的理由是成本：每条都要走一次 provider）。 */
+export declare const EVIDENCE_PATH_CAP = 12;
 export declare const conflictOf: (fs: any, ws: string, text: string, verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>) => Promise<{
     missing: string[];
+    droppedByCap: number;
 }>;

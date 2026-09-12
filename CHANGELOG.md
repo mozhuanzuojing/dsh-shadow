@@ -3,6 +3,37 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.58] **披露面 4 处 + 标定测试自身的假绿（`tools/*.selftest.ts`）** —— `verify` 52/52
+
+**一句话**：这一轮除了继续修「报告不得虚报」，还去审了此前**从未被审过**、审查者点名「可能是最高危假绿源」的
+`tools/*.selftest.ts` —— 结果抓到**一处致命同义反复**与**一条从未被触达的判据**。
+
+### 1. 披露面
+
+| 缺陷 | 修法 |
+|---|---|
+| **`shadow_query` 截断不披露** | 检索路径早有 `truncationNote`（`retrieval/render.ts:26`），`shadow_query` 却只写 query-log、返回文本一字不提 ⇒ 两条读路径披露不一致。现附「命中 N · 只返回前 limit · **还有 k 个未显示**」 |
+| **证据路径上限无披露** | `.slice(0,12)` 让「前 12 条都不缺失」被读成「全查过了」⇒ 导出 `EVIDENCE_PATH_CAP` + `droppedByCap`，experience 渲染与 `ev.unverifiedByCap` 都带出「另有 k 条**未核验**」 |
+| **快照坏件回退更旧后无声** | 回退是**有意**的（不因一份坏文件返回 null），但调用方不知道拿到的是旧图 ⇒ 回退时打印「跳过了哪些／实际用了哪份」+ 文档写明回退语义 |
+| **`observer/projection.ts` 两处失真** | ① 读不出的记忆**既不进 relevant 也不进 excluded**，而 `reality.total` 按全量算 ⇒ 数字对不上却看不出为什么；② `候选相关` 报的是砍到 8 **之后**的长度（**那是上限，不是命中数**）⇒ 新增 `unreadable` 与 `relTotal` |
+
+### 2. 标定测试自身的假绿（比被审对象的问题更该先修）
+
+| 缺陷 | 为什么是假绿 | 修法 |
+|---|---|---|
+| **`audit-wiring.selftest` ⑪ 同义反复（致命）** | 它在测试内**重写了一遍产品侧的分桶 ternary**，再断言「四桶之和 = 总数」—— 由同一段代码赋出的和**必然成立** ⇒ **把产品侧改成任何东西它照样全绿** | 分桶判据搬进 lib（`bucketOf`）两边共用；⑪ 重写为四桶正例 + **三条反例** + 语料非空。**变异验证**：改坏 A1 条件 ⇒ 立即红 |
+| **`audit-drift` 判据 ③ 零标定** | 原 NEG-2 条件里**没有 `.has(`** ⇒ 在判据 ② 就被 `continue`，**根本走不到 ③**（`probeVars` 那整段）⇒ 删掉它测试仍全绿 | 加**差分对** `POS-4`/`NEG-6`（只差「有没有探针局部名」，结果必须相反）。**变异验证**：废掉 `probeVars` 填充 ⇒ 立即红 |
+| **`isTestPath` 零覆盖** | 它由 v1.15.43 真缺陷修来，却定义在 **CLI** ⇒ 改坏/删掉 6 个 selftest 全绿 | 搬进 lib + 新增 ⑬（**断言它与旧写法在产物/依赖上给出不同答案**） |
+| `audit-layers.selftest` ③ 用空判据表 | 与 `DIRECTION_RULES` **完全无关**，加反向禁令也测不出 | 改用真方向表（只清白名单） |
+| `retrieval-eval.selftest` 恒真断言 | `assert.equal(x.algorithm, HASH_ALGORITHM)` 而实现就是把该常量放回 ⇒ 恒真 | 改为对**字面量**断言 |
+| `audit-drift.selftest` 真仓库断言无下限 | `walk` 吞异常 ⇒ 取错根时「0 条线索」照样通过（CLI 有 `exit 2`，测试没有） | 补 `prod.length > 0` |
+| `corpus-health.selftest` footer 与代码不符 | 称 `retrieval-eval` 走本闸，实际它**没调用** `classifyCorpus`（第二份实现）⇒ 让人不再去查它 | 改正 footer + 记为线索 |
+
+**证据**：`verify` **52/52**；6 个 selftest 全绿；**两处变异测试分别立即变红**（可复核）；棘轮如实变红 `b_keys 110→113`（**+3 正是新增的标定断言**）后按规程重录。
+
+**新线索（未修）**：`retrieval-eval.ts:117-120` 的第二份「语料太小」判据（未标定）· `audit-wiring` ↔ `audit-drift` 的 `isProductionPath` 口径分叉（**需先拍板 `tools/` 算不算生产面**）· 全部 CLI 接线零自动断言 · `toolset-authority` 未接进 `verify`。
+
+
 ## [v1.15.57] **证据面与报告面：「判不了」不得伪装成「已核实」** —— `verify` 52/52
 
 **一句话**：这一轮修的是**会直接改变裁决**的两种谎 —— **「读不出」被说成「证据仍在」**（还带 `0.99` + `fresh`），

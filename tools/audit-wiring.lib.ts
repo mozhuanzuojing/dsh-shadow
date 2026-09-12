@@ -123,6 +123,18 @@ export const maskStrings = (src) => {
  * 恰好**掩盖**了本轮要抓的那处真缺陷（`meta.status === "superseded"` 无写入者）。
  * ⇒ 改为**按路径分段**判断，与相对/绝对路径无关。
  */
+/**
+ * **「这条路径算不算测试面」—— 唯一来源**（v1.15.58 从 CLI 搬进 lib，并补标定）。
+ *
+ * 为什么值得单列：这条判据由一处**真缺陷**修来（v1.15.43）—— 旧写法 `!isProductionPath(p)`
+ * 会把 `dist/**`、`node_modules/**` 的 `.d.ts` 也算成「测试引用」⇒ A 段那一列**虚高**，
+ * 分诊时会把「零测试引用」读成「已被测试覆盖」。
+ * 它此前定义在 **CLI**（`tools/audit-wiring.ts:61`），而 CLI 不在任何 selftest 的覆盖面上 ⇒
+ * 改成 `p.includes("test")`、退回旧写法、或整条删掉，**6 个 selftest 全部照旧全绿**，
+ * 而那一列会静默改变含义。搬进 lib 后由 `audit-wiring.selftest.ts` ⑫ 锁住。
+ */
+export const isTestPath = (p) => p === "test" || p.startsWith("test/");
+
 export const isProductionPath = (p) => {
   const segs = String(p).replace(/\\/g, "/").split("/").filter(Boolean);
   const EXCLUDE = new Set(["node_modules", "dist", "test", "tests", "fixtures", "__tests__"]);
@@ -307,6 +319,21 @@ export const exportsOf = (text) => {  const re = /^export\s+(?:const\s+(\w+)\s*=
  * 引擎只 import 了**谓词**，`assert*` 包装无人调用 —— 那不是「忘接线」，是**一处决定**。
  * 双向匹配：给 `assertNotRevoked` 找 `notRevoked`；给 `notRevoked` 找 `assertNotRevoked`。
  */
+/**
+ * **A 段分桶判据 —— 唯一来源**（v1.15.58 从 CLI 搬进来）。
+ *
+ * 为什么必须放在 lib：此前这条 ternary 写在 `tools/audit-wiring.ts`，而
+ * `tools/audit-wiring.selftest.ts` 的 ⑪ **在测试内重写了一遍同样的 ternary** 再断言
+ * 「四桶之和 = A 段总数」—— 那是**同义反复**（分桶值由同一段代码赋出，和必然成立），
+ * 而且它验证的是**测试自己那份拷贝**：把产品侧改成任何东西，标定测试照样全绿。
+ * 一条「改坏了也不会红」的标定测试比没有测试更坏：它给的是**虚假的确定性**。
+ *
+ * 优先级（越靠前越可疑）：**A3（成对导出，只接一半）> A1（零引用）> A2b（导入即闲置）> A2a（间接调用）**。
+ * 各桶含义与复核方式见 CLI 的 `BUCKETS` 文案。
+ */
+export const bucketOf = (row: { pair?: unknown; imports?: unknown[]; bare?: number }): "A3" | "A1" | "A2b" | "A2a" =>
+  row.pair ? "A3" : !(row.imports ?? []).length ? "A1" : row.bare === 0 ? "A2b" : "A2a";
+
 export const pairedExport = (names, name) => {
   const has = (x) => names.includes(x);
   if (/^assert/i.test(name)) {

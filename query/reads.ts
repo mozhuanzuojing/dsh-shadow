@@ -120,7 +120,16 @@ const shadowQuery: ReadQuery = {
     const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept", "resource"].includes(t)) : [];
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
     const items = queryShadow(nodes, topicQ, scope, limit);
-    const matchedNodes = matchShadowNodes(nodes, topicQ, scope).slice(0, limit);
+    // **截断必须披露**（v1.15.58）：检索路径早就有 `truncationNote`（`retrieval/render.ts:26`，
+    // 借 PageIndex 的 `part/total_parts/has_more`），而 `shadow_query` 这里只把 `returnedNodes`
+    // 写进 query-log、**返回文本里一个字都不提** ⇒ 同一份数据两条读路径披露不一致，
+    // 读到「8 条」的人不知道其实命中了 30 条。
+    const allMatched = matchShadowNodes(nodes, topicQ, scope);
+    const matchedNodes = allMatched.slice(0, limit);
+    const droppedByLimit = Math.max(0, allMatched.length - matchedNodes.length);
+    const truncNote = droppedByLimit > 0
+      ? `\n> ⚠ 命中 **${allMatched.length}** 个，只返回前 **${limit}** 个（**还有 ${droppedByLimit} 个未显示**：调大 \`limit\` 或收窄 \`topic\`/\`scope\`）。\n`
+      : "";
     const nodeTypes = matchedNodes.reduce((acc: Record<string, number>, n) => { acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
     const bd = evidenceBreakdownOf(matchedNodes);
     await recordQueryObservation(fs, ws, deps.config, {
@@ -133,7 +142,7 @@ const shadowQuery: ReadQuery = {
       nodeTypes, nodeTitles: matchedNodes.map((n) => n.title), latencyMs: Date.now() - qStart,
       evidenceByType: bd.byType, evidenceByKind: bd.byKind, evidenceByCreatedBy: bd.byCreatedBy,
     });
-    return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + truncNote + flushWarn);
   },
 };
 

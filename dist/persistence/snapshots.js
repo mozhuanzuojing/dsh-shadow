@@ -20,8 +20,14 @@ const DATE_DIR = /^\d{4}-\d{2}-\d{2}$/;
  * @param dirRel 相对 `.shadow/` 的目录（如 `temporal` / `world`）
  * @param fileName 快照文件名（默认 `graph.json`）
  * @returns 解析出的对象；**没有任何快照 / 全部解析失败 → null**（不抛、不编造）
+ *
+ * ⚠ **回退语义（v1.15.58 起会留痕）**：某一天的最新快照解析失败时，本函数会**继续找更旧的**并返回它。
+ * 这是**有意的**（不因一份坏文件就让整条读路径返回 null），但调用方**必须知道**自己拿到的是旧图：
+ * 故回退发生时打印一条含「跳过了哪些 / 实际用了哪份」的日志。**静默回退**会让「读到旧投影」
+ * 伪装成「投影就是当前状态」（ADR-0003：派生件不是 source）。
  */
 export const readLatestSnapshot = async (fs, ws, dirRel, fileName = "graph.json") => {
+    const skipped = []; // 坏件（**回退到更旧快照时必须说出来**，见下）
     try {
         const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/${dirRel}`, { cwd: ws });
         const entries = (await fs.listDir(root).catch(() => [])) || [];
@@ -37,13 +43,21 @@ export const readLatestSnapshot = async (fs, ws, dirRel, fileName = "graph.json"
                 continue;
             const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/${dirRel}/${name}/${fileName}`, { cwd: ws });
             const txt = await fs.readText(p);
-            if (!txt)
+            if (!txt) {
+                console.log(`[dsh-shadow] 快照为空文件，跳过：${name}/${fileName}`);
                 continue;
+            }
             try {
+                if (skipped.length) {
+                    // **回退到更旧快照必须可见**（v1.15.58）：否则调用方读到的是旧图却以为是当前图 ——
+                    // 「读到旧投影」与「投影就是旧的」是两件事（ADR-0003：派生件不是 source）。
+                    console.log(`[dsh-shadow] ⚠ 较新的快照**坏件**，已回退到更旧的：跳过 ${skipped.join(", ")} ⇒ 实际使用 ${name}/${fileName}`);
+                }
                 return JSON.parse(txt);
             }
             catch {
-                continue; // 坏快照跳过，继续找更旧的（不因一份坏文件就返回 null）
+                skipped.push(`${name}/${fileName}`); // 坏快照跳过，继续找更旧的（不因一份坏文件就返回 null）
+                continue;
             }
         }
     }

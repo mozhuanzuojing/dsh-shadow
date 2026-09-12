@@ -24,7 +24,7 @@ import { runAdaptation } from "./adaptation.js";
 import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText, truncationNote } from "../retrieval/render.js";
-import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf } from "../observer/arbitrate.js";
+import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf, EVIDENCE_PATH_CAP } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
 import { unavailableHint } from "../core/toolset.js";
@@ -245,13 +245,19 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     if (!matched.length) return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)), reason: "Experience 视图（情境/问题/决策/证据）无匹配项" });
     const newest = newestByEntryOf(entryList);
     const exps: any[] = [];
+    let capDropped = 0; // 因 `EVIDENCE_PATH_CAP` **未核验**的具体路径数（必须披露，见下）
     for (const { exp, mm, text } of matched) {
       const conflict = await conflictOf(fs, ws, text, deps.verifyEvidence);
+      capDropped += conflict.droppedByCap ?? 0;
       const v = verdictOf(conflict.missing.length, exp.situation, mm.date, mm.time, newest);
       exp.verdict = v.verdict; exp.outcome = v.outcome; exp.reflection = v.reflection; exp.lesson = lessonOf(v);
       exps.push(exp);
     }
-    return scrubFinal(RECALL_PREFIX + exps.map(renderExperience).join("\n\n") + flushWarn);
+    // **「没查」不得被读成「没问题」**：超过上限的具体路径没有核验，故 verdict 只能代表**前 N 条**。
+    const capNote = capDropped > 0
+      ? `\n\n> ⚠ 另有 **${capDropped}** 条具体路径**未核验**（单条上限 ${EVIDENCE_PATH_CAP} 条）：上面的裁决只覆盖已核验的那些，**不代表**全部证据都在。\n`
+      : "";
+    return scrubFinal(RECALL_PREFIX + exps.map(renderExperience).join("\n\n") + capNote + flushWarn);
   }
   const scored: any[] = [];
   const entryList: any[] = [];
@@ -293,6 +299,8 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
       if (dp !== 1) score = score * dp;
       const ev: any = evidenceOf(text, mm, meta, stale);
       ev.conflict = conflict.missing.length;
+      // 上限之外**未核验**的条数一并带出（否则「没查」会被读成「没问题」）。
+      ev.unverifiedByCap = conflict.droppedByCap ?? 0;
       ev.lifecycle = lifecycleOf(meta[mm.rel], ageDaysOf(mm.rel), conflict.missing.length, stale);
       scored.push({ mm, text, entry, tier, score, tokens, origin, stale, currentOrigin: agent?.id, provenance: provenanceText(ev), evidence: ev, breakdown: breakdownOf(text, mm.rel, entry, tokens, dp !== 1), deprioritized: dp !== 1, conflict: conflict.missing, observer: observerMode, asOf });
     }

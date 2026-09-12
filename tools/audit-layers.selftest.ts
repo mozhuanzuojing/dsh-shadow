@@ -65,7 +65,10 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   assert.equal(r1.violations.filter((v) => v.rule === "core ↛ query").length, 1, "core→query 必须违规（ADR-0003）");
 
   const ok = [f("query/x.ts", 'import { c } from "../core/y.js";\n'), f("core/y.ts", "export const c = 1;\n")];
-  assert.equal(auditLayers(ok, NO_RULES).violations.length, 0, "query→core 是本仓的**主方向**，不得违规");
+  // **必须用真判据表**（v1.15.58 修）：旧版这里传 `NO_RULES`（方向禁令**清空**），
+  // 于是这条断言与 `DIRECTION_RULES` 的内容**完全无关** —— 往表里加一条 `query→core`
+  //（把主方向反过来）也照样绿。只清空白名单即可避开「白名单腐化」噪声，方向禁令必须是真的。
+  assert.equal(auditLayers(ok, { pureModules: [] }).violations.length, 0, "query→core 是本仓的**主方向**，用真判据表也必须零违规");
 
   const root = [f("core/x.ts", 'import { i } from "../index.js";\n'), f("index.ts", "export const i = 1;\n")];
   assert.equal(

@@ -16,7 +16,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings } from "./audit-wiring.lib.ts";
+import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
 import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
@@ -58,7 +58,6 @@ const prodPaths = allTs.filter((f) => isProductionPath(rel(f)));
  * `apply` 的 230 里 15 来自 `node_modules` 里的 `lib.dom.d.ts`）⇒ 分诊时会把「零测试引用」读成「已被测试覆盖」。
  * 现判据改成**只认 `test/` 下的文件**；`dist/` 与 `node_modules/` **两边都不算**（它们是产物/依赖，不是断言）。
  */
-const isTestPath = (p: string) => p === "test" || p.startsWith("test/");
 const testPaths = allTs.filter((f) => isTestPath(rel(f)));
 const prod = prodPaths.map((f) => ({ file: rel(f), text: read(f) }));
 const testText = testPaths.map((f) => read(f)).join("\n");
@@ -102,8 +101,9 @@ for (const { file, text } of prod) {
       mentions: (testMasked.match(re) || []).length,
       imports, pair,
       bare: bare.count, bareWhere: bare.where,
-      // 优先级：A2b（导入即闲置）> A1（零引用）> A2a（间接调用）> A3（平行 API）
-      bucket: pair ? "A3" : !imports.length ? "A1" : bare.count === 0 ? "A2b" : "A2a",
+      // 优先级：A3（成对导出）> A1（零引用）> A2b（导入即闲置）> A2a（间接调用）。
+      // **判据在 lib**（`bucketOf`）：测试与 CLI 必须走同一份，否则标定测试只是在测它自己的拷贝。
+      bucket: bucketOf({ pair, imports, bare: bare.count }),
     });
   }
 }

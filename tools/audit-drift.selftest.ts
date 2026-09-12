@@ -49,18 +49,25 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
 {
   const textA = read(FIX_A);
   const hitLines = new Set(findFreshnessAsksProcess([{ file: "fixtures/drift-fixture.ts", text: textA }]).map((h) => h.line));
-  const pos1 = markedLines(textA, "MARK:POS-1"), pos2 = markedLines(textA, "MARK:POS-2"), pos3 = markedLines(textA, "MARK:POS-3");
-  for (const [name, lines] of [["POS-1", pos1], ["POS-2", pos2], ["POS-3", pos3]] as [string, number[]][]) {
+  const pos1 = markedLines(textA, "MARK:POS-1"), pos2 = markedLines(textA, "MARK:POS-2"), pos3 = markedLines(textA, "MARK:POS-3"), pos4 = markedLines(textA, "MARK:POS-4");
+  for (const [name, lines] of [["POS-1", pos1], ["POS-2", pos2], ["POS-3", pos3], ["POS-4", pos4]] as [string, number[]][]) {
     assert.equal(lines.length, 1, `夹具里 ${name} 标记应唯一`);
     assert.ok(hitLines.has(lines[0]), `${name}（第 ${lines[0]} 行）应被报出；实际报了 ${JSON.stringify([...hitLines])}`);
   }
-  for (const name of ["NEG-1", "NEG-2", "NEG-3", "NEG-4", "NEG-5"]) {
+  const negNames = ["NEG-1", "NEG-2", "NEG-6", "NEG-3", "NEG-4", "NEG-5"];
+  for (const name of negNames) {
     const lines = markedLines(textA, `MARK:${name}`);
     assert.equal(lines.length, 1, `夹具里 ${name} 标记应唯一`);
     assert.ok(!hitLines.has(lines[0]), `${name}（第 ${lines[0]} 行）**不得**被报出（假阳）`);
   }
-  assert.equal(hitLines.size, 3, `检测 A 在夹具上应恰好报 3 条；实际 ${hitLines.size}：${JSON.stringify([...hitLines])}`);
-  console.log(`✔ ③ 检测 A 夹具标定：恰好报 POS-1/2/3（行 ${[pos1[0], pos2[0], pos3[0]].join(", ")}），NEG-1..5 全不报`);
+  // **v1.15.58：差分对** —— POS-4 与 NEG-6 形状只差「条件里有没有探针赋值的局部名」。
+  // 两者必须给出**相反**结果：否则判据 ③（`probeVars` 排除）根本没被触达，
+  // 而是被判据 ②（要求出现 `.has(`）顺手挡掉的（旧 NEG-2 就是这样，于是 ③ 无标定）。
+  const p4 = markedLines(textA, "MARK:POS-4")[0], n2b = markedLines(textA, "MARK:NEG-6")[0];
+  assert.ok(hitLines.has(p4) && !hitLines.has(n2b),
+    `★ 差分对必须分道扬镳：POS-4(:${p4}) 应报、NEG-6(:${n2b}) 不得报 —— 这才证明「探针局部名」这条判据真在起作用`);
+  assert.equal(hitLines.size, 4, `检测 A 在夹具上应恰好报 4 条；实际 ${hitLines.size}：${JSON.stringify([...hitLines])}`);
+  console.log(`✔ ③ 检测 A 夹具标定：恰好报 POS-1/2/3/4（行 ${[pos1[0], pos2[0], pos3[0], pos4[0]].join(", ")}），NEG-1/2/2b/3/4/5 全不报；差分对 POS-4↔NEG-6 分道扬镳（判据 ③ 被真正触达）`);
 }
 
 // ─────────────────────────────────────────────
@@ -130,6 +137,11 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
     .map((rel) => ({ file: rel, text: readFileSync(join(repoRoot, rel), "utf8") }));
   const fresh = findFreshnessAsksProcess(prod);
   const preds = findPredicateExpressedTwice(prod);
+  // **语料非空**（v1.15.58 补）：`walk` 会吞掉 `readdirSync` 的异常并返回已累积结果，
+  // 于是取错根 / 递归没跟随 / 后缀变了都会让 `prod` 变空 —— 那时 `fresh.length === 0` **照样通过**，
+  // 并打印「真仓库 0 个生产文件：线索 0（回归护栏）」。CLI 有 `prod.length === 0 ⇒ exit 2` 的闸
+  //（`audit-drift.ts:56`），标定测试此前**没有这道下限** ⇒ 正是「扫描范围错了也全绿」的形态。
+  assert.ok(prod.length > 0, "★ 真仓库生产文件不得为 0（否则下面的「0 条线索」是假的）");
   assert.equal(fresh.length, 0,
     `当前仓库不应再有「新鲜度只看进程」（ADR-0069 已修）；实际 ${fresh.length} 条：${JSON.stringify(fresh.map((h) => `${h.file}:${h.line}`))}`);
   console.log(`✔ ⑥ 真仓库（${prod.length} 个生产文件）：新鲜度线索 **0**（回归护栏）· 判据重复线索 ${preds.length} 条（线索级，需人工复核）`);

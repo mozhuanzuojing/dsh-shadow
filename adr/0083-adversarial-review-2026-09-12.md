@@ -147,3 +147,40 @@
 快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · **§6.3 六条待定语义** ·
 **169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
 以及 `tools/*.selftest.ts`）。
+
+---
+
+## 9. 第六轮（v1.15.58）：披露面 4 处 + **标定测试自身的假绿**（审查者点名的「最高危假绿源」）
+
+### 9.1 披露面（「报告不得虚报」这一族）
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **`shadow_query` 截断不披露** | 检索路径早就有 `truncationNote`（`retrieval/render.ts:26`，借 PageIndex 的 `part/total_parts/has_more`），而 `shadow_query` 只把 `returnedNodes` 写进 query-log、**返回文本里一个字不提** ⇒ 同一份数据**两条读路径披露不一致**：读到「8 条」的人不知道其实命中 30 条 | 用 `allMatched` 算 `droppedByLimit`，附一行「命中 N 个，只返回前 limit 个（**还有 k 个未显示**）」 |
+| **证据路径上限无披露** | `arbitrate.ts` 的 `.slice(0, 12)` 让「**前 12 条**都不是缺失」被读成「**全查过了、都没缺失**」 | 导出 `EVIDENCE_PATH_CAP`，`conflictOf` 返回 `droppedByCap`；experience 渲染与 `ev.unverifiedByCap` 都带出「另有 k 条**未核验**」 |
+| **快照坏件回退更旧后无声** | `readLatestSnapshot` 某天快照坏就**继续找更旧的**（有意，不因一份坏文件返回 null），但调用方**不知道**自己拿到的是旧图 ⇒ 「读到旧投影」伪装成「投影就是当前状态」 | 跳过的坏件累积到 `skipped`，真正回退时打印「跳过了哪些 / 实际用了哪份」；函数文档写明回退语义 |
+| **`observer/projection.ts` 两处可见性失真** | ① 读不出的记忆 `continue` ⇒ 它**既不进 relevant 也不进 excluded**，而 `reality.total` 按全量算 ⇒ 数字对不上却看不出为什么；② `候选相关` 报的是 `rel.slice(0,8)` **之后**的长度 ⇒ 命中 12 条显示「候选相关 8」（**那是上限，不是命中数**） | 新增 `unreadable`（单列 + 渲染「读不出 ≠ 不相关」）与 `relTotal`（报上限**前**的真实命中数 + 「本视图只显示前 N」） |
+
+### 9.2 标定测试自身的假绿（**这比被审对象的问题更该先修**）
+
+审查者此前点名 `tools/*.selftest.ts` 是唯一**从未被审过**的目录、「可能是最高危的假绿源」。逐份读完，抓到**一处致命 + 一处判据零标定**：
+
+| 缺陷 | 为什么是假绿 | 修法 |
+|---|---|---|
+| **`audit-wiring.selftest.ts` ⑪ 是同义反复（致命）** | 它在测试内**重写了一遍产品侧的分桶 ternary**，再断言「四桶之和 = A 段总数」—— 分桶值由同一段代码赋出，和**必然成立**；各桶断言也逐字复述那几个条件。⇒ **把产品侧改成任何东西，标定测试照样全绿**，它验证的只是自己那份拷贝 | 把分桶判据搬进 lib（`bucketOf`），CLI 与测试**共用同一份**；⑪ 重写为「四桶正例 + **三条反例**（A1/A2b/A3 各一条）」，并加「真仓库 A 段不得为空」。**变异验证**：把 `bucketOf` 的 A1 条件写反 ⇒ 立即 `AssertionError: 零引用 ⇒ A1` |
+| **`audit-drift` 判据 ③ 从未被任何夹具触达** | 原 NEG-2 的条件里**没有 `.has(`** ⇒ 它在判据 ② 就被 `continue` 掉，**根本走不到 ③**（收集 `probeVars` 并据此排除的那段）。把它删掉或写成恒空集合，标定测试仍全绿 | 加**差分对** `POS-4` / `NEG-6`：两者形状**只差**「条件里有没有探针赋值的局部名」⇒ 必须给出**相反**结果。**变异验证**：废掉 `probeVars` 的填充 ⇒ 立即 `AssertionError: NEG-6 不得被报出（假阳）` |
+| **`isTestPath` 这条判据零覆盖** | 它由 v1.15.43 的**真缺陷**修来（旧写法 `!isProductionPath` 把 `dist/`、`node_modules/` 也算成「测试引用」⇒ A 段那列虚高），却定义在 **CLI** 里 ⇒ 改成 `p.includes("test")`、退回旧写法、或整条删掉，6 个 selftest 全绿 | 搬进 lib，新增 ⑬：正例 + 反例（**明确断言它与旧写法在「产物/依赖」上给出不同答案**） |
+| `audit-layers.selftest` ③ 用空判据表断言主方向 | `NO_RULES` 把方向禁令清空 ⇒ 该断言与 `DIRECTION_RULES` **完全无关**，往表里加反向禁令也测不出 | 改用 `{ pureModules: [] }`（只清白名单、**保留真方向表**） |
+| `retrieval-eval.selftest` 的恒真断言 | `assert.equal(h1.algorithm, HASH_ALGORITHM)` 而 `datasetHash` 就是把该常量原样放回 ⇒ 恒真（等价 `assert.ok(true)`） | 改为对**字面量** `"sha256-utf8-lf-v1"` 断言 |
+| `audit-drift.selftest` 真仓库断言无下限 | `walk` 吞 `readdirSync` 异常并返回已累积结果 ⇒ 取错根/递归没跟随会让 `prod` 变空，此时「0 条线索」**照样通过**（CLI 有 `exit 2` 的闸，标定测试没有） | 补 `assert.ok(prod.length > 0, …)` |
+| `corpus-health.selftest` footer 与代码不符 | footer 称 `retrieval-eval` 走本闸，实际它**没调用 `classifyCorpus`**、是第二份内联实现 ⇒ 那句话会让读者**不再去查它** | 改正 footer，并把「同一判据两份实现」记为线索（下节） |
+
+**证据**：`verify` **52/52**；6 个 selftest 全绿；**两处变异测试**（改坏 `bucketOf` / 废掉 `probeVars`）分别立即变红 —— 这是「标定测试真的能失败」的可复核证据。
+棘轮如实变红 `b_keys 110 → 113`：**+3 正是本轮新增的标定断言**（`bucket=A1/A2a/A2b`），逐条点名后重录。
+
+### 9.3 新记线索（本轮发现，**未修**）
+
+- **`retrieval-eval.ts:117-120`** 有第二份「语料太小 ⇒ PARTIAL」实现（读协议常量 `min_corpus_files`），与 `classifyCorpus` **判据分叉**且**该份未标定**；
+- **`audit-wiring` 与 `audit-drift` 的 `isProductionPath` EXCLUDE 不同**（前者把 `tools/` 当生产面，后者排除）⇒ 两个工具的口径不一致，且**两个 selftest 各自把相反期望锁死**（`audit-wiring.selftest.ts:82` vs `audit-drift.selftest.ts:40`）。**要统一必须先决定 `tools/` 算不算生产面**（改哪边都会破一个棘轮基线）；
+- **所有 CLI 接线（退出码语义、`--update-ratchet` 的拒绝分支、两工具共用基线文件却分写段）零自动断言** —— 历史上真实踩过的两类缺陷都在这里，两处 footer 已自认；
+- **`toolset-authority.ts` 未接进 `npm run verify`**（只在单独的 `verify:authority`）。

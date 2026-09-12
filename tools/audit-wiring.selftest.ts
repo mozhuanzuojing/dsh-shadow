@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions } from "./audit-wiring.lib.ts";
+import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
@@ -190,9 +190,35 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
 }
 
 // ─────────────────────────────────────────────
-// ⑪ 真仓库：分桶必须**覆盖全部** A 段条目（不丢线索），且各桶判据没走偏
+// ⑪ 分桶判据**真的在判**（v1.15.58 重写）
+//
+// 旧版这一节是**同义反复**：它在测试内重写了一遍产品侧的分桶 ternary，再断言
+// 「四桶之和 = A 段总数」—— 分桶值由同一段代码赋出，和必然成立；各桶断言也逐字复述那几个条件。
+// 于是**把产品侧的分桶改成任何东西，本测试照样全绿**（它验证的是自己那份拷贝）。
+// 一条「改坏了也不会红」的标定测试比没有测试更坏：它给的是**虚假的确定性**。
+//
+// 现在改为直接调用产品判据 `bucketOf`（从 CLI 搬进 lib，两边共用），并且**用反例证明它在判**：
+// 每个桶不仅验「分到该桶的符合条件」，还验「条件不满足的**不会**被分进去」。
 // ─────────────────────────────────────────────
 {
+  // ① 判据本身：四个桶各有正例，且**互斥**（同一输入只能落一个桶）
+  assert.equal(bucketOf({ pair: "x", imports: ["f"], bare: 0 }), "A3", "有配对 ⇒ A3（优先级最高）");
+  assert.equal(bucketOf({ pair: undefined, imports: [], bare: 0 }), "A1", "零引用 ⇒ A1");
+  assert.equal(bucketOf({ pair: undefined, imports: ["f"], bare: 0 }), "A2b", "被 import 且零裸提及 ⇒ A2b");
+  assert.equal(bucketOf({ pair: undefined, imports: ["f"], bare: 3 }), "A2a", "被 import 且有裸提及 ⇒ A2a");
+
+  // ② **反例：判据被改坏会红**（这是旧版完全缺失的部分）
+  //    A1 的条件是「零引用」——`imports` 非空时**不得**落 A1（若实现把条件写反，这里立即红）
+  assert.notEqual(bucketOf({ imports: ["f"], bare: 1 }), "A1", "★ 有 import 不得被判 A1");
+  //    A2b 的条件是「被 import **且** bare === 0」——bare > 0 时必须落 A2a
+  assert.notEqual(bucketOf({ imports: ["f"], bare: 5 }), "A2b", "★ bare>0 不得被判 A2b（否则 A2b 这桶失去意义）");
+  //    A3 只在**真配对**时成立
+  assert.notEqual(bucketOf({ imports: [], bare: 0 }), "A3", "★ 无配对不得被判 A3");
+  //    桶名必须落在四桶之一（防未来加桶却忘了更新统计）
+  const all = new Set(["A3", "A1", "A2b", "A2a"]);
+  assert.ok(all.has(bucketOf({ pair: "p", imports: [], bare: 0 })), "桶名必须在四桶集合内");
+
+  // ③ 真仓库：每个 A 段条目落桶后**自洽**，且桶内条件与实际数据一致（用产品判据判定）
   const aRows: { name: string; bucket: string; imports: string[]; bare: number }[] = [];
   const exportRe = /^export\s+(?:const\s+(\w+)\s*=\s*(?:async\s*)?\(|function\s+(\w+)|async\s+function\s+(\w+)|class\s+(\w+))/gm;
   for (const { file, text } of prod) {
@@ -203,23 +229,19 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
       const imports = importedBy(prod, name);
       const pair = pairedExport(exportsOf(text), name);
       const bare = bareMentions(prod, name, file).count;
-      aRows.push({ name, imports, bare, bucket: pair ? "A3" : !imports.length ? "A1" : bare === 0 ? "A2b" : "A2a" });
+      aRows.push({ name, imports, bare, bucket: bucketOf({ pair, imports, bare }) });
     }
   }
+  // **语料非空**（ADR-0049：扫描范围错了也要红，而不是「0 条 ⇒ 0 违规 ⇒ 全绿」）
+  assert.ok(aRows.length > 0, "★ 真仓库 A 段不得为空（取错根/递归没跟随都会让它变空，那时「全绿」是假的）");
   const cnt = (k: string) => aRows.filter((r) => r.bucket === k).length;
   assert.equal(cnt("A2b") + cnt("A1") + cnt("A2a") + cnt("A3"), aRows.length, "四桶之和必须等于 A 段总数（不得丢线索）");
-  // 各桶判据逐条自证
-  for (const r of aRows.filter((x) => x.bucket === "A2b")) {
-    assert.ok(r.imports.length > 0 && r.bare === 0, `${r.name} 分到 A2b，必须「被 import 且零裸提及」`);
-  }
-  for (const r of aRows.filter((x) => x.bucket === "A1")) {
-    assert.ok(r.imports.length === 0, `${r.name} 分到 A1，必须未被 import`);
-  }
-  for (const r of aRows.filter((x) => x.bucket === "A2a")) {
-    assert.ok(r.imports.length > 0 && r.bare > 0, `${r.name} 分到 A2a，必须「被 import 且有裸提及」`);
-  }
-  console.log(`✔ ⑪ 真仓库分桶覆盖全部 ${aRows.length} 条（A2b ${cnt("A2b")} · A1 ${cnt("A1")} · A2a ${cnt("A2a")} · A3 ${cnt("A3")}）`
-    + ` ⇒ 需逐条查的 ${cnt("A2b") + cnt("A1")} 个`);
+  // 各桶**互斥性**：桶内不得出现与该桶判据矛盾的条目（这一条若红，说明 bucketOf 与数据口径不一致）
+  for (const r of aRows.filter((x) => x.bucket === "A2b")) assert.ok(r.imports.length > 0 && r.bare === 0, `${r.name} 分到 A2b，必须「被 import 且零裸提及」`);
+  for (const r of aRows.filter((x) => x.bucket === "A1")) assert.ok(r.imports.length === 0, `${r.name} 分到 A1，必须未被 import`);
+  for (const r of aRows.filter((x) => x.bucket === "A2a")) assert.ok(r.imports.length > 0 && r.bare > 0, `${r.name} 分到 A2a，必须「被 import 且有裸提及」`);
+  console.log(`✔ ⑪ 分桶判据：四桶正例 + **三条反例**（改坏会红）；真仓库 ${aRows.length} 条全部落桶且自洽`
+    + `（A2b ${cnt("A2b")} · A1 ${cnt("A1")} · A2a ${cnt("A2a")} · A3 ${cnt("A3")}）⇒ 需逐条查的 ${cnt("A2b") + cnt("A1")} 个`);
 }
 
 // ─────────────────────────────────────────────
@@ -246,6 +268,27 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
   assert.equal(bareMentions(onlyDef, "nothing", "d.ts").count, 0,
     "只有定义、无人引用 ⇒ 必须为 0（定义处那一次要减掉）");
   console.log("✔ ⑫ 裸提及判据：间接调用（有提及）与导入即闲置（零提及）被正确分开；定义处不计入");
+}
+
+// ─────────────────────────────────────────────
+// ⑬ `isTestPath`：**这条判据本身**必须被锁住（v1.15.58 从 CLI 搬进 lib + 补标定）
+//    它由 v1.15.43 的真缺陷修来（旧写法 `!isProductionPath(p)` 把 `dist/`、`node_modules/`
+//    的 `.d.ts` 也算成「测试引用」⇒ A 段那一列**虚高**，分诊时会把「零测试引用」读成
+//    「已被测试覆盖」）。此前它定义在 **CLI**、不在任何 selftest 的覆盖面上 ⇒ 改坏也全绿。
+// ─────────────────────────────────────────────
+{
+  assert.equal(isTestPath("test"), true, "顶层 test 目录自身算测试面");
+  assert.equal(isTestPath("test/x.test.ts"), true, "test/ 下算测试面");
+  assert.equal(isTestPath("core/x.ts"), false, "生产源码不算测试面");
+  assert.equal(isTestPath("dist/core/x.d.ts"), false, "★ 产物**不算**测试面（旧写法在这里虚高）");
+  assert.equal(isTestPath("node_modules/pkg/x.d.ts"), false, "★ 依赖**不算**测试面");
+  // **反例：必须与旧写法在这些路径上分开**（否则等于没修）
+  const legacy = (p: string) => !isProductionPath(p);
+  assert.notEqual(isTestPath("dist/core/x.d.ts"), legacy("dist/core/x.d.ts"),
+    "★ 新判据必须与 `!isProductionPath` 在「产物」上给出不同答案");
+  assert.notEqual(isTestPath("node_modules/pkg/x.d.ts"), legacy("node_modules/pkg/x.d.ts"),
+    "★ 同上（依赖）");
+  console.log("✔ ⑬ isTestPath：test/ 命中 · 产物与依赖**不**命中（与旧写法 `!isProductionPath` 明确分开）");
 }
 
 console.log("");

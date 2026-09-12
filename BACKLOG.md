@@ -1416,3 +1416,25 @@ V/G/T6 真机与外部条件项
 **仍未修**：`_index.md` 不进指纹 · 证据路径上限无披露 · `observer/projection.ts` 可见性不一致 ·
 快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · §6.3 六条待定语义 ·
 **169 个测试类型错误** · 整目录未读（含 `tools/*.selftest.ts`）。
+
+### 6.8 状态更新（v1.15.58）：披露面 4 处 + **标定测试自身的假绿** 6 处
+
+| 原线索 / 新发现 | 状态 |
+|---|---|
+| `reads.ts` 截断只写 log、返回文本不提 | ✅ **已修**：`shadow_query` 附「命中 N · 只返回前 limit · 还有 k 个未显示」（与 `retrieval/render.ts` 的 `truncationNote` 对齐） |
+| 证据路径上限无披露（`arbitrate.ts` slice(0,12)） | ✅ **已修**：导出 `EVIDENCE_PATH_CAP` + `droppedByCap`，experience 渲染与 `ev.unverifiedByCap` 均带出 |
+| 快照坏件回退更旧、无声 | ✅ **已修**：回退时打印「跳过了哪些 / 实际用了哪份」+ 文档写明回退语义 |
+| `observer/projection.ts` 可见性不一致 | ✅ **已修**：新增 `unreadable`（读不出 ≠ 不相关）与 `relTotal`（报上限**前**的命中数） |
+| **`audit-wiring.selftest` ⑪ 是同义反复**（致命假绿） | ✅ **已修**：分桶判据搬进 lib（`bucketOf`）两边共用；⑪ 改为「四桶正例 + 三条反例」+ 语料非空；**变异验证**（改坏必红） |
+| **`audit-drift` 判据 ③ 零标定**（NEG-2 走不到它） | ✅ **已修**：加差分对 `POS-4`/`NEG-6`（只差探针局部名，结果必须相反）；**变异验证**（废掉 `probeVars` 必红） |
+| **`isTestPath` 判据零覆盖**（它在 CLI 里） | ✅ **已修**：搬进 lib + 新增 ⑬（含「与旧写法必须不同」的反例） |
+| `audit-layers.selftest` ③ 用空判据表断言主方向 | ✅ **已修**：改用真方向表（只清白名单） |
+| `retrieval-eval.selftest` 的恒真断言（常量与自己比） | ✅ **已修**：改为对字面量断言 |
+| `audit-drift.selftest` 真仓库断言无下限（空语料也全绿） | ✅ **已修**：补 `prod.length > 0` |
+| `corpus-health.selftest` footer 与代码不符 | ✅ **已修**：footer 改正 + 下方新线索 |
+
+**新线索（未修）**：
+- `retrieval-eval.ts:117-120` 的「语料太小 ⇒ PARTIAL」是**第二份实现**（读协议常量），与 `classifyCorpus` 判据分叉且**未标定**；
+- `audit-wiring` ↔ `audit-drift` 的 `isProductionPath` EXCLUDE **不同**（`tools/` 算不算生产面），两个 selftest 各自把相反期望锁死 ⇒ **统一前需先拍板**；
+- 所有 **CLI 接线**（退出码、`--update-ratchet` 拒绝分支、共用基线分写段）零自动断言（两处 footer 已自认）；
+- `toolset-authority.ts` **未接进** `npm run verify`。
