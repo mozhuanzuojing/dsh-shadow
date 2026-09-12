@@ -3,7 +3,10 @@
 // 契约：
 //   - 观测是「系统派生记录」：写 .shadow/query-log/<date>.jsonl，rm -rf query-log 不影响任何 Atom；
 //   - 只在 shadow_query（mode:"query"）入口打点，不进 derive 真相路径；
-//   - 写失败静默（best-effort），绝不改变 query 的返回值；
+//   - 写失败**不再静默**（v1.15.65 / T8 第 4 条）：`recordQueryObservation` 返回 `boolean`，
+//     调用方据此经 `deps.noteDegrade` 留痕 ⇒ 读侧横幅可见。它**仍然不改变 query 的返回值**
+//     （这是本条契约里唯一没变的部分）—— 但「不冒泡」与「不可见」是两件事，
+//     旧注释把后者也一并声明了，而那正是 T8 要修的缺陷。
 //   - query/title 做轻量 scrub（密钥打码 + 剔除控制/双向字符），防敏感检索词与注入残留回显。
 import { SHADOW_ROOT } from "../core/paths.js";
 import { today } from "../core/util.js";
@@ -305,12 +308,23 @@ export const renderFitnessReport = (r: any): string => {
   return lines.join("\n");
 };
 
-/** 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。 */
+/**
+ * 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。
+ *
+ * **裁定：这里的静默是正当的**（判据见 `core/projection-store.ts` 的「正当静默类判据」）——
+ * 报告**正文**由调用方 `query/reads.ts:259` **原样返回给读者**，落盘只是留一份副本
+ * ⇒ 写失败时**读者拿到的内容逐字节不变**。
+ * 这正是它与 sidecar 写失败的区别（后者会让 `_index.md` 少一行 ⇒ 必须有信号）。
+ *
+ * **残留风险（写给后来者）**：本函数的**调用点**在 `mode:"shadow-report"` 的输出里说
+ * 「生成 `.shadow/shadow-report.md`」，而这句话在写失败时**不成立**且无处可知。
+ * 若将来有人依赖「跑过就一定有这个文件」，这条裁定要重新审 —— 那时它就不再是「冗余副本」了。
+ */
 export const writeShadowReport = async (fs: any, ws: string, text: string): Promise<void> => {
   if (!fs || !ws) return;
   try {
     const rel = `${SHADOW_ROOT}/shadow-report.md`;
     const target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
     await fs.writeText(target, text);
-  } catch { /* best-effort：报告落盘失败不冒泡 */ }
+  } catch { /* 正当静默：正文已随返回值交付（见上方裁定），此处只是副本 */ }
 };

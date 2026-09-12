@@ -155,7 +155,7 @@ npm run verify
 
 ### 默认开关（装完什么都不动会怎样）
 
-**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的是**四项**（采集与落盘、一句话摘要 `summary`、查询观测 `queryLog`、Episode 回溯 `episodes`）—— 其中**只有 `summary` / `queryLog` 能一行关掉**，`episodes` 目前**关不掉**（见下表注 ①），采集本身也**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
+**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的是**四项**（采集与落盘、一句话摘要 `summary`、查询观测 `queryLog`、Episode 回溯 `episodes`）—— `summary` / `queryLog` / `episodes` 都能一行关掉（`episodes.showInIndex: 0`，**v1.15.64 修好了**：此前被 `|| 8` 吞掉 ⇒ 那个开关**不存在**，见注①），采集本身**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
 
 > **关于「成熟度」列的读法（v1.15.34 / D8）**：本仓**不给自己打 `stable`/`beta`/`experimental` 等级**
 > （全仓无此口径；`adr/0073:53` 亦自陈「0 个 ADR 带『重新评估条件』小节」）。若要凭空造一套等级，
@@ -165,25 +165,28 @@ npm run verify
 > 它恰好回答了「成熟度」那一列原本要回答的问题：**哪些是「稳定但耗 token」，哪些是「接口还可能变」**。
 >
 > **「降级行为」列是 ADR-0049「缺件不静默」的一眼全览**。标 **⚠️静默** 的格子表示
-> 「关闭或缺件后行为退到某处，但**没有任何可见信号**」—— 按 ADR-0049 它们是**候选缺陷**，
-> 已单独立账（`BACKLOG.md` **T8**，共 7 条），**不在表里写一句敷衍的话盖过去**。
+> 「关闭或缺件后行为退到某处，但**没有任何可见信号**」—— 按 ADR-0049 它们是**候选缺陷**。
+> **T8 已于 `v1.15.64` + `v1.15.65` 结案**（`adr/0084` / `adr/0085`）：**6 条补了可见信号**
+> （统一进「能力降级台账」→ 读侧横幅），**1 条裁定为正当静默**（`projectionStore`；类判据是
+> **「读者拿到的内容逐字节不变」**，见 `adr/0085` §5 与 `core/projection-store.ts`）。
+> 下表**仍标 ⚠️静默** 的格子是**尚未进 T8 的同族**（如 `retention`），不是已修项。
 
 | 能力 | 默认 | 成熟度 | 降级行为（关闭 / 缺件时退到哪） | 晋级 / 启用标准 | 开着会怎样 · 怎么开 |
 |------|------|--------|--------------------------------|------------------|----------------------|
 | 采集与落盘 | **开**（无总开关） | **无开放未验证项**（ADR-0074 已于 `v1.15.40` 第 4 轮真机复核，**B3 闭环**） | 写失败 → `lastFlushError` + `console.error` → **读侧顶部横幅**（可见） | 仓库未定义 | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」（注②） |
-| 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ⚠️**静默** | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
-| 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 `catch {}` → 观测丢弃，读侧显示「尚无记录」→ 与「从没查过」不可区分 ⚠️**静默** | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
-| Episode 回溯 `episodes` | **开**（且**关不掉**，注①） | 无开放未验证项 | derive 抛错 / 写 `_index.md` 失败 → 仅 `console.log` ⇒ 索引可**静默陈旧**；读侧 `deriveEpisodes` 无 try/catch → 直接抛 ⚠️**静默** | 仓库未定义 | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
-| 语义召回 B 档 `recall` | 关 | 无开放未验证项 | `expandTerms → []` → 只用原词跑 A 档，**输出无任何标记** ⚠️**静默** | 仓库未定义 | 开需 `recall = { enabled: true, provider, model }` |
-| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账**读**失败 → 静默当空台账 ⇒ **冷却静默失效** ⚠️**静默** | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
+| 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ✅**可见**（T8 第 2 条，v1.15.65：降级台账 → 横幅，含原因与后果） | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
+| 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 → 观测丢弃，读侧显示「尚无记录」✅**可见**（T8 第 4 条，v1.15.65：`recordQueryObservation` 改返回 `boolean` → 调用点留痕） | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
+| Episode 回溯 `episodes` | **开**（`showInIndex: 0` 关，注①） | 无开放未验证项 | derive 抛错 → 索引不列 Episodes 段（与「暂无连续任务片段」**渲染成同一句**）✅**可见**（T8 第 7 条，v1.15.65）；写 `_index.md` 失败 → `lastIndexError` → 读侧横幅（`v1.15.55`） | 仓库未定义 | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
+| 语义召回 B 档 `recall` | 关 | 无开放未验证项 | `expandTerms → []` → 只用原词跑 A 档 ✅**可见**（T8 第 3 条，v1.15.65） | 仓库未定义 | 开需 `recall = { enabled: true, provider, model }` |
+| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账读不到 / 坏件 / 写失败 → 各自留痕 ⇒ 冷却失效**可见**（T8 第 5 条，v1.15.65。注：v1.15.55 留的 `corrupt` 标记**此前没有任何消费者** = 等价于没留） | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
 | 召回 trace `recall.debug` | 关 | 无开放未验证项 | 无降级（仅不输出 diag，答案路径不变） | 仓库未定义 | 开需 `{ debug: true }` 或 `recall.debug: true` |
 | 召回降权 `recall.deprioritize` | 空（不降权） | 无开放未验证项 | 无降级（空配置不降权）。注：**启用后**降权只在 debug 输出可见 | 仓库未定义 | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**）；如 `["references-agents", "_reports"]` |
 | 记忆遗忘 `retention` | 关 | 有开放未验证项（ADR-0067 / ADR-0068 真机待验） | 关闭 → 不做 hotness 加权、`registerMeta` 直接 return ⇒ `_meta.json` 不建档；差异**不可见** ⚠️**静默** | 仓库未定义 | `retention = { enabled: true, halfLifeDays: 7 }`：hotness 加权（注③：`stale` **不是**排除项，它喂生命周期标签） |
 | GC / 归档 `forget` | 关 | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | 关闭 → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | `forget.enabled: true` 才把低价值记忆移出活跃召回集（文件保留，Forget≠Delete） |
 | Episode 收口归档 `compact` | 关 | 有开放未验证项（ADR-0068 `runCompact` delta 真机未验） | 关闭 → 直接 return，不合并（无降级） | 仓库未定义 | `compact.enabled: true` 才合并原子文件 |
-| LLM 推理导航 `llmRecall` | 关 | 无开放未验证项 | 缺 `llm`/route/解析不出编号 → `[]` → 确定性 `renderRecovery`，**无标记**；且 `label:""` 使异常**也不打日志** ⚠️**静默（最彻底）** | 仓库未定义 | 开需 `llmRecall = { enabled: true, provider, model }` |
-| Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 未接线） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 ⚠️**静默** | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
-| 目录级摘要 `abstracts`（v1.15.35 / ADR-0075） | **开** | **边界 ADR 已接受但收益未验证**（ADR-0075 自陈：召回收益未测 → T9） | 写失败 → `console.log` 且该目录**不列入** `_index.md`（**部分可见**：索引里看不到它，但无显式 warn） | 仓库未定义 | 每日期目录写一份 `_abstract.md`（L1 + L0）；`abstracts.enabled: false` 关、`showInIndex` 控制索引里列几个（默认 3） |
+| LLM 推理导航 `llmRecall` | 关 | 无开放未验证项 | 缺 `llm`/route/解析不出编号 → `[]` → 确定性 `renderRecovery` ✅**可见**（T8 第 1 条，v1.15.65。修前是**最彻底**的一条：`label:""` 使异常**连 log 都没有**，且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） | 仓库未定义 | 开需 `llmRecall = { enabled: true, provider, model }` |
+| Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 未接线） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 —— **裁定为正当静默**（`adr/0049:38` 行级豁免 + `adr/0085` §5 的类判据：**读者拿到的内容逐字节不变**） | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
+| 目录级摘要 `abstracts`（v1.15.35 / ADR-0075） | **开** | **边界 ADR 已接受但收益未验证**（ADR-0075 自陈：召回收益未测 → T9） | 写失败 → 该目录**不列入** `_index.md`（索引少一行 = 内容变了）✅**可见**（v1.15.65 复查时补：它**不属于**正当静默那一类，判据同上；`showInIndex: 0` 的「不列」v1.15.64 才真的生效） | 仓库未定义 | 每日期目录写一份 `_abstract.md`（L1 + L0）；`abstracts.enabled: false` 关、`showInIndex` 控制索引里列几个（默认 3） |
 | Knowledge Engine `knowledgeEngine` | **并非「关」——闸门不存在**（注④） | **边界 ADR 未接受**（`adr/0047` 已提出；`adr/0046` 实现计划冻结） | 读路径**无条件**建树；唯一闸门 `llmNavigate`（默认关）→ 确定性检索，**输出显式标注**「LLM 导航未启用/失败」（可见） | 仓库未定义 | `mode:"knowledge"` 直接用；`llmNavigate.enabled` 是**唯一**闸门 |
 | 工程知识图谱 `kg` | 关（注⑤：**不是 config 键**，是 per-call 参数） | 无开放未验证项（已知局限：`MEMORY.md:92` 域推导，未解决） | 未传 → 不加图谱块；传入无匹配 → 输出「暂无匹配的组件/域」（无降级） | 仓库未定义 | 按需 `read_shadow(topic, { kg: true })` |
 | 证据 Provider `evidenceProvider` | `fs` | 有开放未验证项（ADR-0059 真机 `host.fs`；V1 zg 未装未实测） | zg 未装 → `unavailable` + `zg_not_installed`；provider 拼错 → `unavailable` + `provider_unknown`；逐条 status+reason + 可执行缺件提示（可见） | 仓库未定义 | 换 `zg` 需已装 CLI；未装报 `unavailable`，不静默 fallback |
@@ -194,10 +197,12 @@ npm run verify
 ⓪ **行数**：原表 16 行 ⇒ v1.15.34 补 **`indexEngine`**（原缺行）、v1.15.35 补 **`abstracts`**（D6 新能力）
 ⇒ **现 18 行**。
 
-① **`episodes` 关不掉**：`showInIndex: 0` 会被 `core/writer-core.ts:69` 的 `|| 8` 吞掉 ⇒
-   `core/writer-materialize.ts:161` 的 `episodeShow > 0` 闸门**恒真**（死分支）；`gapMinutes: 0` 同样被
-   `|| 60` 吞掉（`:68` / `core/episode.ts:230`）⇒ 两处 `Math.max(0, …)` 永不生效。
-   **这是缺陷，不是设计**（用 `||` 取默认值把「显式 0」与「未传」混为一谈）⇒ 见 `BACKLOG.md` **T8**。
+① **`episodes` 关不掉** —— ✅ **已在 `v1.15.64` 修复**（`adr/0084`），本条留档说明**修前**的形态：
+   `showInIndex: 0` 被 `core/writer-core.ts` 的 `|| 8` 吞掉 ⇒
+   `core/writer-materialize.ts` 的 `episodeShow > 0` 闸门**恒真**（死分支，即那个开关**不存在**）；
+   `gapMinutes: 0` 同样被 `|| 60` 吞掉（`writer-core.ts` / `core/episode.ts` / `query/reads.ts` **三处各写一遍**）
+   ⇒ `Math.max(0, …)` 永不生效。根因是**用 `||` 取默认值把「显式 0」与「未传」混为一谈**。
+   现统一走 `core/util.ts:numOr`（判据只此一处），并把默认值的落点收成 `deriveEpisodes` 一处。
 ② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
 ③ **`retention` 的「stale 默认排除」在代码里没有对应实现**：`staleDays`/`stale` 在
    `retention.enabled` 判断**之外**计算（`query/query.ts:275-276`），关闭 retention 也照标 stale；
@@ -205,11 +210,11 @@ npm run verify
    唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts:279`）。
    原表把它写在「默认」列，属**串列**。
 ④ **`knowledgeEngine` 的闸门不存在（v1.15.34 实测校正的硬缺陷）**：`ShadowConfig.knowledgeEngine.enabled`
-   **生产零读取**（全仓唯一读取是 `core/writer.ts:79` 读 `.llmNavigate`）；`query/reads.ts:141`
+   **生产零读取**（全仓唯一读取是 `core/writer.ts` 读 `.llmNavigate`）；`query/reads.ts`
    **无条件**建树；且 `createKnowledgeEngine` 原本收一个 `config` 形参却**从不使用**它
    （已删死形参）。⇒ 原表写「默认 关 / `enabled: true` 启用」描述的是**一处不存在的开关**。
    本 mode 的**唯一**闸门是 `llmNavigate.enabled`。
-⑤ **`kg` 不是 config 键**：它不在 `ShadowConfig` 里，只是 per-call 参数（`query/query.ts:424`），
+⑤ **`kg` 不是 config 键**：它不在 `ShadowConfig` 里，只是 per-call 参数（`query/query.ts`），
    原表却把它排在「默认」列里，与真正的 config 默认值混用同一列。
 
 ### 采集与落盘
@@ -225,8 +230,8 @@ npm run verify
 ### 读取（`read_shadow`，可穿透）
 
 - 无参数返回 `_index.md`（目录）；带 `topic`/`entry` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签 → 路径 → 正文 + 时间衰减」打分排序，在 token 预算内按深度返回——高分记忆给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控制预算（默认 1600）。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
-- **冷热淘汰（默认关，显式开启）**：`rawConfig.recall.cooldownTurns = 5` 时，`.shadow/_recall_log.json` 记录「带内容」发过的路径，N 回合内不重复返回；纯 URI 不带内容则不冷却。写失败降级为「不去重」。
-- **语义召回（B 档，默认关）**：`read_shadow(topic)` 默认走加权关键词召回（A 档，无外部依赖）。要更接近语义，配置 `rawConfig.recall = { enabled, provider, model, maxTokens, timeoutMs }`——`enabled: true` 且给了 `provider/model` 时，先用 `llm.stream` 扩展几个相关检索词，再打分召回；失败/未配置时静默退回 A 档。
+- **冷热淘汰（默认关，显式开启）**：`rawConfig.recall.cooldownTurns = 5` 时，`.shadow/_recall_log.json` 记录「带内容」发过的路径，N 回合内不重复返回；纯 URI 不带内容则不冷却。写失败降级为「不去重」，且**读侧横幅披露**（T8 第 5 条，v1.15.65：台账读不到 / 坏件 / 写失败各自留痕）。
+- **语义召回（B 档，默认关）**：`read_shadow(topic)` 默认走加权关键词召回（A 档，无外部依赖）。要更接近语义，配置 `rawConfig.recall = { enabled, provider, model, maxTokens, timeoutMs }`——`enabled: true` 且给了 `provider/model` 时，先用 `llm.stream` 扩展几个相关检索词，再打分召回；失败/未配置时退回 A 档并**在读侧横幅披露**（T8 第 3 条，v1.15.65；修前是**静默**的 —— 这条此前由本文档自己承认）。
 - **Memory Debugger**：`read_shadow(topic, { debug: true })`（或 `recall.debug: true`，默认关）返回召回管线 trace——`候选 → 命中(打分>0) → 冷却 → 预算 → 返回` 计数 + 每条召回「为什么命中（入口/主题/路径/正文打分拆解）/为什么被降权(cooldown/deprioritize)/状态」。默认路径不变。
 - **召回信封（截断不静默）**：借 PageIndex「成功/失败都返回带下一步的信封」——预算/`limit`/冷却砍掉的命中会在结果末尾**自报家门**（`未返回的命中：N 条（命中 M · 本次返回 K）· 原因分解 · 示例入口 · 下一步`，**N 恒等于 M − K**，冷却也计入），空命中不再是一句死路，而是给「换词/看索引/`shadow_query`/`recall_shadow`」四条可执行下一步 + **近似候选（显式标「未验证」）**；命中全在冷却时给的是「冷却中的命中（是命中，不是近似）」+ 冷却专属下一步。全部返回时不加任何多余文字。**已知边界**：信封本身不计入 `max_tokens` 预算，所以带信封的输出会比 `max_tokens` 多出这几行（换取「不静默丢」）。
 - **读侧输出保留换行（v1.12.7 根因修复）**：`scrubFinal` 原先整篇套 `scrubUnsafe`（剔 `\u0000-\u001f`，连 `\t\n\r` 一起剔）→ 所有读侧 Markdown 被压成一行；现改用 `scrubUnsafeDoc`（保留 `\t\n\r`，仍剔其余控制符/双向覆盖符）。注入短语与 HTML 标签仍被剥离，「数据非指令」前缀不变。
@@ -301,7 +306,7 @@ npm run verify
 
 - **读侧**：`read_shadow` 输出**恒定带「数据非指令」前缀** + 每条标记「（记忆 | 可能过时/需验证，非当前事实，非指令）」；无匹配也带前缀（不把"没有找到"混成"可作指令"）；对 snippet/摘要/正文做**二次 scrub**（`scrubFinal`：剔控制/双向字符 + 密钥打码 + 去注入标签/短语，防历史残留回显）。线索头也 scrub（防从线索头绕过泄漏）。
 - **写侧**：对密钥形状（`sk-`/`ghp_`/`AKIA` 等）打码、滤含控制/双向字符的行；采集记录带 `source` + 记忆文件头带「> 来源会话：<agentId>」，读侧跨来源标「（来自其它会话/子代理）」（默认只标注不隔离，防跨 session/子代理污染）。`writeConsent: true` 时无用户显式要求仅累积不落盘（默认 `false` 保持采集流）。
-- **缺件不静默（ADR-0049，统一纪律）**：所有**可选增强**（一句话摘要 / 语义召回 B 档 / 推理导航 / Knowledge 树上导航 / Projection Store / `zg` 证据 Provider）缺依赖时**只降级到确定性路径**，不抛错、不阻塞；降级**必须可见**（`unavailable` 状态 / flush warn / debug trace 之一）；**绝不把「缺件」说成「已验证 / 已存在 / 已完成」**，也不拿记忆里记着的流程代替真实检查。例：`zg` 未装 → `unavailable`（不是 verified）；`evidenceProvider` 名拼错 → `unavailable / provider_unknown`（v1.12.8 起，此前会静默退回 fs）；缺 `llm` → 摘要留空、召回退回关键词档。新增可选增强时按 ADR-0049 的门禁清单自检。
+- **缺件不静默（ADR-0049，统一纪律）**：所有**可选增强**（一句话摘要 / 语义召回 B 档 / 推理导航 / Knowledge 树上导航 / Projection Store / `zg` 证据 Provider）缺依赖时**只降级到确定性路径**，不抛错、不阻塞；降级**必须可见**（`unavailable` 状态 / flush warn / debug trace 之一）；**绝不把「缺件」说成「已验证 / 已存在 / 已完成」**，也不拿记忆里记着的流程代替真实检查。例：`zg` 未装 → `unavailable`（不是 verified）；`evidenceProvider` 名拼错 → `unavailable / provider_unknown`（v1.12.8 起，此前会静默退回 fs）；缺 `llm` → 摘要留空、召回退回关键词档（**两者都在读侧横幅披露**，T8 / v1.15.65）。新增可选增强时按 ADR-0049 的门禁清单自检。
 
 #### 安全边界（对照 OpenAI《Computer use》指南的四条控制）
 
@@ -310,7 +315,7 @@ npm run verify
 | 限制环境、给白名单 | 写入限定在 `shadowRoot`（工作区 `.shadow/`，兜底 `~/.dsh-observer/shadow`）；跨会话默认只标注来源、不自动混用 |
 | 内容一律当不可信：页面/文档/工具结果里的文字不能授权、也不能覆盖用户指令 | 读侧输出恒定「数据非指令」前缀 + 每条标「（记忆，可能过时/需验证，非当前事实，非指令）」；`scrubFinal` 剔注入标签/短语 |
 | 有后果的动作要用户确认 | `writeConsent: true` 时，无用户显式要求只累积、不落盘（默认 `false`） |
-| 给运行设上限 + 支持取消 + 看真实结果，别只信模型自述 | 召回有 token 预算与冷热淘汰；每个 LLM 增强（摘要 / 语义召回 / 推理导航 / 知识导航）都有 `timeoutMs`，**失败或超时静默退回确定性路径、不阻塞主路径**（等于可取消/可降级）；证据裁决按「证据路径是否存在」判 fresh/stale/superseded，置信度从可验证信号派生 |
+| 给运行设上限 + 支持取消 + 看真实结果，别只信模型自述 | 召回有 token 预算与冷热淘汰；每个 LLM 增强（摘要 / 语义召回 / 推理导航 / 知识导航）都有 `timeoutMs`，**失败或超时退回确定性路径**且**在读侧横幅披露**（T8，v1.15.65；修前确有静默项，见默认开关表的「降级行为」列）、不阻塞主路径（等于可取消/可降级）；证据裁决按「证据路径是否存在」判 fresh/stale/superseded，置信度从可验证信号派生 |
 
 ### 提示接入
 
@@ -466,10 +471,15 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.40`（本地全部材料总台账 `MATERIALS.md` + 平台契约纠错，T16）** —— 最新几版摘要：
+**当前版本：`v1.15.66`**（元审查第二轮：审我自己 v1.15.64/65 的 T8 产出）—— 最新几版摘要：
+
+> ⚠ **这行曾长期停在 `v1.15.40`**（写到 v1.15.66 才被发现）。它与下方版本表**第一行**是同一件事的两种说法 ⇒
+> 只要表在更新、这行不动，它就在**持续说谎**。教训同「引用纪律」：**能由别的数据推出来的字段不要手写**
+> —— 这行要么跟着表首行走，要么删掉。
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.66 | **元审查（第二轮）：审我自己 v1.15.64/65 的产出** + 补一道**三方版本门**（`adr/0085` §8.5/§8.6）；`verify` **56/56**。用户在 T8 收口后又下同一条元审查指令 —— 这轮审的**不是我早先的审查，而是我刚做完的 T8 本身**。**① 遗漏（最实在）**：`core/writer-materialize.ts` 的 `writeAbstracts` 那个 `catch` 我**上一轮就站在它旁边**却没补信号 —— 而它**不属于**「正当静默」那一类：`continue` 会让该日期目录的 L0 **不再写进 `_index.md`**（索引少一行 = **读者拿到的内容变了**）；**`README` 自己早就标着它「部分可见：索引里看不到它，但无显式 warn」—— 文档写了、我读了、还是漏了** ⇒ 已补信号 + 端到端锁（⑤c 组，正/负对照）。**② 文档把已修项写成现状**：`README` 的「默认开关」表 7 行仍标 ⚠️**静默**、`episodes` 仍写「**关不掉**」、注① 仍描述缺陷为当前形态、另 3 处「静默退回」措辞 ⇒ **读者看这张表会以为缺陷还开着**（比缺一行注释严重）⇒ 全表逐行更新 + 注① 改成「✅ 已在 v1.15.64 修复，留档修前形态」。**③ 仓库的自我说明书在骗人**：`AGENTS.md` 写「仓库没有配置 test runner」—— 运行器是 `tools/run-tests.ts`（`verify` 55 项）⇒ 重写「构建与验证」段，并写明**跑 `dist/` 消费者前必须 `npm run build`**。**④ 因果（我上一轮说错的话）**：我曾在 `adr/0085` §5 与 `core/projection-store.ts` 写 ADR-0049 有「**内部张力**」（清单要求每个增强有信号 vs 表里给豁免）—— **不成立**：清单小标题是「**新增**可选增强时的门禁」，只管**将来新增**，表格是**冻结时的现状台账**，适用范围不同 ⇒ 已改正；**并把真正的缺失环节补上**：`adr/0049` 的现状盘点表里 **3 行**「可见信号：否」早已变成「有」而正文冻结不能改 ⇒ 新增**补记**（增量表 + 「三选一实务上只用 flush warn」+ 那条**类判据**）。**⑤ 一次自己踩的坑**：改完源码我跑了 `npx tsc --noEmit`（**只类型检查不产出**）就去跑 `test/*.ts`，而它们 **import 的是 `dist/`** ⇒ 断言读到旧代码，表现为「补了信号却没上横幅」；是探针（打印「writeText 被拒次数」与横幅有无）定位出**catch 确实进了、是产物没重编译**。**⑥ 过度声明**：`adr/0084` 写「**本仓** 25 处 `Number(x) \|\| dflt`」实为 `core/` 下的**修前快照** ⇒ 改成带**范围与时刻**的表述。**⑦ 重复**：`BACKLOG` 的 T8 条目里我上一轮**又**贴了两张表（与 ADR 逐字重复）⇒ 收口为「ADR 拥有决策与判据（权威表）· `BACKLOG` 只拥有状态与指向 · `CHANGELOG` 拥有历史归档 · 证据目录拥有链路矩阵」，写进 `AGENTS.md`。**⑧ 干扰：过期行号先分层再动手**（数字全部实测）—— 归档文档层 **68**（`CHANGELOG` 34 + 冻结 ADR 28 + `adr/0083` 6）与**当前态文档内的归档区间 34**（`README` 版本表、`BACKLOG` §〇/§六§七）**一处不改**（行号是「当时/发现时」的，改写 = 伪造历史）；**当前态 + 受本次改动影响 14 处**改成不依赖行号的形态；未受影响 10 处不动；权威表 10 处**手工**改符号引用；`AGENTS.md` 的 2 处**故意保留**当例子。判据客观可复算（`N >= 该文件自 v1.15.63 起首个变更行的旧行号`），脚本 `.docs/fix/2026-09-12/live-doc-ref-repoint.ts` **默认干跑**；**第一版脚本错了**（把 `README` 版本表 6 处也「修」了，干跑拦下才补「按行区间分层」）；**另一次口径自我更正**：全仓统计把 `references.md` 的 `src/index.ts:96` 算成本仓 `index.ts`（引的是 **DSH 本体**）⇒ 多算 2 处。**未做**：`episodeParse`/`episodes` 仍无端到端触发 · `recallLedger` 写失败仍无端到端触发 · 台账坏件会被覆盖（未改旁路写入）。 |
 | v1.15.65 | **T8 的 A 部分：7 处静默降级 → 一个降级台账 + 一个渲染点**（`adr/0085`）；`verify` **55/55**。ADR-0049 早就写下判据（「`unavailable` 状态 / flush warn / debug trace **三者至少一个** —— **`console.log` 不算**」），但本仓**没有承接它的东西** ⇒ 补的不是「意识」而是**承接物**：**一个台账**（`WriterCore.degrade` + 唯一写入口 `noteDegrade(core, capability, reason, effect)`，写侧直接调、读侧经 `ShadowQueryDeps` 注入）+ **一个渲染点**（`getFlushWarn()`，按能力名排序）—— 而 `flushWarn` 已被**每一个**读 handler 带在返回值里（60+ 处 `+ flushWarn`）⇒ **一处渲染，全部 mode 同时获得信号**。最刺眼的一例：`core/writer-llm.ts` 的**唯一**痕迹是 `if (opts.label) console.log(...)`，而 `recallSelect`/`knowledgeNavigate` 传 `label: ""` ⇒ **连 log 都没有**；更根本的是 `!llm` / `!route` / `finish.error\|aborted` **三条路径从不进 catch** ⇒ 即使有 label 也不出声 —— 现经 `StreamOpts.onSkip` 回传原因（**与 `label` 是否为空无关**）。**四条刻意取舍**：① **`effect` 必填** —— 可见的前提是说清**丢了什么**；② **用户显式 `enabled:false` 不留痕** —— 关掉是用户的选择，渲染成告警＝把读者的决定当故障；③ 同类**覆盖**不追加 —— 「一直坏着」与「刚刚坏」对读者是同一件事，追加只会刷屏成噪音；④ 渲染前**排序** —— `Map` 插入序会让逐字节比对的门禁变脆。**7 条处置**：`llmRecall`/`summary`/`recallExpansion`/`queryLog`（**默认开启**，改 `recordQueryObservation` 返 `boolean`）/`recallLedger`（`corrupt` 与 `unreadable` 分开且各带原因 —— 上一版留了 `corrupt` 标记却**没有消费者**＝等价于没留）/`episodes`（解析失败 ⇒ 该记忆从 Episodes/Decision 里**整个消失**；派生失败只有 `console.log`，而「没有 Episodes 段」与「暂无连续任务片段」**渲染成同一句话**）各上横幅；**第 6 条 `projectionStore` 裁定不加信号**，依据 `adr/0049:38` 的**行级豁免**（「缓存不是真相」，重建结果与命中缓存逐字节等价），并同时记下 **ADR 内部张力**（同份 ADR 的清单 `:45` 要求**每一个**增强都有信号、表里却给了豁免且清单没写例外），就地写明**失效条件**（缓存若将来参与答案，裁定立即失效）。**我在写测试时两次猜错读路径**（①用 `{topic}` 测 `queryLog`，实际在 `mode:"query"`；②用 `mode:"recovery"` 测 `recallLedger`，实际 `readLedger` 在**不传 mode** 的默认召回上，`recovery` 只是**复用**了前一轮的横幅）—— **两次都是「正对照」拦下来的**（第一版「健康 fs 下 query-log 必须真的落盘」当场变红，证明路径没走到、那句「没有横幅」是**假绿**）⇒ 新增探针 `.docs/fix/2026-09-12/t8a-read-path-map.ts` 用事实代替猜测。**未做**：`episodeParse`/`episodes` 只有接线无端到端触发 · `recallLedger` 写失败留痕未端到端触发 · 台账坏件会被覆盖（已在「后果」里写明，未改旁路写入）· `summary` 留痕是能力级非逐条级。 |
 | v1.15.64 | **回到泳道做 T8**（B 部分：**显式 0 被默认值吞掉**）+ 副产品：**比较点判据的两份实现**（`adr/0084`）；`verify` **54/54**。`adr/0083` §14.1 记下「M1 之后连续 **8 轮**做审查→修，`T8/T15/D1-3/A段/T2` **一项未动**」——本轮**回到泳道**做第一步 **T8**（B 部分判据已定、纯实现，不需决策）。**决定一（新纪律）**：`Math.max(0, Number(v) \|\| dflt)` 把「**显式 0**」与「**未传**」混为一谈 ⇒ 新增 **`core/util.ts:numOr`** 作**唯一判据**（错类型判为「未传」而非 0：写 `false`/`""` 几乎总意为「我没填」，读成 0 会**静默关掉一个功能**）；**同族共 6 处**（T8-B 原只记 2 处）—— 最重的是 `episodes.showInIndex: 0` 被 `\|\| 8` 吞 ⇒ `writer-materialize.ts:212` 的 `episodeShow > 0` **恒真 = 死分支**（「关掉 Episodes 段」这个开关**不存在**）；`abstracts.showInIndex: 0` 则是 **`core/types.ts:55` 明写**「0 = 不列」而代码不认。默认值只在 `deriveEpisodes` **落一次**（此前 `writer-core`/`episode`/`query/reads` **三处各写一遍** = 判据分叉，且三份都吞 0）。**决定二**：`typeof x === "<类型名>"` 是**定义上的假阳**（右侧是类型名、左侧是 `typeof` 的结果 ⇒ **必然**「无写入点」，但可达性由运行时类型决定，静态文本永远答不了）——**是闸门自己顶出来的**：加 `numOr` → `audit-wiring` 报 `b_keys` **115 → 116** → 修 wiring 那份 → `audit-drift` **紧接着**报 `drift_sites` **28 → 29**（键名不变 `v=string`、只多一处 site）⇒ 查出**同一个假阳有两份独立实现**，而 `audit-drift` **自述看不见 `tools/` 内部**的判据分叉（`isProductModulePath` 排除 `tools/`）⇒ 它抓得到产品代码里的分叉、**抓不到自己与兄弟工具之间那处**。修法：新增 **`tools/comparison-points.lib.ts`**（唯一来源），两工具改为调用它；**键怎么取两家伙刻意不同、不统一**（wiring 取最后一段、drift 取整条接收者链 —— 统一键 = 同时改变两个工具的含义），这句话写进文件头防后人「顺手统一」。**取证（不是估计）**：`.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts` 对 **18 个被减掉的键**逐键回 HEAD 语料断言「**每一处**出现点都带 `typeof ` 前缀」⇒ **18/18 通过、非 typeof 出现点 0 个**（判据等价性：某键只要有一处非 typeof 出现点就不会消失）。**我自己的错误（留档）**：探针**第一版自己写窄了**判据（用「匹配点之前紧邻 `typeof `」判，而 `typeof thing.agent === "object"` 的匹配点在最后一段 `agent` 上）⇒ 误报「9 个键**减多了**」的**假警报**；这与 §2 要修的是**同一个模式**（同一判据写两遍、其中一遍偏窄）——**判据收一处是每次写判据时的动作，不是一次性清理**。**红前绿后（实测）**：临时把 3 处调用点还原为 `\|\|` + 重 `tsc` ⇒ `test/t8-explicit-zero.test.ts` 的 `③b` **真红**（报文打印出修前索引仍含 `## 任务回溯（Episodes）` 段）。结果：`b_keys` 115→**97**·`drift_keys` 11→**9**·`drift_sites` 28→**23**·`numOr` 覆盖 **6** 处（`min <= 0`；`min > 0` 的 19 处**未动**）·`wiring.a_total` 仍 **39**（未变 ⇒ 新函数确有接线）·棘轮是**收紧**不是放宽。**未做**：T8 的 A 部分（7 处静默降级）· `min > 0` 的 19 处未逐条审语义 · `query/reads.ts:47` 端到端读路径未加断言。 |
 | v1.15.63 | **元审查：审我自己这 10 轮的产出**（**无代码变更**）。用户要求「审查：找出遗漏、纠正因果、处理重复、解决干扰、填补缺失环节」——这一轮审的**不是代码**，而是 `adr/0083`（14 节）+ `BACKLOG` §六/§七（**54 条**线索）这些**我自己产出的文档与过程**。**⭐ 最重的发现是「遗漏」：路线漂移** —— 用户 2026-09-12 定的泳道 `T8 → T15 → D1/D2/D3 → A段 → T2(B段) → …`，而我自 M1 之后连续 **8 轮**做「审查→修」，**T8/T15/D1-3/A段/T2 一项未动**；「review fix all」每轮都能自洽生出下一轮（线索越查越多）⇒ **这是会自我延续、不会自己停下来的活动**，**我此前从未把这件事写下来**（`adr/0083` §14.1）。**因果**：§六/§七 的「后果」列写法是断言，但相当部分来自只读审查的**静态推演**（报告者未跑测试），此前只在报告结尾整体标注、**没有逐行区分** ⇒ §7.0 加统一口径；并更正我自己的措辞（⑪ 应说「改**分桶判据**照样全绿」而非「改成任何东西」）。**重复**：「169→83」的更正曾在 **4 处**各写一遍 ⇒ **收口到 `BACKLOG` §6.10 为唯一权威**，其余改「一行 + 指向」；ADR 头部写明分工（ADR=决策与理由 / BACKLOG=台账与状态）。**干扰（四处全修）**：BACKLOG 表头「现存 20 条」与正文 54 条线索**矛盾** ⇒ 改「两套台账分开计数」；「169 个测试类型错误」在该文件**残留 4 处**（一处还写「仍未修」）而实际早已 **83→0** ⇒ 全改；`### 6.11` **被追加到 §七 之后** ⇒ 移回并核对顺序；ADR 标题只覆盖第一轮而实际 **14 节/跨 10 轮**、§5 指向「审查线索一节」 ⇒ 标题与指针改正。**缺失环节**：54 条线索**没有优先级、没有归属 ⇒ 有记录但不可行动** ⇒ 补 `BACKLOG` **§6.0/§7.0 分级表**（P0/P1/P2+判据+归属）；**仍未补**（如实列出）：线索表缺「状态·优先级·证据等级·归属泳道」四栏重构、「线索→修复」无机械核对链接、ADR 无「哪几轮被独立复核过」索引。**我自己的一处操作事故**：调整 `BACKLOG.md` 章节顺序时用 `Set-Content -Value <数组> -NoNewline` ⇒ PowerShell **把数组直接拼接不插换行**，1540 行压成 **1 行**（163KB，内容未丢、结构全毁）；用 `git checkout --` 恢复后改为「单字符串 + `-NoNewline`」重做 ⇒ 纪律：**改大文件章节顺序前先确认工作树可回退，且不要用数组喂 `-NoNewline`**。`verify` 仍 **53/53** |

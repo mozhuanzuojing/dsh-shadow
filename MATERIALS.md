@@ -36,7 +36,7 @@
 | 面 | 规模 | 状态 |
 |---|---|---|
 | `docs/` | **357 文件 / 3.85 MB** | ✅ 部分深读（架构 / cordis-primer / capability-seams / agent-lifecycle / config-catalog / api-gateway / **postmortem 0001**）；未读面仍大 |
-| `vendor/cordis` + 另 8 包 | 218 文件 / 1.4 MB | ✅ **已读关键面**：`loader/src/config/isolate.ts`（隔离继承）、`loader/src/index.ts:192-199`（`unwrapExports`）、`cordis/src/reflect.ts`（`get` 与代理陷阱）——**三处与运行面 0.1.5-rc.2 逐字节相同**（v1.15.43 核对） |
+| `vendor/cordis` + 另 8 包 | 218 文件 / 1.4 MB | ✅ **已读关键面**：`loader/src/config/isolate.ts`（隔离继承）、`loader/src/index.ts-199`（`unwrapExports`）、`cordis/src/reflect.ts`（`get` 与代理陷阱）——**三处与运行面 0.1.5-rc.2 逐字节相同**（v1.15.43 核对） |
 | `.agents/` | **2,459 文件 / 12.5 MB** | ⚠ 只做**结构索引**（agent 预设/技能/指令层的组织方式），未逐个读 |
 | `packages/` | 12,492 文件 / 94 MB | ⚠ 按需局部读了：`runtime-diagnostics/invariants`（全文）、`bundle/{base,web-app,sdk-minimal}/cordis.patch.yml`、`preset/agent-presets/presets/*`、`packages/AGENTS.md`；**其余未读** |
 | `apps/` `native/` `python/` `website/` `snapshots/` | 545 / 54 / 36 / 8 / 626 文件 | ❌ 未读 |

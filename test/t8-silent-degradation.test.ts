@@ -285,12 +285,12 @@ import * as mod from "../dist/index.js";
   // （第一版这里用默认 topic 召回路径调，正对照当场变红，暴露了代码路径没走到。）
   assert.ok(qHealthy.observed, "**正对照**：健康 fs 下 query-log 必须真的落盘");
   assert.ok(!qHealthy.first.includes("能力降级") && !qHealthy.second.includes("能力降级"),
-    `**负对照**：queryLog 正常时不得出现任何降级横幅；实际 ${JSON.stringify(qHealthy.second.slice(0, 300))}`);
+    `**负对照**：queryLog 正常时不得出现任何降级横幅；实际 ${JSON.stringify(qHealthy.second.slice(-300))}`);
 
   const qBroken = await run("query", { topic: "pkg-a" }, qDeny, sawQueryLog);
   assert.equal(qBroken.observed, false, "**正对照**：拒绝写 query-log 时文件不应存在（证明 fs 桩真的拦住了）");
   assert.ok(qBroken.second.includes("能力降级") && qBroken.second.includes("queryLog"),
-    `T8 第 4 条（**默认开启**的观测层写失败）必须在读者可见处出现；实际 ${JSON.stringify(qBroken.second.slice(0, 600))}`);
+    `T8 第 4 条（**默认开启**的观测层写失败）必须在读者可见处出现；实际 ${JSON.stringify(qBroken.second.slice(-600))}`);
   console.log("✔ ⑤a 端到端 queryLog：写失败 ⇒ 输出出现「能力降级 · queryLog」；正常 ⇒ 零横幅（正/负对照齐备）");
 
   // ── (B) `recallLedger`：`readLedger` 在**默认召回路径**上（不传 `mode`；`query/query.ts:332`）──
@@ -305,20 +305,34 @@ import * as mod from "../dist/index.js";
   // 而不是「只要有这个文件就报」。
   const lOk = await run(undefined, { topic: "pkg-a" }, {}, undefined, {}, validLedger);
   assert.ok(!lOk.second.includes("recallLedger"),
-    `**负对照**：合法台账不得出现 recallLedger 横幅（否则横幅只是「文件存在」的回声）；实际 ${JSON.stringify(lOk.second.slice(0, 400))}`);
+    `**负对照**：合法台账不得出现 recallLedger 横幅（否则横幅只是「文件存在」的回声）；实际 ${JSON.stringify(lOk.second.slice(-400))}`);
 
   // 正：坏件（能读到、解析失败）
   const lCorrupt = await run(undefined, { topic: "pkg-a" }, {}, undefined, {}, "{ this is not json");
   assert.ok(lCorrupt.second.includes("recallLedger"),
-    `T8 第 5 条（台账坏件 ⇒ 冷却窗口整体作废）必须可见；实际 ${JSON.stringify(lCorrupt.second.slice(0, 600))}`);
+    `T8 第 5 条（台账坏件 ⇒ 冷却窗口整体作废）必须可见；实际 ${JSON.stringify(lCorrupt.second.slice(-600))}`);
   assert.match(lCorrupt.second, /坏件/, "横幅必须说清是「坏件」还是「读不到」—— 两者的处置不同");
 
   // 正：读不到（`resolve`/`readText` 抛错）—— 旧版这个 catch **什么都不带**地回落空台账
   const lUnreadable = await run(undefined, { topic: "pkg-a" }, { read: (p: string) => p.includes("_recall_log.json") });
   assert.ok(lUnreadable.second.includes("recallLedger"),
-    `台账**读不到**也必须可见；实际 ${JSON.stringify(lUnreadable.second.slice(0, 600))}`);
+    `台账**读不到**也必须可见；实际 ${JSON.stringify(lUnreadable.second.slice(-600))}`);
   assert.match(lUnreadable.second, /读不到/, "「读不到」与「坏件」是两个不同的原因，不得混成一句");
   console.log("✔ ⑤b 端到端 recallLedger：坏件 / 读不到 各自可见且原因可区分；合法台账 ⇒ 零横幅（负对照）");
+
+  // ── (C) `abstracts`（目录摘要 sidecar）：T8-A **漏项**，v1.15.65 复查时补上 ──
+  //    为什么它不是「正当静默」那一类：写失败时 `writeAbstracts` 会 `continue`，
+  //    于是该日期目录的 L0 **不再被写进 `_index.md`** ⇒ **读者拿到的内容变了**（索引少一行）。
+  //    判据见 `core/projection-store.ts` 的「正当静默类判据」。这条正是我上一轮
+  //    「站在同一个 `catch` 旁边却没给它加信号」的漏项。
+  const abDeny = { write: (p: string) => p.includes("_abstract.md") };
+  const abHealthy = await run(undefined, {}, {}, undefined, {}, undefined);
+  assert.ok(!abHealthy.second.includes("abstracts"),
+    `**负对照**：sidecar 正常时不得出现 abstracts 横幅；实际 ${JSON.stringify(abHealthy.second.slice(-400))}`);
+  const abBroken = await run(undefined, {}, abDeny);
+  assert.ok(abBroken.second.includes("abstracts"),
+    `目录摘要 sidecar 写失败必须可见（索引会少一行 ⇒ 内容变了）；实际 ${JSON.stringify(abBroken.second.slice(-600))}`);
+  console.log("✔ ⑤c 端到端 abstracts：sidecar 写失败 ⇒ 横幅可见（索引少一行是内容变化，不属于正当静默）；正常 ⇒ 零横幅");
 }
 
 console.log("ALL PASS ✅");

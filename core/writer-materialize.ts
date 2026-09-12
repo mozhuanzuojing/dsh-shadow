@@ -170,6 +170,12 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
         await fs.writeText(t, text);
       } catch (e: any) {
         console.log("[dsh-shadow] abstract sidecar write failed:", e && e.message);
+        // T8-A 漏项（v1.15.65 补）：这一条**不是**「正当静默」那一类（判据见 `core/projection-store.ts`）——
+        // 下面的 `continue` 会让该日期目录的 L0 **不再被写进 `_index.md`**（`sections.push` 被跳过）
+        // ⇒ **读者拿到的内容变了**（索引里少一行），且 sidecar 文件也不存在。
+        // 我上一轮修 T8-A 时就站在这个 `catch` 旁边，却没给它加信号 —— 而这正是
+        // `README` 自己标的「**部分可见**：索引里看不到它，但无显式 warn」。
+        noteDegrade(core, "abstracts", `目录摘要 sidecar 写失败（${e && e.message}）`, `该日期目录的 L0 **不会出现在 \`_index.md\` 里**（索引少一行），且 sidecar 文件不存在 ⇒ 「这个目录没有摘要」与「写失败了」在读数上不可区分`);
         continue;   // 一个目录写失败不影响其余；也不把它列进 `_index.md`（避免指向不存在的摘要）
       }
       sections.push(`- ${date}（${faces.length} 条）${deriveL0(l1)}`);

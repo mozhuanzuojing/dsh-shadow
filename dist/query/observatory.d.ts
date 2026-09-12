@@ -89,5 +89,16 @@ export declare const buildFitnessReport: (agg: any, parsed: ParsedMemory[]) => {
     evByCreatedBy: any;
 };
 export declare const renderFitnessReport: (r: any) => string;
-/** 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。 */
+/**
+ * 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。
+ *
+ * **裁定：这里的静默是正当的**（判据见 `core/projection-store.ts` 的「正当静默类判据」）——
+ * 报告**正文**由调用方 `query/reads.ts:259` **原样返回给读者**，落盘只是留一份副本
+ * ⇒ 写失败时**读者拿到的内容逐字节不变**。
+ * 这正是它与 sidecar 写失败的区别（后者会让 `_index.md` 少一行 ⇒ 必须有信号）。
+ *
+ * **残留风险（写给后来者）**：本函数的**调用点**在 `mode:"shadow-report"` 的输出里说
+ * 「生成 `.shadow/shadow-report.md`」，而这句话在写失败时**不成立**且无处可知。
+ * 若将来有人依赖「跑过就一定有这个文件」，这条裁定要重新审 —— 那时它就不再是「冗余副本」了。
+ */
 export declare const writeShadowReport: (fs: any, ws: string, text: string) => Promise<void>;

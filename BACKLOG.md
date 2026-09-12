@@ -267,7 +267,7 @@
 
 - **原线索**：审计 B 类报 `status=archived` 无写入者（`core/forget.ts:18`、`core/lifecycle.ts:28`）。
 - **分诊中扩展**（第 9 轮）：**`pinned` 同样无写入者** —— 生产代码只写 `pinned: false`
-  （`core/memory.ts:74`、`core/writer-materialize.ts:88`、`query/query.ts:401` 三处），
+  （`core/memory.ts:74`、`core/writer-materialize.ts`、`query/query.ts` 三处），
   **`pinned: true` 全仓零处**（三路 grep 核实：字面量、`pinned:`、`pinned =`）。
 - **两者的可达性**：
   | 状态 | 读点 | 语义 | 生产可达？ |
@@ -425,77 +425,66 @@
   ② 删除（并确认 `TemporalEdge.relation` 的取值不依赖它）；③ 保留并**改签名去掉未用形参**
   （`(_n: any)` → `()`），使「它不消费输入」在类型层面显式。
 
-### T8. **静默降级** —— ADR-0049 的 7 条候选缺陷 + 2 处开关缺陷（D8 实测产出）
+### T8. **静默降级** —— ADR-0049 的 7 条候选缺陷 + 2 处开关缺陷（D8 实测产出）—— ✅ **已结案（B: v1.15.64 / A: v1.15.65）**
 
 - **依据**：`adr/0073-hl-mem-benchmark.md` §2 行① / §3（D8）；**D8 实测**（逐条读代码，见 `README.md`「默认开关」表的**降级行为**列与表注）。
 - **判据**：ADR-0049 的枚举是「`unavailable` 状态 / flush warn / debug trace **三者至少一个**」——
   **`console.log` 不算**。据此，以下 7 条关掉或缺件后**行为退到某处却无任何可见信号**：
 
-  | # | 能力 | 位置 | 静默形态 |
-  |---|---|---|---|
-  | 1 | `llmRecall` | `core/writer.ts:62,64,73` + `core/writer-llm.ts:37` + `query/reads.ts:94-96` | 回退确定性 `renderRecovery` **无标记**；`label:""`（`writer.ts:70`）使 catch 的日志分支也不触发 ⇒ **连 log 都没有**（最彻底） |
-  | 2 | `summary` | `core/writer-materialize.ts:70,72,80,180` + `writer-llm.ts:22,31` | 缺 llm/route/finish 出错**均提前 `return ""`**（不记日志）⇒ 文件里只是「没有摘要」，与「尚未生成」不可区分 |
-  | 3 | `recall`（语义 B 档） | `core/writer.ts:94,96` + `query/query.ts:159-164` | `expandTerms → []`，输出与「本来就没配」完全一致。`README.md` 自己写「**静默**退回 A 档」= 文档已承认，但代码未给三条信号中任何一条 |
-  | 4 | `queryLog`（**默认开**） | `query/observatory.ts:76`（`catch {}`，注释自陈「写失败静默」） | 观测数据丢失，读侧显示「尚无记录」⇒ 与「从没查过」不可区分。**默认开启项里的静默 ⇒ 优先级最高** |
-  | 5 | `recall.cooldownTurns` | `retrieval/ledger.ts:11-13`（读失败静默当空台账）+ `:21-23`（写失败仅 `console.log`） | 冷却**静默失效**；`README.md` 亦自陈「写失败降级为『不去重』」 |
-  | 6 | `projectionStore` | `core/projection-store.ts:58,61,171-180` | 缓存读失败/坏行 → 全量重建，零信号。**区别于前五条**：结果**仍正确**（ADR-0049:38 明列「缓存不是真相」），只损失性能 ⇒ **优先级最低** |
-  | 7 | `episodes` | `core/writer-materialize.ts:37`（解析失败静默）、`:165-167`（derive 失败仅 log）、**`:173-175`（写 `_index.md` 失败仅 log）** | ③ 最重：`read_shadow()` 无参读到**静默陈旧**的索引 —— 与 **ADR-0069 同族**，而 ADR-0069 只修了「新鲜度问源」，**未给 rebuild 失败加可见信号** |
+> **⚠ 这张表是 `v1.15.34` 的立账快照，保留原样**（以免丢失「当时查到什么」）。
+> 它的**位置列已按引用纪律换成符号名** —— 原始行号（如 `core/writer-core.ts` **第 69 行**）在后续版本里
+> 早已漂移，留着一串查不到东西的行号比不留更糟（见 `AGENTS.md`「引用纪律」）。
+> **当前状态与修法见下面的「状态」小节**；本节**不复制** ADR 的表（同一件事只写一处）。
 
-- **另两处**开关/取默认值缺陷（同轮实测产出，**不是降级问题**）：
-  1. **`episodes` 关不掉**：`showInIndex: 0` 被 `core/writer-core.ts:69` 的 `|| 8` 吞掉 ⇒
-     `writer-materialize.ts:161` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
-     ⇒ 两处 `Math.max(0, …)` 永不生效。**根因**：用 `||` 取默认把「显式 0」与「未传」混为一谈。
+  | # | 能力 | 位置（符号，非行号） | 静默形态（v1.15.34 实测） |
+  |---|---|---|---|
+  | 1 | `llmRecall` | `core/writer.ts` 的 `recallSelect` + `core/writer-llm.ts` 的 `streamText` catch | 回退确定性 `renderRecovery` **无标记**；`label:""` 使 catch 的日志分支也不触发 ⇒ **连 log 都没有**（最彻底；且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） |
+  | 2 | `summary` | `core/writer-materialize.ts` 的 `summarizeTurn` / `patchSummary` | 缺 llm/route/finish 出错**均提前 `return ""`**（不记日志）⇒ 文件里只是「没有摘要」，与「尚未生成」不可区分 |
+  | 3 | `recall`（语义 B 档） | `core/writer.ts` 的 `expandTerms` + `query/query.ts` 的召回打分段 | `expandTerms → []`，输出与「本来就没配」完全一致。`README.md` 自己写「**静默**退回 A 档」= 文档已承认，但代码未给三条信号中任何一条 |
+  | 4 | `queryLog`（**默认开**） | `query/observatory.ts` 的 `recordQueryObservation`（`catch {}`，注释自陈「写失败静默」） | 观测数据丢失，读侧显示「尚无记录」⇒ 与「从没查过」不可区分。**默认开启项里的静默 ⇒ 优先级最高** |
+  | 5 | `recall.cooldownTurns` | `retrieval/ledger.ts` 的 `readLedger`（读失败静默当空台账）+ `writeLedger`（写失败仅 `console.log`） | 冷却**静默失效**；`README.md` 亦自陈「写失败降级为『不去重』」 |
+  | 6 | `projectionStore` | `core/projection-store.ts` 的 `load` / `invalidate` / `invalidateFor` | 缓存读失败/坏行 → 全量重建，零信号。**区别于前五条**：结果**仍正确**（ADR-0049:38 明列「缓存不是真相」），只损失性能 ⇒ **优先级最低** |
+  | 7 | `episodes` | `core/writer-materialize.ts` 的 `recOf`（解析失败静默）、Episodes 派生段（derive 失败仅 log）、`rebuildIndex` 写 `_index.md` | ③ 最重：`read_shadow()` 无参读到**静默陈旧**的索引 —— 与 **ADR-0069 同族**，而 ADR-0069 只修了「新鲜度问源」 |
+
+- **另两处**开关/取默认值缺陷（v1.15.34 立账，**均已在 v1.15.64 修复**，见下「状态」）：
+  1. **`episodes` 关不掉**：`showInIndex: 0` 被 `core/writer-core.ts` 的 `|| 8` 吞掉 ⇒
+     `core/writer-materialize.ts` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
+     ⇒ `Math.max(0, …)` 永不生效。**根因**：用 `||` 取默认把「显式 0」与「未传」混为一谈。
   2. **`kg` 被排在「默认」列**却不是 config 键（只是 per-call 参数）⇒ 已在 README 表注⑤标明。
-- **✅ B 部分已完成（v1.15.64 / `adr/0084`）** —— 上面「另两处」+ 读代码时找出的 **4 个同族遗漏**全部修掉：
 
-  | # | 位置 | 承诺 0 有意义的出处 | 原被吞成 |
-  |---|---|---|---|
-  | 1 | `core/writer-materialize.ts` 的 `abstracts.showInIndex` | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 |
-  | 2 | `core/writer-core.ts` 的 `episodes.showInIndex` | 本条立账 | 8 |
-  | 3 | `core/writer-core.ts` 的 `episodes.gapMinutes` | 本条立账 | 60 |
-  | 4 | `core/episode.ts` 的 `deriveEpisodes`（**库层**） | 同 3 | 60 |
-  | 5 | `core/writer-materialize.ts` 的 `compact.gapMinutes` | 同 3 | `episodeGap` |
-  | 6 | **`query/reads.ts`** 的 `episodes.gapMinutes` | 同 3 | 60（**第三处口径分叉**） |
+#### T8 状态（本台账只记**状态与指向**，不复制 ADR 的表 —— 同一件事只写一处）
 
-  **新纪律（`adr/0084` §2）**：判据收一处 —— `core/util.ts:numOr(v, dflt, min)`；
-  **错类型（`false` / `""` / 对象）判为「未传」而不是 0**（读成 0 会静默关掉一个功能）；
-  `min > 0` 的调用点**不属本条**（本仓 25 处 `Number(x) || dflt` 里只有 `min <= 0` 的 6 处）；
-  `forget.minHits` 的 `|| 1` **判为正当并保留**（`minHits: 0` = 关掉遗忘，而该语义已由 `enabled: false` 承担）。
-  **副产品**：`typeof x === "<类型名>"` 是**定义上的假阳**，而「什么算一个比较点」此前有**两份实现**
-  ⇒ 收进 `tools/comparison-points.lib.ts`（`b_keys` **115→97**、`drift_keys` **11→9**、`drift_sites` **28→23**；
-  **逐键取证**见 `.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts`，18/18）。
-  **仍待办**：`min > 0` 的 19 处**未逐条审语义**（本轮只按必要判据 `min <= 0` 筛）。
-- **✅ A 部分已完成（v1.15.65 / `adr/0085`）—— 6 条上信号，1 条裁定为正当静默**。
-  机制：**一个台账 + 一个渲染点** —— `WriterCore.degrade`（唯一写入口 `noteDegrade(core, capability, reason, effect)`）
-  渲染进 `getFlushWarn()`（唯一渲染点）；而 `flushWarn` 已被**每一个**读 handler 带在返回值里
-  ⇒ **一处渲染，全部 mode 同时获得信号**。
+| 部分 | 版本 | 决策记录（**权威表在这里**） | 结果 |
+|---|---|---|---|
+| **B**：显式 0 被默认值吞掉（**6 处**，含读代码时找出的 4 处同族遗漏）+ 比较点判据两份实现 | `v1.15.64` | `adr/0084` §2.1 缺陷表 · §2.2 判据 · §3.3 工具 · §5 结果 | `#1` 🔴 |
+| **A**：7 条静默降级 + 复查时补的第 8 条（`abstracts`） | `v1.15.65` | `adr/0085` §2 机制 · §5 正当静默类判据 · §6 落地清单 · §8.5 self-fix | `verify` 55/55 |
 
-  | # | 能力 | 形态 |
-  |---|---|---|
-  | 1 | `llmRecall` | `streamText` 的 `onSkip` → 台账 + 横幅（原来 `label:""` ⇒ **连 log 都没有**） |
-  | 2 | `summary` | 同上（「没有摘要」与「尚未生成」在文件表面完全一样） |
-  | 3 | `recallExpansion` | 同上（`README` 自称「**静默**退回 A 档」） |
-  | 4 | `queryLog`（**默认开启**） | `recordQueryObservation` 改返 `boolean` → 调用点留痕 |
-  | 5 | `recallLedger` | `readLedger` 区分 `corrupt`/`unreadable`（各带原因）→ 调用点留痕；**上一版的 `corrupt` 标记没有消费者 ⇒ 等价于没留** |
-  | 6 | `projectionStore` | **裁定不加信号**：`adr/0049:38` 行级豁免（「缓存不是真相」，重建结果与命中缓存逐字节等价）。⚠ 同份 ADR 的清单 `:45` 要求每个增强都有信号、表里却给豁免 —— 就地写明「按行级豁免执行」+ **失效条件** |
-  | 7 | `episodes` / 解析 | 台账 + 横幅（①解析失败 ⇒ 该记忆从 Episodes/Decision 里**整个消失** ②派生失败渲染成「暂无连续任务片段」） |
-
-  **未做 / 缺口（不是已验证）**：`episodeParse` / `episodes` 两个生产者**只有接线、没有端到端触发**
+- **B 的结果**：`audit-wiring` `b_keys` **115→97**（−18，**逐键取证** 18/18，见 `.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts`）·
+  `drift_keys` **11→9** · `drift_sites` **28→23** · `wiring.a_total` 仍 **39**（未变 ⇒ 新 `numOr` 确有接线）。
+  新纪律：`core/util.ts:numOr`（默认值回落的唯一判据）；`forget.minHits` 的 `|| 1` **判为正当并保留**
+  （`minHits: 0` = 关掉遗忘，而该语义已由 `enabled: false` 承担）。
+  **仍待办**：`min > 0` 的调用点**未逐条审语义**（当时 `core/` 下 19 处，本轮只按必要判据 `min <= 0` 筛）。
+- **A 的结果**：**8 条里 7 条上了可见信号**（统一进「能力降级台账」→ `getFlushWarn()` 横幅，
+  一处渲染覆盖全部读 mode），**1 条裁定为正当静默**（`projectionStore`；**类判据**＝
+  「读者拿到的内容逐字节不变」⇒ 冗余副本可静默，改变内容的必须报，见 `adr/0085` §5.1）。
+- **A 的未做 / 缺口（不是已验证）**：`episodeParse` / `episodes` 两个生产者**只有接线、没有端到端触发**
   （本仓夹具没有能让 `parseMemory`/`deriveEpisodes` 抛异常的输入）· `recallLedger` 的**写失败**留痕未端到端触发
   （需 `cooldownTurns>0 && servedDetail.length`）· `knowledgeNavigate` 的留痕无专门断言 ·
   **一次观察未修**：台账坏件时本回合若走到写台账会**覆盖**坏件（已在横幅「后果」里写明，未改旁路写入）。
 - **已在本轮修掉的同类（第 3 处）**：`knowledgeEngine.enabled` **生产零读取** ——
-  `query/reads.ts:141` 无条件建树、`createKnowledgeEngine` 收 `config` 却从不使用（**已删死形参**）。
+  `query/reads.ts` 无条件建树、`createKnowledgeEngine` 收 `config` 却从不使用（**已删死形参**）。
   ⇒ 原文档声称的「默认关 / `enabled: true` 启用」是**一处不存在的开关**，已在
   `core/types.ts:36` 与 README 表注④就地校正。**这是本轮 D8 唯一的代码改动。**
-- **为什么现在没做（诚实标注）**：7 条各需**不同的可见信号形态**（有的该打 warn、有的该在输出里加标记、
+- **为什么当时没做（v1.15.34 的诚实标注，保留）**：7 条各需**不同的可见信号形态**（有的该打 warn、有的该在输出里加标记、
   有的该复用已有的 `flushWarn` 横幅），且第 6 条按 ADR-0049 的「缓存不是真相」**可能根本不该报**。
-  ⇒ 逐条定形态是**独立工作量**，本轮只做**清点与立账**（D8 的授权范围是「补表 + 记缺陷」）。
+  ⇒ 逐条定形态是**独立工作量**，当时只做**清点与立账**（D8 的授权范围是「补表 + 记缺陷」）。
+  **事后看**：这条判断**对了一半** —— 形态确实各异，但 v1.15.65 发现它们**可以共用一个渲染点**
+  （`getFlushWarn()`），于是「逐条定形态」的边际成本远低于当时的估计。
+  ⇒ 教训：**「逐条都要单独做」这个判断，本身应该被验证一次**再拿来当排期理由。
 - **完成判据**：7 条各落「补可见信号（给形态 + 测试）」或「判定为正当静默（给 ADR-0049 依据）」；
   两处开关缺陷各修（`||` → `??` 或显式 `undefined` 判定）+ 加锁。
-  **进度：B 部分 ✅ 已闭（v1.15.64）；A 部分 ✅ 已闭（v1.15.65，6 条上信号 + 1 条裁定）；
-  T8 整体可结案 —— 剩余三项缺口（`episodeParse`/`episodes` 无端到端触发、`recallLedger` 写失败无端到端触发、
-  台账坏件会被覆盖）已分别记在上方「未做 / 缺口」里。**
+  **✅ 全部满足**：B 部分 v1.15.64（`adr/0084`）；A 部分 v1.15.65（`adr/0085`，7/8 上信号 + 1 条裁定，
+  复查时另补第 8 条 `abstracts`）。**剩余缺口**见上方「A 的未做 / 缺口」，**已结案**。
 
 ### T9. sidecar 的**读路径收益**与**真机规模**均未测（D6 交付后的诚实缺口）
 
@@ -638,7 +627,7 @@
   |---|---:|---|
   | `core` 不得碰 `node:fs` | 1 | `core/toolset-exec.ts:19`（它是**执行器**，不是纯派生） |
   | `core` 不得碰 `node:child_process` | 1 | 同上 `:18` |
-  | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts:12,13` |
+  | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts,13` |
   | `query` 不得 import `persistence` | 4 | `query/materialize.ts:4,5` / `query/query.ts:6,7`（读路径**本来就要**读落盘文件） |
   ⇒ **`core/` 不是「纯函数层」，是「脊柱」**（`paths`/`types`/`util` 无依赖；`memory`/`writer-materialize`/`toolset-exec` 有副作用）。
   **照搬目录分层 = 当轮就红的门 = 假闸门** ⇒ **改判据对象**（完成判据 ① 的「先改表」即此）。
@@ -892,7 +881,7 @@
      | # | 平面 | 结论 | 关键证据 |
      |---|---|---|---|
      | 1 | `isolate` 继承语义 | **一致** | 运行面 `cordis-plugin-loader/src/config/isolate.ts` 与克隆面 `vendor/loader/src/config/isolate.ts` **SHA256 相同**（各 173 行；loader 1.0.2/1.0.3 该文件都同哈希）⇒ 克隆面行号（`:98`/`:99-101`/`:123`）**可直接引用** |
-     | 2 | `export default` 丢命名空间（含 `inject`） | **一致** | 运行面 `src/index.ts:192-199` 与克隆面**逐字相同**，`exports = exports.default ?? exports` 仍在（`:194`）；`lib/index.js:746` 亦有 ⇒ postmortem 0001 的结论**对运行面仍成立** |
+     | 2 | `export default` 丢命名空间（含 `inject`） | **一致** | 运行面 `src/index.ts-199` 与克隆面**逐字相同**，`exports = exports.default ?? exports` 仍在（`:194`）；`lib/index.js:746` 亦有 ⇒ postmortem 0001 的结论**对运行面仍成立** |
      | 3 | `ctx.get` vs 属性代理 | **一致** | 运行面 `cordis/src/` **9/9 文件**与克隆面同哈希；`get` 在 `reflect.ts:233-243`、代理陷阱 `:136-171`（ancestor-only 走链 `:155-166`）⇒ `packages/AGENTS.md` 的说法仍准确 |
      | 4 | `dsh-base` 组合行 | **已变** | 克隆 86 id / 运行 84 id；**只在克隆面有**：`tool-str-replace-editor`（克隆 `base:428`）、`tool-subagent-report`（`:376`）；只在运行面有 **0**。`dsh-tool-subagent-report` **包已退役**（双树均无），`str-replace-editor` 包仍在磁盘但**无任何行挂载** |
      | 5 | `dsh-web-app` 组合行 | **已变** | 克隆 85 / 运行 94；**只在运行面有 10**（`open-in-app:65`、`ui-open-in-app:72`、`session-turn-outline:91`、`workspace-files:110`、`file-upload:192`、`resources:217`、`ui-sidebar-right:224`、`ui-sidebar-documentpreview:230`、`ui-sidebar-files:234`、`ui-schedule:306`）；只在克隆面有 1（`tool-str-replace-editor`） |
@@ -928,7 +917,7 @@
 - **依据**：`adr/0062-wiring-audit.md` §3。
 - **现状**：`core/change-set.ts`（83 行）与 `ShadowProjectionStore.invalidateFor?()`
   **生产中未接线** —— 唯二消费者是两个测试；生产只在**类型位置**提到它；
-  实际走的是**粗粒度清空** `invalidateProjection`（`core/writer-materialize.ts:213`）。
+  实际走的是**粗粒度清空** `invalidateProjection`（`core/writer-materialize.ts`）。
 - **已明确**：**不是正确性缺陷**（投影缓存是可重建派生，清空后下次读自动重建 ⇒ 粗粒度路径正确）。
   它是 `ADR-0048⑤` 的**未接线优化**。
 - **接线的代价（已查明）**：需要**写侧新增变更跟踪** —— 现有 `rebuildIndex` 走 `listMemories`
@@ -1066,7 +1055,7 @@
 ### D7. `hits` 的范围：其它读入口（`shadow_query` / `recall_shadow` / `episode`…）算不算命中？
 
 - **依据**：`adr/0067-hit-accumulation-trigger.md`「备选」表末行（本轮**有意不顺手做**）。
-- **现状（实测）**：`hits` / `confirmedBy` **只在主题召回路径累积**（`query/query.ts:397`，
+- **现状（实测）**：`hits` / `confirmedBy` **只在主题召回路径累积**（`query/query.ts`，
   即 `read_shadow({topic})` 不带 `mode`）。以下入口**都不累积**：
   - `shadow_query`（`mode:"query"`，走 `read_shadow` 的 `shadowQuery` ReadQuery）；
   - `recall_shadow`（→ `mode:"recovery"`，**用户最常用的恢复入口**）；

@@ -35,12 +35,12 @@
 
 | # | 位置 | 承诺 0 有意义的**出处** | 被吞成 | 后果 |
 |---|---|---|---|---|
-| 1 | `core/writer-materialize.ts:166` `abstracts.showInIndex` | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 | 文档承诺与代码不符；`!show` 分支**永不可达** |
-| 2 | `core/writer-core.ts:77` `episodes.showInIndex` | T8-B 立账时判定 | 8 | `writer-materialize.ts:212` 的 `episodeShow > 0` **恒真 = 死分支** ⇒「关掉 Episodes 段」**这个开关不存在** |
-| 3 | `core/writer-core.ts:76` `episodes.gapMinutes` | T8-B 立账时判定 | 60 | 无法表达「同一分钟才算同一段」 |
-| 4 | `core/episode.ts:230` `deriveEpisodes` 的 `gapMinutes` | 同 3（**库函数层**） | 60 | 同上；且它是**默认值的实际落点** |
-| 5 | `core/writer-materialize.ts:92` `compact.gapMinutes` | 同 3 | `episodeGap` | 同上 |
-| 6 | `query/reads.ts:47` `episodes.gapMinutes` | 同 3 | 60 | 同上，**且是第三处口径分叉** |
+| 1 | `core/writer-materialize.ts` 的 `writeAbstracts` → `abstracts.showInIndex`（**修前**在此行取默认） | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 | 文档承诺与代码不符；`!show` 分支**永不可达** |
+| 2 | `core/writer-core.ts` 的 `createWriterCore` → `episodes.showInIndex` | T8-B 立账时判定 | 8 | `core/writer-materialize.ts` 的 `rebuildIndex` 里 `episodeShow > 0` **恒真 = 死分支** ⇒「关掉 Episodes 段」**这个开关不存在** |
+| 3 | `core/writer-core.ts` 的 `createWriterCore` → `episodes.gapMinutes` | T8-B 立账时判定 | 60 | 无法表达「同一分钟才算同一段」 |
+| 4 | `core/episode.ts` 的 `deriveEpisodes` 的 `gapMinutes` | 同 3（**库函数层**） | 60 | 同上；且它是**默认值的实际落点** |
+| 5 | `core/writer-materialize.ts` 的 `runCompact` → `compact.gapMinutes` | 同 3 | `episodeGap` | 同上 |
+| 6 | `query/reads.ts` 的 episode/decision 读查询 → `episodes.gapMinutes` | 同 3 | 60 | 同上，**且是第三处口径分叉** |
 
 **#6 是「找出遗漏之处」的产物**：`episodes.gapMinutes` 的默认值算法此前在**三个地方各写一遍**
 （`writer-core.ts` / `episode.ts` / `query/reads.ts`）——**判据分叉**，而三份都吞 0。
@@ -63,16 +63,20 @@ numOr(v, dflt, min = 0)
    *代价（已知）*：`numOr(true, 60)` 从修前的 `1` 变成 `60`。`true` 作为数值是垃圾输入，
    回落默认值比静默取 1 更诚实。
 2. **`min > 0` 的调用点不纳入本次修复**。那些点上 0 本就不是合法值，回落默认值才是对的
-   （`Math.max(1, Number(0) || 80)` 恒为 1，与 `dflt=80` 不同）。本仓 25 处 `Number(x) || dflt`
-   中，只有 `min <= 0` 的 6 处属于本条 —— **其余保持原样**，不在本轮扩大范围。
+   （`Math.max(1, Number(0) || 80)` 恒为 1，与 `dflt=80` 不同）。
+   **口径更正**（元审查 self-fix）：我原先写「本仓 **25 处** `Number(x) || dflt`」——
+   那是一次 `Select-String` 在 **`core/*.ts`** 上的**快照**（且是**修前**的），不是「本仓」全量，
+   修后这个数字也不再是 25（6 处已换掉）。**能站住的说法**：
+   「`core/` 下当时有 25 处 `Number(x) || dflt`，其中 `min <= 0`（即显式 0 可能有意义）的 6 处属本条」。
+   数字要带**范围**与**时刻**，否则它会在下一次改动后变成一句无人能复核的断言。
 3. **默认值只在库函数里落一次**。`deriveEpisodes` 是 `gapMinutes` 默认值的**唯一落点**；
-   `writer-core` 与 `query/reads` **原样传配置**（`episode.ts:230` 注释里写明）。
+   `writer-core` 与 `query/reads` **原样传配置**（`core/episode.ts` 的 `deriveEpisodes` 注释里写明）。
 
 ### 2.3 裁定：`forget.minHits` 的 `||` **判为正当，不修**
 
 `minHits: 0` 会让判据 `hits < 0` **恒假** ⇒ 等于「按 hits 永不遗忘」。而这个语义本仓
 **已由 `enabled: false` 明确承担** —— 再让 0 表达一次就是**同一件事两个开关**（判据分叉）。
-⇒ 此处 0 判为**非法输入**，回落 1。理由就地写在 `core/forget.ts:20`。
+⇒ 此处 0 判为**非法输入**，回落 1。理由就地写在 `core/forget.ts` 的 `isForgettable`。
 
 这条裁定是刻意「**关掉**而不是**记成新线索**」：`adr/0083` §14.1 的教训正是「线索越查越多、
 路线图原地不动」。能当轮判掉的，当轮判掉。
@@ -156,7 +160,7 @@ numOr(v, dflt, min = 0)
 | `audit-drift` `drift_keys` | 11 | **9** | −2 |
 | `audit-drift` `drift_sites` | 28 | **23** | −5 |
 | `numOr` 覆盖的配置点 | 0 | **6** | `min <= 0` 的那 6 处；`min > 0` 的 19 处**未动** |
-| `episodes.gapMinutes` 默认值落点 | 3 处 | **1 处** | `episode.ts:230` |
+| `episodes.gapMinutes` 默认值落点 | 3 处 | **1 处** | `core/episode.ts` 的 `deriveEpisodes` |
 | 比较点扫描判据落点 | 2 处 | **1 处** | `comparison-points.lib.ts` |
 | `npm run verify` | 53/53 | **54/54** | 新增 `test/t8-explicit-zero.test.ts` |
 
@@ -175,6 +179,6 @@ numOr(v, dflt, min = 0)
   按本仓纪律，**上升**必须点名并给理由；本轮只有下降。
 - **语料指纹已变**（`1e66ea539824…` / `7d771706cac4…`）：本轮新增/改动了 `.ts` 文件，
   指纹变化是**预期**的，不代表语料质量变化（V7 的规模类判据不覆盖内容变化）。
-- `query/reads.ts:47` 的简化**未做端到端读路径测试**：它只是把默认值交给 `deriveEpisodes`，
+- `query/reads.ts` 的 episode 读查询里那处简化**未做端到端读路径测试**：它只是把默认值交给 `deriveEpisodes`，
   单元层（`deriveEpisodes` 的 `gapMinutes: 0`）已有锁，但「`read_shadow({mode:'episode'})`
   在 `episodes.gapMinutes: 0` 下的端到端行为」**没有断言**。
