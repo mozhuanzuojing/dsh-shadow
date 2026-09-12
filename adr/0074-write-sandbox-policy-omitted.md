@@ -226,3 +226,42 @@ v1.15.39 深读 DSH 本体时，平台文档（`docs/subsystems/filesystem.md:41
 两条待查：**(a)** 该服务是否对**普通插件**可见（`capability-seams.md:515` 称「only the sandboxed executor and provider read the service」——若被 restrict，则委派不可行，现有显式传参就是唯一解）；
 **(b)** 若可见，应改为**向平台要策略**而非自己推导（判据收一处）。
 **方法**：`ctx.get("sandboxPolicy")` 实测 + 查 `capability-seams` 的 restrict 名单（本轮未做，诚实标注）。
+
+### 更正（同日第 2 轮，2026-09-12）：上条补记里**有两处我说错了**，正文与我自己的实现**都是对的**
+
+上一条补记的「④ 由此产生一条新的待办」写了两句错话，现更正并留档：
+
+**错话①「本仓 `core/fs-scope.ts` 自己重造了 mode/root 的推导」——错。**
+读自己的代码（`core/fs-scope.ts:34-35`）即可见它**本来就是委派**：
+`context?.get?.("sandboxPolicy")` → `sp.resolve({ session })`。**没有重造，也没有自己推导 mode/root。**
+⇒ 教训：**子代理/文档的表述不能代替读自己的代码。**
+
+**错话②（在更正①的过程中我又犯的）「`DSH_PERMISSION_MODE` 在运行体里不存在」——错。**
+我只对 `dsh-sandbox-policy` / `dsh-fs-sandbox` / `dsh-sandbox` 三个包 grep 得 0 命中，就下了断言；
+而它存在于**部署组合**：`@deepseek-ai/dsh-base/cordis.patch.yml`（运行体 `0.1.5-rc.2` 的 **`:208-212`**）：
+```yaml
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+```
+⇒ 教训：**grep 之前先写清枚举范围**（与本文档第 1 轮踩的 `-like` 正斜杠、`specs/` 假阴性是同一族）。
+
+**两条真相并不矛盾，是「两层」**：
+| 层 | 谁在读 | 读什么 |
+|---|---|---|
+| **包层** | `dsh-sandbox-policy` 的构造函数 | `config.mode` / `config.workspaceRoot`（包内**没有**环境变量逻辑；`process.cwd()` 只是包内兜底） |
+| **部署层** | 部署组合的那一行 `config:` | 把上面两个值**配成** `process.env.DSH_PERMISSION_MODE ?? 'workspace-write'` 与 `process.cwd()` |
+
+⇒ **本文档正文（第 2 节的配置出处 L207-212、以及「`mode = DSH_PERMISSION_MODE ?? 'workspace-write'`、
+`workspaceRoot = process.cwd()`」）描述的是部署层，是准确的、不需要改。**
+本轮**唯一的代码改动**是 `core/fs-scope.ts` 的**注释**：把「两层」写清，并把上面两条教训留档防复发。
+
+**顺带结清两条**（运行体 Service 目录，`ctx.sandboxPolicy` 契约原文）：
+① 该服务**对普通插件可见**：`access.optional = { expression: "ctx.get(\"sandboxPolicy\")", requiresUndefinedCheck: true }`
+与 `access.hardDependency = { inject: ["sandboxPolicy"] }`；`dsh-web-app` 自己的包即
+`static inject = ['fs','sandboxPolicy','sessions','typert']`，且其 `:200` 用
+`workspaceRoot: header.cwd ?? scope.sandboxPolicy.workspaceRoot`（**先会话 cwd、再退服务根**）。
+② 契约原文逐字印证本文档结论：「**A session cwd is its workspace-write boundary; the configured root is the
+fallback for agentless calls and sessions without a cwd.**」

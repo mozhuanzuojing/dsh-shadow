@@ -107,7 +107,24 @@
 但**无参 `resolve()` 取的是服务级根**（`dsh-sandbox-policy/lib/index.js:116-117` `config.workspaceRoot ?? process.cwd()`），
 只有 **`resolve({session})`** 才用 **`session.header.cwd`**（`:138-142`）
 ⇒ **ADR-0074 的结论成立，机制表述已修正**（不是「插件读环境变量」，而是「平台服务在无 session 时按进程级解析」）。
-**副产品**：本仓 `core/fs-scope.ts` **重造了**平台已有的 `ctx.sandboxPolicy` ⇒ 新开 **T16**（先查它是否对普通插件可见）。
+**副产品（v1.15.40 第 2 轮两次更正，**都是自我更正**）**：
+① 第 1 轮我据子代理的表述写成「本仓 `core/fs-scope.ts` **重造了**平台已有的 `ctx.sandboxPolicy`」——**判断错误**：
+   读自己的代码后确认 `core/fs-scope.ts:34-35` **本来就是委派**（`context?.get?.("sandboxPolicy")` → `sp.resolve({ session })`）。
+② 第 2 轮我进一步据「对三个包 grep `DSH_PERMISSION_MODE` 得 0 命中」断言「该环境变量在运行体里不存在」——**也是错的**：
+   它存在于**部署组合** `@deepseek-ai/dsh-base/cordis.patch.yml`（运行体 0.1.5-rc.2 的 `:208-212`：
+   `mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'` / `workspaceRoot: !!js process.cwd()`）。
+⇒ **两条教训**：**(a)** 子代理/文档的表述**不能代替读自己的代码**；**(b)** **grep 之前先写清枚举范围**
+（这与第 1 轮我踩的 `-like` 正斜杠、`specs/` 假阴性是同一族）。**净结论**：`fs-scope.ts` 与 ADR-0074 **两处都对**，
+只是「包层读 config」与「部署层配 env/cwd」**两层**必须分清——已写进 `core/fs-scope.ts` 的注释留档。
+
+**T16 第 1 条已结案（运行体 Service 目录，2026-09-12 第 2 轮）**：
+`ctx.sandboxPolicy` 在运行体里**是注册服务**且**对普通插件可见**，平台自身给出两种接入方式：
+`access.optional = { expression: "ctx.get(\"sandboxPolicy\")", requiresUndefinedCheck: true }`、
+`access.hardDependency = { inject: ["sandboxPolicy"], expression: "ctx.sandboxPolicy" }`；
+契约原文还逐字印证了 ADR-0074 补记的结论：「**A session cwd is its workspace-write boundary;
+the configured root is the fallback for agentless calls and sessions without a cwd.**」
+（⇒ 文档里「only the sandboxed executor and provider read the service」在本运行体上**不成立**：
+`dsh-web-app` 自己的包就是 `static inject = ['fs','sandboxPolicy','sessions','typert']`。）
 
 **其它已入账的动作项**（见 `BACKLOG.md` T16）：`isolate` 行级语义（技能散文不精确）/ 平台已有而下游可能在重造的四项
 （`ctx.sessionProjections` / `ctx.storageDomain` / `ctx.invariants` / `ctx.jobs`）/ `export default` 自查**已通过**（本仓无 `export default`，`unwrapExports` 那条静默缺陷**不适用**）。
@@ -129,7 +146,7 @@
 
 | 论文 | 为什么对本项目重要 |
 |---|---|
-| **Temporal Validity in Retrieval Memory: Eliminating Stale-Fact Errors for AI Agents over Evolving Knowledge** —— 副标题「**A deterministic supersession layer that retrieval-augmented generation cannot match by construction**」 | ⭐ **与 D3 直接同题**：主张**确定性取代层**在构造上优于 RAG。这正是本仓 ADR-0059（不让 LLM 判语义）+ ADR-0061（读时取代）的外部对照，**可能为本仓既有裁决补独立证据** | [arXiv:2606.26511](https://arxiv.org/abs/2606.26511) |
+| **Temporal Validity in Retrieval Memory: Eliminating Stale-Fact Errors for AI Agents over Evolving Knowledge**（**MemStrata**；Neeraj Yadav；2026-06-25；21 页 / 5 表；**已发布 harness、数据集与评测协议**） | ⭐⭐ **与 D3 直接同题，且是同题里证据最强的一份**（唯一**带数据集与 harness** 的）。摘要原文要点：① RAG「**has no model of time**」，事实变更时 stale 与 current 值**嵌入相似度几乎相同**；② **量化**：「cosine similarity distinguishes a contradicted fact from a duplicated one with **AUROC 0.59** (near chance)」——并解释「contradictions are often **more** embedding-similar to the original than rephrased duplicates」；③ 机制：「a **deterministic `(subject, relation, object)` supersession rule** retires the stale value in a **bi-temporal ledger** — with **no similarity threshold and no LLM call**」；④ 读数（**作者声称，未复现**）：六基准 / 本地 7B，「ties RAG on static knowledge」、演化知识 **0.95–1.00**（RAG **0.20–0.47**）、**stale-fact-error rate：RAG 15–40% → 它 ~0%**、延迟 **~2.1s** vs LLM-reranking **~16–18s**。⇒ 对本仓：**为 ADR-0059 补独立量化证据**（相似度不能裁决矛盾）；**为 D3 提供第三个独立样本**（hl_mem 四元坐标 / 本仓单键 + 时间序 / 它用**三元组**）；并给出一个本仓**没有的指标**——「**stale-fact-error rate**」（正好是「错误方向不对称」的可测形态）。 | [arXiv:2606.26511](https://arxiv.org/abs/2606.26511) · [HTML](https://arxiv.org/html/2606.26511v1) |
 | **A Survey of Agent Memory in the Second Half: Towards Self-Evolving and Long-Horizon Agents** | 综述：可能给出「记忆系统」的分类学与**评测现状**（对 T11、G1–G4 的空白判断有用） | [arXiv:2602.06052](https://arxiv.org/abs/2602.06052) |
 | **From Storage to Experience: A Survey on the Evolution of LLM Agent Memory Mechanisms** | 综述（ACL Findings 2026）：**记忆机制的演化分期** | [ACL 2026 Findings](https://aclanthology.org/2026.findings-acl.2069/) |
 | **Caching for the Future: Scrub Jay Episodic Memory Principles for Agent Memory Systems** | 从动物认知取原则（**缓存/前瞻性记忆**）——与「什么该忘、什么该留」的判据可能有关 | [arXiv:2608.04746](https://arxiv.org/abs/2608.04746) |

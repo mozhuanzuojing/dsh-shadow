@@ -578,10 +578,17 @@
     但**无参 `resolve()` 取服务级根**（`dsh-sandbox-policy/lib/index.js:116-117` `config.workspaceRoot ?? process.cwd()`），
     只有 **`resolve({session})`** 才用 `session.header.cwd`（`:138-142`）⇒ **ADR-0074 结论成立、机制表述已修正**。
 - **待办（逐条可核，未做）**：
-  1. **`ctx.sandboxPolicy` 是否对普通插件可见**：`capability-seams.md:515` 称「only the sandboxed executor and provider
-     read the service」；若**被 restrict**，则本仓 `core/fs-scope.ts` 的显式传参是唯一解；**若可见**，应改为
-     **向平台要策略**（`ctx.sandboxPolicy.resolve({session})`）而非自己推导 mode/root（判据收一处）。
-     **方法**：在运行体里实测 `ctx.get("sandboxPolicy")`（或 `cordis_inspect_query` 的 Service 目录）。
+  1. ✅ **已结案（v1.15.40 第 2 轮，运行体 Service 目录）**：`ctx.sandboxPolicy` **在运行体里是注册服务、
+     且对普通插件可见**——平台自身给出两种接入方式：`access.optional = {expression:"ctx.get(\"sandboxPolicy\")",
+     requiresUndefinedCheck:true}` 与 `access.hardDependency = {inject:["sandboxPolicy"]}`；
+     契约原文「**A session cwd is its workspace-write boundary; the configured root is the fallback for
+     agentless calls and sessions without a cwd.**」逐字印证 ADR-0074 补记。
+     **并且**：本仓 `core/fs-scope.ts:34-35` **本来就是委派**（`ctx.get("sandboxPolicy")` → `.resolve({session})`），
+     **没有重造** —— 上一轮「重造」的判断**是我的误判**（据子代理表述下结论、未读自己的代码），已在 `MATERIALS.md` 更正。
+     **本轮改的只有 `core/fs-scope.ts` 的注释**：把「包层 / 部署层」写清（包只读 `config.mode`/`config.workspaceRoot`；
+     部署组合 `dsh-base/cordis.patch.yml:208-212` 才把它们配成 `DSH_PERMISSION_MODE` / `process.cwd()`），
+     并**留档我的一次范围性错误**（只对三个包 grep `DSH_PERMISSION_MODE` 得 0 命中就断言「不存在」，
+     漏了部署组合 ⇒ **grep 之前先写清枚举范围**）。**ADR-0074 正文与旧注释的描述是对的。**
   2. **`isolate` 是行级 option，`group` 不继承**（`vendor/loader/src/config/isolate.ts:79`）⇒
      `editing-cordis-compositions` 技能里「wrap the provider **and every consumer** in one group carrying an isolate realm」
      这句**散文不精确**：**每一行都要各自写 `isolate`**。若本仓/本用户预设里有 `group + isolate` 的写法，需按此复核。
@@ -589,6 +596,8 @@
   3. **评估「平台已有而本仓可能在重造」的四项**：`ctx.sessionProjections`（纯 fold 单元 ⇒ 取代自建
      `ctx.on('session/event')` + 缓存 + 推送）、`ctx.storageDomain`（非会话持久数据）、`ctx.invariants`（注册不变量）、
      `ctx.jobs`（后台任务）。**判据**：先用运行体确认可见性与语义，再判「重造 vs 委派」，**不凭文档直接改**。
+     **进度（v1.15.40 第 2 轮）**：四个服务**在运行体 Service 目录里都存在**（`invariants` / `jobs` /
+     `storage` / `storageDomain` / `sessionProjections` 均已列出）；**语义与可见性（optional vs hard）尚未逐条取契约**。
   4. **版本偏差**：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2 ⇒ 上述结论凡未回运行体核对的，**一律标注未核对**。
 - **为什么现在没做**：① 每条都要**回运行体**核对（文档可能落后），属逐条实测，不是批量替换；
   ② 涉及**改变本仓写入路径**（`core/fs-scope.ts`）与**引入平台服务**，须先有可见性结论，否则会引出新的
@@ -628,6 +637,16 @@
 - **完成判据**：决定是否做；若做，需先定「哪些根可信、谁有权限加根」（涉及 inv 178 边界）。
 
 ### D3. 是否引入 `(subject, relation, object)` 细粒度取代？
+
+> **★★★ 第三个独立样本（v1.15.40 第 2 轮，论文层；`MATERIALS.md` §3.2）**：**MemStrata**
+> （[arXiv:2606.26511](https://arxiv.org/abs/2606.26511)，2026-06-25，21 页，**已发布 harness + 数据集 + 评测协议**）
+> —— 它用的正是 **`(subject, relation, object)` 三元组**，机制是「**确定性取代规则 + 双时间账本**，
+> **无相似度阈值、无 LLM 调用**」，并用 **AUROC 0.59（近随机）** 量化「相似度分辨不出『被推翻』与『换说法』」。
+> 它的读数（**作者声称，本仓未复现**）：演化知识 **0.95–1.00**（RAG **0.20–0.47**）、
+> **stale-fact-error rate：RAG 15–40% → 它 ~0%**、延迟 ~2.1s vs 重排基线 ~16–18s。
+> ⇒ 对 D3 的两条直接用途：① **第三个独立样本**（hl_mem 用四元坐标 / 本仓用单键+时间序 / 它用三元组），
+> 且**唯一带数据集**；② 给出一个本仓**没有的指标**——「**stale-fact-error rate**」，
+> 它是「错误方向不对称」的**可测形态**（正是本仓 T11/T14 缺的判据面）。**未读全文，不得引用其结论**。
 
 > **★★ 对照面已在 v1.15.39 被实质改写（`adr/0078` D6，**首次本地克隆读源码**）**：
 > 0076 读到的 `docs/adr/0004` 是**文档层面**的完整协议；**落地形态**是**窄面 + 默认只建议**：
