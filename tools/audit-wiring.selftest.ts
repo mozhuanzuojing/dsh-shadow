@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
+import { isProductionPath as driftIsProductionPath } from "./audit-drift.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
@@ -289,6 +290,35 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
   assert.notEqual(isTestPath("node_modules/pkg/x.d.ts"), legacy("node_modules/pkg/x.d.ts"),
     "★ 同上（依赖）");
   console.log("✔ ⑬ isTestPath：test/ 命中 · 产物与依赖**不**命中（与旧写法 `!isProductionPath` 明确分开）");
+}
+
+// ─────────────────────────────────────────────
+// ⑭ **锁住 `isProductionPath` 的分叉**（v1.15.59）—— 不擅自统一，但让任何一侧的改动变红
+//
+// 事实：`audit-wiring.lib.ts` 与 `audit-drift.lib.ts` **各有一份**同名 `isProductionPath`，
+// 两者 EXCLUDE 集合**差一个 `"tools"`**（wiring 把 `tools/**` 当生产面，drift 排除它）。
+// 后果：两个工具量的是**不同语料**（故基线里 `corpus.wiring` / `corpus.drift` 必须分键），
+// 而 `audit-drift` 的存在理由之一（检测「同一条判据在 ≥2 模块被表达」）**恰好看不见 `tools/`**
+// ⇒ 它看不见自家这对分叉。
+//
+// **为什么这一轮不统一**：统一会改变某一侧的基线口径（`a_total`/`b_keys` 或 `drift_keys`），
+// 必须先决定「`tools/` 算不算生产面」—— 那是**工程口径的决定**，不是重构。
+// 本轮只把当前差异**写成断言**：任何一侧被改动时这里会红，逼出那个决定，而不是让它们继续悄悄漂移。
+// ─────────────────────────────────────────────
+{
+  const probe = [
+    "core/x.ts", "query/y.ts", "tools/audit-wiring.ts", "tools/audit-wiring.selftest.ts",
+    "test/x.test.ts", "dist/core/x.js", "node_modules/pkg/index.ts", "tools/fixtures/f.ts",
+  ];
+  const diff = probe.filter((p) => isProductionPath(p) !== driftIsProductionPath(p));
+  assert.deepEqual(diff, ["tools/audit-wiring.ts", "tools/audit-wiring.selftest.ts"],
+    "★ 两份 `isProductionPath` 的差异必须**恰好**是 `tools/` 下的路径（出现新差异 ⇒ 有人改了一侧口径，请先拍板再改）");
+  // 无分歧的部分也要锁住：两边都必须排除测试面与产物（防「修一侧时改坏」）
+  for (const p of ["test/x.test.ts", "dist/core/x.js", "node_modules/pkg/index.ts"]) {
+    assert.equal(isProductionPath(p), false, `wiring 侧必须排除 ${p}`);
+    assert.equal(driftIsProductionPath(p), false, `drift 侧必须排除 ${p}`);
+  }
+  console.log("✔ ⑭ `isProductionPath` 分叉已**锁住**：差异恰好是 tools/（口径决定未拍板，但改动会红）");
 }
 
 console.log("");

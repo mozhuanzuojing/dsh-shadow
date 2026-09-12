@@ -1438,3 +1438,14 @@ V/G/T6 真机与外部条件项
 - `audit-wiring` ↔ `audit-drift` 的 `isProductionPath` EXCLUDE **不同**（`tools/` 算不算生产面），两个 selftest 各自把相反期望锁死 ⇒ **统一前需先拍板**；
 - 所有 **CLI 接线**（退出码、`--update-ratchet` 拒绝分支、共用基线分写段）零自动断言（两处 footer 已自认）；
 - `toolset-authority.ts` **未接进** `npm run verify`。
+
+### 6.9 状态更新（v1.15.59）：CLI 接线盲区**已做成断言** + 两处判据收口/锁口
+
+| 原线索 | 状态 |
+|---|---|
+| **所有 CLI 接线零自动断言**（退出码语义 / `--update-ratchet` 拒绝分支 / 共用基线分写段） | ✅ **已修**：新增 `tools/cli-wiring.selftest.ts`（**spawn 真 CLI**，5 组）—— 先探针确认本环境可 spawn（`execFileSync` 管道可用、退出码可读） |
+| `retrieval-eval.ts:117-120` 的第二份「语料太小」判据（未标定） | ✅ **已修**：抽成 `corpusFloorVerdict` + selftest ⑬ 锁边界；**两份判据刻意保留**（绝对下限 vs 相对容许带，拦不同故障） |
+| `audit-wiring` ↔ `audit-drift` 的 `isProductionPath` 分叉 | ⏸ **已锁住、未统一**：新增 ⑭ 断言「差异**恰好**是 `tools/`」，任何一侧改动即红 ⇒ **等拍板 `tools/` 算不算生产面**（统一会改基线口径） |
+| `toolset-authority.ts` 未接进 `verify` | ⏸ **原因已实测**：`--check` 本机 **>120s**（winget 探测）⇒ 是**耗时**，不是「忘了接线」 |
+
+**仍未修**：`isProductionPath` 口径统一（等拍板）· `--update-ratchet` 成功路径未自动化（会改真实基线）· 169 个测试类型错误 · §6.3 六条待定语义 · 整目录未读。

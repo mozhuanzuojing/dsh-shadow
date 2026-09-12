@@ -171,6 +171,24 @@ export const checkProtocol = (protocol: EvalProtocol) => {
   return violations;
 };
 
+/**
+ * **语料绝对下限判据**（协议常量 `min_corpus_files`）—— v1.15.59 从 `retrieval-eval.ts` 的内联块抽出来。
+ *
+ * 为什么值得单列：它此前写在 CLI 的 `if` 里，**没有任何标定测试**（旧 footer 还误称它走的
+ * `corpus-health.classifyCorpus`）。抽出来之后，边界（`== minFiles` 通过 / `< minFiles` 拒绝）
+ * 由 `retrieval-eval.selftest.ts` 锁住。
+ *
+ * ⚠ **与 `corpus-health.classifyCorpus` 不是同一条判据**（不可互相替代）：
+ *   · 本函数 = **绝对下限**，拦「工作区指错、但恰好有几十个文件」；
+ *   · `classifyCorpus` = **相对基线的容许带**，拦「相对上次骤降」（工具坏了）。
+ *   两者拦的是不同故障，故**保留两份是刻意的**；但两份都必须有标定（此前第二份没有）。
+ */
+export const corpusFloorVerdict = (corpusCount: number, minFiles: number): { ok: boolean; reason?: string } => {
+  if (!Number.isFinite(minFiles) || minFiles <= 0) return { ok: true }; // 未设下限 ⇒ 不拦（常量缺失由 checkProtocol 另行兜住）
+  if (corpusCount >= minFiles) return { ok: true };
+  return { ok: false, reason: `语料过小（PARTIAL）：扫到 ${corpusCount} 条，低于协议常量 min_corpus_files=${minFiles}` };
+};
+
 export interface CompareInput {
   readonly candidate: Record<string, any>;
   readonly baseline: Record<string, any>;

@@ -12,6 +12,7 @@ import {
   datasetHash,
   checkProtocol,
   checkAggregateOnly,
+  corpusFloorVerdict,
   compareEval,
   HASH_ALGORITHM,
   RESULT_FIELDS,
@@ -196,6 +197,24 @@ const runCompare = (candidate: Record<string, unknown>) =>
   assert.equal(datasetHash(two).hex, datasetHash([...two].reverse()).hex, "文件顺序不得影响语料指纹");
   assert.equal(h1.fileCount, 1);
   console.log("✔ ⑫ 序列化与语料指纹：键序无关 / 尾换行 / 内容变即换 / 顺序无关");
+}
+
+// ─────────────────────────────────────────────
+// ⑬ 语料**绝对下限**判据（v1.15.59 从 CLI 内联块抽进 lib）
+//    为什么补这一条：该判据此前只有 CLI 里的一个 `if`，**零标定**；而旧 footer 还误称
+//    它走的 `corpus-health.classifyCorpus`（实际没有引用）。抽出来后才可能锁边界。
+//    ⚠ 它与 `classifyCorpus`（相对基线的容许带）**不是同一条**：一个拦「工作区指错」，
+//    一个拦「相对上次骤降」⇒ 两份并存是刻意的，但两份都必须有标定。
+// ─────────────────────────────────────────────
+{
+  assert.equal(corpusFloorVerdict(100, 100).ok, true, "恰好等于下限 ⇒ **通过**（边界是 `>=`，不是 `>`）");
+  assert.equal(corpusFloorVerdict(99, 100).ok, false, "低于下限 ⇒ 拒绝");
+  assert.ok(String(corpusFloorVerdict(99, 100).reason).includes("min_corpus_files=100"), "拒绝理由必须带上实际阈值（可诊断）");
+  assert.equal(corpusFloorVerdict(0, 0).ok, true, "未设下限（0）⇒ 不拦（常量缺失由 checkProtocol 另行兜住）");
+  assert.equal(corpusFloorVerdict(5, -1).ok, true, "非法负值等同未设 ⇒ 不拦（不得因坏常量把语料判死）");
+  assert.equal(corpusFloorVerdict(5, NaN).ok, true, "NaN ⇒ 不拦（同上）");
+  assert.equal(corpusFloorVerdict(1, 1).ok, true, "下限为 1 时单文件通过");
+  console.log("✔ ⑬ 语料绝对下限：`==` 通过 / `<` 拒绝（带阈值）/ 未设或非法 ⇒ 不拦");
 }
 
 console.log("");

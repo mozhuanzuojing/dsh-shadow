@@ -184,3 +184,41 @@
 - **`audit-wiring` 与 `audit-drift` 的 `isProductionPath` EXCLUDE 不同**（前者把 `tools/` 当生产面，后者排除）⇒ 两个工具的口径不一致，且**两个 selftest 各自把相反期望锁死**（`audit-wiring.selftest.ts:82` vs `audit-drift.selftest.ts:40`）。**要统一必须先决定 `tools/` 算不算生产面**（改哪边都会破一个棘轮基线）；
 - **所有 CLI 接线（退出码语义、`--update-ratchet` 的拒绝分支、两工具共用基线文件却分写段）零自动断言** —— 历史上真实踩过的两类缺陷都在这里，两处 footer 已自认；
 - **`toolset-authority.ts` 未接进 `npm run verify`**（只在单独的 `verify:authority`）。
+
+---
+
+## 10. 第七轮（v1.15.59）：把**CLI 接线**这条最高危盲区做成自动断言
+
+### 10.1 先探针，再承诺
+
+上一轮 footer 里写着「CLI 接线要 spawn 子进程才能测」。**这一轮先写了探针**（`.docs/fix/2026-09-12/spawn-probe.ts`）：
+本环境 `execFileSync` 管道捕获**可用**、非零退出码**可读**（`SPAWN_OK` / `status=2`）。于是可以做，不必继续记成「未做」。
+
+### 10.2 新增 `tools/cli-wiring.selftest.ts`（5 组，**spawn 真 CLI**）
+
+此前 6 个 selftest **100% 只调纯函数**，而本仓历史上真实踩过的两类缺陷都长在 CLI 接线上：
+
+| # | 断言 | 锁住的真实缺陷 |
+|---|---|---|
+| ① | `node tools/audit-wiring.ts --ratchet`（**旗标占了 root 位置**）⇒ **exit 2**；drift 同 | v1.15.45：漏 root 参数 ⇒ ROOT 取到旗标 ⇒ 0 文件 ⇒ **静默全绿** |
+| ② | 显式给**空语料根** ⇒ 两个 CLI 都 exit 2 | 「0 文件不是没问题」这条闸的另一面 |
+| ③ | `--update-ratchet` 在坏语料上 exit 2，**且基线文件逐字节未变** | 「闸不许把坏读数写进基线」的**接线面**：拒绝必须先于 `writeFileSync`。（安全性：测试内先备份、`finally` 还原） |
+| ④ | 基线**必须分段**：`wiring` / `drift` 各自独立，且 `corpus.wiring` / `corpus.drift` **分键** | v1.15.45 第二处：两个工具量**不同语料**却共用 `corpus` 键 ⇒ 互相覆盖、判成「骤降 76%」 |
+| ⑤ | `run-tests.ts` 确实扫描 `tools/*.selftest.ts` | 防「标定测试没接进门禁」的死文件 |
+
+### 10.3 两处判据收口 / 锁口
+
+| 项 | 处理 |
+|---|---|
+| **`retrieval-eval` 的第二份语料判据**（`retrieval-eval.ts` 内联块，**零标定**；旧 footer 还误称它走 `classifyCorpus`） | 抽成 `retrieval-eval.lib.ts` 的 **`corpusFloorVerdict`** 并在其 selftest 里补 **⑬**（`==` 通过 / `<` 拒绝且带阈值 / 未设或非法 ⇒ 不拦）。**明确保留两份判据**：一个是**绝对下限**（拦工作区指错），一个是**相对基线容许带**（拦工具坏了）—— 拦的是不同故障 |
+| **`isProductionPath` 分叉**（wiring 把 `tools/**` 当生产面，drift 排除它；drift 因此看不见自家这对分叉） | **不擅自统一**（统一会改某一侧的基线口径，须先决定「`tools/` 算不算生产面」）⇒ 本轮把它**锁住**：新增 ⑭ 断言「两份的差异**恰好**是 `tools/` 下的路径」，于是任何一侧被改动都会红，**逼出那个决定**；同时锁住无分歧的部分（两边都必须排除测试面与产物） |
+
+### 10.4 一处**实测修正**上一轮的记录
+
+上一轮把 `toolset-authority.ts --check` 未接进 `verify` 记为「未接进（未说明原因）」。本轮**实测**：
+`node tools/toolset-authority.ts --check` 在本机 **>120s**（winget 探测）⇒ 真实原因是**耗时**（它本身确实是只读的、`--check` 不写文件）。
+已写进新 selftest 的诚实标注，避免后来者以为是「忘了接线」。
+
+**证据**：`verify` **53/53**（+1 就是新 selftest）；棘轮如实变红 `b_keys 113 → 115`（**+2 = 基线分段断言** `wiring=object` / `drift=object`）后按规程重录。
+
+**仍未修**：`isProductionPath` 口径统一（**等拍板**）· `--update-ratchet` 的**成功**路径未自动化（会改真实基线）· **169 个既存测试类型错误** · §6.3 六条待定语义 · 整目录未读（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`）。

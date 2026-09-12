@@ -20,6 +20,7 @@ import {
   checkProtocol,
   checkAggregateOnly,
   compareEval,
+  corpusFloorVerdict,
 } from "./retrieval-eval.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -113,11 +114,13 @@ if (docs.length === 0) {
 
 // **V7 语料健康门**：空语料之外还有「**语料过小**」（工作区指错但恰好有几十个文件）。
 // 阈值是**协议常量**（`min_corpus_files`），不是代码里的硬常量 —— 改判据＝改数据并被 diff 审阅。
+// 判据本体在 lib（`corpusFloorVerdict`），由 `retrieval-eval.selftest.ts` 标定边界（v1.15.59）。
 {
   const raw = existsSync(PROTOCOL_PATH) ? readFileSync(PROTOCOL_PATH, "utf8").replace(/\r\n/g, "\n") : undefined;
   const minFiles = raw === undefined ? 0 : Number(JSON.parse(raw)?.min_corpus_files ?? 0);
-  if (minFiles > 0 && corpus.length < minFiles) {
-    console.error(`语料过小（PARTIAL）：扫到 ${corpus.length} 条，低于协议常量 min_corpus_files=${minFiles}`);
+  const floor = corpusFloorVerdict(corpus.length, minFiles);
+  if (!floor.ok) {
+    console.error(floor.reason);
     console.error("  ⇒ 拒绝产出读数（先确认 SHADOW_EVAL_ROOT / 默认推导的语料根指对了）");
     process.exit(2);
   }
