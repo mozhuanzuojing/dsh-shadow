@@ -3,6 +3,58 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.49] **`Proposal → Confirmation → Fact` 升为通用原语**（`adr/0082`）：Inference is cheap; facts are expensive
+
+**一句话**：用户选 **A**（两层），并要求把这条边界**从 M1 的特殊处理升为所有 Memory Intelligence 能力的共同纪律**。
+故单独立 **`adr/0082`** 冻结原语；**M1 降为它的第一个使用者**（Memory Track 顺序变为 **P1 → M1 → M2 → M3 → M4 → M5**）。
+
+### 1. 原语（唯一升级路径）
+
+```text
+Inference（廉价、可海量）→ Proposal（候选层）→ Confirmation（显式确认）→ Fact（事实层，受契约保护）
+                                                                    └→ Pattern / M5 统计 / 棘轮
+```
+
+**事实层只有两条写入路径**：**显式外部来源**（用户/工具/CI，`source` **不得**为模型）· **确定性规则**（同入口+时间窗，**不看语义**）。
+**`model-proposal` 永不直接进 Fact。**
+
+### 2. 用户补充的三条硬要求（全部写进契约）
+
+| # | 要求 | 落点 |
+|---|---|---|
+| ① | **proposal 必须自带「基于什么提议」** | `source` / `model` / `prompt_version` / `input_refs[{file,line}]` / `proposed_relation`；**缺一不得入库** —— 否则 proposal 连**被复核**的资格都没有（与「线索必须带 `文件:行号`」同一纪律）|
+| ② | **proposal 不参与任何事实统计**（六条） | ❌ Pattern count · ❌ influenced_decision · ❌ confidence · ❌ ratchet baseline · ❌ knowledge fact · ❌ identity；**唯一允许**：`candidate coverage` / `acceptance rate` / `rejection rate`（**度量模型能力，不修改世界状态**）|
+| ③ | **升级必须留链** | `P ──confirmed_by──→ C ──→ F`；**没有 C 的 F 不存在**；lineage 三段可追（原始证据 → proposal → 确认 → Fact → Pattern → 未来召回）|
+
+**核心不变量（用户原话，写进 ADR）**：
+> **只有 FACT 可以改变系统的认知统计；CANDIDATE 只能改变「待确认候选」的统计。**
+
+### 3. 同时冻结的两条 M1 配套纪律
+
+- **`subject` = `explicit` + `deterministic-normalized`，明确关闭「语义实体消解」这条演化路径**。
+  理由（用户的推理链）：用相似度把 A、B 吸到同一 subject ⇒ **Pattern 统计量虚假变高**，
+  而「**Pattern 的质量上限会被 subject resolution 的错误率锁死**」——**隐蔽**污染（数字看起来更好）。
+- **`pending` 年龄只暴露风险，不得改变状态**：读数必须印条数 + 年龄分布（<7d/7–30d/30–90d/≥90d）+ 最老一条；
+  可加**轻量派生** `pending_age_p90` 用于分「正常等待 / 长期积压 / 疑似永不结算」；
+  **不得设置自动结算阈值**。
+
+### 4. 位置与边界
+
+- **泳道位置**：`adr/0082` = Memory Track 的 **P1（第 0 项）**，**先于 M1**；`adr/0081` 的 §3 契约据此**收窄**
+  （保留「不用相似度/LLM 做归属」的禁令，把 LLM 归属**移到候选层**）。
+- **主干（用户指定）**：`Memory → Evidence → Inference → Confirmation → Knowledge`。
+- **本 ADR 没给系统加任何能力** —— 它只给「**什么算事实**」定了一条**不可绕过**的路径。
+- **T15 Registry 第 2 条真条目**：`id = proposal-confirmation-fact-v1`，十字段齐备，**verification 含 5 条（3 条负例）**，
+  待建棘轮桶 = `proposal_coverage` / `acceptance_rate` / `rejection_rate`（**这三项可以进棘轮**，因为度量的是模型能力而非世界状态）。
+- **未决（不脑补）**：Confirmation 的载体（新 mode 还是独立工具）· `prompt_version` 的记录方式 ·
+  `pending_age_p90` 的窗口 · proposal 的存储位置（**无论哪种都不得进入 `listMemories` 语料**，否则候选污染召回 —— 与 ADR-0075 的 `_` 前缀纪律同族）。
+
+### 5. 变更文件与门禁
+
+`adr/0082-proposal-confirmation-fact.md`（新）· `adr/0081`（新增 §7.4 用户确认 + 契约收窄）·
+`BACKLOG.md`（新增 **P1 已冻结**；Memory Track 改为 `P1 → M1 → …`）· `CHANGELOG.md` · `README.md` · `package.json`（1.15.49）。
+**未改动**：任何业务源码、`dist/`、门禁（49/49 不变）。
+
 ## [v1.15.48] M1 三处拍板入账 + **一处异议与两层合成设计**（`adr/0081` §7）
 
 **一句话**：用户对 M1 的三处前置作了决定。**两处我接受并补了配套纪律；第三处我提出异议** ——

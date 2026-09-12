@@ -1210,8 +1210,24 @@ V/G/T6 真机与外部条件项
 
 ```text
 🛡️ Contract Track : T8 → T15(Registry) → D1/D2/D3 → Contract Freeze → T14
-🧠 Memory Track   : M1 → M2 → M3 → M4 → M5
+🧠 Memory Track   : P1 → M1 → M2 → M3 → M4 → M5
 ```
+
+### P1. **Proposal → Confirmation → Fact 原语**（**Inference is cheap; facts are expensive.**）—— ✅ **已冻结（v1.15.49，`adr/0082`）**
+
+- **地位**：**Memory Track 第 0 项，先于 M1** —— 它是**所有 Memory Intelligence 能力的共同架构纪律**，M1 只是第一个使用者。
+- **来源**：M1 的「结果从哪来」争议逼出来的（用户先选「允许 LLM 归属」，我提出四条异议，用户接受并**把它推广成通用原语**）。
+- **单一升级路径**：`Proposal →（Confirmation）→ Fact`；事实层只能由「**显式外部来源**」或「**同入口+时间窗的确定性规则**」写入；
+  **`model-proposal` 永不直接进 Fact**。
+- **六条硬禁令**：proposal **不得**参与 `Pattern count` / `influenced_decision` / `confidence` / `ratchet baseline` /
+  `knowledge fact` / `identity`。**核心不变量：只有 FACT 能改变系统认知统计；CANDIDATE 只能改变「待确认候选」的统计。**
+- **proposal 必填**：`source` / `model` / `prompt_version` / `input_refs[{file,line}]` / `proposed_relation`（缺一不得入库 ⇒ 可回答「模型为什么提这个候选」）。
+- **升级链**：`P ──confirmed_by──→ C ──→ F`，三段可追；**没有 C 的 F 不存在**。
+- **唯一允许的 proposal 统计**：`candidate coverage` / `acceptance rate` / `rejection rate`（度量**模型能力**，不改世界状态）⇒ **这三项可以进棘轮**。
+- **通用化**：`subject / relation / outcome / pattern / knowledge` 五类 proposal 共用同一条路径，**不得为任何一类开直通口**。
+- **主人干**：`Memory → Evidence → Inference → Confirmation → Knowledge`。
+- **待建验证（含负例）**：① proposal 计入 Pattern ⇒ 必须失败；② 缺 `input_refs` ⇒ 拒收；③ 无 confirmation 的 Fact 出现在事实视图 ⇒ 必须失败；④ P→C→F lineage 可追；⑤ `pending_age_p90` **为 derived、不写回状态**。
+
 
 **核心思想转变**：**Recall 不是 Memory 的终点**。目标是完整生命周期 ——
 `发生 → 记录 → 理解 → 形成决策 → 执行 → 观察结果 → 形成经验 → 修正认知 → 再影响未来决策`。

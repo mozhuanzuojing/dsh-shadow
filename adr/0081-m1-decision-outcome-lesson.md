@@ -178,3 +178,24 @@ LLM 提议的归属 ──→ 【候选层】proposal（source=model-proposal, c
 - **代价（诚实说）**：`unresolved` 这个状态**不再存在**，所以「这条决策最终无人结算」不会被系统标出来 ——
   只能靠上面的年龄分布被人看见。**这是你的选择，我按此实现，但把它记在契约的已知限制里。**
 
+### 7.4 用户确认（2026-09-12，最终）：**选 A**，并把两层设计**升为通用原语**
+
+用户接受异议，并明确：
+
+> **「LLM 可以提高『发现候选』的召回率，但不能提高『事实』的权威性。」**
+> **「只有 FACT 可以改变系统的认知统计；CANDIDATE 只能改变『待确认候选』的统计。」**
+
+并**把它推广为所有 Memory Intelligence 能力的共同纪律** ⇒ 已单独立 ADR：**`adr/0082`（Proposal → Confirmation → Fact）**。
+该 ADR 同时冻结了用户补充的三条硬要求：
+
+1. **proposal 必须自带「基于什么提议」**：`source` / `model` / `prompt_version` / `input_refs[{file,line}]` / `proposed_relation`
+   （**缺一不得入库** —— 否则 proposal 连被复核的资格都没有）；
+2. **proposal 不参与任何事实统计**（六条禁令：Pattern count / influenced_decision / confidence / ratchet baseline /
+   knowledge fact / identity）；唯一允许的是 `candidate coverage` / `acceptance rate` / `rejection rate`
+   —— **度量模型能力，不修改世界状态**；
+3. **confirmed proposal 必须留下升级链**：`P ──confirmed_by──→ C ──→ F`，**没有 C 的 F 不存在**。
+
+**M1 因而有了明确的前置**：先有 **P1（`adr/0082`）** 这条原语，M1 是它的**第一个使用者**。
+**本 ADR 的 §3 契约据此收窄**：`decision-outcome` 的 `forbidden changes` **保留**第 ④ 条禁令（不用相似度/LLM 做归属），
+并把「LLM 归属」**移到候选层**（`adr/0082`）。
+
