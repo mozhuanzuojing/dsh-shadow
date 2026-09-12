@@ -107,6 +107,67 @@ import assert from "node:assert/strict";
   console.log("✔ ③ validation timeline 坏件：拒绝覆盖（历史保留），全新时间线正常追加");
 }
 
+// ── ④ 台账坏件：**坏件 ≠ 空件**（否则冷却静默清零 ⇒ 已冷却的记忆被重新返回） ──
+{
+  const mkFs = (content: string | undefined) => {
+    const files = new Map<string, string>();
+    if (content !== undefined) files.set("D:/ws/.shadow/_recall_log.json", content);
+    return {
+      files,
+      async resolve(path: string) { return { targetKey: path, displayPath: path }; },
+      async readText(t: any) {
+        const k = t.displayPath;
+        if (!files.has(k)) { const e: any = new Error("ENOENT"); e.code = "ENOENT"; throw e; }
+        return files.get(k)!;
+      },
+      async writeText(t: any, c: string) { files.set(t.displayPath, c); return { operation: "create", version: 1 }; },
+      async listDir() { return []; },
+    };
+  };
+  const { readLedger, writeLedger } = await import("../dist/retrieval/ledger.js");
+
+  const fresh = await readLedger(mkFs(undefined) as any, "D:/ws");
+  assert.equal(fresh.corrupt, undefined, "文件不存在 ⇒ 是「真的还没有」，不是坏件");
+
+  const broken = await readLedger(mkFs("{ 半截") as any, "D:/ws");
+  assert.equal(broken.corrupt, true, "★ 坏件必须显式标记，否则与「第一次运行」不可区分");
+  assert.deepEqual(broken.served, {}, "坏件时仍是空台账（但已标记）");
+
+  const shaped = await readLedger(mkFs('{"turn":3}') as any, "D:/ws");
+  assert.equal(shaped.corrupt, true, "形状不对（无 served）同样算坏件");
+
+  const good = await readLedger(mkFs('{"turn":3,"served":{"a.md":1}}') as any, "D:/ws");
+  assert.equal(good.turn, 3);
+  assert.equal(good.corrupt, undefined);
+
+  // 写失败必须能被调用方看见（旧版返回 void）
+  const deadFs = { async resolve() { throw new Error("readonly"); } };
+  assert.equal(await writeLedger(deadFs as any, "D:/ws", { turn: 1, served: {} }), false, "★ 写失败必须报 false");
+  assert.equal(await writeLedger(undefined as any, "D:/ws", {}), false, "无 fs/ws 也算没写成功");
+  assert.equal(await writeLedger(mkFs(undefined) as any, "D:/ws", { turn: 1, served: {} }), true);
+  console.log("✔ ④ 召回台账：坏件标记 corrupt、写失败报 false（冷却不再静默清零）");
+}
+
+// ── ⑤ 证据/假设落盘失败必须能被上层播报（旧版只 console.log） ──
+{
+  const deadFs = { async resolve() { throw new Error("readonly"); } };
+  const { writeHypothesis, registerFutureEvidence } = await import("../dist/validation/evidence.js");
+  assert.equal(await writeHypothesis(deadFs as any, "D:/ws", { id: "h1" } as any), false, "★ 假设没写下去就必须报 false");
+  const r = await registerFutureEvidence(deadFs as any, "D:/ws", { hypothesisId: "h1", observedAt: "2026-02-01", actualOutcome: "优化", observationType: "t" } as any);
+  assert.equal(r.persisted, false, "★ 证据没写下去必须能被调用方看见（否则照样播报 registered）");
+  assert.equal(r.evidence.hypothesisId, "h1", "但证据本体仍返回（调用方可用它渲染「未落盘」）");
+
+  const memFs = {
+    files: new Map<string, string>(),
+    async resolve(p: string) { return { displayPath: p }; },
+    async writeText(t: any, c: string) { this.files.set(t.displayPath, c); return { operation: "create", version: 1 }; },
+  };
+  const ok = await registerFutureEvidence(memFs as any, "D:/ws", { hypothesisId: "h2", observedAt: "2026-02-01", actualOutcome: "优化", observationType: "t" } as any);
+  assert.equal(ok.persisted, true);
+  assert.ok([...memFs.files.keys()].some((k) => k.includes("future-evidence")), "正常路径必须真的落盘");
+  console.log("✔ ⑤ 假设/证据：落盘失败返回 false/persisted=false，调用方得以改写播报");
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · 本轮审查是**抽样**的：三名审查者各只读了一部分目录（`adaptation/`、`agency/`、`federation/`、");

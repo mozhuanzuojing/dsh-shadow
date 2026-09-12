@@ -80,8 +80,14 @@ for (const r of DIRECTION_RULES) console.log(`   · ${r.from} ↛ ${r.to}（${r.
 console.log("");
 
 if (unresolved.length > 0) {
-  console.log(`未解析的相对 import（${unresolved.length} 处，需人工看；暂不计违规）：`);
-  for (const u of unresolved.slice(0, 10)) console.log(`   ? ${u.from}:${u.line} → ${u.spec}`);
+  // v1.15.55：**未解析的相对 import 计违规**。
+  // 旧行为只是打印（且只显示前 10 条）并注明「暂不计违规」⇒ 把一个 import 路径改坏，
+  // 就能让那条边**从依赖图里消失** ⇒ 「①文件级无环」与「③方向禁令」**静默放行**。
+  // 一个会静默放行的门禁，比没有门禁更危险（它给出的是**虚假的确定性**）。
+  console.log(`✗ 未解析的相对 import（${unresolved.length} 处）—— 计违规：这些边**不在**依赖图里，`);
+  console.log("  无环与方向禁令都看不到它们（路径写错/文件被删/笔误都会造成）。");
+  for (const u of unresolved.slice(0, 10)) console.log(`   ✗ ${u.from}:${u.line} → ${u.spec}`);
+  if (unresolved.length > 10) console.log(`   ……另有 ${unresolved.length - 10} 处（只显示前 10）`);
   console.log("");
 }
 
@@ -91,6 +97,15 @@ if (layerCycles.length > 0) {
   console.log("   成因：`core/` 是**混合层**（`core/paths.ts`/`types.ts`/`util.ts` 是无依赖纯模块，");
   console.log("   而 `core/memory.ts`/`writer-materialize.ts`/`toolset-exec.ts` 有副作用）⇒ 层间环是命名artifact，");
   console.log("   **文件级**无环（①为 0）。要消掉它得先拆 `core/`，那是架构决策（BACKLOG T13），不是门禁。");
+  console.log("");
+}
+
+if (unresolved.length > 0) {
+  // 判据在 lib 里（`audit-layers.lib.ts` 的 ⓪）⇒ 这里只负责**给人看的清单**，不再自己判一次。
+  console.log(`✗ 未解析的相对 import（${unresolved.length} 处）—— 已**计违规**（见下方违规清单）：`);
+  console.log("  这些边**不在**依赖图里，无环与方向禁令都看不到它们（路径写错/文件被删/笔误都会造成）。");
+  for (const u of unresolved.slice(0, 10)) console.log(`   ✗ ${u.from}:${u.line} → ${u.spec}`);
+  if (unresolved.length > 10) console.log(`   ……另有 ${unresolved.length - 10} 处（只显示前 10）`);
   console.log("");
 }
 

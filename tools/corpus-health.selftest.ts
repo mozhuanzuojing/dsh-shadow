@@ -57,12 +57,18 @@ const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
   console.log("✔ ⑤ 小跌幅（<20%）⇒ NORMAL（把「正常收益」与「工具故障」分开）");
 }
 
-// ⑥ 目录数骤降 ⇒ PARTIAL（专防「递归没跟随 junction / 漏了根」这一类静默截断）
+// ⑥ 目录数**掉到近乎没有** ⇒ PARTIAL（专防「递归没跟随 junction / 漏了根」这一类静默截断）
 {
-  const r = classifyCorpus("t", obs({ dirs: 3 }), obs());
-  assert.equal(r.health, "PARTIAL");
+  // v1.15.55 起这条判据分两档（见 lib 的 `catastrophicDirRatio`）：
+  //   · 目录掉 <10% 且文件健康 ⇒ **物理上解释不通**（语料不可能这么浅）⇒ 照旧 PARTIAL；
+  //   · 目录掉 10%~90% 且文件健康 ⇒ 更可能是**遍历口径变化**（空目录、`.git` 打包）⇒ NORMAL + 印理由。
+  const r = classifyCorpus("t", obs({ dirs: 2 }), obs()); // 基线 30 → 2（6.7% < 10%）
+  assert.equal(r.health, "PARTIAL", "目录几乎没了而文件健康 ⇒ 必须拦（否则门成了瞎的）");
   assert.ok(r.lines.some((l) => l.includes("目录数")));
-  console.log("✔ ⑥ 目录数骤降 ⇒ PARTIAL（比文件数更早暴露递归被截断）");
+  // 边界显式化：**恰好 10% 不算 catastrophic**（判据是 `<`，不是 `<=`）——
+  // 界线上的夹具必须用二分精确值，别用十进制近似（本仓踩过：0.5-0.01 的浮点假红）。
+  assert.equal(classifyCorpus("t", obs({ dirs: 3 }), obs()).health, "NORMAL", "3/30 = 10% 恰在界内 ⇒ 归入「口径变化」那一档");
+  console.log("✔ ⑥ 目录数掉到近乎没有 ⇒ PARTIAL（比文件数更早暴露递归被截断）");
 }
 
 // ⑦ 哨兵缺失 ⇒ PARTIAL，**无基线也能发现**「走错目录」
@@ -96,6 +102,27 @@ const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
   const loose = classifyCorpus("t", obs({ files: 160 }), obs(), [], { minFileRatio: 0.5 });
   assert.equal(loose.health, "NORMAL");
   console.log("✔ ⑩ 阈值可注入（同一次观测在严/松两档下结论不同 ⇒ 判据不在暗处）");
+}
+
+// ⑪ **目录数骤降但文件面健康 ⇒ 不判 PARTIAL**（v1.15.55 修假阳性；这条闸曾把自己的修正堵死）
+{
+  // 旧实现：只看目录数 ⇒ 修一次遍历口径（或 `git gc` 打包 `.git` 松散对象）就报 PARTIAL，
+  // 而 PARTIAL 又**拒绝录基线** ⇒ 口径修正永远录不进去。
+  const dirsDown = obs({ dirs: 168 }); // 基线 400 目录 → 168（降 58%）
+  const r1 = classifyCorpus("t", dirsDown, obs({ dirs: 400 }), []);
+  assert.equal(r1.health, "NORMAL", "★ 文件面健康（210→210）时，目录数降**不构成**语料不健康");
+  assert.ok(r1.lines.some((l) => l.includes("目录数") && l.includes("不是")), "★ 但必须**印出理由**，不得静默放过");
+
+  // 反例：**递归真被截断**时文件数必然一起掉 ⇒ 此时必须 PARTIAL
+  const truncated = obs({ files: 120, dirs: 168 });
+  const r2 = classifyCorpus("t", truncated, obs({ dirs: 400 }), []);
+  assert.equal(r2.health, "PARTIAL", "★ 文件面也掉 ⇒ 那是真截断，照旧拦");
+  assert.ok(r2.lines.some((l) => l.includes("目录数")), "两条判据都要报");
+
+  // 边界：文件正好在容许带内（0.9）⇒ 仍算健康
+  const edge = classifyCorpus("t", obs({ files: 189, dirs: 168 }), obs({ dirs: 400 }), []);
+  assert.equal(edge.health, "NORMAL", "189/210 = 0.9 恰在容许带下限（含）⇒ 仍算健康");
+  console.log("✔ ⑪ 目录数骤降：文件面健康 ⇒ NORMAL + 印理由；文件面也掉 ⇒ PARTIAL（真截断仍拦得住）");
 }
 
 console.log("");

@@ -1364,3 +1364,25 @@ V/G/T6 真机与外部条件项
 - `tsconfig.test.json` 现在只覆盖**本轮三道闸**；对 `test/**/*.ts` 全量开启会立刻报 **169 个既存类型错误**（涉及多数测试文件的夹具与真实接口不匹配）。
 - **这正是 v1.15.52 那类「夹具悄悄失真」的温床**，但**未修** —— 修它要逐个改夹具，属独立工作项。
 - 未读：`tools/*.selftest.ts` **全部**（审查者主动标注：**审计工具的标定测试本身可能是最高危的假绿源**）。
+
+### 6.5 状态更新（v1.15.55）：§6.1 里下列条目**已修**（其余原样保留）
+
+> 保留在 §6.1 是为了**留痕**（「这条线索确实存在过」），**读的时候以本节状态为准**。
+
+| 原线索（§6.1 位置） | 状态 |
+|---|---|
+| flush 早退晚于消费 pending ⇒ 整批静默丢失 + `getFlushWarn()` 恒空 | ✅ **已修（v1.15.55）**：取 ws/fs 提到消费前；取不到则**保留 pending** + 设 `lastFlushError` |
+| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | ✅ **已修**：`rebuildIndex` 返回 boolean；失败**不清 dirty** + 设 `lastIndexError`（读侧渲染「索引可能不是最新的」） |
+| FutureEvidence 落盘失败仍播报 `[Evidence] registered` | ✅ **已修**：返回 `{evidence, persisted}`，未落盘时播报改成「**未落盘**」并说明后果 |
+| hypothesis 落盘失败仍打印 `hypotheses N` | ✅ **已修**：`writeHypothesis` 返回 boolean，`mode:offline` 报「其中 k 条未落盘」 |
+| 召回冷却台账坏 JSON ⇒ 静默归零 | ✅ **已修**：坏件带 `corrupt: true` + 留痕；`writeLedger` 返回 boolean |
+| `all-document text` 截断到 600 字**无标记** | ✅ **已修**：截断处显式写「**已截断**：原文 N 字，保留前 600 字」 |
+| 结构门解析不到的 import **不进图**、退出码 0 | ✅ **已修**：判据移进 `audit-layers.lib.ts`（不是 CLI）⇒ **未解析即违规**；`audit-layers.selftest.ts` ⑨ 标定 |
+| **V7 语料闸把 `.git` 当语料**（`git gc` ⇒ 假 PARTIAL） | ✅ **已修**：两个工具遍历排除 `.git` |
+| **PARTIAL 拒绝录基线 ⇒ 闸堵死自己的修正** | ✅ **已修**：目录数判据改用**文件面定案**（文件健康 ⇒ 口径变化，NORMAL + 印理由）；保留文件面掉/目录 <10% 两档；`corpus-health.selftest.ts` ⑪ 标定 |
+| `core/memory.ts:77-79` meta 注册失败只 log | ⬜ **未修**（与上列同族，下一轮候选） |
+
+**新增线索（本轮发现，未修）**：
+- `tools/audit-drift.ts` 的 `--json --update-ratchet` 仍会把**空 drift 表**写进基线（记账失真，非静默）；
+- `tools/toolset-authority.ts:128` 清单落盘**早于** `falseMeasured` 标红；
+- `corpus-health` 的指纹**只覆盖路径集合**（不含内容）⇒ 「同路径改了内容」不在该闸覆盖内（已在输出提示，属**已知边界**而非缺陷）。

@@ -35,6 +35,14 @@ export interface HealthOptions {
   readonly minDirRatio?: number;
   /** 线索数相对基线的**最大容许跌幅**（默认 0.2 = 跌超 20% 判 PARTIAL）。 */
   readonly maxFindingDrop?: number;
+  /**
+   * 目录数掉到基线的这个比例以下 ⇒ **无论文件面是否健康都判 PARTIAL**（默认 0.1）。
+   *
+   * 理由：「目录几乎没了但文件数健康」在物理上解释不通（语料不可能这么浅）⇒ 一定是遍历坏了。
+   * 而 10%~90% 的目录跌幅在文件面健康时更可能是**遍历口径变化**（空目录、`.git` 打包），
+   * 那种情况必须能录基线，否则闸会把自己的修正堵死（见 ④ 的注释）。
+   */
+  readonly catastrophicDirRatio?: number;
 }
 
 export interface HealthResult {
@@ -65,6 +73,7 @@ export const classifyCorpus = (
   const minFileRatio = options.minFileRatio ?? 0.9;
   const minDirRatio = options.minDirRatio ?? 0.9;
   const maxFindingDrop = options.maxFindingDrop ?? 0.2;
+  const catastrophicDirRatio = options.catastrophicDirRatio ?? 0.1;
   const lines: string[] = [];
   const say = (s: string) => lines.push(`  ${s}`);
 
@@ -90,12 +99,42 @@ export const classifyCorpus = (
   }
 
   // ④ 规模骤降（文件 / 目录 / 线索三面）
+  //
+  // **目录数这条判据要用「文件面是否健康」来定案**（v1.15.55 修一处**假阳性**，这条闸会自己堵死自己的修正）：
+  // 这条判据的设计意图是「目录数骤降 ⇒ 递归被静默截断，**比文件数更早**暴露问题」。
+  // 但**递归真被截断时，文件数必然一起骤降**（少走一个子树就少一批 `.ts`）；
+  // 反过来「文件数在容许带内、只有目录数降」只可能是**遍历口径/结构变化**
+  // （空目录被清掉、`.git` 松散对象被打包、我们把 `.git` 从遍历里排除）。
+  // 旧实现不看文件面，于是：修一次遍历口径（或跑一次 `git gc`）就报 PARTIAL，
+  // 而 PARTIAL 又**拒绝录基线** ⇒ **口径修正永远录不进去**（闸把自己的修正堵死了）。
+  //
+  // ⚠ **指纹的覆盖范围要说准**：它是 `sha256(文件**路径**集合)`（**不含内容**，见 `audit-wiring.ts`
+  // 与 `audit-drift.ts` 的 `sha256Hex(...map(rel).sort().join("\n"))`）。
+  // 故「指纹逐字相同」只能推出「**找到了同一批文件**」（这正好够用），
+  // **推不出**「内容没变 —— 同路径改了内容它看不出来（这条边界在输出里另有提示）。
+  const filesHealthy = ratio(observed.files, baseline.files) >= minFileRatio;
+  const sameFingerprint = observed.fingerprint === baseline.fingerprint;
   const problems: string[] = [];
-  if (ratio(observed.files, baseline.files) < minFileRatio) {
+  const notes: string[] = [];
+  if (!filesHealthy) {
     problems.push(`文件数 ${baseline.files} → ${observed.files}（低于 ${(minFileRatio * 100).toFixed(0)}% 容许带）`);
   }
-  if (ratio(observed.dirs, baseline.dirs) < minDirRatio) {
-    problems.push(`目录数 ${baseline.dirs} → ${observed.dirs}（递归可能没跟随 junction / 漏了根）`);
+  const dirsDropped = ratio(observed.dirs, baseline.dirs) < minDirRatio;
+  const dirsCatastrophic = ratio(observed.dirs, baseline.dirs) < catastrophicDirRatio;
+  if (dirsDropped && (!filesHealthy || dirsCatastrophic)) {
+    // 两种都要拦：① 文件面也掉 ⇒ 真截断；② 目录掉到近乎没有（<10%）而文件健康 ⇒ 物理上解释不通。
+    problems.push(
+      `目录数 ${baseline.dirs} → ${observed.dirs}` +
+        (dirsCatastrophic ? `（掉到 ${(catastrophicDirRatio * 100).toFixed(0)}% 以下，且文件面${filesHealthy ? "健康" : "也在跌"}）` : "（递归可能没跟随 junction / 漏了根）"),
+    );
+  } else if (dirsDropped) {
+    // **不静默放过**：说明为什么这次不据此判 PARTIAL。
+    notes.push(
+      `目录数 ${baseline.dirs} → ${observed.dirs}（降 ${(100 - ratio(observed.dirs, baseline.dirs) * 100).toFixed(0)}%），` +
+        `但**文件面健康**（${baseline.files} → ${observed.files}，在容许带内）且` +
+        `${sameFingerprint ? "**路径指纹逐字相同**（找到了同一批文件）" : `路径指纹 ${baseline.fingerprint.slice(0, 8)}… → ${observed.fingerprint.slice(0, 8)}…`}` +
+        `⇒ 判为「遍历口径/结构变化」（空目录、\`.git\` 打包、口径修正），**不是**递归被截断 ⇒ 不据此判 PARTIAL；请用 \`--update-ratchet\` 更新基线。`,
+    );
   }
   const dropA = 1 - ratio(observed.findingsA, baseline.findingsA);
   const dropB = 1 - ratio(observed.findingsB, baseline.findingsB);
@@ -117,6 +156,7 @@ export const classifyCorpus = (
     `语料健康（${label}）：**NORMAL** ✅（files ${observed.files} / dirs ${observed.dirs} / ` +
       `findings ${observed.findingsA}+${observed.findingsB}；指纹 ${observed.fingerprint.slice(0, 12)}…）`,
   );
+  for (const n of notes) say(`⚠ ${n}`);
   if (observed.fingerprint !== baseline.fingerprint) {
     say("⚠ 指纹与基线不同但规模在容许带内 ⇒ 语料内容变了（规模类判据**不**覆盖内容变化）");
   }

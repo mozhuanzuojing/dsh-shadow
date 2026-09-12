@@ -11,6 +11,11 @@ export interface WriterCore {
         at: number;
         err: string;
     } | undefined;
+    /** 索引重建失败（读侧据此提示「你读到的索引可能是旧的」）。与 lastFlushError 分开：这是**读路径**的失败。 */
+    lastIndexError: {
+        at: number;
+        err: string;
+    } | undefined;
     indexCache: Map<string, Map<string, any>>;
     indexCacheWarm: Set<string>;
     indexDirty: Set<string>;

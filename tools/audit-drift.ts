@@ -27,10 +27,13 @@ const asJson = process.argv.includes("--json");
 let driftCounts: Counts = {};
 /** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断）。 */
 let dirCount = 0;
+/** **排除 `.git`**：松散对象被打包会让目录数骤降而语料未变（详见 `audit-wiring.ts` 同处注释）。 */
+const SKIP_DIRS = new Set([".git"]);
 const walk = (d: string, out: string[] = []): string[] => {
   let es: any[];
   try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
   for (const e of es) {
+    if (SKIP_DIRS.has(e.name)) continue;
     const p = join(d, e.name);
     if (e.isDirectory()) { dirCount++; walk(p, out); }
     else if (e.name.endsWith(".ts")) out.push(p);

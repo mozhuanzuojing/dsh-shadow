@@ -26,9 +26,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.argv[2] || ".";
 /** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断，比文件数更早暴露问题）。 */
 let dirCount = 0;
+/**
+ * **必须排除 `.git`**（v1.15.55 修一处**假阳性**）：
+ * `.git/objects/xx` 是**松散对象**的散列目录，`git gc`/repack 会把它们打包 ⇒ 目录数**骤降**，
+ * 而语料一个字都没变（指纹相同）。实测：`count: 0 / in-pack: 4025` 之后 dirs 428 → 185，
+ * 于是 V7 语料闸报 **PARTIAL** 并拒绝比较 —— 那是**闸自己把 git 内部当成了语料**。
+ * 会把「一次 gc」误判成「语料坏了」的闸，会被当成狼来了（这正是 V7 要防的反面）。
+ */
+const SKIP_DIRS = new Set([".git"]);
 const walk = (d, out = []) => {
   let es; try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
   for (const e of es) {
+    if (SKIP_DIRS.has(e.name)) continue;
     const p = join(d, e.name);
     if (e.isDirectory()) { dirCount++; walk(p, out); }
     else if (e.name.endsWith(".ts")) out.push(p);

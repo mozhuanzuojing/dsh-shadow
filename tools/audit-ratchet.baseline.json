@@ -2,18 +2,18 @@
   "corpus": {
     "dirs": 420,
     "drift": {
-      "dirs": 426,
-      "files": 195,
+      "dirs": 168,
+      "files": 196,
       "findingsA": 0,
       "findingsB": 28,
-      "fingerprint": "6f609cc704a14ab10302040aff5794c4b27068d9dff909309f4f3ac640c668e9"
+      "fingerprint": "7d771706cac4bb3a50a01712daca37b3a10817b4197511d82a267784ffbeddac"
     },
     "files": 778,
     "findingsA": 32,
     "findingsB": 103,
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
-      "dirs": 428,
+      "dirs": 168,
       "files": 787,
       "findingsA": 39,
       "findingsB": 107,

@@ -3,6 +3,43 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.55] **修台账里的高危条目（6 类）＋ 修闸自身的 2 处缺陷** —— `verify` 52/52
+
+**一句话**：继续 `review fix all`，这次动手的对象是**上一轮自己记下的高危线索**（会永久改变可见状态、当前不出声），
+外加**本轮真实撞上的、审计闸自身的两处缺陷** —— 后者比被审对象的问题更该先修。
+
+### 1. 高危条目（ADR-0083 §6.1）
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **flush 顺序反了** | 先 `pending.delete`/`comps.delete`，**再** `if (!ws \|\| !fs) return` ⇒ 取不到工作区/会话 fs 时**整批记录已被消费**：没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空，**告警在最需要它时失效**） | 取 ws/fs 提到消费**之前**；取不到 ⇒ **保留 pending** + 设 `lastFlushError` + `console.error` |
+| **索引失败后照读陈旧索引** | `rebuildIndex` 吞异常返回 void；`ensureIndex` 无条件清 `indexDirty` ⇒ 一次失败后**再也不重建**，调用方照读磁盘旧 `_index.md` | `rebuildIndex` 返回 `boolean`；失败**不清 dirty** + `lastIndexError`，`getFlushWarn()` 渲染「索引可能不是最新的」 |
+| **证据落盘失败仍播报 `registered`** | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed，**没人知道为什么** | `registerFutureEvidence` 返回 `{evidence, persisted}`，未落盘时播报改为「**未落盘**」+ 后果说明 |
+| **假设落盘失败仍打印 `hypotheses N`** | 用户以为有 N 条可 validate，磁盘上少几条 | `writeHypothesis` 返回 `boolean`；`mode:offline` 报「其中 k 条未落盘」 |
+| **台账坏件 ≡ 空件** | 冷却状态静默清零 ⇒ **已冷却的记忆被重新返回**，与「第一次运行」不可区分 | 坏件带 `corrupt: true` + 留痕；`writeLedger` 返回 `boolean` |
+| **消息截断无痕迹** | 长消息尾部**从未落盘**，读的人以为这就是全文 | 截断处显式写「**已截断**：原文 N 字，保留前 600 字」 |
+
+### 2. 闸自身的缺陷（本轮真实发生 —— 一个会误报的闸会被当成狼来了）
+
+| 缺陷 | 现象 | 修法 |
+|---|---|---|
+| **V7 语料闸把 `.git` 当语料** | `git gc` 把 `.git/objects/xx` 松散对象打包 ⇒ 目录数 **428 → 185**，而语料一个字没变（指纹相同）⇒ 报 **PARTIAL** | 两个工具的遍历**排除 `.git`** |
+| **PARTIAL 拒绝录基线 ⇒ 闸堵死自己的修正** | 修完遍历口径仍 PARTIAL（基线旧），而 PARTIAL 又拒绝 `--update-ratchet` ⇒ **口径修正永远录不进去**（本轮实测卡住） | 目录数判据改为**用文件面定案**：文件面健康时的目录降 ⇒ 「遍历口径/结构变化」⇒ NORMAL **但必须印理由**；保留两档保护（文件面也掉 / 目录掉到 **<10%**）⇒ 真截断仍拦。阈值可注入 |
+
+### 3. 标定与自查
+
+- `tools/corpus-health.selftest.ts` 新增 **⑪**（口径变化 ⇒ NORMAL + 印理由 / 真截断 ⇒ PARTIAL / 0.9 边界含）；**⑥** 改为测两档并把 **10% 边界显式化**（`3/30` 恰在界内）。
+- `tools/audit-layers.selftest.ts` 新增 **⑨**：未解析的相对 import ⇒ **计违规**（曾经只打印、退出码 0 ⇒ 改坏一个 import 路径即可让违规边从判据里消失）。
+- `test/review-fixes.test.ts` 加 ④⑤：台账坏件标记 / 写失败报 false / 证据与假设落盘失败可被播报。
+- **本轮自己写错并当场改正的一处注释**：我起初把语料指纹写成「**路径 + 全文**的内容派生值」，
+  实际是 `sha256(文件**路径**集合)`（**不含内容**）。论点仍成立（同一路径集 ⇒ 没丢文件），**措辞已改准**；
+  「同路径改了内容」这条边界在输出里另有提示。
+- **`verify` = 52/52**；两条棘轮均通过；语料健康双方 **NORMAL**（基线已按新口径重录：`dirs 168`）。
+
+**仍未修**：ADR-0083 §6.3 列出的中危/待定语义条目 · `core/memory.ts:77-79` meta 注册失败只 log ·
+169 个既存测试类型错误 · 整目录未读（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，`tools/*.selftest.ts`）。
+
+
 ## [v1.15.54] **对抗性审查（按缺陷类全仓扫）**：修 7 类 + **三条新纪律** + 一份未修线索台账 —— `verify` 52/52
 
 **一句话**：用户说「review fix all」。第一轮只审了两个新模块；本轮**按缺陷类**扫全仓，三个角度**并行只读审查**：

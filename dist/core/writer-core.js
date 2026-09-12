@@ -10,6 +10,7 @@ export function createWriterCore(opts) {
         goalByAgent: new Map(),
         cwdBySession: new Map(),
         lastFlushError: undefined,
+        lastIndexError: undefined,
         indexCache: new Map(),
         indexCacheWarm: new Set(),
         indexDirty: new Set(),

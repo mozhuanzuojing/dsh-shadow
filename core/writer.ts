@@ -50,10 +50,18 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   hooks.flush = materialize.flush;
   hooks.primaryComp = capture.primaryComp;
 
-  const getFlushWarn = () =>
-    core.lastFlushError
-      ? `\n\n> ⚠ shadow 最近一次落盘失败（${new Date(core.lastFlushError.at).toISOString()}：${core.lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`
-      : "";
+  const getFlushWarn = () => {
+    const parts: string[] = [];
+    if (core.lastFlushError) {
+      parts.push(`\n\n> ⚠ shadow 最近一次落盘失败（${new Date(core.lastFlushError.at).toISOString()}：${core.lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`);
+    }
+    // 索引重建失败**也必须提示**：此时无参读路径会 serve 磁盘上的**陈旧** `_index.md`，
+    // 「索引里没有这条」与「这条不存在」是两件事（ADR-0049）。
+    if (core.lastIndexError) {
+      parts.push(`\n\n> ⚠ shadow 最近一次**索引重建失败**（${new Date(core.lastIndexError.at).toISOString()}：${core.lastIndexError.err}）。下面的索引可能**不是最新的**；主题召回走逐文件读盘，两者可能不一致。`);
+    }
+    return parts.join("");
+  };
 
   // v1.6 recall_shadow 的 LLM 推理导航：只让 LLM【选编号】（意图/排序），不生成事实/理由/判断。
   // 失败/未配置 → 返回 []，调用方回退到确定性 bestTask（行为不变）。

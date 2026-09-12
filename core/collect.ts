@@ -22,7 +22,11 @@ export const extractMessage = (event: any) => {
     .join("\n")
     .trim();
   if (!text) return null;
-  return { kind, text: text.slice(0, 600) };
+  // **截断必须留痕**（v1.15.55）：旧版 `slice(0, 600)` 让长消息的尾部**从未落盘**，
+  // 而读的人以为这就是全文（「缺件不静默」ADR-0049）。这里显式标出丢了多少字。
+  const CAP = 600;
+  if (text.length <= CAP) return { kind, text };
+  return { kind, text: `${text.slice(0, CAP)}…（**已截断**：原文 ${text.length} 字，此处保留前 ${CAP} 字）` };
 };
 
 export const goalText = (change: any) => {

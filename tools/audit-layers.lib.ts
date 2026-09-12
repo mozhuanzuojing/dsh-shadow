@@ -201,6 +201,18 @@ export const auditLayers = (
   const known = new Set(graph.nodes);
   const violations: { rule: string; why: string; where: string }[] = [];
 
+  // ⓪ **未解析的相对 import 计违规**（v1.15.55）。
+  // 判据必须放在 **lib**（不是 CLI）：置此之前它只写在 `audit-layers.ts` 的打印分支里，
+  // 于是「未解析 ⇒ 违规」这条判定**只有 CLI 看得到**，`auditLayers()` 的调用方（含 selftest）看不到 ——
+  // 那正是「判据分叉」的形态。放在这里，CLI 与标定测试共用同一个判据。
+  for (const u of graph.unresolved ?? []) {
+    violations.push({
+      rule: "未解析 import",
+      why: "相对 import 解析不到 ⇒ 这条边**不在依赖图里**：无环判据与方向禁令都看不到它（改坏一个路径即可静默放行）",
+      where: `${u.from}:${u.line} → ${u.spec}`,
+    });
+  }
+
   // ① 文件级无环
   const fileSucc = (n: string) => graph.edges.filter((e) => e.from === n && e.kind === "relative").map((e) => e.to);
   const fileCycles = stronglyConnected(graph.nodes, fileSucc);

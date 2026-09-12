@@ -16,7 +16,12 @@ export async function runValidation(deps, args, ctx) {
         return undefined;
     const { fs, ws, flushWarn } = ctx;
     if (mode === "evidence") {
-        const ev = await registerFutureEvidence(fs, ws, { hypothesisId: String(args?.hypothesisId || ""), observedAt: String(args?.observedAt || today()), actualOutcome: String(args?.actualOutcome || ""), observationType: String(args?.observationType || "observation") });
+        const { evidence: ev, persisted } = await registerFutureEvidence(fs, ws, { hypothesisId: String(args?.hypothesisId || ""), observedAt: String(args?.observedAt || today()), actualOutcome: String(args?.actualOutcome || ""), observationType: String(args?.observationType || "observation") });
+        // **播报必须与实际一致**（v1.15.55）：没落盘就不能说 registered —— 否则之后 validate 读不到它，
+        // 使用者只会看到「证据消失了」，无从知道当时根本没写下去。
+        if (!persisted) {
+            return scrubFinal(RECALL_PREFIX + `[Evidence] **未落盘** ${ev.id} · hypothesis ${ev.hypothesisId} · outcome ${ev.actualOutcome}\n> ⚠ 写入 \`.shadow/future-evidence/\` 失败：这条证据**不会**被后续 \`mode:validate\` 读到。请先确认 shadowRoot 可写后重试。` + flushWarn);
+        }
         return scrubFinal(RECALL_PREFIX + `[Evidence] registered ${ev.id} · hypothesis ${ev.hypothesisId} · outcome ${ev.actualOutcome}` + flushWarn);
     }
     if (mode === "validate") {

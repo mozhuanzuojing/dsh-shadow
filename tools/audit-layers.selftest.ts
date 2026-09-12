@@ -126,6 +126,24 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   console.log("✔ ⑦ 判据表非空、每条禁令带 why、默认白名单在空语料下逐条自曝");
 }
 
+// ⑨ **未解析的相对 import 必须计违规**（v1.15.55：曾经只打印、退出码 0 ⇒ 门可静默放行）
+{
+  // 构造：`core/a.ts` 引一个不存在的 `./ghost.js`。旧行为下这条边**不进图**，
+  // 于是「无环」与「方向禁令」都看不到它 —— 把一个 import 路径改坏就能让违规边消失。
+  const ghost = [f("core/a.ts", 'import { g } from "./ghost.js";\n')];
+  const rGhost = auditLayers(ghost, NO_RULES);
+  assert.equal(rGhost.unresolved.length, 1, "解析不到的相对 import 必须被记为 unresolved");
+  assert.ok(rGhost.violations.length >= 1, "★ 而且必须**计违规**（否则门静默放行）");
+  assert.ok(rGhost.violations.some((v) => v.rule === "未解析 import"), "违规条目要能点名这条判据");
+
+  // 反例对照：把 import 写对 ⇒ 无 unresolved、无违规
+  const okPair = [f("core/a.ts", 'import { b } from "./b.js";\n'), f("core/b.ts", "export const b = 1;\n")];
+  const rOk = auditLayers(okPair, NO_RULES);
+  assert.equal(rOk.unresolved.length, 0);
+  assert.equal(rOk.violations.length, 0, "写对的 import 不得被误判");
+  console.log("✔ ⑨ 未解析 import 计违规（改坏路径不再能静默绕过结构门）");
+}
+
 // ⑧ Tarjan 自身的正反例
 {
   const nodes = ["a", "b", "c"];

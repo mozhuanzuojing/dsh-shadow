@@ -25,7 +25,8 @@ import type { WriterHooks } from "./writer-capture.js";
 
 export interface MaterializeResult {
   flush: (agent: AgentLike | undefined) => Promise<void>;
-  rebuildIndex: (fs: any, ws: string) => Promise<void>;
+  /** 返回是否**真的重建成功**（v1.15.55）：调用方 `ensureIndex` 必须据此决定要不要清 dirty 标记。 */
+  rebuildIndex: (fs: any, ws: string) => Promise<boolean>;
   ensureIndex: (ws: string, session?: any) => Promise<void>;
 }
 
@@ -222,7 +223,9 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       if (fpBefore !== undefined) core.indexFingerprint.set(ws, fpBefore);
     } catch (e: any) {
       console.log("[dsh-shadow] rebuildIndex failed:", e && e.message);
+      return false; // **必须让调用方知道**：否则它会清掉 dirty 标记 ⇒ 本次失败后**再也不重建**
     }
+    return true;
   };
 
   const patchSummary = async (fs: any, ws: string, rel: string, entry: string, arr: any[]) => {
@@ -253,15 +256,28 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     if (core.writeConsent && !arr.some((e) => e.kind === "user" && /(记住|记得|记一下|记下来|记忆|沉淀|存档|保存|日后|以后|写入记忆|记下)/.test(String(e.text || "")))) {
       return;
     }
-    if (id) core.pending.delete(id);
-    const entry = hooks.primaryComp?.(id || "") || "shadow";
-    if (id) core.comps.delete(id);
+    // **先取好工作区与会话 fs，再消费 pending**（v1.15.55 修：顺序反了 ⇒ 整批被静默丢弃）。
+    // 旧顺序是「先 `pending.delete` / `comps.delete`，再 `if (!ws || !fs) return`」：
+    // 一旦取不到 ws/fs（会话工作区解析失败 / 无沙箱策略），**整批记录已经被消费掉了**，
+    // 既没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空 ⇒
+    // 「你读到的可能是旧/不完整记忆」这条告警**在最需要它的时候失效**）。
     const ws = resolveWorkspace(agent, core.cwdBySession, core.config);
     // 会话作用域的 fs（ADR-0074）：写入必须携带**该会话自己的**沙箱策略 ——
     // 省略该参数会让沙箱退回部署 fallback（mode=workspace-write + `process.cwd()`），
     // 会话工作区一旦不等于服务启动目录，写入即被围栏拒绝（记忆一条都落不了盘）。
     const fs = scopedFs(core.context.get("fs"), policyForAgent(core.context, agent));
-    if (!ws || !fs) return;
+    if (!ws || !fs) {
+      // **pending 保留**（不 delete）：下次 flush 还能落盘；同时**必须留痕**。
+      core.lastFlushError = {
+        at: Date.now(),
+        err: `flush 跳过：${!ws ? "工作区不可解析" : "无会话 fs（沙箱策略缺失）"}；本回合 ${arr.length} 条**未落盘且已保留**`,
+      };
+      console.error("[dsh-shadow][error] flush SKIPPED:", core.lastFlushError.err);
+      return;
+    }
+    const entry = hooks.primaryComp?.(id || "") || "shadow";
+    if (id) core.pending.delete(id);
+    if (id) core.comps.delete(id);
     try {
       const rel = `${SHADOW_ROOT}/${today()}/${compact()}-${slug(entry)}.md`;
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
@@ -308,7 +324,15 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       // 两侧都可判定且一致 → 跳过；任一侧不可判定（后端不报 size/version、首次无记录）→ 保守重建。
       if (fpNow !== undefined && fpPrev !== undefined && fpNow === fpPrev) return;
     }
-    await rebuildIndex(fsI, ws);
+    const ok = await rebuildIndex(fsI, ws);
+    if (!ok) {
+      // **不清 dirty**（下次读还会重建），并**留痕**给读侧（`getFlushWarn()` 会渲染）。
+      // 旧代码无条件 `indexDirty.delete(ws)`：一次重建失败 ⇒ dirty 被清掉 ⇒ 之后
+      // `indexCacheWarm` 命中就**再也不重建**，而调用方照读磁盘上的**陈旧** `_index.md`。
+      core.lastIndexError = { at: Date.now(), err: `索引重建失败（${ws}）：本次仍读旧 _index.md` };
+      console.error("[dsh-shadow][error]", core.lastIndexError.err);
+      return;
+    }
     core.indexDirty.delete(ws);
     // v1.15.12：索引重建 = **记忆集已变** → 投影缓存必须一并失效，
     // 否则 shadow_query 会读陈旧投影（此前 invalidate 零调用点，只能手动删 nodes.jsonl）。

@@ -55,3 +55,41 @@
 
 **这些不得被读成「已修」或「不存在」** —— 台账见 `BACKLOG.md`「审查线索」一节。
 **本 ADR 不主张审查已穷尽**：三名审查者各自只读了一部分，且**都未做端到端复现**（坏件发生率、真语料影响面均未量化）。
+
+---
+
+## 6. 第三轮（v1.15.55）：修 §5 台账里的**高危条目**，并**修闸自身的两处缺陷**
+
+### 6.1 已修（每条都标了「为什么是真缺陷」）
+
+| 缺陷 | 修法 |
+|---|---|
+| **flush 顺序反了**：`core/writer-materialize.ts` 先 `pending.delete` / `comps.delete`，**再** `if (!ws \|\| !fs) return` ⇒ 取不到 ws/fs 时**整批记录已被消费掉**：没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空） | 把「取工作区 + 会话 fs」提到消费**之前**；取不到 ⇒ **保留 pending** + 设 `lastFlushError` + `console.error` |
+| **索引失败后照读陈旧索引**：`rebuildIndex` 吞异常返回 void；`ensureIndex` 无条件 `indexDirty.delete(ws)` ⇒ 一次失败之后**再也不重建**，而调用方照读磁盘旧 `_index.md` | `rebuildIndex` 返回 `boolean`；失败时**不清 dirty**、设 `core.lastIndexError`、`getFlushWarn()` 渲染「索引可能不是最新的」 |
+| **FutureEvidence 落盘失败仍播报 `registered`** | `registerFutureEvidence` 返回 `{ evidence, persisted }`；`mode:evidence` 按 `persisted` 改写播报（未落盘时明说「不会被 validate 读到」） |
+| **hypothesis 落盘失败仍打印 `hypotheses N`** | `writeHypothesis` 返回 `boolean`；`mode:offline` 数出失败条数并在同一条回复里说明「只有 N−k 条可 validate」 |
+| **台账坏件 ≡ 空件**（冷却静默清零 ⇒ 已冷却记忆被重发） | `readLedger` 坏件带 `corrupt: true` + 留痕；形状不对（无 `served`）同样算坏件；`writeLedger` 返回 `boolean` |
+| **消息截断 600 字无痕迹**（长消息尾部从未落盘，读的人以为这就是全文） | `core/collect.ts` 截断时显式追加「**已截断**：原文 N 字，此处保留前 600 字」 |
+
+### 6.2 闸自身的缺陷（**本轮真实发生**，比被审对象的问题更该先修）
+
+| 缺陷 | 现象 | 修法 |
+|---|---|---|
+| **V7 语料闸把 `.git` 当语料** | `git gc` 把 `.git/objects/xx` 松散对象打包 ⇒ 目录数 **428 → 185**，而语料一个字没变（指纹相同）⇒ 报 **PARTIAL** 并拒绝比较。**会把一次 gc 误判成「语料坏了」的闸，会被当成狼来了** | `audit-wiring.ts` / `audit-drift.ts` 的遍历**排除 `.git`** |
+| **PARTIAL 拒绝录基线 ⇒ 闸把自己的修正堵死** | 修完遍历口径后仍然 PARTIAL（基线是旧的），而 PARTIAL 又**拒绝 `--update-ratchet`** ⇒ **口径修正永远录不进去**（本轮实测卡住） | 目录数这条判据改为**用文件面定案**：文件面健康时的目录降判为「遍历口径/结构变化」⇒ NORMAL **但必须印出理由**（不静默放过）；同时保留**两档**保护 —— 文件面也掉、或目录掉到 **<10%**（物理上解释不通）照旧 PARTIAL。阈值可注入（`catastrophicDirRatio`） |
+
+**标定**：`tools/corpus-health.selftest.ts` 新增 ⑪（口径变化 ⇒ NORMAL + 印理由 / 真截断 ⇒ PARTIAL / 0.9 边界含）；⑥ 改为测**两档**并把 10% 边界显式化（`3/30` 恰在界内 ⇒ 归入口径变化那一档）。
+
+**⚠ 本轮自己写错并当场改正的一处注释**：我起初把语料指纹描述为「**路径 + 全文**的内容派生值」——
+实际是 `sha256(文件**路径**集合)`（`audit-wiring.ts:194` / `audit-drift.ts:125`），**不含内容**。
+论点仍成立（同一路径集 ⇒ 没丢文件，正好够用于目录数判定），但**措辞已改准**；
+「同路径改了内容」这条边界在输出里另有提示。
+
+### 6.3 仍未修（§5 台账里剩余的中危/待定语义条目原样保留）
+
+`manifest.failures` 恒空 · `_index.md` 不进指纹 · query-log 坏行无计数 · 证据路径上限无披露 ·
+`observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 · `reads.ts` 截断只写 log ·
+`episode.ts` 缺时刻被默认值掩盖 · zg 报错→not_found · `filesystem.ts` 读失败/不存在不分 ·
+缺 locator 当存在 · audit-drift `--json --update-ratchet` 写空表 · toolset-authority 落盘早于标红 ·
+`factualOnly`/`candidateStats` 丢 `violations` · 以及 §6.3 的六条**待定语义**。
+**未读范围与 169 个测试类型错误同样未变**（见 §5）。

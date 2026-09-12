@@ -58,6 +58,12 @@ export async function runObserverKernel(deps: ShadowQueryDeps, args: any, ctx: O
   const result = await offlineCompression(fs, ws, { observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to });
   const artifact = await buildDreamArtifact(fs, ws, { id: sw.id, observerId: sw.observerId, from: sw.includedTimelineRange.from, to: sw.includedTimelineRange.to }, result);
   await writeDream(fs, ws, { artifact, result });
-  for (const h of result.hypotheses) await writeHypothesis(fs, ws, h);
-  return scrubFinal(RECALL_PREFIX + renderSleepWindow(sw) + "\n" + renderDreamResult(result) + flushWarn);
+  // **播报必须与实际一致**（v1.15.55）：`renderDreamResult` 会打印 `hypotheses N`，
+  // 若其中若干条没落盘，就必须在**同一条回复里**说明 —— 否则用户以为有 N 条可 validate，实际少几条。
+  let failedH = 0;
+  for (const h of result.hypotheses) if (!(await writeHypothesis(fs, ws, h))) failedH += 1;
+  const hypWarn = failedH > 0
+    ? `\n> ⚠ 其中 **${failedH} 条假设未落盘**（写 \`.shadow/hypothesis/\` 失败）：上面的 \`hypotheses ${result.hypotheses.length}\` 只有 ${result.hypotheses.length - failedH} 条可被 \`mode:validate\` 读到。\n`
+    : "";
+  return scrubFinal(RECALL_PREFIX + renderSleepWindow(sw) + "\n" + renderDreamResult(result) + hypWarn + flushWarn);
 }
