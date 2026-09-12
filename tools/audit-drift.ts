@@ -11,12 +11,18 @@
 //   · 夹具 10 组已知答案（POS-1..3 / NEG-1..5 / 检测 B 跨文件）
 //   · **git 历史里的真缺陷**：`0c4e06b:core/writer-materialize.ts` 的 :41 与 :215（修复前报 2 条、修复后 0 条）
 // 一个抓不到已知缺陷的检测器，报「0 findings」没有意义（本仓纪律：先证工具，再用工具）。
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join, relative, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductionPath } from "./audit-drift.lib.ts";
+import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 const ROOT = process.argv[2] || ".";
 const asJson = process.argv.includes("--json");
+/** B 段计数需在块作用域内取，故提到顶层（V6 棘轮用）。 */
+let driftCounts: Counts = {};
 const walk = (d: string, out: string[] = []): string[] => {
   let es: any[];
   try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
@@ -37,6 +43,13 @@ const prod = walk(ROOT, [])
 
 const fresh = findFreshnessAsksProcess(prod);
 const preds = findPredicateExpressedTwice(prod);
+
+// **缺件不静默（ADR-0049）**：与 `audit-wiring` 同因 —— 漏掉根参数会让 ROOT 取到旗标字符串、
+// 扫出 0 文件、然后「安静地全绿」。（v1.15.45 实测踩到，故两个工具都加闸。）
+if (prod.length === 0) {
+  console.error(`生产语料为空（ROOT=${ROOT}）⇒ 拒绝产出「0 线索」读数：先确认根参数写对了（用法：node tools/audit-drift.ts <仓库根> [--ratchet]）`);
+  process.exit(2);
+}
 
 if (asJson) {
   console.log(JSON.stringify({ productionFiles: prod.length, freshness: fresh, predicateLeads: preds }, null, 2));
@@ -70,6 +83,7 @@ if (asJson) {
     console.log(`  ${k.padEnd(26)} 文件 ${v.files.size}: ${[...v.files].join(", ")}`);
   }
   console.log(`  小计 ${keys.length} 个键 / ${preds.length} 处`);
+  driftCounts = { drift_keys: keys.length, drift_sites: preds.length };
 
   console.log("");
   console.log("判定纪律（**本条最重要**）：以上都是**线索不是结论**。");
@@ -79,6 +93,28 @@ if (asJson) {
   console.log("    生产者与消费者分别表达同一条判据，在分层架构里**可能是正当的**。");
   console.log("");
   console.log("**工具自身经标定**：node tools/audit-drift.selftest.ts");
+}
+
+// ───────────────────── V6：棘轮（退出码语义） ─────────────────────
+// 与 `audit-wiring` **共用同一个基线文件**的 `drift` 段。判据同前：线索数只能降不能升；
+// 桶消失或新桶出现都算违规。**诚实标注**：本段只棘轮 **B 段**（`drift_keys` / `drift_sites`）——
+// A 段的 `fresh` 计数在块作用域里，文件尾取不到；要棘轮它得先把计数提到顶层（留作后续）。
+const RATCHET_BASELINE = join(here, "audit-ratchet.baseline.json");
+const DRIFT_COUNTS: Counts = driftCounts;
+const wantsRatchet = process.argv.includes("--ratchet") || process.argv.includes("--update-ratchet");
+if (wantsRatchet) {
+  const all = existsSync(RATCHET_BASELINE) ? JSON.parse(readFileSync(RATCHET_BASELINE, "utf8")) : {};
+  if (process.argv.includes("--update-ratchet")) {
+    all.drift = DRIFT_COUNTS;
+    writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
+    console.log(`已写入棘轮基线（drift 段）：${RATCHET_BASELINE}`);
+    for (const [k, v] of Object.entries(DRIFT_COUNTS).sort()) console.log(`  ${k} = ${v}`);
+    process.exit(0);
+  }
+  const r = ratchetCounts("audit-drift", DRIFT_COUNTS, all.drift);
+  console.log("");
+  for (const l of r.lines) console.log(l);
+  process.exit(r.exitCode);
 }
 
 process.exit(0);

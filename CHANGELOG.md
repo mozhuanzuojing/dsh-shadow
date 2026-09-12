@@ -3,6 +3,52 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.45] **V6 闭环**：两个分诊报告有了**棘轮退出码**，并接进 `npm run verify`（+ 修一处「空语料冒充没问题」）
+
+**一句话**：`audit:wiring` / `audit:drift` 一直是**人工分诊**工具 —— 输出是线索清单、**退出码恒 0**
+⇒ 「工具会随时间失效」（V6 原文）。本轮把退出码语义定下来、做成棘轮，并**接进门禁**；
+过程中**踩到并修掉了一处真缺陷**（空语料 ⇒ 假全绿 ⇒ 会录成假基线）。
+
+### 1. 判据（新文件 `tools/audit-ratchet.lib.ts` + 8 组标定测试）
+
+| # | 判据 | 退出码 |
+|---|---|---|
+| ① | **线索数只能降不能升**（某桶多于基线 ⇒ 报文给「旧 → 新」与增量） | **1** |
+| ② | **下降不是违规**（提示 `--update-ratchet` 收紧基线）—— 判紧会让人习惯性绕过这道门 | 0 |
+| ③ | **基线里有的桶在观测里消失**（缺件不静默：可能是工具坏了，不是问题没了） | **1** |
+| ④ | **出现新桶**（否则整类新线索会被棘轮漏掉） | **1** |
+| ⑤ | 基线缺失 / 两表皆空（「通过」不能靠没有判据换来） | **1** |
+
+### 2. 基线与执行处
+
+- `tools/audit-ratchet.baseline.json`（**两个报告共用一份**，分 `wiring` / `drift` 两段）：
+  `wiring = { a_total 31, a2b 0, a1 17, a2a 3, a3 11, b_keys 103 }`、
+  `drift = { drift_keys 10, drift_sites 25 }`。
+- `npm run audit:ratchet`（两份报告的 `--ratchet` 串联）**已进 `npm run verify`** ⇒ 门禁 **48/48**。
+- `--update-ratchet` 单入口写回基线（与 `retrieval-eval --update-baseline` 同形）。
+
+### 3. 同轮踩到并修掉的真缺陷（留档，与 T2/T12 同族）
+
+`node tools/audit-wiring.ts --ratchet` **漏了根参数** ⇒ `ROOT` 取到旗标字符串 `"--ratchet"` ⇒
+扫描目录不存在 ⇒ **0 文件 ⇒ 0 线索 ⇒ 工具「安静地全绿」**，而 `--update-ratchet` 会把这个全 0 读数
+**录成基线**（棘轮从此失去意义）。
+⇒ 两个 CLI **都加闸：零文件语料直接 `exit 2`**（缺件不静默，ADR-0049），npm 脚本里显式带上 `.`。
+**唯一失效模式就是「空语料冒充没问题」**。
+
+### 4. 诚实边界
+
+- 棘轮只覆盖**计数**，答不了「计数相同但线索换了一批」（需逐条 diff，未做）。
+- `audit-drift` 只棘轮 **B 段**（A 段的 `fresh` 计数在块作用域内，要棘轮得先把计数提到顶层）。
+- 两个 CLI 的 `--ratchet` 接线与「零文件 `exit 2`」靠**真实运行**验证（已手工跑过），未做成自动断言（需 spawn 子进程）。
+
+### 5. 变更文件
+
+`tools/audit-ratchet.lib.ts`（新）· `tools/audit-ratchet.selftest.ts`（新）· `tools/audit-ratchet.baseline.json`（新）·
+`tools/audit-wiring.ts`（`--ratchet`/`--update-ratchet` + 零语料闸）· `tools/audit-drift.ts`（同）·
+`package.json`（`version` → 1.15.45；新增 `audit:ratchet`；`verify` 加一步）· `BACKLOG.md`（V6 结案，头部 23 → 22 / 20 → 21）·
+`CHANGELOG.md`（本条）· `README.md`（版本表 + `verify` 组成）。
+**未改动**：`index.ts` 与业务源码、`dist/`。
+
 ## [v1.15.44] **台账回填**：把「读了什么 / 还没读什么」追平到事实（MATERIALS + references 覆盖率台账）
 
 **一句话**：本仓纪律要求「台账比事实旧＝缺陷」（ADR-0072 那一族）。v1.15.41–43 一口气读了五片面

@@ -13,9 +13,13 @@
 //
 // **本工具的结论必须经标定**：见 `tools/audit-wiring.selftest.ts`。
 // 一个抓不到已知缺陷的检测器，报「0 findings」是没有意义的（本仓纪律：先证工具，再用工具）。
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join, relative, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings } from "./audit-wiring.lib.ts";
+import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 const ROOT = process.argv[2] || ".";
 const walk = (d, out = []) => {
@@ -47,6 +51,13 @@ const prod = prodPaths.map((f) => ({ file: rel(f), text: read(f) }));
 const testText = testPaths.map((f) => read(f)).join("\n");
 
 console.log(`生产源码 ${prod.length} 个 · 测试 ${testPaths.length} 个（判据：生产 = isProductionPath；测试 = 仅 test/ 下）`);
+// **缺件不静默（ADR-0049）**：v1.15.45 实测踩到 —— 把根参数漏掉（`node ... --ratchet`）时 ROOT 会取到
+// 旗标字符串，扫描目录不存在 ⇒ **0 文件 ⇒ 0 线索**，而工具会「安静地全绿」。这类「空语料冒充没问题」
+// 必须当场拒绝，否则棘轮会被录成一条全 0 的假基线。
+if (prod.length === 0) {
+  console.error(`生产语料为空（ROOT=${ROOT}）⇒ 拒绝产出「0 线索」读数：先确认根参数写对了（用法：node tools/audit-wiring.ts <仓库根> [--ratchet]）`);
+  process.exit(2);
+}
 console.log("");
 
 // ═══════════ A. 导出但生产代码**无调用点** ═══════════
@@ -139,3 +150,32 @@ console.log("    （实例：`notRevoked` 的 2 个调用点都在零调用的 `
 console.log("    这需要调用图/可达性分析 ⇒ 见 `BACKLOG.md` T10。");
 console.log("");
 console.log("**工具自身经标定**：node tools/audit-wiring.selftest.ts");
+
+// ───────────────────── V6：棘轮（退出码语义） ─────────────────────
+// 判据：**线索数只能降不能升**；桶消失或新桶出现都算违规（缺件不静默 / 新类线索必须记账）。
+// 基线与 `audit-drift` **共用同一个文件**的 `wiring` 段（一处记账）。
+const RATCHET_BASELINE = join(here, "audit-ratchet.baseline.json");
+const WIRING_COUNTS: Counts = {
+  a_total: rows.length,
+  a2b: cnt("A2b"),
+  a1: cnt("A1"),
+  a2a: cnt("A2a"),
+  a3: cnt("A3"),
+  b_keys: orphans.length,
+};
+const wantsRatchet = process.argv.includes("--ratchet") || process.argv.includes("--update-ratchet");
+if (wantsRatchet) {
+  const all = existsSync(RATCHET_BASELINE) ? JSON.parse(readFileSync(RATCHET_BASELINE, "utf8")) : {};
+  if (process.argv.includes("--update-ratchet")) {
+    all.wiring = WIRING_COUNTS;
+    writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
+    console.log("");
+    console.log(`已写入棘轮基线（wiring 段）：${RATCHET_BASELINE}`);
+    for (const [k, v] of Object.entries(WIRING_COUNTS).sort()) console.log(`  ${k} = ${v}`);
+    process.exit(0);
+  }
+  const r = ratchetCounts("audit-wiring", WIRING_COUNTS, all.wiring);
+  console.log("");
+  for (const l of r.lines) console.log(l);
+  process.exit(r.exitCode);
+}

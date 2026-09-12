@@ -1,0 +1,14 @@
+{
+  "drift": {
+    "drift_keys": 10,
+    "drift_sites": 25
+  },
+  "wiring": {
+    "a1": 17,
+    "a2a": 3,
+    "a2b": 0,
+    "a3": 11,
+    "a_total": 31,
+    "b_keys": 103
+  }
+}
