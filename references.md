@@ -249,3 +249,38 @@
 
 **吸收后的净效果**：本仓第一次有了**一条命令跑完全部确定性检查**；「读一条没人写的状态」在结构上会被报警；
 「错误方向不对称」从建议变成成文判据。**代价**：新开 **T12**（时间炸弹 fixture 的风险面只拆了一颗）。
+
+### 6.3 **覆盖率台账（由磁盘枚举生成，不由手写清单生成）** —— v1.15.39 / `adr/0078`
+
+**为什么加这一节**：0073 与 0076 的「未读清单」都是**手写的散文**，于是第三轮（本地克隆后）一核对就发现它**漏了整片**面。
+手写清单的两个本质缺陷：① 不完整且**无法自证完整**；② 与「靠自觉不是闸门」同族（本仓 ADR-0049 / 0077 D2 反复记录的形态）。
+⇒ 从本轮起，覆盖率**以 `git ls-files` 为基准**。
+
+**基准**：`hl_mem` v1.1.7（HEAD `aa5d068`）= **1025 文件 / 16.03 MB**（`git ls-files`）。
+
+| 面 | 文件 | 字节 | 一手读过？ | 读到的边界 |
+|---|---:|---:|---|---|
+| `src/hl_mem/state_latest_wins.py` | 1 | 6.5 KB | ✅ **全文** | 取代协议核心（六分支函数） |
+| `src/hl_mem/lifecycle.py` | 1 | 4.5 KB | ✅ **全文** | 状态矩阵 + 四个守卫函数 |
+| `src/hl_mem/storage/claims.py` | 1 | ~40 KB | ⚠ **只读关键段** | `update_status` / `supersede`（`:160-169`、`:893-931`） |
+| `src/hl_mem/application/latest_wins.py` | 1 | 6.5 KB | ✅ **全文** | 应用层接线 + 审计事件 |
+| `src/hl_mem/config/models.py` | 1 | ~45 KB | ⚠ **只读 `:500-513`** | 默认模式与 slot 白名单 |
+| `src/hl_mem/evaluation/smoke_full_chain.py` | 1 | ~16 KB | ⚠ **只读 `:392-423`** | 13 项检查断言 + 四条 seam |
+| `src/hl_mem/evaluation/state_experiment_thresholds.py` | 1 | 3.3 KB | ✅ **全文** | 13 条冻结阈值 + 可满足性审计 |
+| `scripts/check_imports.py` | 1 | 4.6 KB | ✅ **全文** | 分层 AST 检查 |
+| `docs/benchmark/core-v1.md` | 1 | 2.8 KB | ✅ **全文** | 零网络基准门 |
+| `docs/research/p1-extraction-ab-v2-protocol.md` | 1 | 7.5 KB | ⚠ **只读 `:1-42`** | 预注册 + 冻结臂 |
+| `src/`（其余 ~344 文件 / 2.41 MB） | 344 | 2.41 MB | ❌ **未读** | —— |
+| `tests/` | 384 | 3.17 MB | ❌ **未读** | —— |
+| `docs/superpowers/plans/` | 22 | 492 KB | ✅ **全部读完**（子代理，父代理抽查引用） | 撤回台账**不在**此目录 |
+| `docs/superpowers/specs/` | 11 | 112 KB | ✅ **全部读完**（子代理） | 取代/生命周期/证据三主题在 `2026-09-01-...completion-design.md` 最集中 |
+| `docs/research/` | 7 | 106 KB | ✅ **全部读完**（子代理） | A/B 协议、TTL 评测、回归诊断 |
+| `docs/archive/` | 21 | 242 KB | ⚠ **子代理在读，本轮未整合** | —— |
+| `docs/*.md` 顶层（除 `capability-matrix.md`） | 13 | 287 KB | ❌ **未读** | 含 `architecture.md`（41 KB） |
+| `docs/dev/` + `docs/benchmark/` | 2 | 11 KB | ✅ 读完（子代理） | `patch-points-v0293.md` 与本主题无关 |
+| `storage/migrations/` | 69 | 147 KB | ✅ **读完**（子代理，父代理核计数） | 60 `.sql`(001-060) + 9 `.py` |
+| `evaluation/` | 67 | 8.15 MB | ⚠ **只读两个 README** | **`evaluation/results/` 实测只有 `README.md`（2130 B）** ⇒ 公开分数**无原始结果可核** |
+| `benchmarks/` | 46 | 512 KB | ⚠ 部分（子代理） | `archive/v030/` 是被撤回批次的归档 |
+
+**本轮之后仍未读**（诚实边界）：`src/` 绝大部分（~344 文件）、`tests/` 全量（384）、`docs/archive/`（21）、`docs/*.md` 顶层（13）、`evaluation/` 的 65 个文件。
+**纪律**：本台账的数字来自 `git ls-files` + `Get-ChildItem` 实测；**任何一轮改这张表必须重跑枚举命令**，不得凭记忆改数。

@@ -3,6 +3,145 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.39] hl_mem **第三轮深读（首次本地克隆、一手读源码）** —— 三处自我更正（ADR-0078）
+
+用户 2026-09-12 指令「**继续深入研究资料**」，并在方法选项中选定「**本地克隆 hl_mem 到工作区**」
+（此前 0073 / 0076 两轮全程 raw 抓取、**从未克隆**）。克隆到 `G:\project\dsh1\hl_mem`（在 `dsh-shadow`
+仓库**之外**，避免把 16 MB 外来代码混进本仓历史）：v1.1.7（`aa5d068`，983 commits，**1025 文件 / 16.03 MB**）。
+**全程只读**：未运行、未安装、未修改任何文件、未做 git 写操作。**纯文档 + 待办登记：无代码 / 行为改动。**
+
+### 0. 一句话结论
+
+**一手读源码的第一件事，就是发现前两轮有三处记述不准。** 其中一处**实质改写了 D3 的对照面**。
+
+### 1. 先做一件此前没人做的事：**以磁盘枚举算覆盖率**
+
+| 项 | 实测（`git ls-files`） |
+|---|---|
+| 全仓 | **1025 文件 / 16.03 MB** |
+| 本轮之前**从未一手阅读**的面 | **901 文件 / 6.67 MB = 87.9% 文件** |
+| 另加 `evaluation/` 绝大部分（67 文件中只读过 2 个 README） | 8.15 MB |
+
+⇒ 0073/0076 的「未读清单」**漏了整片**：`docs/research/`(7) · `docs/archive/`(21) · `docs/*.md` 顶层(13) ·
+`docs/dev/` · `docs/benchmark/` · `tests/`(384) · `scripts/`(42) · `src/`(352) · `storage/migrations/`(69)。
+**根因**：清单是**手写散文**而不是**磁盘台账** ⇒ 既不完整也**无法自证完整**（与「靠自觉不是闸门」同族）。
+
+### 2. 三处**自我更正**（本轮最重要的产出）
+
+**更正①「`assert_transition()` 是写侧守卫」——不准确**（更正 ADR-0077 D1）
+- 守卫本身是纯函数（`src/hl_mem/lifecycle.py:111-118`）；但**写原语不强制**：
+  `src/hl_mem/storage/claims.py:160-169` 的 `update_status()` docstring 写「校验目标状态后更新」，
+  **实际只做 `ClaimStatus(status)`（只校验「是不是合法状态名」）**、**不校验转换**、**不读当前状态** ⇒ 原理上不可能校验转换。
+- 收口靠**调用点自觉**：全仓 **28 处**调用、跨 **13 个文件**。
+- **至少两处完全绕过**：`workers/deduplicate.py:571-575`（治理回滚，`WHERE id=?`、无状态前置条件）、
+  `application/conflict_backlog.py:178-186`（集合式批量修复）。
+- ⇒ 它 `AGENTS.md` 的「**所有**状态变更统一经过 `assert_transition()`」**作为全称命题为假**。
+- **另一条更尖锐的**：矩阵里 `SUPERSEDED`/`EXPIRED`/`RETRACTED` 是**终态（无出边）**，而回滚通道**必须反向走这些边**
+  ⇒ **矩阵只是「正向可达」的真相，不是「可达状态」的完整真相**。
+- **对本仓的影响**：ADR-0077 D1 的**结论不受影响**（不照搬写侧守卫），但理由**更强**了——对方那条所谓
+  「写侧守卫」本身也没在写侧强制；已落 `adr/0077` 补记。
+
+**更正② ADR-0004 的协议在生产里是「窄面 + 默认只建议」，不是通用细粒度取代**（更正 ADR-0076 §1）——**这条最要紧**
+- `src/hl_mem/state_latest_wins.py:1` 自述：`ADR-0004 **narrow** deterministic latest-wins relation for config.version`。
+- `:94-95`：`canonical_slot != "config.version"` ⇒ **一律 `compatible`（不做取代）**。
+- `src/hl_mem/config/models.py:508-510`：`latest_wins_slots: tuple[Literal["config.version"], ...]`
+  —— **类型层面锁死只允许一个 slot**；`tests/unit/test_config_loader.py:596` 有测试断言「TOML **不能**授权白名单外的 slot」。
+- `config/models.py:506`：`latest_wins_mode` 默认 **`"observe"`**（只写审计、不执行）；而**同一文件** `:501-504`
+  的 `provenance_mode`/`price_target_mode`/`plan_fulfillment_mode` **默认都是 `"enforce"`** ⇒ **默认值按破坏性分级**。
+- ⇒ **它给出的不是「细粒度取代值得做」，而是「细粒度取代被收窄到一个 slot、且默认只观察，才敢上线」。**
+  **这把 D3 的问题改写为**：*要不要为**特定 slot**建确定性取代，其余一律 `compatible`（不做取代）*。
+
+**更正③ 路径与计数**：`specs/` 实际是 `docs/superpowers/specs/`（11 篇）；migration 数 ——
+它 `AGENTS.md` 写「**57 个 SQL（001-057）**」、其 `CHANGELOG` 写 **60**，**我实测 = 60 个 `.sql`（001…060）+ 9 个 `.py` = 69 个文件**
+⇒ **它自己的 agent 指令文件比事实旧 3 个**（本仓 ADR-0072「台账比事实强」的同族）。
+附带方法教训：同一目录子代理数出 **8 个 `.py`**、我实测 **9**，差额是 `snapshots/__init__.py`
+⇒ **计数差异常常不是「谁错了」，而是「枚举口径没写出来」**。
+
+### 3. 一手读到的「确定性取代」真身（对 D3 直接可用）
+
+| 机制 | 证据（`state_latest_wins.py`） |
+|---|---|
+| 版本量级**只用于相等**，不用于排序 | `:106-108` 相等 ⇒ `duplicate`/`corroborates`（**证实**「版本大小不决定时间方向」，从此有代码证据） |
+| 方向**只由可信事件时间**决定 | `:109-114` 要求双方 `event_time_trusted`；`_parse_time` **要求 tz-aware**（`:167`）；**时间并列 ⇒ `needs_review`**（`:112-113`） |
+| `historical_predecessor` **绝不移动 current tip** | `:183` `current_tip_id=existing.claim_id` **恒为旧者** |
+| 任何否决 ⇒ `needs_review`（**永不破坏性关链**） | `:96-97`；8 条硬否决 `:122-139` + 7 条证据否决 `:142-158`（含冻结的产物契约三元组） |
+| 候选发现是**精确坐标匹配** | `:100-104` 精确匹配坐标（`json(qualifiers_json)=json(?)`），**无 FTS / 无向量 / 无编辑距离** |
+| `conflict_key` 是**派生指纹** | `application/latest_wins.py:99` `json.dumps(astuple(coordinate))` |
+| **有界决策：候选过多即拒判** | `:104` `LIMIT 17` + `:127` `local_snapshot_matches = len(candidates) < 17` |
+| 决策前**实测无环 + 深度** | `:117-122` recursive CTE 沿 `superseded_by_id` + cycle 检测 + `depth<64` |
+| **CAS 失败抛错** | `:77-80` `.applied` 假 ⇒ `raise RuntimeError("latest-wins compare-and-set failed")` |
+
+### 4. 找到本仓 `verify` 的**下一层形态**（hl_mem 的**门禁生态**）
+
+- **11 个 `scripts/check_*.py`**：其中**分层方向是 AST 检查而非约定**（`check_imports.py:12-19` 的
+  `FORBIDDEN_IMPORTS` 表 + `:61-83` `ast.parse` 扫真实导入，失败 `return 1`）、**复杂度预算只能降**
+  （`check_complexity_budget.py` + `complexity_budget.json`）、6 个快照比对。
+- **确定性零网络基准门**（`docs/benchmark/core-v1.md`，**一手读完全文**）：`:3-8`「deterministic, public,
+  **zero-network** regression gate … **any external model call fails the run**」；`:17-19` 冻结容差
+  （≤`0.01` 回归 / HTTP 100% / forbidden 0 / P95 ≤ `max(baseline+150ms, baseline×1.25)`）；
+  `:21-22`「**功能字段与 hash 必须跨两跑逐字相同**，只允许延迟字段可变」；基线**签入** + `compare_core_v1` 子命令。
+- **零 LLM 缝合线冒烟**（T11② 的真身）：`src/hl_mem/evaluation/smoke_full_chain.py:402-403`
+  「`len(checks) != 13` ⇒ 抛错」（**检查项数量本身是断言**）、`:404-412` 四条 seam 全过才算过、`:415` 产出写 `zero_llm: True`。
+- **13 条冻结阈值 + 零容忍 + 可满足性审计**：`state_experiment_thresholds.py:9-23`
+  （`supersede_edge_precision >= 1.0`、`counterexample_cross_coordinate_supersede <= 0`）+ `:26-106` 成对整数边界求交。
+- **三层冻结语料已落地**（实测 `evaluation/datasets/` 含 dev/sealed/sealed_r2/sealed_r4 的 corpus+gold+manifest ≈ 3 MB）。
+- **预注册 A/B 协议**（`docs/research/2026-09-04-p1-extraction-ab-v2-protocol.md`）：`:3`「装备就绪、**尚未执行**」、
+  `:7` 单变量、`:22-25` 两臂唯一差异一行 diff、`:37` 每臂只跑一次、`:39-41` **付费前身份 hard gate**、
+  `:73-76` 任一臂身份无效 ⇒ **整轮无效**。
+
+### 5. 不吸收（含 hl_mem 自己的坏味道）
+
+DB 级不变量（触发器/部分唯一索引）本仓无对象；双时间四列与 as-of 查询与 0073 结论一致；
+hl_mem 的 `conflict_cases` 状态集**在 5 处各写一遍**（`OPEN_CASE_STATUSES` ×3、`TERMINAL_...` ×2，类型还不同）
+⇒ **正是本仓 ADR-0063/0070 要防的形态，作为反例记录**；其 `schema_migrations` **无 checksum 列**；
+**我实测 `evaluation/results/` 只有 `README.md`（2130 字节）⇒ 公开长测分数只在索引里、原始结果不在仓，一律不引用为已证。**
+
+### 5b. `docs/archive/`（21 篇）+ 7 篇顶层文档：一条**新对照透镜** + 四条可吸收
+
+**新透镜（两端均我一手核实）：`schema 继承` ≠ `运行时契约继承`** ——
+`docs/archive/design/audit-log-design.md:183-191` 要求 `emit()`「**It never opens SQLite** … or waits for
+capacity on the calling thread」（只 `queue.put_nowait`、<1 ms 返回、单独 daemon writer 线程批量写）；
+而落地是 `src/hl_mem/observability/audit.py:44`「Best-effort **synchronous** SQLite audit writer」+ `:144`
+**在调用路径上直接 INSERT**。**同一份设计的 DDL 却被逐字照搬进 migration `004`。**
+⇒ **设计契约的另一半（阻塞性/并发/顺序/失败行为）被静默放弃，而 schema 一字不差。**
+本仓既有审计（ADR-0062 / 0070）只问「机制有没有接线」，**没问过「契约的哪一半被静默放弃」** ⇒ 补上这一问。
+
+**它的归档明确拒绝承担追溯**：`docs/archive/README.md:28`「以上 proposal 均不代表仍在排期；
+**完成状态和最终行为应从 CHANGELOG、能力矩阵和代码判断**」⇒ 归档**不维护「是否落地 / 为何被否」**。
+而它自己的手写索引**已漂移两处**（我核实）：`design/` 3 篇只列 2 篇（漏 `extraction-pre-filter.md`）；
+`:43` 称 `plan-lifecycle-research`「未实施」，而 `docs/architecture.md:386` 写 `plan.fulfillment_mode="enforce"`
+**已是发布默认**（E5 过 143 条冻结场景）。⇒ **与本仓 ADR-0075 同族**（手写/逐名枚举必漂移）。
+**本仓保留自己的三段式**（ADR 不可变决策 + BACKLOG 未完成台账 + CHANGELOG 已做什么）；
+其 `docs/README.md:38-41`「Accepted ADR 不改写决策；新方向使用新 ADR」与本仓用**补记**的做法同构。
+
+**四条可吸收**（→ **T15**）：① 归档条目带一句「为什么归档 / 现以谁为准」（21 篇只有 3 篇做到）；
+② **退役路径表 + 启动报错**（`config/loader.py:35` `RETIRED_TOML_PATHS`，「提案被否」的唯一可执行档案）；
+③ **弃用强制前置 + 必须点名替代品或明说无替代**（`docs/compatibility.md:20-29`）+ 三档稳定性各有变更预算（`:33-35`）
++ 未知版本显式失败（`:74-75`）+ 不可逆变更前恢复集与 **rollback 数据丢失显式写出**（`:62-70`）；
+④ **破坏性动作二次确认 + 读可重试 / 写不可重试**（`docs/delegation.md:89-91`、`:130`）。
+
+### 6. 自曝
+
+做覆盖率检查时我自己两次用了**未标定**的判据：① 用**字面路径**匹配 ADR 文本，把 0076 明确写过的 `specs/`
+判成「未提及」；② `-like "$p\*"` 里用**正斜杠**匹配**反斜杠**路径，5 个面匹配到 **0 个文件**（第一版台账整个是错的）。
+两次都是**判据没标定就用**，与本仓反复记录的缺陷族同源。
+
+### 7. 本轮落地
+
+`adr/0078`（**新增**）· `adr/0077`（**补记**：更正外来机制描述）· `references.md`（**新增 §6.3 磁盘枚举覆盖率台账**）·
+`BACKLOG.md`（**D3 对照面改写** + **T11① 推进** + **新开 T13 结构性门禁 / T14 确定性基准门 / T15 兼容性弃用纪律** + 头部）·
+`CHANGELOG` / `README` / `package.json`（`1.15.39`）。**无代码改动**，回归状态不变（**45/45**）。
+
+### 8. 未验证 / 未做（诚实标注）
+
+- **仍未运行、未安装、未复现任何分数**；**仍未**把 hl_mem 的任何读数当作本系统的证据（0073 起纪律不变）。
+- `docs/archive/`（21 篇）与 7 篇顶层文档**由子代理读完并回报**；我最吃重的五条**已逐条自查**
+  （归档 README 的两处、`architecture.md:386`、`audit.py:44/144`、`audit-log-design.md:183-191`、`migrations` 计数），
+  其余条目**在正文标注为子代理回报**。
+- `tests/`（384 文件）与 `src/` 其余 ~344 个文件**未读**；更正①依赖 grep 计数（28 处），**未逐条核对**上下文。
+- T13 / T14 / T15 只**开了条目**，未实现。
+
+
 ## [v1.15.38] 吸收 hl_mem 的**三件动作** + 修两处真缺陷（ADR-0077）
 
 用户 2026-09-12 指示「**能吸收哪些？做**」——把 ADR-0076 读到的、可移植的部分**做掉**（不照搬）。
