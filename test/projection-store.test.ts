@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { createJsonlProjectionStore, loadOrBuildProjection } from "../dist/core/projection-store.js";
 import { ChangeSet } from "../dist/core/change-set.js";
+import type { ShadowNode } from "../dist/core/node.js";
 
 const makeFs = () => {
   const files = new Map();
@@ -16,7 +17,7 @@ const makeFs = () => {
   };
 };
 const WS = "D:/ws";
-const NODE = (id) => ({ id, type: "code", source: `.shadow/x/${id}.md`, title: id, content: [], evidence: [id + ".java"], relations: [], kind: "experience", createdBy: "tool" });
+const NODE = (id): ShadowNode => ({ id, type: "code", source: `.shadow/x/${id}.md`, title: id, content: [], evidence: [id + ".java"], relations: [], kind: "experience", createdBy: "tool" });
 
 // —— 块 1：store 直接 save/load/invalidate/rebuild ——
 {

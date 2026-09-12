@@ -5,14 +5,14 @@ import { createIndexEngine, rankRefs } from "../dist/core/index-engine.js";
 import { stripBracketedNoProxy, parseSembleRefs } from "../dist/core/semble.js";
 
 // fs 默认：空候选（走全量扫描），provider=fs
-const fsEngine = createIndexEngine({}, { verify: async () => ({ status: "verified", matches: [] }), discover: async () => [] });
+const fsEngine = createIndexEngine({}, { verify: async () => ({ status: "verified", source: "fs", matches: [], confidence: 0, freshness: "fresh", provenance: { provider: "fs" } }), discover: async () => [] });
 const fsR = await fsEngine.generateCandidates("appid", { ws: "D:/ws" });
 assert.equal(fsR.provider, "fs", "默认 provider=fs");
 assert.equal(fsR.unavailable, undefined, "fs 无 unavailable 标记");
 assert.equal(fsR.refs.length, 0, "fs 空候选（全量扫描）");
 
 // zg：未装 → unavailable=true，且不产出候选（绝不冒充 verified）
-const zgUnavailable = createIndexEngine({ indexEngine: { provider: "zg" } }, { verify: async () => ({ status: "unavailable", matches: [], confidence: 0, freshness: "stale", source: "zg", provenance: {} }), discover: async () => [] });
+const zgUnavailable = createIndexEngine({ indexEngine: { provider: "zg" } }, { verify: async () => ({ status: "unavailable", matches: [], confidence: 0, freshness: "stale", source: "zg", provenance: { provider: "zg" } }), discover: async () => [] });
 const zgR = await zgUnavailable.generateCandidates("appid", { ws: "D:/ws" });
 assert.equal(zgR.provider, "zg", "zg provider");
 assert.equal(zgR.unavailable, true, "zg 未装 → unavailable");
@@ -20,8 +20,8 @@ assert.equal(zgR.refs.length, 0, "unavailable 时不产出候选");
 
 // zg：可用 → 候选 refs（file + 行号 fragment）
 const zgOk = createIndexEngine({ indexEngine: { provider: "zg" } }, {
-  verify: async () => ({ status: "verified", matches: [{ path: "src/AuthFilter.java", startLine: 120 }], confidence: 0.8, freshness: "fresh", source: "zg", provenance: {} }),
-  discover: async () => [{ path: "src/AuthFilter.java", startLine: 120 }],
+  verify: async () => ({ status: "verified", matches: [{ path: "src/AuthFilter.java", startLine: 120, route: "exact" }], confidence: 0.8, freshness: "fresh", source: "zg", provenance: { provider: "zg" } }),
+  discover: async () => [{ path: "src/AuthFilter.java", startLine: 120, route: "exact" }],
 });
 const zgOkR = await zgOk.generateCandidates("appid", { ws: "D:/ws" });
 assert.equal(zgOkR.unavailable, undefined, "zg 可用 → 不 unavailable");

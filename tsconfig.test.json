@@ -1,4 +1,4 @@
-// dsh-shadow —— 测试面的类型检查（v1.15.54 新增）。
+// dsh-shadow —— 测试面的类型检查（v1.15.54 新增；v1.15.62 扩到**全部**测试文件）。
 //
 // **为什么需要它**：`test/*.ts` 是 TypeScript，但过去**从不被任何 tsconfig 覆盖**
 // （`tsconfig.json` 只 include 三个源码文件，`tsconfig.tools.json` 只 include `tools/**`），
@@ -6,10 +6,9 @@
 // 实测代价：v1.15.52 给 `AttributionResult` 加了必填字段 `considered` 后，手写 fixture 少了它，
 // 测试**静默变成错的语义**（pending 由 3 变 0）却没有报错，是断言先炸才发现的。
 //
-// **为什么只 include 三个文件**：对 `test/**/*.ts` 全量开启类型检查会立刻报 **169 个既存类型错误**
-// （涉及 47 个文件中的多数，多为夹具对象与真实接口不匹配 —— 正是上面那类「夹具悄悄失真」）。
-// 那批错误**未修**，已记入 `BACKLOG.md` 的审查线索（不得读成「测试都类型正确」）。
-// 本配置先锁**本轮改动的三道闸**：它们类型干净，且正是最容易被夹具失真坑到的地方。
+// **v1.15.62 起 include 全部 `test/**/*.ts`**：此前只覆盖三个文件，因为全量会报 **83 条**既存诊断；
+// 那批已修完（**83 → 0**，且经独立探针核对：剥掉类型 cast 后所有断言逐字相同，
+// 见 `.docs/fix/2026-09-12/verify-assertions-unchanged.ts` 与 `verify-added-fixture-fields.ts`）。
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -27,6 +26,7 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["test/review-fixes.test.ts", "test/proposal-firewall.test.ts", "test/decision-outcome.test.ts"],
+  "include": ["test/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
+

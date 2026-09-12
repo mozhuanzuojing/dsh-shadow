@@ -182,7 +182,7 @@ const boolTrueSites = (files: { file: string; text: string }[], field: string): 
   };
   assert.deepEqual(Object.keys(PRODUCE).sort(), declaredStates, "可达性正控集合与状态表必须一一对应（多一个 = 状态表漏声明）");
   for (const s of STATES) {
-    assert.equal(lifecycleOf(...PRODUCE[s.state]), s.state, `状态 ${s.state} 声明为可达，但正控产不出来（via: ${s.via}）`);
+    assert.equal(lifecycleOf(...(PRODUCE[s.state] as Parameters<typeof lifecycleOf>)), s.state, `状态 ${s.state} 声明为可达，但正控产不出来（via: ${s.via}）`);
   }
   // 行为侧正控：状态字符串必须在既有行为测试里逐条被断言过（表与行为测试互证）。
   const beh = readFileSync(join(repoRoot, "test/lifecycle-superseded.test.ts"), "utf8");

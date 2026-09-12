@@ -55,7 +55,15 @@ export const sectionPath = (tree, node) => {
     };
     return walk(tree.root, [])?.join(" / ") || node.title;
 };
-/** 渲染检索结果 + 引用（节路径溯源）。 */
+/**
+ * 渲染检索结果 + 引用（节路径溯源）。
+ *
+ * v1.15.62：声明补 `__path?: string`。此前声明比**真实契约**窄 —— 实现里读 `(h as any).__path`，
+ * 而生产调用方 `query/reads.ts:162,167` 确实构造并传入 `__path`（`:168/:171` 喂给本函数）。
+ * 生产没被 `tsc` 拦，是因为 `.map` 回调的返回值**没有上下文类型** ⇒ 不触发 excess property 检查；
+ * 而测试面一旦做类型检查，这个声明缺口就会以「夹具多了一个属性」的形式暴露出来。
+ * **声明要写真实契约**，否则类型检查会反过来逼调用方去 cast（那是把缺口搬到下游）。
+ */
 export const renderKnowledgeRetrieval = (tree, hits, query) => {
     if (!hits.length)
         return `（knowledge retrieval 未命中：${query}）`;

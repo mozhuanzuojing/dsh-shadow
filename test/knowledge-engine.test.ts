@@ -83,7 +83,11 @@ const tree2 = { provider: "tree", root: [buildTree(parsed)], sourceCount: 1 };
 const node = tree2.root[0].children[0];   // spec 下第一节点
 const path = sectionPath(tree2, node);
 assert.ok(path.includes(tree2.root[0].title) && path.includes(node.title), "sectionPath 应含根→节点的路径");
-const cited = renderKnowledgeRetrieval(tree2, [{ title: node.title, content: node.content, level: node.level, __path: path }], "RSA");
+// renderKnowledgeRetrieval 的实现读 `(h as any).__path`，而它声明的 hits 元素类型不含 `__path`
+// （生产侧类型缺口，见报告）。故先落到**带 __path 的局部对象**再按声明形状传参 ——
+// 既保留「引用路径进入渲染」这一被测行为，也不必用断言把多给的字段藏起来。
+const citedHit: { title: string; content: string; level: number; __path?: string } = { title: node.title, content: node.content, level: node.level, __path: path };
+const cited = renderKnowledgeRetrieval(tree2, [citedHit], "RSA");
 assert.ok(cited.includes(path), "renderKnowledgeRetrieval 应含引用路径");
 console.log("✔ 场景 Knowledge-Engine-1 规范→保留树 + 检索 + corpus 级 file 树 + flattenSections（ADR-0047 + v1.10.0）+ 渐进披露 + 成本 refine（ADR-0048①②）+ 去噪③ + 格式抽取⑦ + 引用④");
 console.log("ALL PASS ✅");

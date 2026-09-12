@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 import { missingTypesOf } from "../dist/query/observatory.js";
+import type { ParsedMemory } from "../dist/core/episode.js";
 const { apply, name, inject } = mod;
 
 const WS = "D:/ws";
@@ -118,7 +119,7 @@ assert.ok(!String(ep2).includes("Shadow Fitness Report"), "shadow-report 不应�
 console.log("✔ 场景 Query-Observatory-5 Fitness Report：mode:shadow-report 生成 .shadow/shadow-report.md（诊断而非增强）");
 
 // —— 场景6：missing-types 启发式（纯函数）：≥3 处约束型内容 → 提议 candidate:constraint；<3 不提议 ——
-const mkParsed = (n: number, phrase: string) => Array.from({ length: n }, (_, i) => ({
+const mkParsed = (n: number, phrase: string): ParsedMemory[] => Array.from({ length: n }, (_, i) => ({
   rel: `.shadow/2026-09-08/00000${i}-constraint.md`, date: "2026-09-08", time: "000000",
   entry: `config/policy-${i}.md`, project: "p", agent: "a", goal: "",
   decisions: [], decisionEvents: [], userMessages: [phrase], materials: [], actions: [], thinkLines: [], body: phrase,

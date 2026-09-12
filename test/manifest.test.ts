@@ -1,6 +1,7 @@
 // dsh-shadow —— ADR-0048⑧：Shadow Manifest（索引元数据 + 诊断）。
 import assert from "node:assert/strict";
 import { buildManifest, writeManifest, readManifest, renderManifest } from "../dist/core/manifest.js";
+import type { ShadowNode } from "../dist/core/node.js";
 
 const files = new Map();
 const fs = {
@@ -9,7 +10,7 @@ const fs = {
   async writeText(t, c) { files.set(t.displayPath, c); return { version: "v1" }; },
 };
 const WS = "D:/ws";
-const NODE = (id, source) => ({ id, type: "code", source, title: id, content: [], evidence: [], relations: [] });
+const NODE = (id, source): ShadowNode => ({ id, type: "code", source, title: id, content: [], evidence: [], relations: [] });
 
 // 构建 + 写 + 读
 const m = buildManifest("1", [NODE("a", ".shadow/x/a.md"), NODE("b", ".shadow/y/b.md"), NODE("c", ".shadow/x/a.md")], [{ path: ".shadow/z/z.md", reason: "parse error" }]);

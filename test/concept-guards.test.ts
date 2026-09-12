@@ -17,11 +17,13 @@ import {
 import { lifecycleOf } from "../dist/delegation/guard/lifecycle-guard.js";
 import { notRevoked, notExpired } from "../dist/delegation/guard/revocation-guard.js";
 import { actionWithinScope, permissionNotOwnership } from "../dist/delegation/guard/scope-guard.js";
+import type { DelegationContext } from "../dist/delegation/types/context.js";
 
 // —— Recall（v0.37：Recall = Access Transition，非 Reality Reconstruction）——
 import {
   forgottenHasNoDeletion, triggerIsExternal, recallLineageComplete, recallNotObservation, recallDoesNotIncreaseCertainty,
 } from "../dist/recall/guard/recall-guard.js";
+import type { ForgottenRecord, RecallEvent } from "../dist/recall/types/index.js";
 
 // —— Adaptation（v0.38：Adaptation ≠ Identity/Authority/Objective/Preference change）——
 import { resultNoEpistemicIncrease, resultNotKnowledge, validationNoCorrectness } from "../dist/adaptation/guard/epistemic-guard.js";
@@ -31,6 +33,7 @@ import { targetInScope, resultNoObjectiveChange, resultNoPreference as adaptResu
 // —— Long-Horizon（v0.39：时间累积 ≠ 权威/偏好/身份/目标）——
 import { resultNoAuthorityGrowth, resultNoSelfConfidence, resultNoPreference, resultNoInferredObjective } from "../dist/long-horizon/guard/authority-guard.js";
 import { summaryNoRealityField } from "../dist/long-horizon/guard/compression-guard.js";
+import type { HistorySummary } from "../dist/long-horizon/types/index.js";
 import { resultNoIdentityChain } from "../dist/long-horizon/guard/identity-guard.js";
 
 // ══════ Agency ══════
@@ -66,9 +69,12 @@ assert.equal(hasNoAutonomousTransition("任务完成"), true, "非自主转换�
 assert.equal(hasNoAutonomousTransition("become autonomous"), false, "自主转换禁止");
 
 // ══════ Delegation ══════
-assert.equal(contextHasNoExpansionField({ delegationId: "d" }), true, "无限权字段允许");
-assert.equal(contextHasNoExpansionField({ delegationId: "d", trust: 0.9 }), false, "trust 字段禁止");
-assert.equal(contextHasNoExpansionField({ delegationId: "d", capabilityLevel: 3 }), false, "capabilityLevel 字段禁止");
+// 本组夹具**故意只给 `delegationId`（+ 被测的那一个键）**：`contextHasNoExpansionField` 的判据是
+// 「有没有 trust/confidence/reputation/capabilityLevel 这些键」，测的是键名会不会被抓到，
+// 不是「字段齐全的 DelegationContext 能否构造」。
+assert.equal(contextHasNoExpansionField({ delegationId: "d" } as unknown as DelegationContext), true, "无限权字段允许");
+assert.equal(contextHasNoExpansionField({ delegationId: "d", trust: 0.9 } as unknown as DelegationContext), false, "trust 字段禁止");
+assert.equal(contextHasNoExpansionField({ delegationId: "d", capabilityLevel: 3 } as unknown as DelegationContext), false, "capabilityLevel 字段禁止");
 
 assert.equal(resultNoPermissionUpgrade("执行了更新"), true, "非权限升级允许");
 assert.equal(resultNoPermissionUpgrade("授权后获得 more authority"), false, "权限升级禁止");
@@ -80,14 +86,16 @@ assert.equal(resultNoIdentityClaim("被委派做 X"), true, "委派身份允许"
 assert.equal(resultNoIdentityClaim("i am an agent capable of X"), false, "agent 身份声称禁止");
 
 // 生命周期（active/expired/revoked）
-assert.equal(lifecycleOf({ delegationId: "d" }, "2026-01-01"), "active", "无撤销/未过期=active");
-assert.equal(lifecycleOf({ delegationId: "d", revocation: true }, "2026-01-01"), "revoked", "撤销=revoked");
-assert.equal(lifecycleOf({ delegationId: "d", expiration: "2020-01-01" }, "2026-01-01"), "expired", "过期=expired");
+// 同上：`lifecycleOf`/`notRevoked`/`notExpired` 只读 `revocation` / `expiration`，
+// 夹具**故意只给 `delegationId` + 被测的那一个键**（其余字段不参与判据）。
+assert.equal(lifecycleOf({ delegationId: "d" } as unknown as DelegationContext, "2026-01-01"), "active", "无撤销/未过期=active");
+assert.equal(lifecycleOf({ delegationId: "d", revocation: true } as unknown as DelegationContext, "2026-01-01"), "revoked", "撤销=revoked");
+assert.equal(lifecycleOf({ delegationId: "d", expiration: "2020-01-01" } as unknown as DelegationContext, "2026-01-01"), "expired", "过期=expired");
 
-assert.equal(notRevoked({ delegationId: "d" }), true, "未撤销允许");
-assert.equal(notRevoked({ delegationId: "d", revocation: true }), false, "已撤销禁止");
-assert.equal(notExpired({ delegationId: "d" }, "2026-01-01"), true, "无过期允许");
-assert.equal(notExpired({ delegationId: "d", expiration: "2020-01-01" }, "2026-01-01"), false, "已过期禁止");
+assert.equal(notRevoked({ delegationId: "d" } as unknown as DelegationContext), true, "未撤销允许");
+assert.equal(notRevoked({ delegationId: "d", revocation: true } as unknown as DelegationContext), false, "已撤销禁止");
+assert.equal(notExpired({ delegationId: "d" } as unknown as DelegationContext, "2026-01-01"), true, "无过期允许");
+assert.equal(notExpired({ delegationId: "d", expiration: "2020-01-01" } as unknown as DelegationContext, "2026-01-01"), false, "已过期禁止");
 
 assert.equal(actionWithinScope(["update config"], "update config"), true, "action in scope");
 assert.equal(actionWithinScope(["update config"], "redesign architecture"), false, "action out of scope");
@@ -95,17 +103,20 @@ assert.equal(permissionNotOwnership({ permission: "update config" }), true, "per
 assert.equal(permissionNotOwnership({ scope: "owns the service" }), false, "scope 含 ownership 禁止");
 
 // ══════ Recall ══════
-assert.equal(forgottenHasNoDeletion({ reason: "长期未访问" }), true, "遗忘≠删除允许");
-assert.equal(forgottenHasNoDeletion({ reason: "已失效" }), false, "「已失效」=删除语义禁止");
+// 同上：`forgottenHasNoDeletion` 只读 `reason`，夹具**故意只给 reason**（其余字段不参与判据）。
+assert.equal(forgottenHasNoDeletion({ reason: "长期未访问" } as unknown as ForgottenRecord), true, "遗忘≠删除允许");
+assert.equal(forgottenHasNoDeletion({ reason: "已失效" } as unknown as ForgottenRecord), false, "「已失效」=删除语义禁止");
 
 assert.equal(triggerIsExternal({ type: "conversation", sourceRef: "msg-1" }), true, "外部 trigger 允许");
 assert.equal(triggerIsExternal({ type: "certainty", sourceRef: "" }), false, "内部确定 trigger 禁止");
 
-assert.equal(recallLineageComplete({ trigger: { sourceRef: "msg-1" }, lineage: { originalRecord: "rec-1", observationRefs: ["o1"] } }), true, "lineage 完整");
-assert.equal(recallLineageComplete({ trigger: {}, lineage: {} }), false, "缺源引用=lineage 断");
+// 夹具**故意只给被读到的键**：`recallLineageComplete` 只读 trigger.sourceRef + lineage.originalRecord，
+// `recallNotObservation` 只看 trigger/lineage 里有没有「新观察」措辞；测的是这两条判据本身。
+assert.equal(recallLineageComplete({ trigger: { sourceRef: "msg-1" }, lineage: { originalRecord: "rec-1", observationRefs: ["o1"] } } as unknown as RecallEvent), true, "lineage 完整");
+assert.equal(recallLineageComplete({ trigger: {}, lineage: {} } as unknown as RecallEvent), false, "缺源引用=lineage 断");
 
-assert.equal(recallNotObservation({ trigger: { type: "conversation" } }), true, "忆起≠观察允许");
-assert.equal(recallNotObservation({ trigger: { type: "conversation" }, lineage: { observationRefs: ["new observation"] } }), false, "忆起产新观察禁止");
+assert.equal(recallNotObservation({ trigger: { type: "conversation" } } as unknown as RecallEvent), true, "忆起≠观察允许");
+assert.equal(recallNotObservation({ trigger: { type: "conversation" }, lineage: { observationRefs: ["new observation"] } } as unknown as RecallEvent), false, "忆起产新观察禁止");
 assert.equal(recallDoesNotIncreaseCertainty("access restored"), true, "忆起≠验证允许");
 assert.equal(recallDoesNotIncreaseCertainty("validated"), false, "忆起=提升证据等级禁止");
 
@@ -143,8 +154,10 @@ assert.equal(resultNoPreference("多次选了 A"), true, "非偏好允许");
 assert.equal(resultNoPreference("形成偏好 A"), false, "长期选择→偏好禁止");
 assert.equal(resultNoInferredObjective("完成了多次合作"), true, "非推断目标允许");
 assert.equal(resultNoInferredObjective("从长期模式推断出目标"), false, "推断目标禁止");
-assert.equal(summaryNoRealityField({ sourceRefs: ["a"], compressionMethod: "summary" }), true, "摘要辅助允许");
-assert.equal(summaryNoRealityField({ sourceRefs: ["a"], compressionMethod: "summarizes reality" }), false, "摘要声称=事实源禁止");
+// 同上：`summaryNoRealityField` 只把 sourceRefs/compressionMethod 送去扫措辞，
+// 夹具**故意只给这两个字段**（id/accessibility 不参与判据）。
+assert.equal(summaryNoRealityField({ sourceRefs: ["a"], compressionMethod: "summary" } as unknown as HistorySummary), true, "摘要辅助允许");
+assert.equal(summaryNoRealityField({ sourceRefs: ["a"], compressionMethod: "summarizes reality" } as unknown as HistorySummary), false, "摘要声称=事实源禁止");
 assert.equal(resultNoIdentityChain("100 次调整后改进了方法"), true, "调整链≠身份允许");
 assert.equal(resultNoIdentityChain("identity evolution"), false, "身份演变禁止");
 

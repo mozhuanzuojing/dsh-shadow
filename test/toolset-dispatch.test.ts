@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchReadQuery, findReadQuery, readQueries } from "../dist/query/reads.js";
+import type { ReadCtx } from "../dist/query/reads.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,7 +25,9 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 // ─────────────────────────────────────────────
 assert.ok(findReadQuery({ mode: "toolset" }), `{mode:"toolset"} 必须能解析到 ReadQuery（现状：不可达）`);
 const deps = { getFlushWarn: () => "", approval: undefined };
-const out = await dispatchReadQuery(deps, { mode: "toolset" }, {}, {});
+// toolset 的 ReadQuery 不读 ctx（其 run 的形参就是 `_ctx`），故这里**故意传空 ctx**：
+// 本测试测的是「入口可达」，不是「ctx 齐全时能跑」。
+const out = await dispatchReadQuery(deps, { mode: "toolset" }, {}, {} as ReadCtx);
 assert.ok(out !== undefined, `{mode:"toolset"} 必须被 dispatchReadQuery 接住（返回 undefined 即静默回落到 _index.md）`);
 assert.ok(out.includes("工具集台账"), `应渲染工具集台账；实际开头：${String(out).slice(0, 120)}`);
 console.log("✔ ① dispatch 可达：{mode:'toolset'} 被接住并渲染台账（不再静默回落到 _index.md）");

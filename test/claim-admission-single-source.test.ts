@@ -14,6 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAdmissibleClaim } from "../dist/world/guard/claim-admission.js";
+import type { RealityClaim } from "../dist/reality/types.js";
 import { buildRepresentationGraph } from "../dist/world/builder/representation-builder.js";
 // **复用审计工具自己的注释剥离器**，不另写一份。
 // 为什么必须复用（本条是自曝）：本测试第一版自己写了 `line.replace(/\/\/.*$/, "")`，
@@ -61,9 +62,11 @@ const prod = walk(repoRoot)
 
 // ── ① 唯一判据源的语义（含「没有对象」的边界）──
 {
-  assert.equal(isAdmissibleClaim({ status: "supported" }), true, "supported 可准入");
+  // 夹具**故意只给 `status`**：`isAdmissibleClaim` 是纯谓词，判据只读 `c?.status`；
+  // 这里测的是「各 status 值下判据给什么答案」，不是「字段齐全的 RealityClaim 能否构造」。
+  assert.equal(isAdmissibleClaim({ status: "supported" } as unknown as RealityClaim), true, "supported 可准入");
   for (const s of ["candidate", "unstable", "rejected"]) {
-    assert.equal(isAdmissibleClaim({ status: s }), false, `${s} 不得准入`);
+    assert.equal(isAdmissibleClaim({ status: s } as unknown as RealityClaim), false, `${s} 不得准入`);
   }
   assert.equal(isAdmissibleClaim(null), false, "null 不得准入（可选链，不抛）");
   assert.equal(isAdmissibleClaim(undefined), false, "undefined 不得准入（可选链，不抛）");

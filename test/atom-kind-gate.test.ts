@@ -10,7 +10,8 @@
 // `isCognitiveAtom` 已删除（规则与 `validateAtomProjection` 完全重复）。
 // 本文件保证「字段口径」与「文本口径」不会再次分叉。
 import assert from "node:assert/strict";
-import { deriveAtomKind, isSessionMetadataAtom, isMetadataMemoryText, parseMemory } from "../dist/core/episode.js";
+import { deriveAtomKind, isSessionMetadataAtom, isMetadataMemoryText, parseMemory, type ParsedMemory } from "../dist/core/episode.js";
+import type { AtomKind } from "../dist/core/lineage.js";
 import { validateAtomProjection } from "../dist/core/lineage-validator.js";
 import { deriveShadowNodes } from "../dist/core/node.js";
 
@@ -95,15 +96,18 @@ const headerOnly = "# shadow\n\n> 完整线索\n> 用户要点：「只有头，
 const parsedHeaderOnly = parseMemory(headerOnly, "2026-09-11/2026-09-11--100000-shadow.md", "2026-09-11--100000-shadow.md");
 assert.equal(parsedHeaderOnly.userMessages.length, 0, "parseMemory 的用户话只来自正文行 ⇒ 头里的用户要点不进 userMessages");
 assert.equal(isMetadataMemoryText(headerOnly), true, "文本口径读头 ⇒ 判为元数据");
+// 先读一次 kind 进局部量：下一行 assert.equal 的断言签名会把 `parsedHeaderOnly.kind` 收窄成字面量
+// "experience"，用被收窄的属性去比 "metadata" 会误报 TS2367。读到的仍是同一个值，判据不变。
+const headerOnlyKind: AtomKind = parsedHeaderOnly.kind;
 assert.equal(parsedHeaderOnly.kind, "experience", "字段口径读正文 ⇒ 判 experience");
 assert.notEqual(
-  isMetadataMemoryText(headerOnly), parsedHeaderOnly.kind === "metadata",
+  isMetadataMemoryText(headerOnly), headerOnlyKind === "metadata",
   "两者在「只有头、无正文行」时**确实分叉** —— 真记忆两者都写，故此边界在真语料上不出现"
 );
 console.log("✔ ④b 已知边界已钉住：头口径 vs 正文口径（真记忆两者都写 ⇒ 真语料不分叉）");
 
 // ── ⑤ 投影门：只有 metadata 被挡，且门后可见性大幅恢复 ──
-const asAtom = (kind: any, userMessages: string[] = ["x"]) => ({
+const asAtom = (kind: any, userMessages: string[] = ["x"]): ParsedMemory => ({
   rel: "x", date: "2026-09-11", time: "100000", entry: "shadow", project: "", agent: "", goal: "",
   decisions: [], decisionEvents: [], userMessages, materials: [], actions: [], thinkLines: [], body: "",
   kind, lineage: { source: "s", createdBy: "agent", evidence: [], createdAt: "2026-09-11 10:00:00" },

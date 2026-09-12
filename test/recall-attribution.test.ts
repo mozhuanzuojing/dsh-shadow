@@ -2549,7 +2549,7 @@ const seedIdentity = (store: Map<string, string>, v: string, at: string) =>
 // ─────────────────────────────────────────────
 // v0.28 Hypothesis Validation：Future Evidence 单向 → 与替代解释竞争 → ValidationArtifact（不覆盖 Hypothesis）。
 // Memory ≠ Evidence；不修改 Identity；不产生 Knowledge。
-const seedHypothesis = (store87, id, opts = {}) => store87.set(`D:/ws/.shadow/hypothesis/${id}.json`, JSON.stringify({
+const seedHypothesis = (store87, id, opts: { createdAt?: string } = {}) => store87.set(`D:/ws/.shadow/hypothesis/${id}.json`, JSON.stringify({
   id, observerId: "T",
   claimCandidate: "在多个场景观察到提前建边界后返工下降的候选模式",
   supportingPatterns: ["p1"],
