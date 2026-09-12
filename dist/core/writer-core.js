@@ -1,4 +1,14 @@
 import { numOr } from "./util.js";
+/**
+ * 记一条降级留痕。**这是写台账的唯一入口**（判据收一处）。
+ *
+ * 为什么参数是 `(core, capability, reason, effect)` 而不是一个对象：调用点大多在
+ * `catch`/早退分支里，短签名让「提前 return 之前顺手留痕」这件事足够便宜 ——
+ * ADR-0049 失效的真实原因从来不是「不知道要留痕」，而是**留痕比 return 麻烦**。
+ */
+export const noteDegrade = (core, capability, reason, effect) => {
+    core.degrade.set(capability, { at: Date.now(), capability, reason, effect });
+};
 export function createWriterCore(opts) {
     const { context, config, getAgentById } = opts;
     const episodeCfg = config.episodes ?? {};
@@ -17,6 +27,7 @@ export function createWriterCore(opts) {
         indexCacheWarm: new Set(),
         indexDirty: new Set(),
         indexFingerprint: new Map(),
+        degrade: new Map(),
         MAX_PENDING: 60,
         forgetCfg: config.forget ?? {},
         compactCfg: config.compact ?? {},

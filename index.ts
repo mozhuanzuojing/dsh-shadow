@@ -142,6 +142,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       config,
       cwdBySession: collector.cwdBySession,
       getFlushWarn: collector.getFlushWarn,
+      // T8-A（v1.15.65）：读侧的降级留痕入口 —— 与 getFlushWarn **同一个台账、同一个横幅**。
+      noteDegrade: collector.noteDegrade,
       verifyEvidence,
       expandTerms: collector.expandTerms,
       recallSelect: collector.recallSelect,

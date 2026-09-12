@@ -18,7 +18,7 @@ import { buildIndexText, consolidateText } from "./writer-render.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
-import { routeFor } from "./writer-core.js";
+import { routeFor, noteDegrade } from "./writer-core.js";
 import { invalidateProjection, shadowSourcesFingerprint } from "./projection-store.js";
 import type { WriterCore } from "./writer-core.js";
 import type { WriterHooks } from "./writer-capture.js";
@@ -36,7 +36,16 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
   const recOf = (mm: any, text: string) => {
     const entry = (String(text || "").match(/^# (.+)$/m) || [])[1]?.trim() || "";
     let parsed: any = undefined;
-    try { parsed = parseMemory(text, mm.rel, mm.name); } catch { /* 解析失败仅缺 episode/decision */ }
+    try {
+      parsed = parseMemory(text, mm.rel, mm.name);
+    } catch (e: any) {
+      // T8-A（v1.15.65，T8 第 7 条①）：旧版这里 `catch { /* 解析失败仅缺 episode/decision */ }`
+      // 是**静默**的 —— 而后果不止「缺 episode/decision」：`parsed` 为 `undefined` 时这条记忆
+      // 在 `deriveEpisodes` / `deriveDecisions` 里**整个消失**，它在索引与主题召回里却照旧活跃
+      // ⇒ 同一份语料两条读路径的覆盖面不一致，而读者无从知道。
+      // 「坏件 ≠ 空件」（`adr/0083` §2）：解析失败必须与「这条记忆本来就没有决策」分开。
+      noteDegrade(core, "episodeParse", `记忆解析失败（${mm.rel}：${(e && e.message) || String(e)}）`, "该记忆**不会**出现在 Episodes / Decision Lineage 里（但它在索引与主题召回里照旧可见）");
+    }
     return { date: mm.date, time: mm.time, name: mm.name, rel: mm.rel, entry, topics: topicsInText(text, slug(mm.name)), parsed };
   };
 
@@ -71,13 +80,15 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
   const summarizeTurn = async (agent: any, body: unknown) => {
     if (core.summaryCfg.enabled === false) return "";
     const route = routeFor(core);
-    if (!route) return "";
     const maxTokens = Math.max(1, Number(core.summaryCfg.maxTokens) || 80);
     const timeoutMs = Math.max(1, Number(core.summaryCfg.timeoutMs) || 8000);
     const system = "用一句话概括给定内容（这轮对话/动作的要点）。只用中文，不超过 40 个字；只输出这一句话，不加解释、引号、Markdown 或任何前缀。";
     const framed = String(body || "").trim().slice(0, 2000) || "（无正文）";
     const messages = [textMessage(`shadow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, framed)];
-    const text = await streamText(core.context, route, { label: "summarize", system, messages, maxTokens, timeoutMs });
+    // T8-A（v1.15.65，T8 第 2 条）：旧版 `if (!route) return ""` 静默；`streamText` 的
+    // `finish.reason.kind === "error"` 也静默返回 `""` ⇒ 文件里只是「**没有摘要**」，
+    // 与「**尚未生成**」不可区分（`patchSummary` 的回填也会因此永远不发生，且不留痕）。
+    const text = await streamText(core.context, route, { label: "summarize", system, messages, maxTokens, timeoutMs, onSkip: (reason, detail) => noteDegrade(core, "summary", `${reason}${detail ? `（${detail}）` : ""}`, "记忆文件里**没有摘要** —— 这与「尚未生成」在文件表面上完全一样；检索时也少了一路语义线索") });
     const one = String(text || "").replace(/\s+/g, " ").trim();
     return one ? one.slice(0, 120) : "";
   };
@@ -216,7 +227,12 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
           const eps = deriveEpisodes(parsed, { gapMinutes: core.episodeGap });
           idx += "\n" + episodesIndexText(eps, core.episodeShow);
         } catch (e: any) {
+          // T8-A（v1.15.65，T8 第 7 条②）：旧版只有 `console.log` —— 而 `console.log`
+          // **不算** ADR-0049 认可的可见信号。后果：`_index.md` 里**没有** Episodes 段，
+          // 与「当前只有原子记忆、还没有连续任务片段」**渲染成同一句话**
+          //（`episodesIndexText([])` 输出「（暂无连续任务片段，当前仅原子记忆）」）⇒ 读者分不清。
           console.log("[dsh-shadow] episodes derive failed:", e && e.message);
+          noteDegrade(core, "episodes", `Episodes 派生失败（${(e && e.message) || String(e)}）`, "`_index.md` 不列 Episodes 段，且与「暂无连续任务片段」**渲染结果相同** ⇒ 分不清是「没有」还是「坏了」");
         }
       }
       const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/_index.md`, { cwd: ws });

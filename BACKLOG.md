@@ -465,6 +465,25 @@
   ⇒ 收进 `tools/comparison-points.lib.ts`（`b_keys` **115→97**、`drift_keys` **11→9**、`drift_sites` **28→23**；
   **逐键取证**见 `.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts`，18/18）。
   **仍待办**：`min > 0` 的 19 处**未逐条审语义**（本轮只按必要判据 `min <= 0` 筛）。
+- **✅ A 部分已完成（v1.15.65 / `adr/0085`）—— 6 条上信号，1 条裁定为正当静默**。
+  机制：**一个台账 + 一个渲染点** —— `WriterCore.degrade`（唯一写入口 `noteDegrade(core, capability, reason, effect)`）
+  渲染进 `getFlushWarn()`（唯一渲染点）；而 `flushWarn` 已被**每一个**读 handler 带在返回值里
+  ⇒ **一处渲染，全部 mode 同时获得信号**。
+
+  | # | 能力 | 形态 |
+  |---|---|---|
+  | 1 | `llmRecall` | `streamText` 的 `onSkip` → 台账 + 横幅（原来 `label:""` ⇒ **连 log 都没有**） |
+  | 2 | `summary` | 同上（「没有摘要」与「尚未生成」在文件表面完全一样） |
+  | 3 | `recallExpansion` | 同上（`README` 自称「**静默**退回 A 档」） |
+  | 4 | `queryLog`（**默认开启**） | `recordQueryObservation` 改返 `boolean` → 调用点留痕 |
+  | 5 | `recallLedger` | `readLedger` 区分 `corrupt`/`unreadable`（各带原因）→ 调用点留痕；**上一版的 `corrupt` 标记没有消费者 ⇒ 等价于没留** |
+  | 6 | `projectionStore` | **裁定不加信号**：`adr/0049:38` 行级豁免（「缓存不是真相」，重建结果与命中缓存逐字节等价）。⚠ 同份 ADR 的清单 `:45` 要求每个增强都有信号、表里却给豁免 —— 就地写明「按行级豁免执行」+ **失效条件** |
+  | 7 | `episodes` / 解析 | 台账 + 横幅（①解析失败 ⇒ 该记忆从 Episodes/Decision 里**整个消失** ②派生失败渲染成「暂无连续任务片段」） |
+
+  **未做 / 缺口（不是已验证）**：`episodeParse` / `episodes` 两个生产者**只有接线、没有端到端触发**
+  （本仓夹具没有能让 `parseMemory`/`deriveEpisodes` 抛异常的输入）· `recallLedger` 的**写失败**留痕未端到端触发
+  （需 `cooldownTurns>0 && servedDetail.length`）· `knowledgeNavigate` 的留痕无专门断言 ·
+  **一次观察未修**：台账坏件时本回合若走到写台账会**覆盖**坏件（已在横幅「后果」里写明，未改旁路写入）。
 - **已在本轮修掉的同类（第 3 处）**：`knowledgeEngine.enabled` **生产零读取** ——
   `query/reads.ts:141` 无条件建树、`createKnowledgeEngine` 收 `config` 却从不使用（**已删死形参**）。
   ⇒ 原文档声称的「默认关 / `enabled: true` 启用」是**一处不存在的开关**，已在
@@ -474,7 +493,9 @@
   ⇒ 逐条定形态是**独立工作量**，本轮只做**清点与立账**（D8 的授权范围是「补表 + 记缺陷」）。
 - **完成判据**：7 条各落「补可见信号（给形态 + 测试）」或「判定为正当静默（给 ADR-0049 依据）」；
   两处开关缺陷各修（`||` → `??` 或显式 `undefined` 判定）+ 加锁。
-  **进度：B 部分 ✅ 已闭（v1.15.64）；A 部分 7 条仍待办。**
+  **进度：B 部分 ✅ 已闭（v1.15.64）；A 部分 ✅ 已闭（v1.15.65，6 条上信号 + 1 条裁定）；
+  T8 整体可结案 —— 剩余三项缺口（`episodeParse`/`episodes` 无端到端触发、`recallLedger` 写失败无端到端触发、
+  台账坏件会被覆盖）已分别记在上方「未做 / 缺口」里。**
 
 ### T9. sidecar 的**读路径收益**与**真机规模**均未测（D6 交付后的诚实缺口）
 
@@ -1209,7 +1230,7 @@
 V1–V5  功能有没有            ✅ 已完成
 V6     验证系统会不会假绿      ✅ 已闭环（v1.15.45）
 V7     语料是不是可信         ✅ 已闭环（v1.15.46）
-T8     静默降级可见化          ← **B 部分（2 处开关缺陷）✅ v1.15.64**；A 部分（7 条可见信号）待办
+T8     静默降级可见化          ← ✅ **已闭（v1.15.64 B 部分 + v1.15.65 A 部分）**
 T15    什么东西是契约          ← 产出 Protected Contract Registry（见 T15）
 D1/D2/D3 + A 段 6 条 ⚠ **不要先拍** —— 它们本质都是「哪些东西算受保护契约」，故排在 T15 之后
 T2(B段) / T9 / T10 / T7

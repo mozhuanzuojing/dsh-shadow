@@ -3,6 +3,56 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.65] **T8 的 A 部分：7 处静默降级 → 一个降级台账 + 一个渲染点**（`adr/0085`）—— `verify` **55/55**
+
+**一句话**：ADR-0049 早就写下判据（「`unavailable` 状态 / flush warn / debug trace **三者至少一个** —— **`console.log` 不算**」），但本仓**没有承接它的东西** ⇒ T8 立账的 7 处降级一条信号都没有。本轮补的不是「意识」，是**承接物**。
+
+### 1. 一个台账 + 一个渲染点（判据收一处）
+
+```
+noteDegrade(core, capability, reason, effect)   ← 唯一写入口（写侧直接调；读侧经 ShadowQueryDeps 注入）
+        ↓ WriterCore.degrade（同类覆盖）
+getFlushWarn()                                  ← 唯一渲染点（按能力名排序）
+        ↓ 所有读 handler 已有 `+ flushWarn`（60+ 处）
+一处渲染 ⇒ 全部 mode 同时获得信号
+```
+
+最刺眼的一例：`core/writer-llm.ts` 的**唯一**痕迹是 `if (opts.label) console.log(...)`，而 `recallSelect` / `knowledgeNavigate` 传 `label: ""` ⇒ **连 log 都没有**；更根本的是 `!llm` / `!route` / `finish.error|aborted` **三条路径从不进 catch** ⇒ 即使有 label 也不出声。现在经 `StreamOpts.onSkip` 把**原因**回传给调用方（**与 `label` 是否为空无关**）。
+
+四条刻意取舍：① **`effect` 必填** —— 可见的前提是说清**丢了什么**（「llmRecall failed」对读者没用）；② **用户显式 `enabled:false` 不留痕** —— 关掉是用户的选择，渲染成告警 = 把读者的决定当故障；③ 同类**覆盖**不追加 —— 「一直坏着」与「刚刚坏」对读者是同一件事，追加只会刷屏成噪音；④ 渲染前**排序** —— `Map` 插入序会让逐字节比对的门禁变脆。
+
+### 2. 7 条的处置
+
+| # | 能力 | 形态 | 修前的**具体**后果 |
+|---|---|---|---|
+| 1 | `llmRecall` | 台账 + 横幅 | 连 log 都没有（`label:""`）；无路由时两处重复判、且都静默 ⇒ 「无路由」判据现只在 `streamText` 判一次 |
+| 2 | `summary` | 台账 + 横幅 | 文件里「没有摘要」与「尚未生成」**在文件表面上完全一样** |
+| 3 | `recallExpansion`（语义 B 档） | 台账 + 横幅 | `README` 自称「**静默**退回 A 档」—— 承认写在文档里，读者在输出里看不到 |
+| 4 | `queryLog`（**默认开启**） | `recordQueryObservation` 改返 `boolean` → 调用点留痕 | 观测数据丢失，`mode:"query-log"` 只显示「尚无记录」⇒ 与「从没查过」不可区分（T8 里优先级最高） |
+| 5 | `recallLedger` | `readLedger` 区分 `corrupt` / `unreadable`（各自带原因）→ 调用点留痕 | 上一版留了 `corrupt` 标记却**没有任何消费者** = 等价于没留；外层 `catch` 还**什么都不带**地回落空台账 |
+| 6 | `projectionStore` | **裁定不加信号** | 依据 `adr/0049:38` 的**行级豁免**（「缓存不是真相」，重建结果与命中缓存逐字节等价）。⚠ 同时记下 ADR 内部张力：同份 ADR 的自检清单（`:45`）要求**每一个**增强都有信号、表里却给了豁免且清单没写例外 —— 已在 `core/projection-store.ts` 就地写明「按表的行级豁免执行」及**失效条件**（若缓存将来参与答案，本裁定立即失效） |
+| 7 | `episodes` / 解析 | 台账 + 横幅 | ① `recOf` 的 `catch {}` 静默 ⇒ 该记忆从 Episodes/Decision 里**整个消失**（但在索引/主题召回里照旧可见 ⇒ 两条读路径覆盖面不一致）② 派生失败只有 `console.log`，而 `_index.md` 的「没有 Episodes 段」与「暂无连续任务片段」**渲染成同一句话** |
+
+`knowledgeEngine.llmNavigate` **不**加第二条披露（`query/reads.ts:174` 已就地写「LLM 导航未启用/失败 → 确定性检索」）；它现在多给的是**原因**，与「退到了哪里」是两层，不重复。
+
+### 3. 我在写测试时犯的两个错（留档，因为正是本条的论据）
+
+写端到端断言时我**两次猜错读路径**：① 用 `read_shadow({topic})` 测 `queryLog`（实际在 `mode:"query"` 上）；② 用 `mode:"recovery"` 测 `recallLedger`（实际 `readLedger` 在**不传 mode** 的默认召回上，而 `recovery` 只是**复用**了前一轮留下的横幅 —— `flushWarn` 是统一的）。**两次都是「正对照」把我拦下来的**：第一版的正对照（「健康 fs 下 query-log 必须真的落盘」）当场变红，证明代码路径没走到、那句「没有横幅」是**假绿**。⇒ ① **端到端断言必须先证明路径真的被走到**；② **不要猜读路径** —— 为此新增探针 `.docs/fix/2026-09-12/t8a-read-path-map.ts`，把四条路径的实际输出与落盘键打出来。这与 `adr/0084` §4 同型（那次探针把判据写窄了）。
+
+### 4. 验证
+
+`npm run verify` **55/55**。正/负对照齐备：①健康流一次都不回传原因 ②**无留痕 ⇒ 横幅逐字节为空**（健康路径输出不变）+ 实例间隔离 ③三条生产者各自留痕 / 显式关掉零留痕 ④空文件是「真的还没有」而**不是**坏件 ⑤a健康 fs 下 query-log 必须真的落盘 ⑤b**合法台账零横幅**（证明横幅由内容坏引起，不是「文件存在」的回声）。
+
+### 5. 未做 / 诚实边界
+
+- **`episodeParse` / `episodes` 两个生产者只有接线、没有端到端触发** —— 本仓夹具里没有能让 `parseMemory` / `deriveEpisodes` 抛异常的输入。锁的是**机制与接线**，**不是**各自触发路径。**这是缺口，不是已验证。**
+- **`recallLedger` 的「写失败」留痕未端到端触发** —— 需 `cooldownTurns > 0 && servedDetail.length`（「tier ≠ L0 且渲染被截断」的长记忆），夹具成本较高。
+- **`knowledgeNavigate` 的留痕没有专门断言**（与已断言的三个生产者共用同一机制）。
+- **一次观察未修**：台账坏件时本回合若走到写台账那一步会**覆盖**坏件（内容是 `{}` 派生的 `{turn:1}`）。原文件已无法解析 ⇒ 无可用数据丢失，但**手工抢救的机会**同时消失。已在横幅「后果」里写明；未改成「写旁路文件」（那是另一个决定：需定坏件保留多久、谁清理）。
+- **`summary` 的留痕是能力级而非逐条记忆级**。
+
+**改动文件**：`core/writer-core.ts`（`DegradeNote` + `degrade` + `noteDegrade`）· `core/writer.ts`（渲染 + 三个生产者 + 对外入口）· `core/writer-llm.ts`（`onSkip`，4 条静默路径）· `core/writer-materialize.ts`（`summary` / `recOf` / episodes）· `core/projection-store.ts`（裁定注释）· `retrieval/ledger.ts`（`LedgerRead`）· `query/observatory.ts`（返回 `boolean`）· `query/query.ts`（两个调用点留痕）· `query/reads.ts`（queryLog 调用点）· `query/types.ts` + `index.ts`（`noteDegrade` 接线）· `test/t8-silent-degradation.test.ts`（**新**）· `adr/0085`（**新**）· `BACKLOG.md` · `README.md` · `dist/**` · 证据 `.docs/fix/2026-09-12/t8a-*`。
+
 ## [v1.15.64] **回到泳道做 T8**（B 部分：显式 0 被默认值吞掉）+ 副产品：**比较点判据的两份实现**（`adr/0084`）—— `verify` **54/54**
 
 **一句话**：`adr/0083` §14.1 记下「我在 M1 之后连续 **8 轮**做审查→修，`T8/T15/D1-3/A段/T2` **一项未动**」——本轮**回到泳道**，做用户 2026-09-12 定的第一步 **T8**（其 B 部分「判据已定、纯实现」，不需决策，故先做）。做的过程中**闸门自己顶出第二条线索**：`typeof x === "<类型名>"` 是**定义上的假阳**，而「什么算一个比较点」此前有**两份独立实现** ⇒ 我修了 wiring 那一份，`audit-drift` 的棘轮**紧接着**在同一假阳上报红。

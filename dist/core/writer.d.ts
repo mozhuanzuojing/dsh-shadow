@@ -10,6 +10,12 @@ export interface ShadowCollector {
     /** push / flush / 扩词 / 落盘失败提示。 */
     push: (agentId: string | undefined, rec: any) => void;
     getFlushWarn: () => string;
+    /**
+     * 记一条能力降级留痕（T8-A / ADR-0049）。写侧自己直接在 `catch`/早退分支里调
+     * `noteDegrade(core, …)`；这个对外入口是给**读侧**用的（`ShadowQueryDeps.noteDegrade`），
+     * 因为读侧路径没有 `WriterCore`。两者写的是**同一个台账**、由 `getFlushWarn` 统一渲染。
+     */
+    noteDegrade: (capability: string, reason: string, effect: string) => void;
     expandTerms: (topic: string) => Promise<string[]>;
     /** recall_shadow 的 LLM 推理导航（v1.6）：给候选任务列表，LLM 选最相关编号；失败返回 []。 */
     recallSelect: (query: string, candidates: RecallCandidate[]) => Promise<number[]>;

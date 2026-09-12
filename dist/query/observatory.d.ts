@@ -48,7 +48,20 @@ export declare const evidenceBreakdownOf: (nodes: any[]) => {
         ev: number;
     }>;
 };
-export declare const recordQueryObservation: (fs: any, ws: string, cfg: any, obs: QueryObservation) => Promise<void>;
+/**
+ * 记录一次查询观测。返回**是否真的写入成功**（T8-A / ADR-0049，v1.15.65）。
+ *
+ * 旧契约是 `Promise<void>` + `catch { /* best-effort *\/ }` —— 写失败时调用方**无从知道**，
+ * 于是 `.shadow/query-log/` 丢的记录与「从没查过」不可区分（读侧只会显示「尚无记录」）。
+ * 这条是**默认开启**的能力，所以它的静默在 T8 的 7 条里优先级最高。
+ *
+ * 现在返回 `false` 时，唯一的租户（`query/reads.ts` 的观测写入点）会经 `deps.noteDegrade`
+ * 记一条降级留痕 ⇒ 读者在横幅上看到「queryLog 写失败」。
+ *
+ * `fs`/`ws` 缺失与 `enabled === false` 仍返回 `false`，但**不算降级** —— 前者是调用环境问题
+ * （调用点本来就有 fs 守卫），后者是用户**显式**关闭，都不是「坏了」。
+ */
+export declare const recordQueryObservation: (fs: any, ws: string, cfg: any, obs: QueryObservation) => Promise<boolean>;
 /** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
 export declare const summarizeQueryLog: (fs: any, ws: string) => Promise<any>;
 export declare const renderQueryLogSummary: (s: any, topic: string) => string;

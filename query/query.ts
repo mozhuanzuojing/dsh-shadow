@@ -330,6 +330,14 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (!scored.length) return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)) }) + (debugMode ? "\n\n" + diag.join("\n") : "");
   const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
   const ledger = await readLedger(fs, ws);
+  // T8-A（v1.15.65，T8 第 5 条）：台账坏件/不可读**必须**可见 —— 两者都会把 `turn` 从 0 重算，
+  // 于是冷却窗口整体作废、**已经冷却过的记忆被重新返回**（这正是 T8 列的后果）。
+  // 上一版留了 `corrupt` 标记却**没有消费者**，等价于没留（标记没人看 = 静默）。
+  if (ledger.corrupt) {
+    deps.noteDegrade?.("recallLedger", "_recall_log.json **坏件**（无法解析或结构不对）", "本次按空台账处理 ⇒ **冷却状态可能失效**：已经冷却过的记忆会被重新返回，`recall.cooldownTurns` 事实上没生效。**另注**：本回合若走到写台账那一步，会把这份坏件**覆盖**掉（其内容已无法解析，但手工抢救的机会同时消失）");
+  } else if (ledger.unreadable) {
+    deps.noteDegrade?.("recallLedger", `_recall_log.json **读不到**（${ledger.error || "原因未知"}）`, "本次按空台账处理且 `turn` 从 0 重算 ⇒ 冷却窗口整体作废，与「第一次运行」不可区分");
+  }
   const turn = (ledger.turn || 0) + 1;
   const available: any[] = [];
   let cooledCount = 0;
@@ -403,7 +411,12 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
     if (keys.length > 500) {
       keys.sort((a, b) => (nextServed[a].turn || 0) - (nextServed[b].turn || 0)).slice(0, keys.length - 500).forEach((k) => delete nextServed[k]);
     }
-    await writeLedger(fs, ws, { turn, served: nextServed });
+    // T8-A（v1.15.65）：写失败此前返回了 `false` 却**没人看**（调用点丢弃返回值），
+    // 于是「冷却状态没保存」与「本次没有冷却」在读者眼里一样。
+    const ledgerWritten = await writeLedger(fs, ws, { turn, served: nextServed });
+    if (!ledgerWritten) {
+      deps.noteDegrade?.("recallLedger", "_recall_log.json **写失败**", "本次的冷却状态**没有保存**：下回合 `turn` 递进会从头再算，同一条记忆可能被反复返回（`recall.cooldownTurns` 失效）");
+    }
   }
   // 命中数累积（v1.15.24 修，ADR-0067）：**必须基于 `servedRels`（每条被返回的），不是 `servedDetail`**。
   // 根因（实测复现）：`servedDetail` 的定义是 `s.tier !== "L0" && render.includes("…")`

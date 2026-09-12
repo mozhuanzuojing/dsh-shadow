@@ -114,7 +114,11 @@ const shadowQuery = {
             : "";
         const nodeTypes = matchedNodes.reduce((acc, n) => { acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
         const bd = evidenceBreakdownOf(matchedNodes);
-        await recordQueryObservation(fs, ws, deps.config, {
+        // T8-A（v1.15.65）：`queryLog` 是**默认开启**的能力，旧代码写失败时 `catch {}` 静默 ⇒
+        // 观测数据丢了，而 `mode:"query-log"` 只显示「尚无记录」，与「从没查过」不可区分。
+        // 现在用返回值判断，失败就留痕（横幅对本函数的 `flushWarn` 是本回合**之前**取的，
+        // 故本次失败在**下一次**读时才可见 —— 这是可接受的：留痕本身是持久的，不会被丢掉）。
+        const obsOk = await recordQueryObservation(fs, ws, deps.config, {
             date: today(), ts: stamp(), query: topicQ, scope, limit,
             candidateNodes: nodes.length, projectionCached: cached, returnedNodes: items.length,
             evidenceCount: Array.from(new Set(items.flatMap((it) => it.evidence))).length,
@@ -124,6 +128,10 @@ const shadowQuery = {
             nodeTypes, nodeTitles: matchedNodes.map((n) => n.title), latencyMs: Date.now() - qStart,
             evidenceByType: bd.byType, evidenceByKind: bd.byKind, evidenceByCreatedBy: bd.byCreatedBy,
         });
+        // 只在「本该写而写失败」时留痕：`fs`/`ws` 缺失与用户显式 `enabled:false` 都不算降级。
+        if (!obsOk && fs && ws && deps.config?.queryLog?.enabled !== false) {
+            deps.noteDegrade?.("queryLog", "观测记录写入失败（.shadow/query-log/ 不可写）", "查询观测数据**丢失**：`mode:\"query-log\"` 的统计建立在被削过的样本上，而它只显示「尚无记录」，与「从没查过」不可区分");
+        }
         return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + truncNote + flushWarn);
     },
 };

@@ -33,20 +33,38 @@ export const evidenceBreakdownOf = (nodes) => {
     return { byType, byKind, byCreatedBy };
 };
 const logRel = (date) => `${SHADOW_ROOT}/query-log/${date}.jsonl`;
+/**
+ * 记录一次查询观测。返回**是否真的写入成功**（T8-A / ADR-0049，v1.15.65）。
+ *
+ * 旧契约是 `Promise<void>` + `catch { /* best-effort *\/ }` —— 写失败时调用方**无从知道**，
+ * 于是 `.shadow/query-log/` 丢的记录与「从没查过」不可区分（读侧只会显示「尚无记录」）。
+ * 这条是**默认开启**的能力，所以它的静默在 T8 的 7 条里优先级最高。
+ *
+ * 现在返回 `false` 时，唯一的租户（`query/reads.ts` 的观测写入点）会经 `deps.noteDegrade`
+ * 记一条降级留痕 ⇒ 读者在横幅上看到「queryLog 写失败」。
+ *
+ * `fs`/`ws` 缺失与 `enabled === false` 仍返回 `false`，但**不算降级** —— 前者是调用环境问题
+ * （调用点本来就有 fs 守卫），后者是用户**显式**关闭，都不是「坏了」。
+ */
 export const recordQueryObservation = async (fs, ws, cfg, obs) => {
-    // 默认开启（本阶段就是要观察真实查询）；显式 queryLog.enabled=false 才关。观测是旁路，写失败静默。
+    // 默认开启（本阶段就是要观察真实查询）；显式 queryLog.enabled=false 才关。
     if (!fs || !ws)
-        return;
+        return false;
     if (cfg?.queryLog && cfg.queryLog.enabled === false)
-        return;
+        return false;
     try {
         const rel = logRel(obs.date);
         const target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
         const prev = (await fs.readText(target)) || "";
         const line = JSON.stringify({ ...obs, query: scrubQuery(obs.query), nodeTitles: (obs.nodeTitles || []).map(tidy) });
         await fs.writeText(target, prev.endsWith("\n") || !prev.length ? prev + line + "\n" : prev + "\n" + line + "\n");
+        return true;
     }
-    catch { /* best-effort：观测层失败不冒泡 */ }
+    catch {
+        // **不再静默**：失败由返回值上抛给调用方去留痕。这里连 log 都不打是**有意的** ——
+        // `console.log` 不算 ADR-0049 的可见信号，打了反而会让人以为「已经有信号了」。
+        return false;
+    }
 };
 /** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
 export const summarizeQueryLog = async (fs, ws) => {

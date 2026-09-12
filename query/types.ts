@@ -7,6 +7,19 @@ export interface ShadowQueryDeps {
   cwdBySession: ReadonlyMap<string, string>;
   /** 动态取落盘失败提示（lastFlushError → flushWarn）。 */
   getFlushWarn: () => string;
+  /**
+   * **记一条能力降级留痕**（T8-A / ADR-0049，v1.15.65）。写进 `WriterCore.degrade`，
+   * 由 `getFlushWarn()` 渲染成读者可见的横幅。
+   *
+   * 为什么读侧需要它：读侧也有**会静默降级**的能力 —— `queryLog` 写失败（**默认开启**的观测层）、
+   * `recall.cooldownTurns` 台账坏件/不可读/写失败。这些路径手里没有 `WriterCore`，
+   * 只能经这里留痕。旧代码在它们上面要么 `catch {}`、要么只 `console.log` ——
+   * 两者都**不算** ADR-0049 认可的可见信号。
+   *
+   * 可选：本仓有意让读模块能在**没有写侧**时独立构造（测试 / 工具），
+   * 缺它时降级照旧发生，只是不上横幅（调用点用 `?.`）。
+   */
+  noteDegrade?: (capability: string, reason: string, effect: string) => void;
   /** 证据验证（经 config.evidenceProvider 路由到 fs/zg/自定义 provider）。 */
   verifyEvidence: (ref: GatewayEvidenceRef, ctx: any) => Promise<EvidenceResult>;
   /** 召回扩词（闭包：recallCfg + llm + routeFor）。 */

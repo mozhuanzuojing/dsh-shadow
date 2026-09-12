@@ -21,6 +21,23 @@ export const createJsonlProjectionStore = (fs, ws) => {
             await fs.writeText(t, body ? body + "\n" : "");
         },
         async load() {
+            // ── T8 第 6 条的**裁定**：此处「读失败/坏行 → `null` → 重建」判为**正当静默**，不加可见信号 ──
+            //
+            // 依据（不是我的判断，是 `adr/0049` 的**行级豁免**）：该 ADR 的表第 38 行已明列
+            // 「Projection Store `projectionStore` | 缓存文件 | 读失败 / 坏行 → `null` → 重建
+            //  （**缓存不是真相**，`rm -rf` 无影响）｜可见信号：**否**」。
+            // 判为正当的理由是**这条降级不改变答案**：缓存只是性能优化，源（记忆文件）才是真相
+            //（ADR-0003），重建得到的结果与命中缓存**逐字节等价**。
+            // 对比 T8 里其他条目：它们的降级会**改变读者看到的内容**（少摘要 / 窄召回 / 冷却失效 /
+            // 观测数据丢失）⇒ 那些必须有信号。
+            //
+            // ⚠ **诚实标注一处内部张力**（不是我发现的豁免，是 ADR-0049 自己两处不一致）：
+            // 同一份 ADR 的「新增可选增强时的门禁」清单（`adr/0049:45`）要求**每一个**可选增强
+            // 「有可见信号（状态 / warn / debug 之一）」。表里给了豁免、清单里没写例外。
+            // 本轮**不改 ADR**（它已接受并冻结），只在此处写明「本行按表的行级豁免执行」，
+            // 免得下一个读者以为清单是绝对的、又来给这里补一条无用的 warn。
+            // 若将来该缓存**参与答案**（例如缓存里存了不可重建的中间判断），本裁定**立即失效** ——
+            // 那时它就不再是「缓存不是真相」这一类了。
             try {
                 const t = await target();
                 const txt = await fs.readText(t);
@@ -35,7 +52,7 @@ export const createJsonlProjectionStore = (fs, ws) => {
                         nodes.push(JSON.parse(s));
                     }
                     catch {
-                        return null; /* 单行坏 → 触发 rebuild */
+                        return null; /* 单行坏 → 触发 rebuild（见上：判为正当静默） */
                     }
                 }
                 return nodes;
