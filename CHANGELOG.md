@@ -3,6 +3,61 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.60] **把一条「判据分叉」线索判定掉**：两个同名 `isProductionPath` 问的是**不同问题**
+
+**一句话**：上一轮把 `audit-wiring` ↔ `audit-drift` 的同名 `isProductionPath`（EXCLUDE 差一个 `tools`）
+记成「分叉，**等拍板** `tools/` 算不算生产面」。这一轮**判定：不需要拍板** —— 两者问的是两个不同的问题：
+
+- wiring 问「**谁可能调用这个导出**」（A 段）⇒ `tools/`（CLI/审计工具）**是真实调用者，必须算**；
+  排除它们会让「被 CLI 调用的导出」统统落进「零引用」桶 —— 那是**另一种谎**。
+- drift 问「**产品模块之间**有没有同一条判据被表达两次」（B 段）⇒ `tools/` **不是产品模块，必须排除**。
+
+⇒ **按用途改名**：`isCallerCorpusPath`（wiring）/ `isProductModulePath`（drift），两处注释写明各自口径与
+**已知副作用**（drift 因此看不见 `tools/` 内部的分叉，包括这两者的差异本身）；
+`audit-wiring.selftest.ts` ⑭ 从「未拍板」改为「**刻意约定**」：断言两份的差异**恰好**是 `tools/`，
+且两侧无分歧的部分（测试面/产物/依赖都必须排除）一并锁住 ⇒ 任一侧口径漂移即红。
+
+**这条线索的处置方式值得记下来**：把「看起来是分叉」的东西**判定成两种不同的问题**，比强行统一更有价值 ——
+强行统一会把两个问题绑死，然后必然有一边是错的。
+
+**顺带更正我自己的一处计数错误**：此前反复写的「**169** 个既存测试类型错误」是把 `tsc` 的**总输出行数**
+（含续行）当成了诊断条数；只按 `error TS` 数，实际是 **83 条**（详见 `adr/0083` §11.2）。
+
+## [v1.15.61] **认识论层「损坏/失败必须出声」6 处** + 三份从未读过的目录的审查台账 —— `verify` 53/53
+
+**一句话**：三个**只读**审查覆盖了此前从未被系统读过的全部剩余目录；本轮先修其中**同一族**的 6 处
+（「损坏 ≠ 为空」/「写失败 ≠ 成功」），其余约 60 条按层记入 `BACKLOG` §七。
+
+### 1. 一条**推翻既有假设**的判定
+
+此前把 `adaptation/` · `agency/` · `continuity/` 记成「整目录未读（可能未接线）」。审查结论：**三层全部已被生产接线**
+（→ `query/query.ts` → `index.ts:297` 的 `read_shadow`）⇒ 那些缺陷是**当前生效**，不是「潜在」。
+**「未读」不等于「未接线」，两者都要查证而非假定。**
+
+### 2. 已修（6 处）
+
+| # | 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|---|
+| 1 | `readObservations` 单 `try` 包整个循环 | 第 k 个文件坏 ⇒ **静默返回前 k-1 条**、后续永不读；目录读失败 ≡ 目录为空。而下游 `claimOf` 的 `supported` 判据**就吃 `obs.length`** | `readObservationsDetailed`：单条坏件只丢该条 + **计数** + 留痕 |
+| 2 | `readClaims` 同型（**更危险**） | 一份坏 claim ⇒ 静默少返回 ⇒ `mode:"world"` 用**残缺图覆盖**落盘 `graph.json`（**不可逆**） | `readClaimsDetailed` + **坏件时不覆盖落盘图** + 出口披露「N 个坏件、本次未覆盖」 |
+| 3 | `readRealityEvidence` 同型 | 坏件 ⇒ `mode:"stability"` 报 `isolated` | `readRealityEvidenceDetailed` |
+| 4 | 三处写失败渲染成成功 | 只 `console.log` 就返回 ⇒ 「写入被拒」与「已登记」**逐字不可区分** | 返回 `{persisted}` / `boolean`；三个 mode 输出显式「**未落盘**」段 |
+| 5 | `referenceEvidence` 把「读不出」压成 `null` | 调用方渲染成「（无 reality evidence X）」⇒ **把工具报错/坏件当成「不存在」** | 返回 `{evidence, reason: not_found \| unreadable}`；出口分开说 |
+| 6 | `world/explain` 两处失真 | ① `Validation History: N supported claim(s)` 数的却是 **claim 条数**（没验证也显示「验证历史」）；② subject 不匹配时**静默换成** `objects[0]`，而该函数用途正是解释**这个**结构 | 标签改 `basedOnClaims` 并明说不是验证历史；回退时**出声** |
+
+### 3. 顺带修掉的判据分叉
+
+`Number(args?.obsConfidence) || 0.5`（`query/federation.ts:35`）vs `opts.observationConfidence ?? 0.5`（`federation/perspective.ts:11`）：
+**显式传 `0` 被 `||` 静默改成 0.5**。⇒ 默认值收进 `CONFIDENCE_DEFAULT` + `confidenceOfInput`（只认「没传 ⇒ 默认」；显式 `0` 保留；非法值归 0 而**不伪装成 0.5**）。
+
+### 4. 台账（**约 60 条**，`BACKLOG` §七）
+
+按层分组、逐条带 `文件:行号`，含每层的**测试假绿**（含「把实现改坏仍全绿」的具体改法）。
+**三条最该先处理**（本轮**未擅自改**，都需要先定契约）：① 工具 schema 与四处读点不一致（`validations`/`visible`/`hidden`/`hiddenA`/`hiddenB`/`distortion` 未声明 ⇒ 要么该层恒空、要么可声明 `outcome:"validated"` 造 `supported`）· ② `claimOf` 的 `supported` 从不与 ValidationTimeline 交叉核对（全仓无 join）· ③ `planning`/`sim-action` 三处守卫永不失败。
+
+**可信度标注**：三名审查者只读、**未跑测试**，「改坏仍通过」类结论是**静态推演**；三份共**排除** 40 余条并给出理由。
+
+
 ## [v1.15.59] **把 CLI 接线这条最高危盲区做成自动断言** —— `verify` 53/53
 
 **一句话**：此前 6 个 selftest **100% 只调纯函数**，而本仓历史上真实踩过的两类缺陷都长在 **CLI 接线**上，

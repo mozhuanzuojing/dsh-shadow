@@ -13,8 +13,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
-import { isProductionPath as driftIsProductionPath } from "./audit-drift.lib.ts";
+import { collectComparisons, hasProducer, findOrphanComparisons, isCallerCorpusPath, countCallSites, maskStrings, importedBy, exportsOf, pairedExport, bareMentions, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
+import { isProductModulePath } from "./audit-drift.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
@@ -84,7 +84,7 @@ const CASES = [
   ["node_modules/x/y.ts", false], ["dist/core/x.js", false], ["a/test/b.ts", false],
 ];
 for (const [p, want] of CASES) {
-  assert.equal(isProductionPath(p), want, `isProductionPath(${JSON.stringify(p)}) 应为 ${want}`);
+  assert.equal(isCallerCorpusPath(p), want, `isCallerCorpusPath(${JSON.stringify(p)}) 应为 ${want}`);
 }
 console.log(`✔ ⑥ 分类器正确（${CASES.length} 例，含**顶层 test/** 这个曾漏掉、会掩盖真缺陷的形态）`);
 
@@ -100,7 +100,7 @@ const walk = (d, out = []) => {
 const repoRoot = join(here, "..");
 const allTs = walk(repoRoot, []);
 const prod = allTs
-  .filter((f) => isProductionPath(f.slice(repoRoot.length).replace(/\\/g, "/")))
+  .filter((f) => isCallerCorpusPath(f.slice(repoRoot.length).replace(/\\/g, "/")))
   .map((f) => ({ file: f.slice(repoRoot.length).replace(/\\/g, "/"), text: readFileSync(f, "utf8") }));
 const real = findOrphanComparisons(prod);
 
@@ -273,7 +273,7 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
 
 // ─────────────────────────────────────────────
 // ⑬ `isTestPath`：**这条判据本身**必须被锁住（v1.15.58 从 CLI 搬进 lib + 补标定）
-//    它由 v1.15.43 的真缺陷修来（旧写法 `!isProductionPath(p)` 把 `dist/`、`node_modules/`
+//    它由 v1.15.43 的真缺陷修来（旧写法 `!isCallerCorpusPath(p)` 把 `dist/`、`node_modules/`
 //    的 `.d.ts` 也算成「测试引用」⇒ A 段那一列**虚高**，分诊时会把「零测试引用」读成
 //    「已被测试覆盖」）。此前它定义在 **CLI**、不在任何 selftest 的覆盖面上 ⇒ 改坏也全绿。
 // ─────────────────────────────────────────────
@@ -284,41 +284,37 @@ console.log("✔ ⑧ 真仓库（A 类）：ChangeSet 判为无调用点；inval
   assert.equal(isTestPath("dist/core/x.d.ts"), false, "★ 产物**不算**测试面（旧写法在这里虚高）");
   assert.equal(isTestPath("node_modules/pkg/x.d.ts"), false, "★ 依赖**不算**测试面");
   // **反例：必须与旧写法在这些路径上分开**（否则等于没修）
-  const legacy = (p: string) => !isProductionPath(p);
+  const legacy = (p: string) => !isCallerCorpusPath(p);
   assert.notEqual(isTestPath("dist/core/x.d.ts"), legacy("dist/core/x.d.ts"),
-    "★ 新判据必须与 `!isProductionPath` 在「产物」上给出不同答案");
+    "★ 新判据必须与 `!isCallerCorpusPath` 在「产物」上给出不同答案");
   assert.notEqual(isTestPath("node_modules/pkg/x.d.ts"), legacy("node_modules/pkg/x.d.ts"),
     "★ 同上（依赖）");
-  console.log("✔ ⑬ isTestPath：test/ 命中 · 产物与依赖**不**命中（与旧写法 `!isProductionPath` 明确分开）");
+  console.log("✔ ⑬ isTestPath：test/ 命中 · 产物与依赖**不**命中（与旧写法 `!isCallerCorpusPath` 明确分开）");
 }
 
 // ─────────────────────────────────────────────
-// ⑭ **锁住 `isProductionPath` 的分叉**（v1.15.59）—— 不擅自统一，但让任何一侧的改动变红
+// ⑭ **两个「路径分类」判据的差异是**刻意**的（v1.15.60 判定 + 锁住）
 //
-// 事实：`audit-wiring.lib.ts` 与 `audit-drift.lib.ts` **各有一份**同名 `isProductionPath`，
-// 两者 EXCLUDE 集合**差一个 `"tools"`**（wiring 把 `tools/**` 当生产面，drift 排除它）。
-// 后果：两个工具量的是**不同语料**（故基线里 `corpus.wiring` / `corpus.drift` 必须分键），
-// 而 `audit-drift` 的存在理由之一（检测「同一条判据在 ≥2 模块被表达」）**恰好看不见 `tools/`**
-// ⇒ 它看不见自家这对分叉。
-//
-// **为什么这一轮不统一**：统一会改变某一侧的基线口径（`a_total`/`b_keys` 或 `drift_keys`），
-// 必须先决定「`tools/` 算不算生产面」—— 那是**工程口径的决定**，不是重构。
-// 本轮只把当前差异**写成断言**：任何一侧被改动时这里会红，逼出那个决定，而不是让它们继续悄悄漂移。
+// 事实：`audit-wiring.lib.ts` 的 `isCallerCorpusPath` 与 `audit-drift.lib.ts` 的 `isProductModulePath`
+// 差异**只有一处**：`tools/`（wiring 算进「谁可能调用它」，drift 不算「产品模块」）。
+// **这不是缺陷而是两种问题**（详见两个 lib 的注释）：问「谁调用它」必须含 CLI；问「产品模块间有无重复判据」必须排除工具。
+// 其**已知副作用**是 drift 看不见 `tools/` 内部的分叉（包括它与 wiring 的这处差异本身）。
+// 本组断言把这个**约定**锁住：任何一侧的口径漂移都会红。
 // ─────────────────────────────────────────────
 {
   const probe = [
     "core/x.ts", "query/y.ts", "tools/audit-wiring.ts", "tools/audit-wiring.selftest.ts",
     "test/x.test.ts", "dist/core/x.js", "node_modules/pkg/index.ts", "tools/fixtures/f.ts",
   ];
-  const diff = probe.filter((p) => isProductionPath(p) !== driftIsProductionPath(p));
+  const diff = probe.filter((p) => isCallerCorpusPath(p) !== isProductModulePath(p));
   assert.deepEqual(diff, ["tools/audit-wiring.ts", "tools/audit-wiring.selftest.ts"],
-    "★ 两份 `isProductionPath` 的差异必须**恰好**是 `tools/` 下的路径（出现新差异 ⇒ 有人改了一侧口径，请先拍板再改）");
+    "★ 两份 `isCallerCorpusPath` 的差异必须**恰好**是 `tools/` 下的路径（出现新差异 ⇒ 有人改了一侧口径；改之前请先读两个 lib 的注释）");
   // 无分歧的部分也要锁住：两边都必须排除测试面与产物（防「修一侧时改坏」）
   for (const p of ["test/x.test.ts", "dist/core/x.js", "node_modules/pkg/index.ts"]) {
-    assert.equal(isProductionPath(p), false, `wiring 侧必须排除 ${p}`);
-    assert.equal(driftIsProductionPath(p), false, `drift 侧必须排除 ${p}`);
+    assert.equal(isCallerCorpusPath(p), false, `wiring 侧必须排除 ${p}`);
+    assert.equal(isProductModulePath(p), false, `drift 侧必须排除 ${p}`);
   }
-  console.log("✔ ⑭ `isProductionPath` 分叉已**锁住**：差异恰好是 tools/（口径决定未拍板，但改动会红）");
+  console.log("✔ ⑭ 两个路径分类判据：差异恰好是 tools/（两种问题、刻意不同；任一侧漂移即红）");
 }
 
 console.log("");

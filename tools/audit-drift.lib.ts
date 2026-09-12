@@ -41,7 +41,15 @@ export const stripComments = (src: string): string => {
 };
 
 /** 路径分类：生产源码 vs 其余（按**路径分段**判，避免 audit-wiring 栽过的「前导斜杠」坑）。 */
-export const isProductionPath = (p: string): boolean => {
+/**
+ * **路径分类：哪些算「产品模块」**（v1.15.60 改名，原名 `isProductionPath`）。
+ *
+ * ⚠ 与 `audit-wiring.lib.ts` 的 `isCallerCorpusPath` **刻意不同**：本函数排除 `tools/`，因为
+ * 它要回答的是「**产品模块之间**有没有同一条判据被表达两次（⇒ 分叉）」。审计工具自己不是产品模块，
+ * 把它们算进来只会让 B 段线索被工具实现塞满。
+ * **副作用（要知道）**：本工具因此**看不见 `tools/` 内部的判据分叉** —— 包括它与 wiring 的同名分叉本身。
+ */
+export const isProductModulePath = (p: string): boolean => {
   const segs = String(p).replace(/\\/g, "/").split("/").filter(Boolean);
   const EXCLUDE = new Set(["node_modules", "dist", "test", "tests", "fixtures", "__tests__", "tools"]);
   return !segs.some((s) => EXCLUDE.has(s));

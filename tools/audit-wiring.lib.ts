@@ -115,7 +115,14 @@ export const maskStrings = (src) => {
 };
 
 /**
- * 路径分类：哪些是**生产源码**（其余为测试/产物，不作数）。
+ * **路径分类：哪些进「谁会调用这个导出」的语料面**（v1.15.60 改名，原名 `isProductionPath`）。
+ *
+ * ⚠ **它与 `audit-drift.lib.ts` 的 `isProductModulePath` 问的不是同一个问题**，两份**刻意不同**：
+ *   · 本函数（wiring）问「**谁可能调用这个导出**」⇒ 产品代码**与 `tools/`（CLI/审计工具）都算调用者**，
+ *     排除的只是测试与产物（`test/`/`dist/`/`node_modules/`/`fixtures/`）。
+ *     若把 `tools/` 也排除，CLI 调用的导出会统统落进「零引用」桶 —— 那是**另一种谎**。
+ *   · drift 的 `isProductModulePath` 问「**产品模块之间**有没有同一条判据被表达两次 ⇒ 它必须排除 `tools/`。
+ * 2026-09-12 的审查把这对同名不同义报成「判据分叉」——**分叉是有理的，问题是名字**；故按用途改名。
  *
  * **标定测试暴露的必要修正**：v1 用 `/[\\/]test[\\/]/` 判断 —— 该正则**要求前导斜杠**，
  * 而相对路径是 `test/foo.ts`（无前导斜杠）⇒ **顶层 `test/` 从未被排除**。
@@ -126,7 +133,7 @@ export const maskStrings = (src) => {
 /**
  * **「这条路径算不算测试面」—— 唯一来源**（v1.15.58 从 CLI 搬进 lib，并补标定）。
  *
- * 为什么值得单列：这条判据由一处**真缺陷**修来（v1.15.43）—— 旧写法 `!isProductionPath(p)`
+ * 为什么值得单列：这条判据由一处**真缺陷**修来（v1.15.43）—— 旧写法 `!isCallerCorpusPath(p)`
  * 会把 `dist/**`、`node_modules/**` 的 `.d.ts` 也算成「测试引用」⇒ A 段那一列**虚高**，
  * 分诊时会把「零测试引用」读成「已被测试覆盖」。
  * 它此前定义在 **CLI**（`tools/audit-wiring.ts:61`），而 CLI 不在任何 selftest 的覆盖面上 ⇒
@@ -135,7 +142,7 @@ export const maskStrings = (src) => {
  */
 export const isTestPath = (p) => p === "test" || p.startsWith("test/");
 
-export const isProductionPath = (p) => {
+export const isCallerCorpusPath = (p) => {
   const segs = String(p).replace(/\\/g, "/").split("/").filter(Boolean);
   const EXCLUDE = new Set(["node_modules", "dist", "test", "tests", "fixtures", "__tests__"]);
   return !segs.some((s) => EXCLUDE.has(s));

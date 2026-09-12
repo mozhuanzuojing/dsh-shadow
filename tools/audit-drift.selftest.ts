@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductionPath, stripComments, markedLines } from "./audit-drift.lib.ts";
+import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductModulePath, stripComments, markedLines } from "./audit-drift.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..");
@@ -38,7 +38,7 @@ const FIX_B = join(here, "fixtures", "drift-fixture-b.ts");
 // ② 分类器：按路径分段判（`tools/` 也算非生产 —— 工具自身不该被自己的规则报）
 // ─────────────────────────────────────────────
 for (const [p, want] of [["core/x.ts", true], ["query/query.ts", true], ["test/x.test.ts", false], ["tools/audit-drift.ts", false], ["node_modules/a/b.ts", false], ["dist/core/x.js", false], ["a/fixtures/b.ts", false]] as [string, boolean][]) {
-  assert.equal(isProductionPath(p), want, `isProductionPath(${JSON.stringify(p)}) 应为 ${want}`);
+  assert.equal(isProductModulePath(p), want, `isProductModulePath(${JSON.stringify(p)}) 应为 ${want}`);
 }
 console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / node_modules / dist / fixtures）");
 
@@ -133,7 +133,7 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
   };
   const prod = walk(repoRoot, [])
     .map((f) => f.slice(repoRoot.length + 1).replace(/\\/g, "/"))
-    .filter(isProductionPath)
+    .filter(isProductModulePath)
     .map((rel) => ({ file: rel, text: readFileSync(join(repoRoot, rel), "utf8") }));
   const fresh = findFreshnessAsksProcess(prod);
   const preds = findPredicateExpressedTwice(prod);

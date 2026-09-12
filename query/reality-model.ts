@@ -21,8 +21,10 @@ export async function runRealityModel(deps: ShadowQueryDeps, args: any, ctx: Rea
   const { fs, ws, flushWarn } = ctx;
   if (mode === "model-observation") {
     const ro = observationOf({ observedAt: String(args?.observedAt || today()), subjectRef: String(args?.subject || ""), sourcePerspectives: args?.sourcePerspectives || [String(args?.sourceObserverId || "unknown")], observation: String(args?.observation || ""), temporalContext: String(args?.temporalContext || today()), validationRefs: args?.validationRefs || [] });
-    await registerObservation(fs, ws, ro);
-    return scrubFinal(RECALL_PREFIX + renderObservation(ro) + flushWarn);
+    const { persisted } = await registerObservation(fs, ws, ro);
+    // **没落盘就说没落盘**（v1.15.61）：否则「写入被拒」与「已登记」逐字不可区分。
+    const w = persisted ? "" : "\n> ⚠ **未落盘**：写入 `.shadow/model/observations/` 失败 ⇒ 这条 observation 不会被后续 claim/model 模式读到。";
+    return scrubFinal(RECALL_PREFIX + renderObservation(ro) + w + flushWarn);
   }
   if (mode === "model-claim") {
     const obs = await readObservations(fs, ws, String(args?.subject || ""));
@@ -30,8 +32,9 @@ export async function runRealityModel(deps: ShadowQueryDeps, args: any, ctx: Rea
     const c = claimOfReality({ observations: obs, validations });
     if (!c) return scrubFinal(RECALL_PREFIX + "（无 RealityObservation：仅 Temporal/Federation 不足以生成 RealityClaim）" + flushWarn);
     if (!isObservablePredicate(c.predicate)) return scrubFinal(RECALL_PREFIX + "[Rejected] predicate_not_observable（RealityClaim ≠ EvaluationClaim：predicate 必须属 observable set）" + flushWarn);
-    await writeClaim(fs, ws, c);
-    return scrubFinal(RECALL_PREFIX + renderClaim(c) + flushWarn);
+    const ok = await writeClaim(fs, ws, c);
+    const w = ok ? "" : "\n> ⚠ **未落盘**：写入 `.shadow/model/claims/` 失败 ⇒ 这条 claim 不会出现在后续 `model` / `world` 读数里。";
+    return scrubFinal(RECALL_PREFIX + renderClaim(c) + w + flushWarn);
   }
   // model
   const claims = await readClaims(fs, ws);

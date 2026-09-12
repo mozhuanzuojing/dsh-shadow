@@ -222,3 +222,78 @@
 **证据**：`verify` **53/53**（+1 就是新 selftest）；棘轮如实变红 `b_keys 113 → 115`（**+2 = 基线分段断言** `wiring=object` / `drift=object`）后按规程重录。
 
 **仍未修**：`isProductionPath` 口径统一（**等拍板**）· `--update-ratchet` 的**成功**路径未自动化（会改真实基线）· **169 个既存测试类型错误** · §6.3 六条待定语义 · 整目录未读（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`）。
+
+---
+
+## 11. 第八轮（v1.15.60）：把「判据分叉」这条线索**判定掉**，并更正一处我自己的计数错误
+
+### 11.1 `isProductionPath` 同名不同义 —— **判定：不是缺陷，是命名问题**
+
+上一轮把它记成「分叉，**等拍板** `tools/` 算不算生产面」。这一轮**想清楚了，不需要拍板**：
+
+| | `audit-wiring` 的用法 | `audit-drift` 的用法 |
+|---|---|---|
+| 它问的问题 | 「**谁可能调用这个导出**」（A 段：导出但生产无调用点） | 「**产品模块之间**有没有同一条判据被表达两次」（B 段：判据分叉） |
+| `tools/` 该不该算 | **该算** —— CLI 与审计工具是**真实的调用者**；排除它们会让「被 CLI 调用的导出」统统落进「零引用」桶，那是**另一种谎** | **不该算** —— 审计工具不是产品模块；算进来只会让 B 段线索被工具实现塞满 |
+| 结论 | 两份**刻意不同** | 同左 |
+
+⇒ 两个工具问的是**两个不同的问题**，共同一个函数名才是真问题。**改法：按用途改名，并把约定锁成断言**：
+
+- `audit-wiring.lib.ts`：`isProductionPath` → **`isCallerCorpusPath`**（并注释说明它含 `tools/`）；
+- `audit-drift.lib.ts`：`isProductionPath` → **`isProductModulePath`**（并注释写明**已知副作用**：它因此看不见 `tools/` 内部的分叉 —— 包括这两者的差异本身）；
+- `audit-wiring.selftest.ts` ⑭ 从「差异未拍板」改为「**差异是刻意约定**」：断言两份的差异**恰好**是 `tools/`，两侧无分歧的部分（测试面/产物/依赖都必须排除）也一并锁住 ⇒ 任一侧口径漂移即红。
+
+**这条线索的处置方式本身值得记下来**：把「看起来是分叉」的东西**判定成两种不同的问题**，比强行统一更有价值 ——
+强行统一会把「谁调用它」和「产品模块间有无重复」两个问题绑死，然后其中一边必然是错的。
+
+### 11.2 更正我自己的一处计数错误（诚实标注）
+
+我在 v1.15.58 / v1.15.59 的 CHANGELOG 与 README 里反复写「**169 个既存测试类型错误**」。
+本轮**重新测量**：那 169 是 `npx tsc ... | Measure-Object -Line` 的**总输出行数**（含每条诊断的续行），
+**不是诊断条数**。用只匹配 `error TS` 的口径数，实际是 **83 条诊断**。
+
+**教训**：把「输出行数」当成「问题条数」—— 这正是本仓一直在防的那类伪精度（同一个数字，两种口径）。
+已在 `BACKLOG` 与本轮 CHANGELOG 更正为 **83**。
+
+---
+
+## 12. 第九轮（v1.15.61）：认识论层的「损坏/失败必须出声」6 处 + 三份从未读过的目录的审查台账
+
+### 12.1 本轮的**一条判定**（推翻我此前的假设）
+
+此前把 `adaptation/` · `agency/` · `continuity/` 记成「整目录未读（可能未接线）」。
+审查结论：**三层全部已被生产接线**（`query/adaptation.ts:7-9`、`query/agency.ts:7-9`、`query/contverify.ts:7-9`
+→ `query/query.ts:20/23/12`、`:101/107/112` → `index.ts:32`、`index.ts:297`）。
+⇒ 那些缺陷按**当前生效**定级，不是「潜在」。**「未读」不等于「未接线」，两者都必须查证而不是假定。**
+
+### 12.2 已修（6 处，全部属「损坏 ≠ 为空 / 写失败 ≠ 成功」这一族）
+
+| # | 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|---|
+| 1 | `readObservations` 单 `try` 包整个循环 | 第 k 个文件坏 ⇒ **静默返回前 k-1 条**，后续永不读；且目录读失败 ≡ 目录为空。下游 `claimOf` 的 `supported` 判据**就吃 `obs.length`** | `readObservationsDetailed`：单条坏件只丢该条 + **计数** + 留痕 |
+| 2 | `readClaims` 同型（**更危险**） | 一份坏 claim ⇒ 静默少返回 ⇒ `mode:"world"` 用**残缺图覆盖**落盘 `graph.json`（**不可逆**） | `readClaimsDetailed` + **坏件时不覆盖落盘图**并在出口披露「有 N 个坏件、本次未覆盖」 |
+| 3 | `readRealityEvidence` 同型 | 坏件 ⇒ 静默部分/空列表 ⇒ `mode:"stability"` 报 `isolated` | `readRealityEvidenceDetailed` |
+| 4 | 三处写失败渲染成成功 | `registerObservation` / `writeClaim` / `registerRealityEvidence` 只 `console.log` 就返回 ⇒ 「写入被拒」与「已登记」**逐字不可区分** | 返回 `{…, persisted}` / `boolean`；`mode:"model-observation"` / `"model-claim"` / `"real-evidence"` 输出显式「**未落盘**」段 |
+| 5 | `referenceEvidence` 把「读不出」压成 `null` | 调用方渲染成「（无 reality evidence X）」⇒ **把工具报错/坏件当成「不存在」**（ADR-0049 的反面） | 返回 `{evidence, reason: "not_found" \| "unreadable"}`；出口分开说 |
+| 6 | `world/explain` 两处失真 | ① `Validation History: N supported claim(s)` 数的却是 **claim 条数**（没验证也显示「验证历史」）；② subject 不匹配时**静默换成** `objects[0]` —— 而该函数的用途正是「为什么系统认为**这个**结构存在」 | 标签改为 `basedOnClaims` 并明说「不是验证历史」；回退时**出声** |
+
+### 12.3 顺带修掉的**判据分叉**（同一个默认值两处两答案）
+
+`query/federation.ts:35` 的 `Number(args?.obsConfidence) || 0.5` 与 `federation/perspective.ts:11` 的 `opts.observationConfidence ?? 0.5`：
+**显式传 `0`（零确信）被 `||` 静默改成 0.5**。⇒ 默认值收进 `CONFIDENCE_DEFAULT` + `confidenceOfInput`（只认「没传 ⇒ 默认」；显式 `0` 原样保留；非法值归 0 而**不伪装成 0.5**）。
+
+### 12.4 三份审查的台账（**约 60 条**，本节不重复）
+
+第二批（从未读过的目录）的完整线索记入 `BACKLOG.md` §七，按层分组、逐条带 `文件:行号`：
+认识论层（`federation/`·`world/`·`reality/`）· `long-horizon/`·`simulation/`·`soul/`·`planning/` · `adaptation/`·`agency/`·`continuity/`，
+外加每层的**测试假绿**（含若干「把实现改坏仍全绿」的具体改法）。
+
+**其中三条最该先处理**（我**没有**在今年这轮擅自改，因为都需要先定契约）：
+1. **工具 schema 与读点不一致**：`validations` / `visible` / `hidden` / `hiddenA` / `hiddenB` / `distortion` 不在 `index.ts:163-295` 里，
+   而四处读点在读它们 ⇒ 要么 Representative 层**恒为空**（host 剥离未声明参数），要么**可由参数声明 `outcome:"validated"` 直接造 `supported`**。
+   这是**契约缺陷**，修它要同时想清楚 `additionalProperties` 与「谁有权声明已验证」。
+2. **`claimOf` 的 `supported` 只看调用方传入的 `validationOutcomes`**，从不与 `validation/history.ts` 的 ValidationTimeline 交叉核对（全仓无 join）。
+3. **`planning` / `sim-action` 的三处守卫永不失败**（被检对象是调用方刚构造的常量、或已把违规字段丢弃后重建的对象）。
+
+**关于报告的可信度**：三名审查者都只读（未写、未 git、未 build、未跑测试），
+**「改坏仍通过」类结论是静态推演**，未实跑验证；三份报告共**排除** 40 余条可疑点并给出理由（排除项与命中项同等重要）。

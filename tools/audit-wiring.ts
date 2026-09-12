@@ -16,7 +16,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
+import { collectComparisons, hasProducer, findOrphanComparisons, isCallerCorpusPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
 import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
@@ -48,12 +48,12 @@ const walk = (d, out = []) => {
 const rel = (p) => relative(ROOT, p).replace(/\\/g, "/");
 const read = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 
-// 按**路径分段**分类（见 lib 里 isProductionPath 的说明：正则判法曾漏掉顶层 test/）
+// 按**路径分段**分类（见 lib 里 isCallerCorpusPath 的说明：正则判法曾漏掉顶层 test/）
 const allTs = walk(ROOT, []);
-const prodPaths = allTs.filter((f) => isProductionPath(rel(f)));
+const prodPaths = allTs.filter((f) => isCallerCorpusPath(rel(f)));
 /**
  * ⚠ **「测试」这一侧必须显式限定**（v1.15.43 修，来自 T2 分诊的标定发现）：
- * 原写法是 `!isProductionPath(...)` —— 那会把 `dist/` 下的 `.d.ts` 与 `node_modules/` 下的 `.d.ts` **也算成测试**，
+ * 原写法是 `!isCallerCorpusPath(...)` —— 那会把 `dist/` 下的 `.d.ts` 与 `node_modules/` 下的 `.d.ts` **也算成测试**，
  * 于是「测试引用 N」是**虚高**的（实测：`hasNoUpgradeApi` 的 1 全来自 `dist/agency/guards.d.ts`；
  * `apply` 的 230 里 15 来自 `node_modules` 里的 `lib.dom.d.ts`）⇒ 分诊时会把「零测试引用」读成「已被测试覆盖」。
  * 现判据改成**只认 `test/` 下的文件**；`dist/` 与 `node_modules/` **两边都不算**（它们是产物/依赖，不是断言）。
@@ -62,7 +62,7 @@ const testPaths = allTs.filter((f) => isTestPath(rel(f)));
 const prod = prodPaths.map((f) => ({ file: rel(f), text: read(f) }));
 const testText = testPaths.map((f) => read(f)).join("\n");
 
-console.log(`生产源码 ${prod.length} 个 · 测试 ${testPaths.length} 个（判据：生产 = isProductionPath；测试 = 仅 test/ 下）`);
+console.log(`生产源码 ${prod.length} 个 · 测试 ${testPaths.length} 个（判据：生产 = isCallerCorpusPath；测试 = 仅 test/ 下）`);
 // **缺件不静默（ADR-0049）**：v1.15.45 实测踩到 —— 把根参数漏掉（`node ... --ratchet`）时 ROOT 会取到
 // 旗标字符串，扫描目录不存在 ⇒ **0 文件 ⇒ 0 线索**，而工具会「安静地全绿」。这类「空语料冒充没问题」
 // 必须当场拒绝，否则棘轮会被录成一条全 0 的假基线。

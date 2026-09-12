@@ -1449,3 +1449,81 @@ V/G/T6 真机与外部条件项
 | `toolset-authority.ts` 未接进 `verify` | ⏸ **原因已实测**：`--check` 本机 **>120s**（winget 探测）⇒ 是**耗时**，不是「忘了接线」 |
 
 **仍未修**：`isProductionPath` 口径统一（等拍板）· `--update-ratchet` 成功路径未自动化（会改真实基线）· 169 个测试类型错误 · §6.3 六条待定语义 · 整目录未读。
+
+### 6.10 状态更新（v1.15.60）：一条线索**判定掉**（不是修掉，是判定「不需要改」）+ 一处计数更正
+
+| 原线索 | 状态 |
+|---|---|
+| `audit-wiring` ↔ `audit-drift` 的 `isProductionPath` 分叉（「**等拍板** `tools/` 算不算生产面」） | ✅ **已判定：不是缺陷，是命名问题**。两者问的是**不同问题** ——「谁可能调用这个导出」（⇒ 含 `tools/`，CLI 是真调用者）vs「**产品模块之间**有无重复判据」（⇒ 排除 `tools/`）。强行统一必然让一边错。⇒ **按用途改名**（`isCallerCorpusPath` / `isProductModulePath`）+ 注释写明各自口径与**已知副作用**（drift 看不见 `tools/` 内部分叉）+ ⑭ 从「未拍板」改为「刻意约定，差异恰好是 `tools/`」并锁住两侧无分歧部分 |
+| 「**169** 个既存测试类型错误」 | ⚠ **计数更正**：169 是 tsc 的**总输出行数**（含续行），**诊断条数实为 83**。教训：把「输出行数」当「问题条数」= 伪精度（同数字两口径） |
+
+**仍未修**：`--update-ratchet` 成功路径未自动化（会改真实基线）· 83 条测试类型错误（本轮在修）· §6.3 六条待定语义 · `test/claim-admission-single-source.test.ts` 与 `test/lifecycle-signal-table.test.ts` 里**各自手写**的同名 `isProductionPath`（刻意：ADR-0070 把声明表放测试面；但与 lib 改名后的名字不再一致，属**弱重复**）。
+
+## 七、审查线索（第二批：**从未被读过的目录**，2026-09-12，v1.15.61）
+
+> 三个只读审查（`federation/`+`world/`+`reality/`；`long-horizon/`+`simulation/`+`soul/`+`planning/`；`adaptation/`+`agency/`+`continuity/`）。
+> 纪律同 §六：**每条带 `文件:行号` 与后果**；**未修 ≠ 不存在**；报告者的「排除项」与「命中项」同等重要（三份共排除 40 余条）。
+
+### 7.1 一条**推翻既有假设**的结论（重要）
+
+`adaptation/` · `agency/` · `continuity/` **三层全部已被生产接线**（`query/adaptation.ts:7-9`、`query/agency.ts:7-9`、`query/contverify.ts:7-9`
+→ `query/query.ts:20/23/12` 与 `:101/107/112` → `index.ts:32`、`index.ts:297` 的 `read_shadow` 转发）。
+⇒ 此前把它们记成「未接线 / 潜在」是**错的**；这些缺陷按**当前生效**定级。唯一「仅潜在」项是 `agency/guards.ts:22-24` 的 `hasNoUpgradeApi`（恒 `return true`、零调用点）。
+
+### 7.2 认识论层（`federation/` · `world/` · `reality/`）—— 最贵的几条
+
+| 线索 | 位置 | 后果 |
+|---|---|---|
+| **`supported` 由调用方参数决定**（唯一判据源的上游被绕） | `reality/claim/engine.ts:20-22,35,40` ← `query/reality-model.ts:29` 的 `args?.validations` | `status` 只由 `{id,outcome}` 字符串决定；`validationHistory` 从不与 `validation/history.ts` 交叉核对（全仓无 join） |
+| **`validations` / `visible` / `hidden` / `hiddenA/B` / `distortion` 不在工具 schema 里** | `index.ts:163-295`（读点在 `query/reality-model.ts:29`、`query/federation.ts:26,31,35,48-49`） | 分支甲：host 剥离未声明参数 ⇒ validations 恒 `[]` ⇒ **Representation 层恒为空**；分支乙：透传 ⇒ **可声明 `outcome:"validated"` 直接造 supported** |
+| **`mode:"world"` 用残缺图覆盖落盘图** | `query/world.ts:39-40` + `reality/claim/persist.ts` | 一份坏 claim ⇒ 静默少返回 ⇒ **不可逆**覆盖（**本轮已修**：坏件时不覆盖 + 出口披露） |
+| 四处**写失败渲染成成功** | `reality/registry.ts:10`、`reality/claim/persist.ts:10`、`federation/reality.ts:20`、`world/persistence/persist.ts:11-15` | 「写入被拒」与「已登记」逐字不可区分（**本轮已修前三处**，`world` 侧未修） |
+| **谓词两套判据交集为空** | `reality/types.ts:41` 的动词表 vs `reality/claim/engine.ts:10` 的 `OBSERVABLE_PREDICATES` | 正则分支命中的谓词**必然**被 `query/reality-model.ts:32` 拒绝 ⇒ 中文/be 动词写法**注定产不出 claim** |
+| **`Validation History` 标签数的却是 claim 条数** | `world/explain/explain.ts:14` | 没验证也会显示「验证历史」（**本轮已修**：改 `basedOnClaims` + 明说不是验证历史） |
+| subject 未匹配时静默换成无关表示 / 空 subject 时拉全库 observation | `world/explain/explain.ts:9` + `query/world.ts:45` | 错误归属的证据被当成「为什么这个结构存在」（**本轮已修**：回退时出声；**全库 observation 那条未修**） |
+| `hidden` 声明了但从不被读 | `federation/guard.ts:2,11` + `query/federation.ts:31` | 隐藏项对比恒空 |
+| 盲点列表静默截断 `slice(0,4)` | `federation/difference.ts:12` | `unresolved` 是子集而读者无法察觉 |
+| `validated` 由调用方布尔参数授予 | `federation/stability.ts:9-11` + `query/federation.ts:56` | 不核对任何 ValidationResult |
+| 置信度四因子全是常量（`toFixed(2)` 呈现） | `reality/claim/engine.ts:23-26` | `uncertainty` 实际只取 {0.3,0.6} ⇒ **伪造精度** |
+| 装饰性守卫（FAIL 分支不可达） | `world/guard/relation-guard.ts:12`、`federation/contract.ts:10` | 守卫挡不住当前代码，只挡未来回归 |
+| 空主题 claim 折叠成一个对象且不报 | `world/builder/representation-builder.ts:16-18` | 其余 claim 无对象承载 |
+
+**测试假绿（认识论层）**：`test/recall-attribution.test.ts:66` 的 mock `register` **零参数校验** ⇒ 端到端用例跑在**生产 schema 表达不出来**的路径上（这正是上表第 2 条看不见的原因）· `isExchangeable` 改成恒 true 仍全绿（`concept-guards-2.test.ts:27-30`）· `isRelationHypothesis` 换成黑名单实现仍全绿（`:68-70`）· 恒真 `!includes(...)` 群（`:3132/3141/3167/3199/3210/3231`）· 空 store 断言（`:3148/3166/3174`）。
+
+### 7.3 `long-horizon/` · `simulation/` · `soul/` · `planning/`
+
+| 线索 | 位置 | 后果 |
+|---|---|---|
+| **三处守卫永不失败**（被检对象是调用方刚构造的常量／已丢弃违规字段后才重建） | `query/planning.ts:17,25,27`、`query/sim-action.ts:31,38` | `objective(source:external)` 由硬编码写死；`assertCandidateNoScore`/`assertCandidateClean` 的拒绝分支不可达 |
+| `mode:candidate` 的假设**不校验** Assume 措辞且缺省伪造 `"Assume change"` | `query/sim-action.ts:37` | 「假设必须 Assume X」只在 `mode:simulate` 强制 |
+| 未匹配条件落回 `RULES[0]` 并把 `r-latency` 写进 lineage | `simulation/engine/simulator.ts:13` | **伪造匹配** |
+| `result` 不在 `read_shadow` 参数契约里，而措辞守卫依赖它 | `index.ts:274-277` vs `long-horizon/engine/interaction.ts:11-17,43,57` | 模型侧拿不到该文本 ⇒ 224/225/226/228 恒对 `""` 通过 |
+| horizon 四对象**只写不读**（`.shadow/horizon/**` 全仓无读取者） | `long-horizon/persistence/persist.ts` + `persistence/files.ts:38` | 写了也没人读 |
+| soul 读失败 ≡ 没配置 | `soul/soul.ts:8-11` + `query/query.ts:118` | 损坏被报成「无 Soul 配置」 |
+| `{"identity":"architect"}` 两处两答案 | `soul/identity.ts:10` vs `identity/timeline.ts:16` | 同一配置 `read_shadow({identity:true})` 与 `identity-advance` 得出不同身份 |
+| `satisfiedConstraints` 三套判据 | `planning/render.ts:14`（子串 `"under"`）/ `planning/types.ts:29` / `agency/engine.ts:27` | 同一概念三种算法 |
+| `|| "available"` / `|| "forgotten"` / `Number(x) || 0.5` 把合法 `0` 与缺失混同 | `long-horizon/engine/interaction.ts:32,44`、`query/planning.ts:25`、`query/sim-action.ts:38` | 缺失伪装成有值 |
+| 写失败仍 `ok:true` | `long-horizon/persistence/persist.ts:7,10,13,16` | 磁盘满/EACCES ≡ 记录已存 |
+
+**测试假绿**：`assert.ok(true)`（`:3608`）· `applyRule` 改成恒返 `RULES[0]` 仍全绿（场景 131-138）· `planning.ts:27` 守卫整段删掉仍全绿 · `isFactLike` 改成恒 false 仍全绿（`concept-guards-2.test.ts:74`——断言在前缀那步就返回）。
+
+### 7.4 `adaptation/` · `agency/` · `continuity/`（**当前生效**）
+
+| 线索 | 位置 | 后果 |
+|---|---|---|
+| **五个边界布尔省略即 false = 约束全关**，写入全局 `boundary.json` 并**覆盖**旧记录 | `continuity/engine.ts:24`、`persist.ts:14-15`、`guard.ts:6-15`、`query/contverify.ts:49-50` | 裸调 `mode:"observer-boundary"` 把「五条边界全不存在」写成事实 |
+| `chosen` 算完即弃 ⇒ 违约候选照样被选中且硬回填 `constraint_satisfied` | `agency/engine.ts:27-28,30` | `selectedCandidateId` 与 `candidates[0]` 两条路都绕过约束检查 |
+| 同一句 `"I own this repository"` 两处**相反**答案 | `agency/guards.ts:47,51` vs `delegation/guard/expansion-guard.ts:41,49` | 审计结论不一致（逐字正则推演） |
+| `before` 无任何守卫却同级落盘并渲染 | `adaptation/engine/adaptation.ts:32-39` | 未过滤字段进审计文本 |
+| `catch { return null }` / `catch { /* 继续 */ }` 三态压平 | `continuity/persist.ts:28,31,34`、`continuity/engine.ts:62-80` | 损坏 ≡ 为空（ADR-0049） |
+| 写失败仅 `console.log`，seam 直接渲染成功 | `agency/persistence.ts:11,21`、`adaptation/persistence/persist.ts:7,10,13`、`continuity/persist.ts:12-24` | 「记录已建立」与「写盘被拒」不可区分 |
+| `kind` 无白名单（schema 写了枚举，引擎裸 `string`） | `continuity/engine.ts:45` vs `index.ts:285`、`types.ts:14` | 任意 kind 通过并建目录 |
+| `basedOn:"exp-1"`（字符串）满足 `length` 检查 | `adaptation/engine/adaptation.ts:28`、`agency/engine.ts:16,35`、`continuity/engine.ts:31` | 畸形值满足 lineage 闸门，先落盘后在 render 抛 TypeError |
+| 隔离名不符实：写用 `r.workspace`、读用 `args.workspace`，**从不比对会话 ws** | `continuity/engine.ts:45`、`persist.ts:24`、`query/contverify.ts:67,75`、`guard.ts:27` | 唯一围栏是平台 sandbox 档位 |
+
+**测试假绿**：`concept-guards.test.ts` 只 import `dist` 纯谓词、**零接线**（删正则的英文/中文半边仍全绿）· `recall-attribution.test.ts` 8 处 `store.keys().filter(...includes("autonomy"/"preference"...))` 因键是**固定文件名**而**恒真** · `:3607-3609` 字面 `assert.ok(true)` · `:3655-3659` 把「零候选 + `selectedCandidateId` 仍返回 `constraint_satisfied`」**钉成期望行为**（缺陷被测试固化）。
+
+### 7.5 本轮**未修**（如实列出，不缩小承诺）
+
+上面**全部**条目中，本轮只修了认识论层的 **6 处**（见 `adr/0083` §12）。其余（含 §7.2 的 schema、§7.3 的守卫、§7.4 的边界布尔）**未修**。
+三份审查的报告者都明确声明：**未运行任何测试/构建**，「改坏仍通过」类结论为**静态推演**，未实跑验证。

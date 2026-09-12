@@ -14,7 +14,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductionPath } from "./audit-drift.lib.ts";
+import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductModulePath } from "./audit-drift.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
 import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
@@ -46,7 +46,7 @@ const read = (p: string) => { try { return readFileSync(p, "utf8"); } catch { re
 
 const prod = walk(ROOT, [])
   .map((f) => ({ file: rel(f), text: read(f) }))
-  .filter((f) => isProductionPath(f.file));
+  .filter((f) => isProductModulePath(f.file));
 
 const fresh = findFreshnessAsksProcess(prod);
 const preds = findPredicateExpressedTwice(prod);
