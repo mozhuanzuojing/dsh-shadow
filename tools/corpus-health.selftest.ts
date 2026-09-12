@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+// dsh-shadow —— tools/corpus-health.selftest.ts：**语料健康门**的标定测试（V7）。
+//
+// 为什么必须有：这道闸的唯一职责是「**别让假绿通过**」。它自己判错的方向是**双向致命**的 ——
+// 判松了（PARTIAL 放行）⇒ 工具坏了会被写进基线（假绿自我固化）；
+// 判紧了（正常波动当骤降）⇒ 人会习惯性 `--update-ratchet --force`，门就变成装饰品。故每一档都要有正反例。
+import assert from "node:assert/strict";
+import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+
+const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
+  files: 210,
+  dirs: 30,
+  findingsA: 31,
+  findingsB: 103,
+  fingerprint: "a".repeat(64),
+  ...o,
+});
+
+// ① NORMAL：规模与线索都在带内 ⇒ 放行
+{
+  const r = classifyCorpus("t", obs(), obs());
+  assert.equal(r.health, "NORMAL");
+  assert.equal(r.ok, true);
+  assert.equal(r.exitCode, 0);
+  console.log("✔ ① 规模在带内 ⇒ NORMAL / 放行");
+}
+
+// ② EMPTY：0 文件 ⇒ 拒绝（V6 已有的那条，保留）
+{
+  const r = classifyCorpus("t", obs({ files: 0, dirs: 0, findingsA: 0, findingsB: 0 }), obs());
+  assert.equal(r.health, "EMPTY");
+  assert.equal(r.exitCode, 2);
+  console.log("✔ ② 0 文件 ⇒ EMPTY / exit 2");
+}
+
+// ③ **PARTIAL（本闸存在的理由）**：语料骤降但**不是 0** ⇒ 拒绝
+{
+  const r = classifyCorpus("t", obs({ files: 7, dirs: 2, findingsA: 21, findingsB: 21 }), obs());
+  assert.equal(r.health, "PARTIAL");
+  assert.equal(r.exitCode, 2);
+  assert.ok(r.lines.some((l) => l.includes("7")), "报文要给出实际数字");
+  console.log("✔ ③ 语料骤降（非 0）⇒ PARTIAL / exit 2 —— 这正是 V6 漏掉的形态");
+}
+
+// ④ **工具坏了导致线索骤降**也必须判 PARTIAL（否则棘轮会把「下降」当「修好了」并收紧基线）
+{
+  const r = classifyCorpus("t", obs({ findingsB: 21 }), obs()); // 文件数正常，线索跌 80%
+  assert.equal(r.health, "PARTIAL");
+  assert.ok(r.lines.some((l) => l.includes("B 段线索")));
+  console.log("✔ ④ 文件正常但线索骤降 ⇒ PARTIAL（防「工具坏了被当成修好了」）");
+}
+
+// ⑤ 小跌幅**不算** PARTIAL（否则正常收益会被误判，人会习惯性绕闸）
+{
+  const r = classifyCorpus("t", obs({ findingsB: 90 }), obs()); // 跌 < 20%
+  assert.equal(r.health, "NORMAL", "20% 以内的下降应放行，交给棘轮的「下降不是违规」处理");
+  console.log("✔ ⑤ 小跌幅（<20%）⇒ NORMAL（把「正常收益」与「工具故障」分开）");
+}
+
+// ⑥ 目录数骤降 ⇒ PARTIAL（专防「递归没跟随 junction / 漏了根」这一类静默截断）
+{
+  const r = classifyCorpus("t", obs({ dirs: 3 }), obs());
+  assert.equal(r.health, "PARTIAL");
+  assert.ok(r.lines.some((l) => l.includes("目录数")));
+  console.log("✔ ⑥ 目录数骤降 ⇒ PARTIAL（比文件数更早暴露递归被截断）");
+}
+
+// ⑦ 哨兵缺失 ⇒ PARTIAL，**无基线也能发现**「走错目录」
+{
+  const r = classifyCorpus("t", obs(), undefined, ["core/paths.ts"]);
+  assert.equal(r.health, "PARTIAL");
+  assert.ok(r.lines.some((l) => l.includes("core/paths.ts")));
+  console.log("✔ ⑦ 哨兵缺失 ⇒ PARTIAL（不需要基线就能判「扫的范围不对」）");
+}
+
+// ⑧ 无基线 ⇒ UNKNOWN / exit 2（缺件不得静默放行）
+{
+  const r = classifyCorpus("t", obs(), undefined);
+  assert.equal(r.health, "UNKNOWN");
+  assert.equal(r.exitCode, 2);
+  console.log("✔ ⑧ 无基线 ⇒ UNKNOWN / exit 2");
+}
+
+// ⑨ 指纹变了但规模在带内 ⇒ 仍 NORMAL，但**必须印警告**（规模类判据不覆盖内容变化）
+{
+  const r = classifyCorpus("t", obs({ fingerprint: "b".repeat(64) }), obs());
+  assert.equal(r.health, "NORMAL");
+  assert.ok(r.lines.some((l) => l.includes("指纹") && l.includes("不")), "内容变了要显式提示判据边界");
+  console.log("✔ ⑨ 指纹变化 ⇒ 仍放行但显式提示「规模类判据不覆盖内容变化」");
+}
+
+// ⑩ 阈值是**可注入的**（判据可在调用点调整，不是埋死的魔数）
+{
+  const strict = classifyCorpus("t", obs({ files: 160 }), obs(), [], { minFileRatio: 0.99 });
+  assert.equal(strict.health, "PARTIAL");
+  const loose = classifyCorpus("t", obs({ files: 160 }), obs(), [], { minFileRatio: 0.5 });
+  assert.equal(loose.health, "NORMAL");
+  console.log("✔ ⑩ 阈值可注入（同一次观测在严/松两档下结论不同 ⇒ 判据不在暗处）");
+}
+
+console.log("");
+console.log("未在测试中验证（诚实标注）：");
+console.log("  · 四个消费者（`audit-wiring` / `audit-drift` / `audit-layers` / `retrieval-eval`）的**接线**靠真实运行验证；");
+console.log("  · `audit-layers` 与 `retrieval-eval` 走的是**无基线**路径（前者自比 + 哨兵，后者协议常量下限），");
+console.log("    故本文件里 NORMAL/PARTIAL 的**基线带**判据对它们不生效；");
+console.log("  · 指纹只覆盖**文件路径集合**（不含内容）⇒ 「同路径内容变了」不在本闸覆盖内（已在输出里显式提示）；");
+console.log("  · 阈值（0.9 / 0.9 / 0.2）是**默认值**，本轮未做过「多真实故障回放」来标定它们的最优值。");
+console.log("ALL PASS ✅");

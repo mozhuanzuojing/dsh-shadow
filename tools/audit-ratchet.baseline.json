@@ -1,4 +1,25 @@
 {
+  "corpus": {
+    "dirs": 420,
+    "drift": {
+      "dirs": 420,
+      "files": 193,
+      "findingsA": 0,
+      "findingsB": 25,
+      "fingerprint": "d16b387d28b08523bd64139c8ad9efeb271665ee5d7f29a6974d4bb6b603a451"
+    },
+    "files": 778,
+    "findingsA": 32,
+    "findingsB": 103,
+    "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
+    "wiring": {
+      "dirs": 420,
+      "files": 778,
+      "findingsA": 31,
+      "findingsB": 103,
+      "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348"
+    }
+  },
   "drift": {
     "drift_keys": 10,
     "drift_sites": 25

@@ -28,6 +28,7 @@ const protocol: EvalProtocol = {
   metric_directions: { recall_mean: "higher", noise_offtopic_mean: "lower", avg_returned_mean: "exact" },
   tolerances: { recall_mean: 0.25, noise_offtopic_mean: 0.25, avg_returned_mean: 0 },
   required_external_model_calls: 0,
+  min_corpus_files: 100,
   k: 5,
   seeds: [1, 2, 3],
   max_docs: 1500,

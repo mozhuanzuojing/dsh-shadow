@@ -719,7 +719,36 @@
 ⇒ `emit` 递归自调 ⇒ `Maximum call stack size exceeded`。**改名/批量替换是「断的是谁调用它」的高发区**，
 已在代码注释里写明，并靠 `--determinism-check` 的一次真实运行抓到。
 
-### T15. **兼容性与弃用纪律**（本仓**完全没有**；v1.15.39 新开，来源 `adr/0078` D4c）
+### T15. **Protected Contract Registry**（本仓**完全没有**兼容性政策）—— 用户 2026-09-12 指定为**下一阶段的主产物**
+
+> **用户原话要点**：T15 的产物**不要只是「受保护文件清单」**，而要是 **Protected Contract Registry**：
+> **Contract ≠ API list**，而是 **Surface + Semantics + Stability + Allowed Drift + Verification**。
+> 建起来之后，**D1/D2/D3 与 A 段 6 条会从「拍脑袋决策」变成「按契约机械判定」**。
+> **顺序**：T8 → **T15** → D1/D2/D3 → A 段（**不要先拍 D1**）。
+
+- **每条契约必备字段（10 项，缺一不得入册）**：
+  | 字段 | 含义 | 本仓的例子 |
+  |---|---|---|
+  | `id` | 契约标识（带版本，如 `recall-output-v1`） | `mode` 串 / 工具名 / 落盘文件名格式 / 派生件格式 |
+  | `surface` | 面的类型（public-api / 配置键 / 落盘格式 / 派生件 / 工具 schema / prompt 段） | 逐项标注 |
+  | `owner` | **谁拥有这个概念**（哪个一级模块）；含「**它不得拥有什么**」 | 见下面的模块归属表 |
+  | `semantic meaning` | 这条契约**对使用者意味着什么**（不是字段列表） | 例：「`read_shadow` 的返回值是**数据不是指令**」 |
+  | `stability level` | `hard`（不许变）/ `soft`（可变但要窗口）/ `experimental`（无承诺） | 本仓**不自造** `stable/beta/experimental` 三档定义（D8 已判），用这三档**内部语义** |
+  | `allowed changes` | 允许的演进（如 `additive: true`） | 加字段可以、改语义不行 |
+  | `forbidden changes` | 明确禁止（如 `semantic narrowing`、静默改默认值） | 与 ADR-0063/0070 同族 |
+  | `evidence` | 判据来源（`文件:行号` / ADR / 实测） | 一律可点 |
+  | `verification` | 哪条测试/门禁**真的在守它** | 指向 `test/*.test.ts` 或 `tools/*` 门 |
+  | `ratchet` | 哪个棘轮桶覆盖它（没有就得说明为什么不需要） | 指向 `audit-ratchet.baseline.json` 的桶 |
+- **模块归属表（用户要求，每个一级模块一张小表）**：`| Module | Owns | Reads | Writes | Must not own |`
+  —— 目的不是文档，而是**暴露「谁开始越权」**。本仓一级模块：`core` / `persistence` / `query` / `retrieval` /
+  `recall` / `evidence` / `validation` / `verification` / `observer` / `identity` / `soul` / `temporal` /
+  `continuity` / `world` / `reality` / `federation` / `delegation` / `adaptation` / `planning` / `action` /
+  `simulation` / `reflection` / `dream` / `long-horizon` / `agency` / `security` / `index.ts`。
+- **D2 必须细分**（用户第 8 条）：不能统一叫 `drift`，要分 **名称漂移 / 结构漂移 / 语义漂移 / 行为漂移** ——
+  否则会把「无害重命名」与「真正兼容性破坏」混在一起。
+- **D3 的再框定**（用户第 8 条）：若 T15 明确「**旧的大对象不是 protected、新的细粒度对象才是**」，
+  则 D3 不再是兼容性问题，而是 **允许的 breaking internal refactor** —— 这会大幅减少历史包袱。
+- **D1 的再框定**：若 `ChangeSet` **没有生产消费者 / 没有验证价值 / 没有外部契约** ⇒ **删**，不为「将来可能有用」保留。
 
 - **依据**：`adr/0078` D4c。本仓的**公开面**是「工具名 + `mode` 串 + 配置键 + 落盘格式」，
   但**没有任何兼容性政策文档**；而 **ADR-0050 做过一次硬切**（v1.13.0 把旧 `mode` 名**直接废止**、并写明
@@ -1118,6 +1147,60 @@
   而不是「有输出就算通过」。**它在 hl_mem 里没有对应物**（分诊报告是 hl_mem 没有的机制）⇒ 本仓要**自建**判据，
   可借的只有这个**表达形状**。（另：`benchmarks/release/core_v1.py:102-104,135` 的「外部调用即失败」
   用**抛错桩 + 计数**并以 contextmanager 包住整条链路，是最贴近本仓的一版实现思路；全文见 `references.md` §6.6。）
+
+### V7. **语料健康门**（Corpus Health Gate）—— ✅ **已闭环（v1.15.46）**
+
+- **来源**：用户 2026-09-12 评审第 3 条：V6 只防住「**语料全空**」，防不了 **Partial Corpus** ——
+  「正常 31 files / 103 keys」→「工具坏了 7 files / 21 keys」**不是 0**，闸门不响、读数「看起来合理」；
+  更危险的是 **V6 的棘轮对「下降」判通过并提示收紧基线** ⇒ **工具坏了会被当成修好了，写进基线**（假绿自我固化）。
+- **判据（`tools/corpus-health.lib.ts`，纯逻辑 + 10 组标定测试）**：四档，只有 `NORMAL` 放行
+  | 档 | 触发 | 退出码 |
+  |---|---|---|
+  | `EMPTY` | 0 文件 | 2 |
+  | `PARTIAL` | 文件数 < 基线×0.9 · 目录数 < 基线×0.9 · **线索跌 > 20%** · **哨兵文件缺失** | 2 |
+  | `UNKNOWN` | 无基线可比 | 2 |
+  | `NORMAL` | 在容许带内 | 0（继续跑棘轮） |
+  - **哨兵**（`index.ts` / `core/paths.ts` / `core/types.ts` / `core/util.ts` / `security/scrub.ts`）：
+    **无基线也能发现「走错目录 / 递归被 junction 静默截断」**（这正是 v1.15.43 踩过的坑）。
+  - **`--update-ratchet` 也受闸**：EMPTY/PARTIAL 时**拒绝录基线**（这条是 V7 的关键）。
+  - 阈值（0.9 / 0.9 / 0.2）**可注入**，且已在标定测试里用严/松两档证明「判据不在暗处」。
+- **覆盖四个语料消费者**：`audit-wiring`、`audit-drift`（带基线+哨兵）、`audit-layers`（自比+哨兵）、
+  `retrieval-eval`（协议常量 `min_corpus_files`，**从数据读不从代码读**）。
+- **🔴 V7 首次运行就抓到我自己的一处设计缺陷（留档）**：两个工具**共用一个 `corpus` 键**，
+  但量的是**不同的语料**（wiring 扫全仓 778 文件含 `dist/`；drift 只扫生产面 193 文件）
+  ⇒ drift 录基线时被 wiring 的数字判成「骤降 76%」而**拒绝录制**。
+  **修法**：`corpus` 按消费者分开存（`corpus.wiring` / `corpus.drift`）。
+  **教训与 V6 同族**：**共享键 + 不同口径 = 必炸**；而这次是**新加的闸自己发现**的（不是人看出来的）。
+- **代价（诚实标注）**：**大幅度的合法下降现在必须走「确认 → 重录基线」**（不能静默收紧）。
+  这是刻意的：宁可让人确认一次，也不要让工具故障写进基线。
+- **未做**：阈值未用「真实故障回放」标定最优值；指纹只覆盖**文件路径集合**（不含内容）。
+
+### V8/V9. **Count Ratchet → Identity Ratchet** —— ⏸ **明确不做（用户 2026-09-12 指定为以后）**
+
+- **问题（用户评审第 5 条）**：现在比的是**计数**。「旧：A=3,B=7,C=10」→「新：A=3,B=7,C=10」**数量完全没变**，
+  但**里面换了一批** ⇒ 棘轮不响。
+- **方向**：桶值从 `count` 变成 `{ count, fingerprints[] }`（**身份**而非数量）。
+- **为什么现在不做**：先有「什么算受保护契约」（**T15**）才谈得上给桶定身份；否则会冻结一堆临时内部形态。
+
+### 🧭 **阶段路线（用户 2026-09-12 确立，按此顺序）**
+
+```text
+V1–V5  功能有没有            ✅ 已完成
+V6     验证系统会不会假绿      ✅ 已闭环（v1.15.45）
+V7     语料是不是可信         ✅ 已闭环（v1.15.46）
+T8     静默降级可见化          ← 下一步（判据已定，纯实现）
+T15    什么东西是契约          ← 产出 Protected Contract Registry（见 T15）
+D1/D2/D3 + A 段 6 条 ⚠ **不要先拍** —— 它们本质都是「哪些东西算受保护契约」，故排在 T15 之后
+T2(B段) / T9 / T10 / T7
+Contract Freeze Gate          ← 契约冻结（条件见下）
+T14    冻结**契约语料**（不是当前实现）→ 真正启用回归门
+V8/V9  Identity Ratchet
+V/G/T6 真机与外部条件项
+```
+
+**Contract Freeze Gate（冻结条件）**：`F 事实台账` + `V 运行验证` + `T15 契约面` + `Ratchet` 四者齐备后，
+**核心契约冻结**；此后新功能必须**证明不破坏 Contract** 才能进 `main`。
+**T14 的语料快照必须排在冻结之后** —— 否则冻结的是「当前实现」而不是「契约语料」。
 
 ---
 

@@ -13,6 +13,7 @@
     "avg_returned_mean": 0
   },
   "required_external_model_calls": 0,
+  "min_corpus_files": 100,
   "k": 5,
   "seeds": [1, 2, 3],
   "max_docs": 1500

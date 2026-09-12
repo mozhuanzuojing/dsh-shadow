@@ -3,6 +3,74 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.46] **V7 语料健康门**（Partial Corpus）+ 五级审计口径 + 阶段路线与 T15 契约登记册规格
+
+**一句话**：V6 只防住「语料**全空**」；本轮补上它的危险兄弟 —— **Partial Corpus**（工具坏了给出一个「看起来合理」
+的小读数），并把「**下降 = 通过并收紧基线**」这个会让**工具故障写进基线**的洞堵上。
+
+### 1. V7 语料健康门（`tools/corpus-health.lib.ts` + 10 组标定测试）
+
+四档，**只有 NORMAL 放行**（且只有 NORMAL 才允许 `--update-ratchet` 录基线）：
+
+| 档 | 触发 | 退出码 |
+|---|---|---|
+| `EMPTY` | 0 文件 | 2 |
+| `PARTIAL` | 文件数 < 基线×0.9 · **目录数** < 基线×0.9 · **线索跌 > 20%** · **哨兵文件缺失** | 2 |
+| `UNKNOWN` | 无基线可比 | 2 |
+| `NORMAL` | 在容许带内 | 0（继续跑棘轮） |
+
+- **哨兵**（`index.ts`/`core/paths.ts`/`core/types.ts`/`core/util.ts`/`security/scrub.ts`）：**无基线也能发现**
+  「走错目录 / 递归被 junction 静默截断」——正是 v1.15.43 踩过的坑。
+- **覆盖四个语料消费者**：`audit-wiring` / `audit-drift`（基线+哨兵）· `audit-layers`（自比+哨兵）·
+  `retrieval-eval`（协议常量 `min_corpus_files`，**从数据读、不从代码读**）。
+- **`--update-ratchet` 也受闸**：EMPTY/PARTIAL ⇒ **拒绝录基线**。这是本轮最关键的一条 ——
+  它堵住了「**工具坏了 → 线索骤降 → 棘轮判『下降不是违规』→ 提示收紧基线**」这条自我固化路径。
+- **代价（刻意）**：**大幅度的合法下降现在必须走「确认 → 重录」**，不能静默收紧。
+
+### 2. 🔴 V7 首次运行就抓到我自己的一处设计缺陷
+
+两个工具**共用一个 `corpus` 键**，但量的是**不同的语料**（wiring 扫全仓 **778** 文件含 `dist/`；
+drift 只扫生产面 **193** 文件）⇒ drift 录基线时被 wiring 的数字判成「**骤降 76%**」而**拒绝录制**。
+**修法**：`corpus` 按消费者分开（`corpus.wiring` / `corpus.drift`）。
+**教训与 V6 同族**：**共享键 + 不同口径 = 必炸** —— 而这次是**新加的闸自己发现**的，不是人看出来的。
+
+### 3. 统一审计口径：**Artifact existence ≠ Runtime capability**（用户评审第 1 条）
+
+写入 `MATERIALS.md` §6 作为全台账的判定链，逐级都不得跳：
+
+```text
+package exists ≠ installed ≠ loaded ≠ active ≠ usable ≠ verified
+```
+
+来历是本仓两次实测教训（据 Service 目录断言 `invariants` 存在 → 运行时 `undefined`；
+`e2b` 在目录里而 `dsh-e2b` **没安装**）。**推论**：`files` 里有 `./invariant` ≠ 运行面可解析；
+bundle patch 有某行 ≠ 该行被挂载；预设清单存在 ≠ 内容未变。
+
+### 4. 阶段路线与 T15 规格入账（`BACKLOG.md`）
+
+- **路线**（用户确立）：`V1–V5 功能` → `V6 假绿` → **`V7 语料可信`** → **`T8`** → **`T15`** →
+  `D1/D2/D3` → `A 段` → `T2(B段)/T9/T10/T7` → **`Contract Freeze Gate`** → `T14`（冻结**契约语料**，不是当前实现）
+  → `V8/V9 Identity Ratchet` → V/G/T6。**明确：D1/D2/D3 不要先拍**（它们本质都是「哪些算受保护契约」）。
+- **T15 产物规格**：**Protected Contract Registry**，每条**十字段**（`id` / `surface` / `owner` /
+  `semantic meaning` / `stability level` / `allowed changes` / `forbidden changes` / `evidence` /
+  `verification` / `ratchet`）；加**模块归属表**（`Owns / Reads / Writes / Must not own`，用来暴露越权）；
+  D2 细分为**名称/结构/语义/行为**四种漂移；D3 若「旧对象不 protected、新对象才 protected」= **允许的内部破坏性重构**。
+- **V8/V9（Count → Identity Ratchet）** 记入「明确不做（以后）」：桶值要从 `count` 变成 `{count, fingerprints[]}`；
+  但**先有 T15 才谈得上给桶定身份**。
+- **Contract Freeze Gate**：`F 台账 + V 运行验证 + T15 契约面 + Ratchet` 四者齐备 ⇒ 核心契约冻结；
+  此后新功能必须证明**不破坏 Contract** 才能进 `main`。
+
+### 5. 门禁与变更文件
+
+**`npm run verify` = 49/49**（48 → 49：多 `tools/corpus-health.selftest.ts`）；
+`audit:wiring` / `audit:drift` 均打印 `语料健康 … NORMAL ✅` 后跑棘轮并通过；`audit-layers` 通过；
+`retrieval-eval --check-baseline` 通过（协议新增 `min_corpus_files` ⇒ 旧基线**明确用 `--force` 重录**，理由即此）。
+变更文件：`tools/corpus-health.lib.ts`（新）· `tools/corpus-health.selftest.ts`（新）·
+`tools/audit-ratchet.baseline.json`（新增 `corpus.wiring` / `corpus.drift` 段）·
+`tools/{audit-wiring,audit-drift,audit-layers,retrieval-eval}.ts` · `tools/retrieval-eval.{lib.ts,selftest.ts,protocol.json,baseline.json}` ·
+`MATERIALS.md`（§6 五级链）· `BACKLOG.md`（V7 闭环 / V8/V9 / 阶段路线 / T15 规格）· `CHANGELOG.md` · `README.md` · `package.json`（1.15.46）。
+**未改动**：`index.ts` 与业务源码、`dist/`。
+
 ## [v1.15.45] **V6 闭环**：两个分诊报告有了**棘轮退出码**，并接进 `npm run verify`（+ 修一处「空语料冒充没问题」）
 
 **一句话**：`audit:wiring` / `audit:drift` 一直是**人工分诊**工具 —— 输出是线索清单、**退出码恒 0**

@@ -19,6 +19,7 @@ import {
   FORBIDDEN_TARGETS_EVERYWHERE,
   auditLayers,
 } from "./audit-layers.lib.ts";
+import { classifyCorpus } from "./corpus-health.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.argv[2] ?? join(here, "..");
@@ -45,6 +46,21 @@ const collect = (dir: string, out: string[] = []): string[] => {
 
 const paths = collect(ROOT).sort();
 const files = paths.map((path) => ({ path, text: readFileSync(join(ROOT, path), "utf8") }));
+
+// **V7 语料健康门（无基线版）**：本工具不吃基线，但**同样会「空语料冒充没问题」** ——
+// 0 文件时它会打印「语料：0 文件 / 0 条边」然后 **全部判据通过 ✅**。
+// 这里用 `baseline = observed` 调用同一个判据（自比 ⇒ 规模带恒为 1.0，只保留 EMPTY 与哨兵两条）；
+// 哨兵 = 必须被扫到的文件（无基线也能发现「走错目录 / 递归被 junction 截断」）。
+const LAYER_SENTINELS = ["index.ts", "core/paths.ts", "core/types.ts", "core/util.ts", "security/scrub.ts"];
+const seenPaths = new Set(paths);
+const missingSentinels = LAYER_SENTINELS.filter((s) => !seenPaths.has(s));
+const selfCorpus = { files: paths.length, dirs: 0, findingsA: 0, findingsB: 0, fingerprint: "" };
+const health = classifyCorpus("audit-layers", selfCorpus, selfCorpus, missingSentinels);
+if (!health.ok) {
+  for (const l of health.lines) console.error(l);
+  console.error("  ⇒ 语料不健康 ⇒ **不跑结构判据**（否则会输出一份「全部通过」的假绿）。");
+  process.exit(health.exitCode);
+}
 
 const report = auditLayers(files);
 const { violations, fileCycles, layerCycles, unresolved, stats } = report;

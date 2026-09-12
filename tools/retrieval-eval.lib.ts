@@ -136,6 +136,8 @@ export interface EvalProtocol {
   readonly metric_directions: Readonly<Record<string, MetricDirection>>;
   readonly tolerances: Readonly<Record<string, number>>;
   readonly required_external_model_calls: number;
+  /** **V7 语料健康门**的下限（协议常量，不是代码硬编码的可调项）。 */
+  readonly min_corpus_files: number;
   readonly k: number;
   readonly seeds: readonly number[];
   readonly max_docs: number;
@@ -159,6 +161,12 @@ export const checkProtocol = (protocol: EvalProtocol) => {
   }
   if (!Array.isArray(protocol.seeds) || protocol.seeds.length === 0) {
     violations.push({ rule: "种子不得为空", why: "无种子 ⇒ 查询集不可复现", where: "protocol.seeds" });
+  }
+  // **V7 语料健康门**：下限必须是协议里的常量（从数据读，不从代码读）。
+  // 用索引读取而非接口字段：该常量是运行期数据（JSON），加进接口会强迫所有夹具同步声明。
+  const minFiles = (protocol as unknown as Record<string, unknown>).min_corpus_files;
+  if (typeof minFiles !== "number" || !Number.isFinite(minFiles) || minFiles <= 0) {
+    violations.push({ rule: "语料下限必须声明", why: "缺 min_corpus_files ⇒ PARTIAL 语料无法被识别（V7）", where: "protocol.min_corpus_files" });
   }
   return violations;
 };

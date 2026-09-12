@@ -16,6 +16,8 @@ import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductionPath } from "./audit-drift.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
+import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+import { sha256Hex } from "./retrieval-eval.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -23,12 +25,14 @@ const ROOT = process.argv[2] || ".";
 const asJson = process.argv.includes("--json");
 /** B 段计数需在块作用域内取，故提到顶层（V6 棘轮用）。 */
 let driftCounts: Counts = {};
+/** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断）。 */
+let dirCount = 0;
 const walk = (d: string, out: string[] = []): string[] => {
   let es: any[];
   try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
   for (const e of es) {
     const p = join(d, e.name);
-    if (e.isDirectory()) walk(p, out);
+    if (e.isDirectory()) { dirCount++; walk(p, out); }
     else if (e.name.endsWith(".ts")) out.push(p);
   }
   return out;
@@ -104,15 +108,44 @@ const DRIFT_COUNTS: Counts = driftCounts;
 const wantsRatchet = process.argv.includes("--ratchet") || process.argv.includes("--update-ratchet");
 if (wantsRatchet) {
   const all = existsSync(RATCHET_BASELINE) ? JSON.parse(readFileSync(RATCHET_BASELINE, "utf8")) : {};
-  if (process.argv.includes("--update-ratchet")) {
+  const isUpdate = process.argv.includes("--update-ratchet");
+
+  // **V7 语料健康门**（与 `audit-wiring` 同一份判据与同一个基线文件的 `corpus` 段）。
+  const SENTINELS = ["index.ts", "core/paths.ts", "core/types.ts", "security/scrub.ts"];
+  const seen = new Set(prod.map((f: { file: string }) => f.file));
+  const missing = SENTINELS.filter((s) => !seen.has(s));
+  const CORPUS: CorpusObservation = {
+    files: prod.length,
+    dirs: dirCount,
+    findingsA: fresh.length,
+    findingsB: preds.length,
+    fingerprint: sha256Hex(prod.map((f: { file: string }) => f.file).sort().join("\n")),
+  };
+  const health = classifyCorpus("audit-drift", CORPUS, all.corpus?.drift, missing);
+
+  if (isUpdate) {
+    if (health.health === "EMPTY" || health.health === "PARTIAL") {
+      for (const l of health.lines) console.log(l);
+      console.log("  ⇒ 拒绝 `--update-ratchet`：先确认是「真修好了」还是「工具坏了」。");
+      process.exit(2);
+    }
+    // 语料段**按消费者分开**（见 `audit-wiring.ts` 同处注释：两工具量的是不同语料，共享键会互相覆盖）。
+    all.corpus = { ...(all.corpus ?? {}), drift: CORPUS };
     all.drift = DRIFT_COUNTS;
     writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
-    console.log(`已写入棘轮基线（drift 段）：${RATCHET_BASELINE}`);
+    console.log(`已写入棘轮基线（drift 段 + corpus 段）：${RATCHET_BASELINE}`);
     for (const [k, v] of Object.entries(DRIFT_COUNTS).sort()) console.log(`  ${k} = ${v}`);
+    console.log(`  corpus: files=${CORPUS.files} dirs=${CORPUS.dirs} fingerprint=${CORPUS.fingerprint.slice(0, 12)}…`);
     process.exit(0);
   }
-  const r = ratchetCounts("audit-drift", DRIFT_COUNTS, all.drift);
+
   console.log("");
+  for (const l of health.lines) console.log(l);
+  if (!health.ok) {
+    console.log("  ⇒ 语料不健康 ⇒ **不跑棘轮比较**（先修语料，再比线索）。");
+    process.exit(health.exitCode);
+  }
+  const r = ratchetCounts("audit-drift", DRIFT_COUNTS, all.drift);
   for (const l of r.lines) console.log(l);
   process.exit(r.exitCode);
 }

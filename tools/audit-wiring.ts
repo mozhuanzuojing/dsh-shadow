@@ -18,15 +18,19 @@ import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectComparisons, hasProducer, findOrphanComparisons, isProductionPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings } from "./audit-wiring.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
+import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+import { sha256Hex } from "./retrieval-eval.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 const ROOT = process.argv[2] || ".";
+/** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断，比文件数更早暴露问题）。 */
+let dirCount = 0;
 const walk = (d, out = []) => {
   let es; try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
   for (const e of es) {
     const p = join(d, e.name);
-    if (e.isDirectory()) walk(p, out);
+    if (e.isDirectory()) { dirCount++; walk(p, out); }
     else if (e.name.endsWith(".ts")) out.push(p);
   }
   return out;
@@ -166,16 +170,51 @@ const WIRING_COUNTS: Counts = {
 const wantsRatchet = process.argv.includes("--ratchet") || process.argv.includes("--update-ratchet");
 if (wantsRatchet) {
   const all = existsSync(RATCHET_BASELINE) ? JSON.parse(readFileSync(RATCHET_BASELINE, "utf8")) : {};
-  if (process.argv.includes("--update-ratchet")) {
+  const isUpdate = process.argv.includes("--update-ratchet");
+
+  // **V7 语料健康门**：先判「这份语料值不值得信」，再判线索多少。
+  // 哨兵 = 必须被扫到的文件（无基线也能发现「走错目录 / 递归被截断」）。
+  const SENTINELS = ["index.ts", "core/paths.ts", "core/types.ts", "security/scrub.ts"];
+  const seen = new Set(allTs.map(rel));
+  const missing = SENTINELS.filter((s) => !seen.has(s));
+  const CORPUS: CorpusObservation = {
+    files: allTs.length,
+    dirs: dirCount,
+    findingsA: rows.length,
+    findingsB: orphans.length,
+    fingerprint: sha256Hex(allTs.map(rel).sort().join("\n")),
+  };
+  const health = classifyCorpus("audit-wiring", CORPUS, all.corpus?.wiring, missing);
+
+  if (isUpdate) {
+    // 只有 EMPTY / PARTIAL 才拒绝录制（**UNKNOWN 是首次录基线的正常状态**）。
+    // 这条正是 V7 的关键：**工具坏了导致骤降时，不许把坏读数写进基线**。
+    if (health.health === "EMPTY" || health.health === "PARTIAL") {
+      console.log("");
+      for (const l of health.lines) console.log(l);
+      console.log("  ⇒ 拒绝 `--update-ratchet`：先确认是「真修好了」还是「工具坏了」。");
+      process.exit(2);
+    }
+    // ⚠ **语料段按消费者分开存**（V7 首次运行的实测教训）：两个工具量的是**不同的语料**
+    //（wiring 扫全仓 778 文件含 dist/；drift 只扫生产面 210 文件）⇒ 共用一个 `corpus` 键会互相覆盖，
+    // 于是 drift 录基线时会被 wiring 的数字判成「骤降 76%」。**共享键 + 不同口径 = 必炸**。
+    all.corpus = { ...(all.corpus ?? {}), wiring: CORPUS };
     all.wiring = WIRING_COUNTS;
     writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
     console.log("");
-    console.log(`已写入棘轮基线（wiring 段）：${RATCHET_BASELINE}`);
+    console.log(`已写入棘轮基线（wiring 段 + corpus 段）：${RATCHET_BASELINE}`);
     for (const [k, v] of Object.entries(WIRING_COUNTS).sort()) console.log(`  ${k} = ${v}`);
+    console.log(`  corpus: files=${CORPUS.files} dirs=${CORPUS.dirs} fingerprint=${CORPUS.fingerprint.slice(0, 12)}…`);
     process.exit(0);
   }
-  const r = ratchetCounts("audit-wiring", WIRING_COUNTS, all.wiring);
+
   console.log("");
+  for (const l of health.lines) console.log(l);
+  if (!health.ok) {
+    console.log("  ⇒ 语料不健康 ⇒ **不跑棘轮比较**（先修语料，再比线索）。");
+    process.exit(health.exitCode);
+  }
+  const r = ratchetCounts("audit-wiring", WIRING_COUNTS, all.wiring);
   for (const l of r.lines) console.log(l);
   process.exit(r.exitCode);
 }

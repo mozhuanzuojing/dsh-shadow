@@ -236,6 +236,22 @@ Get-ChildItem <repo> -File | Where-Object { $_.Name -match '^(LICENSE|LICENCE|CO
 
 ## 6. 诚实边界（本台账**尚未**回答的）
 
+**⭐ 本台账的统一审计口径（v1.15.46 起，用户评审确立）—— 五级链，逐级都不得跳：**
+
+```text
+package exists  ≠  installed  ≠  loaded  ≠  active  ≠  usable  ≠  verified
+工件存在        ≠  已安装     ≠  已装载   ≠  在跑     ≠  可用    ≠  已验证
+```
+
+- **一句话**：**Artifact existence ≠ Runtime capability**。目录里有、包里发了、进程装了 —— **都不等于运行时在跑**。
+- **来历（本仓实测的两次教训）**：v1.15.40 我曾据「运行体 Service 目录里有 `invariants`」断言「该服务存在」——
+  **错**：`ctx.get('invariants')` 运行时为 `undefined`（目录是**声明的契约**，不是活性表）；
+  反例更硬：**`e2b` 在目录里而 `dsh-e2b` 在本 profile 里根本没安装**（`Test-Path` = `False`）。
+- **判定方法**：凡结论是「某能力有没有」，**唯一判据是运行时读取**（真实插件里的 `ctx.get` 或等效运行时观测），
+  不得用目录、文档或「安装包里存在」代替。详见 `references.md` §6.5 / §6.5.1、`BACKLOG.md` T16 第 3–4 项。
+- **推论（同一条纪律的四个面）**：`files` 字段有 `./invariant` ≠ 该子路径在运行面可解析；
+  bundle patch 里有某行 ≠ 该行被挂载；预设清单存在 ≠ 预设内容未变（v1.15.43 实测：6 个文件内容不同）。
+
 - 除 hl_mem（含其**门禁面**）/ openviking / harness 的**关键面**外，**其余材料的「内容」尚未深读**
   （§2.4–§2.7 只做定位；§2.8 四路回报的结论已分别落 ADR / BACKLOG）。
 - **论文**：MemStrata **已读完正文 + Appendix B/C/D + Table 1/2/3**（`adr/0080`）；
