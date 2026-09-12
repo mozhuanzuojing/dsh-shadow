@@ -21,13 +21,29 @@ const fixturePath = join(here, "fixtures", "wiring-fixture.ts");
 const files = [{ file: "wiring-fixture.ts", text: readFileSync(fixturePath, "utf8") }];
 
 // ─────────────────────────────────────────────
-// ① 收集比较点：夹具里应恰好有 5 个
+// ① 收集比较点：夹具里应恰好有 6 个
+//    （v1.15.64 起 `typeof x === "<类型名>"` **不计入** —— 见 ①b）
 // ─────────────────────────────────────────────
 const cmps = collectComparisons(files);
 const keys = [...cmps.keys()].sort();
-assert.deepEqual(keys, ["kind=phantom", "kind=y", "phase=ghost", "status=bad", "status=ok"],
+assert.deepEqual(keys, ["kind=phantom", "kind=y", "phase=ghost", "status=bad", "status=ok", "t=number"],
   `比较点集合不对：${JSON.stringify(keys)}`);
-console.log(`✔ ① 收集到 5 个比较点：${keys.join(" · ")}`);
+console.log(`✔ ① 收集到 6 个比较点：${keys.join(" · ")}`);
+
+// ─────────────────────────────────────────────
+// ①b `typeof x === "<类型名>"` 必须**被排除**，而**同一个字面量用在真字段上必须照旧被收集**
+//    背景（v1.15.64）：真语料里 `v=string` / `v=object` / `wiring=object` 三条 B 类线索
+//    **全部**来自 `typeof v === "object"` 这类写法（左右两侧都定义上不可能有生产者）；
+//    T8 的 `numOr` 又新增了 `v=number` ⇒ 棘轮如实报「线索变多」（115→116），顺藤查出是工具缺陷。
+//    本组同时锁**两个方向**，防止修复退化成「把一类别名一删了事」的静默掩盖。
+// ─────────────────────────────────────────────
+assert.equal(cmps.has("v=number"), false, "`typeof v === \"number\"` 不得被收集（定义上的假阳）");
+assert.equal(cmps.has("v=object"), false, "`typeof v === \"object\"` 不得被收集");
+assert.equal(cmps.has("v=string"), false, "`typeof v === \"string\"` 不得被收集");
+assert.equal(cmps.has("t=number"), true,
+  "**反例正控**：同一个字面量 `\"number\"` 用在真字段 `r.t === \"number\"` 上**必须照旧被收集** " +
+  "—— 排除的是 `typeof` 前缀，不是「值长成类型名」");
+console.log("✔ ①b typeof 比较被排除（v=number/object/string 均未收集），而真字段上的同一字面量（t=number）照旧收集");
 
 // ─────────────────────────────────────────────
 // ② 生产者判定：3 个可达必须**认出**有写入者（含**三元写**与**赋值写** —— v1 漏这几种）
@@ -53,12 +69,13 @@ assert.equal(hasProducer(files, "kind", "phantom").length, 0,
 console.log("✔ ③ 两个不可达均正确判为无生产者（含**跨字段同名字面量**的干扰项）");
 
 // ─────────────────────────────────────────────
-// ④ 端到端：findOrphanComparisons 恰好报出那 2 个，不报那 3 个
+// ④ 端到端：findOrphanComparisons 恰好报出那 3 个，不报那 3 个可达
+//    （`t=number` 是 ①b 的反例正控：真字段 + 类型名字面量，**必须**照旧被报）
 // ─────────────────────────────────────────────
 const orphans = findOrphanComparisons(files).map((o) => `${o.field}=${o.value}`).sort();
-assert.deepEqual(orphans, ["kind=phantom", "phase=ghost"],
-  `应恰好报出 2 个不可达，实际：${JSON.stringify(orphans)}`);
-console.log(`✔ ④ 端到端：恰好报出 2 个不可达（${orphans.join(" · ")}），3 个可达全部未误报`);
+assert.deepEqual(orphans, ["kind=phantom", "phase=ghost", "t=number"],
+  `应恰好报出 3 个不可达，实际：${JSON.stringify(orphans)}`);
+console.log(`✔ ④ 端到端：恰好报出 3 个不可达（${orphans.join(" · ")}），3 个可达全部未误报`);
 
 // ─────────────────────────────────────────────
 // ⑤ **调用点计数**：夹具里 2 个无调用点、2 个有（含类实例化与函数调用）

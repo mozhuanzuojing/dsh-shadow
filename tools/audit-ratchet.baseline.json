@@ -5,7 +5,7 @@
       "dirs": 168,
       "files": 196,
       "findingsA": 0,
-      "findingsB": 28,
+      "findingsB": 23,
       "fingerprint": "7d771706cac4bb3a50a01712daca37b3a10817b4197511d82a267784ffbeddac"
     },
     "files": 778,
@@ -14,15 +14,15 @@
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
       "dirs": 168,
-      "files": 788,
+      "files": 790,
       "findingsA": 39,
-      "findingsB": 115,
-      "fingerprint": "4ea5337c087f78ed8d0238053e817753a05107234011731bdf1659cf24b684a2"
+      "findingsB": 97,
+      "fingerprint": "1e66ea53982409c7bddad6ad6a8c67d8cbf634c3efa583428cac62e2f56ddd10"
     }
   },
   "drift": {
-    "drift_keys": 11,
-    "drift_sites": 28
+    "drift_keys": 9,
+    "drift_sites": 23
   },
   "wiring": {
     "a1": 24,
@@ -30,6 +30,6 @@
     "a2b": 0,
     "a3": 11,
     "a_total": 39,
-    "b_keys": 115
+    "b_keys": 97
   }
 }

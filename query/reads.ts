@@ -44,7 +44,10 @@ const episodeDecision: ReadQuery = {
     const { fs, ws, flushWarn } = ctx;
     const { parsed } = await materializeAtoms(fs, ws, deps.config);
     if (String(args?.mode) === "episode") {
-      const eps = deriveEpisodes(parsed, { gapMinutes: Math.max(0, Number(deps.config.episodes?.gapMinutes) || 60) });
+      // T8-B（v1.15.64）：此处原先自己算了一遍 `Math.max(0, Number(...) || 60)` —— 与
+      // `core/writer-core.ts` 和 `core/episode.ts` 三处口径分叉，且都吞显式 0。
+      // 默认值现只在 `deriveEpisodes` 里落一处，本处**原样传配置**。
+      const eps = deriveEpisodes(parsed, { gapMinutes: deps.config.episodes?.gapMinutes });
       return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
     }
     const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });

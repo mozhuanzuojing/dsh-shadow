@@ -3,6 +3,70 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.64] **回到泳道做 T8**（B 部分：显式 0 被默认值吞掉）+ 副产品：**比较点判据的两份实现**（`adr/0084`）—— `verify` **54/54**
+
+**一句话**：`adr/0083` §14.1 记下「我在 M1 之后连续 **8 轮**做审查→修，`T8/T15/D1-3/A段/T2` **一项未动**」——本轮**回到泳道**，做用户 2026-09-12 定的第一步 **T8**（其 B 部分「判据已定、纯实现」，不需决策，故先做）。做的过程中**闸门自己顶出第二条线索**：`typeof x === "<类型名>"` 是**定义上的假阳**，而「什么算一个比较点」此前有**两份独立实现** ⇒ 我修了 wiring 那一份，`audit-drift` 的棘轮**紧接着**在同一假阳上报红。
+
+### 1. 决定一：`||` 取默认值不得吞掉**显式 0**（新纪律，判据只一处）
+
+**缺陷形态**：`Math.max(0, Number(v) || dflt)` 把「**显式 0**」与「**未传**」混为一谈 —— `0` 是 falsy ⇒ 用户写的 0 被默认值吞掉。T8-B 立账时只记了 **2 处**，执行时读代码发现**同族共 6 处**：
+
+| # | 位置 | 承诺 0 有意义的出处 | 被吞成 | 后果 |
+|---|---|---|---|---|
+| 1 | `core/writer-materialize.ts:166` `abstracts.showInIndex` | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 | 文档承诺不成立；`!show` **死分支** |
+| 2 | `core/writer-core.ts:77` `episodes.showInIndex` | T8-B 立账 | 8 | `writer-materialize.ts:212` 的 `episodeShow > 0` **恒真 = 死分支** ⇒「关掉 Episodes 段」**这个开关不存在** |
+| 3 | `core/writer-core.ts:76` `episodes.gapMinutes` | T8-B 立账 | 60 | 无法表达「同一分钟才算一段」 |
+| 4 | `core/episode.ts:230` `deriveEpisodes` | 同 3（**库层**） | 60 | 同上 |
+| 5 | `core/writer-materialize.ts:92` `compact.gapMinutes` | 同 3 | `episodeGap` | 同上 |
+| 6 | **`query/reads.ts:47`** `episodes.gapMinutes` | 同 3 | 60 | 同上，**且是第三处口径分叉**（默认值算法此前在 3 个地方各写一遍） |
+
+**修法**：新增 **`core/util.ts:numOr(v, dflt, min = 0)`** 作为**唯一判据** —— `number` 用之 · 非空 `string` `Number()` 之 · **其余类型视为「未传」回落默认**（含 `undefined`/`null`/`""`/空白串/**布尔**/对象/数组）· `NaN`/`±Infinity` 视为非法 · 最后钳到 `min`。默认值只在 `deriveEpisodes` **落一次**，`writer-core` 与 `query/reads` **原样传配置**（判据收一处）。
+
+**三条刻意的取舍**：① **错类型判为「未传」而不是 0** —— 写 `false`/`""` 几乎总意为「我没填」，读成 0 会**静默关掉一个功能**（正是本条要修的毛病）；代价已知：`numOr(true, 60)` 从 1 变 60，垃圾输入回落默认比静默取 1 诚实。② **`min > 0` 的调用点不纳入本次修复** —— 那些点 0 本就非法；本仓 25 处 `Number(x) || dflt` 中只有 `min <= 0` 的 **6 处**属本条，其余 19 处**保持原样**（未逐条审语义，已在 §6 标注）。③ **`forget.minHits` 的 `|| 1` 判为正当并保留** —— `minHits: 0` ⇒ `hits < 0` 恒假 ⇒ 等于关掉遗忘，而该语义**已由 `enabled: false` 承担**，再让 0 表达一次就是同一件事两个开关。
+
+### 2. 决定二：`typeof x === "<类型名>"` **不是**比较点，且判据要**搬成一份**
+
+**它为什么是定义上的假阳**：两个审计工具都用「`字段 === "字面量"`」当 B 类输入。对 `audit-wiring`（问「有没有写入者」）：右侧是**类型名**、左侧是 `typeof` 的结果 ⇒ **必然**「无写入点」，可该分支可达性由**运行时类型**决定，静态文本**永远答不了**。对 `audit-drift`（问「判据是否被表达两次」）：`typeof` 的名字空间只有 8 个字面量，左侧又几乎总是泛用局部名（`v`/`x`/`k`），两模块同写 `typeof v === "object"` 只是**巧合同名**。
+
+**怎么被发现的（闸门自己顶出来的）**：加 `numOr` → `audit-wiring --ratchet` 报 **`b_keys` 115 → 116** → 查出 `typeof` 假阳、修 wiring 那一份 → **`audit-drift --ratchet` 紧接着**报 `drift_sites` 28 → 29（键名不变 `v=string`、只多一处 site）→ 查出 **drift 里有第二份独立实现**。而 `audit-drift` **自述看不见 `tools/` 内部**的判据分叉（`isProductModulePath` 排除 `tools/`）⇒ 它抓得到产品代码里的分叉，**抓不到自己与兄弟工具之间那一处**。
+
+**修法**：新增 **`tools/comparison-points.lib.ts`**（`scanComparisons` = 「什么算一个比较点」的唯一来源，含 `typeof` 排除），两个工具改为调用它。**键怎么取两家刻意不同、不统一**：wiring 只取左侧**最后一段**（`r.status === "ok"` ⇒ `status=ok`，接收者不影响「有没有写入者」）；drift 取**整条接收者链**并把 `?.` 归一（`c?.status === "supported"` ⇒ `c.status=supported`，接收者是判据身份的一部分）—— **统一键 = 同时改变两个工具的含义**。这句话写进该文件头，防后人「顺手统一」。`stripComments` 仍保留两份（`audit-drift.lib.ts:17` 记录过的有意取舍），本条只统一**判据**。
+
+**反例正控（两处夹具各放同一字面量的两个方向）**：`wiring-fixture.ts` 的 `f`（`typeof v === "number"` ⇒ **不收集**）与 `g`（`r.t === "number"` 真字段 ⇒ **照旧收集**）；`audit-drift.selftest.ts` ⑤c 的 `typeof v === "object"`（跨两文件 ⇒ **不报**）与 `r.mode === "object"`（跨两文件 ⇒ **照旧报**）。若有人把排除写成「值在黑名单里就跳过」，这些正控会红 —— 那才是 ADR-0063 最怕的「把一类别名一删了事」的静默掩盖。
+
+### 3. 取证：`b_keys` 下降 **−18** 是**逐键**证明过的，不是估计
+
+`.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts` 对每个被减掉的键**回到 HEAD 语料**断言「**每一处**出现点都带 `typeof ` 前缀」。**判据等价性**：某键只要有**一处**非 typeof 出现点，它就不会消失 ⇒ 该检查**恰好等价**，既不过严也不过松。结果 **18/18 通过、非 typeof 出现点 0 个**，其中 **9 个键是「带点操作数」的 typeof**（`typeof thing.agent === "object"`、`typeof fs.stat === "function"` …）—— 这一点很关键，见下。
+
+**我自己的错误（留档）**：探针**第一版自己写窄了**判据 —— 用「匹配点之前紧邻 `typeof `」来判断，而 `typeof thing.agent === "object"` 的匹配点落在链的**最后一段** `agent` 上 ⇒ 9 个真 typeof 被误判，报出「9 个键**减多了**」的**假警报**。修法是改用与共享判据**逐字同源**的正则。**这个错误本身即是论据**：它与 §2 要修的是同一个模式（同一判据写两遍、其中一遍偏窄）—— 我修工具时抓到这个模式，转身在探针里又犯一次 ⇒ **判据收一处是每次写判据时的动作，不是一次性清理**。另留一条**反面记录**：探针第一次**红了并且是对的**（拒绝接受无证据的结论）；若当时改的是期望值而不是判据，这条 18 键的下降就会变成一个**没有证据的数字**。
+
+### 4. 红前绿后（实测，非推断）
+
+把 `writer-core.ts`/`writer-materialize.ts` 的 3 处调用点**临时还原**为 `||`、重新 `tsc`、跑 `test/t8-explicit-zero.test.ts` ⇒ `③b` **真红**，报文打印出修前索引里**仍有** `## 任务回溯（Episodes）` 段。恢复后 54/54 全绿。
+
+### 5. 结果（可对账）
+
+| 项 | 修前 | 修后 |
+|---|---|---|
+| `audit-wiring` `b_keys` | 115 | **97**（−18，逐键取证） |
+| `audit-drift` `drift_keys` / `drift_sites` | 11 / 28 | **9 / 23** |
+| `numOr` 覆盖的配置点 | 0 | **6**（`min <= 0`；`min > 0` 的 19 处**未动**） |
+| `episodes.gapMinutes` 默认值落点 | 3 处 | **1 处** |
+| 比较点扫描判据落点 | 2 处 | **1 处** |
+| `npm run verify` | 53/53 | **54/54** |
+
+`wiring.a_total` 仍 **39**（**未变** ⇒ 新 `numOr` 确有接线）。棘轮是**收紧**不是放宽；按本仓纪律**上升**必须点名给理由，本轮只有下降。语料指纹已变（新增/改动 `.ts` 文件所致，V7 规模类判据**不**覆盖内容变化）。
+
+### 6. 未做 / 诚实边界
+
+- **T8 的 A 部分（7 处静默降级）未做** —— 本轮只完成 B 部分；A 部分每条需不同的可见信号形态。
+- **`min > 0` 的 19 处未逐条审语义** —— 本轮只按 `min <= 0` 这个**必要判据**筛，不等于其余都判过正当。
+- **`query/reads.ts:47` 的端到端读路径未加断言** —— 单元层（`deriveEpisodes` 的 `gapMinutes: 0`）有锁，`read_shadow({mode:'episode'})` 在 `episodes.gapMinutes: 0` 下的端到端行为**未验证**。
+- **`stripComments` 仍有两份** —— 有意取舍，本条未动。
+
+**改动文件**：`core/util.ts`（新增 `numOr` 与判据注释）· `core/writer-core.ts` · `core/episode.ts` · `core/writer-materialize.ts` · `query/reads.ts` · `core/forget.ts`（裁定注释）· `tools/comparison-points.lib.ts`（**新**）· `tools/audit-wiring.lib.ts` · `tools/audit-drift.lib.ts` · `tools/fixtures/wiring-fixture.ts` · `tools/audit-wiring.selftest.ts` · `tools/audit-drift.selftest.ts` · `test/t8-explicit-zero.test.ts`（**新**）· `tools/audit-ratchet.baseline.json`（收紧）· `adr/0084`（**新**）· `BACKLOG.md`（T8 进度）· `README.md` · `dist/**`（构建产物）· 证据 `.docs/fix/2026-09-12/t8b-*`。
+
+
 ## [v1.15.63] **元审查：审我自己这 10 轮的产出**（遗漏 / 因果 / 重复 / 干扰 / 缺失环节）—— **无代码变更**
 
 **一句话**：用户要求「审查：找出遗漏、纠正因果、处理重复、解决干扰、填补缺失环节」。这一轮审的**不是代码，

@@ -120,6 +120,34 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
   const optLines = hits.filter((h) => h.detail.includes("x.flag=join")).map((h) => h.line);
   assert.deepEqual(optLines.sort((a, b) => a - b), [o1, o2].sort((a, b) => a - b), "可选链两侧报出的行号应与标记一致");
   console.log(`✔ ⑤b 可选链与点号归一到同一个键（行 ${o1} / ${o2}）—— v1.15.32 修的漏报类有回归锁`);
+
+  // ⑤c `typeof x === "<类型名>"` **不得**被当成「同一条判据被表达两次」（v1.15.64 修的真缺陷）。
+  //     起因：这个**定义上的假阳**此前在**两份实现**里各有一份正则。修掉 `audit-wiring` 那一份后，
+  //     本工具的棘轮**立刻**报 `drift_sites` 28 → 29（键名不变 `v=string`、只多一处 site）——
+  //     同一假阳在第二份实现里继续存在，而本工具**看不见 `tools/` 内部**（`isProductModulePath` 排除它）。
+  //     ⇒ 扫描判据已收进 `tools/comparison-points.lib.ts`，本组锁住「收一处」的结果。
+  {
+    const ty = [
+      { file: "fixtures/a.ts", text: `export const f = (v: unknown) => (typeof v === "object" ? 1 : 0);\n` },
+      { file: "fixtures/b.ts", text: `export const g = (v: unknown) => (typeof v === "object" ? 2 : 0);\n` },
+    ];
+    const tyHits = findPredicateExpressedTwice(ty);
+    assert.equal(tyHits.length, 0,
+      `\`typeof v === "object"\` 不得被报成跨模块判据 —— 左侧是 \`typeof\` 的结果、右侧是**类型名**，` +
+      `两个模块同时写它只是**巧合同名**，不是同一条判据。实际：${JSON.stringify(tyHits.map((h) => h.detail))}`);
+
+    // **反例正控**：同一个字面量 `"object"` 用在**真字段**上必须照旧被报 ——
+    // 证明排除的是 `typeof` 前缀，而不是「值长成类型名」（否则本修复就退化成静默掩盖）。
+    const real = [
+      { file: "fixtures/a.ts", text: `export const f = (r: any) => (r.mode === "object" ? 1 : 0);\n` },
+      { file: "fixtures/b.ts", text: `export const g = (r: any) => (r.mode === "object" ? 2 : 0);\n` },
+    ];
+    const realHits = findPredicateExpressedTwice(real);
+    const realKeys = [...new Set(realHits.map((h) => (h.detail.match(/`([^`]+)`/) || [])[1]))];
+    assert.ok(realKeys.includes("r.mode=object"),
+      `反例正控：真字段 \`r.mode === "object"\` 必须照旧被报；实际 ${JSON.stringify(realKeys)}`);
+    console.log(`✔ ⑤c typeof 比较不报（0 条），真字段上的同一字面量照旧报（${realKeys.join(" · ")}）`);
+  }
 }
 
 // ─────────────────────────────────────────────

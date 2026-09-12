@@ -3,6 +3,7 @@
 //
 // 拆出来的理由：标定测试必须验**同一份逻辑**，否则测试过了产品没改、或反之。
 // 全部纯函数：输入是 `{file, text}[]`，输出是线索数组。不做 IO。
+import { scanComparisons } from "./comparison-points.lib.ts";
 
 /**
  * 去掉注释（**标定测试暴露的必要修正**）。
@@ -148,19 +149,22 @@ export const isCallerCorpusPath = (p) => {
   return !segs.some((s) => EXCLUDE.has(s));
 };
 
-/** 从源码文本抽取「字段 === "值"」比较点。返回 Map<`field=value`, 位置[]> */
+/**
+ * 从源码文本抽取「字段 === "值"」比较点。返回 Map<`field=value`, 位置[]>。
+ *
+ * 扫描判据（含 `typeof` 假阳的排除）**不在这里** —— 它是 `tools/comparison-points.lib.ts`，
+ * 与 `audit-drift` 共用一份（v1.15.64：同一个假阳曾**两份实现各自报出、又各自没修**）。
+ * 本函数只负责 wiring 需要的**归键**：键取左侧**最后一段**标识符（接收者不影响
+ * 「这个字段有没有写入者」这个问题的答案）。
+ */
 export const collectComparisons = (files) => {
-  // 抓 `=== "字面量"`，左侧取最后一个标识符字段名
-  const cmpRe = /\b([\w$]+)\s*===\s*["']([^"']+)["']/g;
   const out = new Map();
   for (const { file, text } of files) {
-    stripComments(text).split("\n").forEach((line, i) => {
-      for (const m of line.matchAll(cmpRe)) {
-        const key = `${m[1]}=${m[2]}`;
-        if (!out.has(key)) out.set(key, []);
-        out.get(key).push(`${file}:${i + 1}`);
-      }
-    });
+    for (const p of scanComparisons(stripComments(text))) {
+      const key = `${p.field}=${p.value}`;
+      if (!out.has(key)) out.set(key, []);
+      out.get(key).push(`${file}:${p.line}`);
+    }
   }
   return out;
 };

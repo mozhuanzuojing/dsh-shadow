@@ -11,6 +11,7 @@
 //
 // 数据流：Events → Trace → Memory Atom → Episode/Decision（派生）→ 可穿透 Recall。
 import { scrubUnsafe } from "../security/scrub.js";
+import { numOr } from "./util.js";
 // ── 解析一条记忆 ──
 const fieldOf = (text, key) => (text.match(new RegExp(`^> ${key}：(.+)$`, "m")) || [])[1]?.trim() || "";
 const stripPrompt = (s) => scrubUnsafe(String(s || "").replace(/〔decision〕|〔reminder〕/g, "").replace(/^「|」$/g, "")).trim();
@@ -177,7 +178,11 @@ const epochMin = (date, hhmmss) => {
     return Number.isNaN(t.getTime()) ? 0 : Math.floor(t.getTime() / 60000);
 };
 export const deriveEpisodes = (parsed, opts = {}) => {
-    const gapMinutes = Math.max(0, Number(opts.gapMinutes) || 60);
+    // T8-B（v1.15.64）：`|| 60` 吞掉显式 `gapMinutes: 0`。0 是**有意义的**值 ——
+    // 判据 `diff <= gapMinutes` 在 0 时要求「同一分钟内」才并入同一段。
+    // 本函数是 `gapMinutes` 默认值的**唯一来源**（`writer-core.ts` 与 `query/reads.ts`
+    // 此前各自又算了一遍 `|| 60` ⇒ 三处口径分叉，现统一：调用方**原样传配置**，默认在这里落）。
+    const gapMinutes = numOr(opts.gapMinutes, 60);
     const sorted = [...parsed].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
     const eps = [];
     let cur = null;

@@ -17,6 +17,10 @@ export const isForgettable = (rel: string, meta: any, cfg: ForgetCfg = {}) => {
   if (m.pinned) return false;
   if (m.status === "archived" || m.status === "superseded") return true;
   const staleDays = Math.max(1, Number(cfg.staleDays) || 14);
+  // `minHits` 的 `|| 1` **判为正当、不随 T8-B 改成 `numOr`**（裁定，v1.15.64）：
+  //   `minHits: 0` 会让判据 `hits < 0` **恒假** ⇒ 等于「按 hits 永不遗忘」，
+  //   而这个语义本仓已由 `enabled: false` 明确承担；再让 0 表达一次就是**同一件事两个开关**
+  //   （判据分叉）。故此处 0 判为**非法输入**，回落 1。理由记在 `adr/0083` T8 条。
   const minHits = Math.max(0, Number(cfg.minHits) || 1);
   const hits = Number(m.hits) || 0;
   return ageDaysOf(rel) >= staleDays && hits < minHits;

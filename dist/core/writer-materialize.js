@@ -7,7 +7,7 @@ import { SHADOW_ROOT } from "./paths.js";
 import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "./abstract.js";
 import { resolveWorkspace } from "./scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
-import { today, compact, slug, topicsInText } from "./util.js";
+import { today, compact, slug, topicsInText, numOr } from "./util.js";
 import { readRel, listMemories, memoryFileName, timeFromName } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
@@ -91,7 +91,7 @@ export function makeMaterialize(core, hooks) {
         const parsed = [...cache.values()].map((r) => r.parsed).filter(Boolean);
         if (!parsed.length)
             return;
-        const gap = Math.max(0, Number(core.compactCfg.gapMinutes) || core.episodeGap);
+        const gap = numOr(core.compactCfg.gapMinutes, core.episodeGap);
         const eps = deriveEpisodes(parsed, { gapMinutes: gap });
         if (eps.length <= 1)
             return; // 只有当前打开的 episode，无已完成收口的
@@ -169,7 +169,9 @@ export function makeMaterialize(core, hooks) {
             }
             sections.push(`- ${date}（${faces.length} 条）${deriveL0(l1)}`);
         }
-        const show = Math.max(0, Number(core.abstractCfg.showInIndex) || 3);
+        // T8-B（v1.15.64）：`types.ts:55` **明写**「默认 3，0 = 不列」，而 `|| 3` 把 0 吞掉 ⇒
+        // 文档承诺的「0 = 不列」在代码里不成立（下面的 `!show` 分支因此永远走不到）。
+        const show = numOr(core.abstractCfg.showInIndex, 3);
         if (!show || !sections.length)
             return "";
         return `\n\n## 目录摘要（L0 · 派生物）\n${sections.slice(0, show).join("\n")}\n`;

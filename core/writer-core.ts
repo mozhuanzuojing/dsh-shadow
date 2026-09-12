@@ -3,6 +3,7 @@
 // 抽成一个可注入的 WriterCore，供 capture（事件→pending）与 materialize（pending→文件+索引+meta+摘要）两 seam 共享。
 // 拆分的动机：materialize（fs 重、领域逻辑最密）此前硬编码在 collector 闭包内、不可单测；换成显式 core 后可独立验证。
 import type { ShadowConfig } from "./types.js";
+import { numOr } from "./util.js";
 
 export interface WriterCore {
   context: any;
@@ -73,8 +74,11 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     retentionCfg: config.retention ?? {},
     episodeCfg,
     writeConsent: config.writeConsent === true,
-    episodeGap: Math.max(0, Number(episodeCfg.gapMinutes) || 60),
-    episodeShow: Math.max(0, Number(episodeCfg.showInIndex) || 8),
+    // T8-B（v1.15.64）：`|| 60` / `|| 8` 会把**显式 0** 与「未传」混为一谈 ⇒ 改用 `numOr`。
+    // `showInIndex: 0` 的含义是「_index.md 不列 Episodes 段」，此前被吞成 8 ⇒
+    // `writer-materialize.ts:212` 的 `episodeShow > 0` 恒真 = **死分支**（那个开关不存在）。
+    episodeGap: numOr(episodeCfg.gapMinutes, 60),
+    episodeShow: numOr(episodeCfg.showInIndex, 8),
     abstractCfg: config.abstracts ?? {},
   };
 }

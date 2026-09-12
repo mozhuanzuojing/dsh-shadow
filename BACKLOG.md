@@ -446,6 +446,25 @@
      `writer-materialize.ts:161` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
      ⇒ 两处 `Math.max(0, …)` 永不生效。**根因**：用 `||` 取默认把「显式 0」与「未传」混为一谈。
   2. **`kg` 被排在「默认」列**却不是 config 键（只是 per-call 参数）⇒ 已在 README 表注⑤标明。
+- **✅ B 部分已完成（v1.15.64 / `adr/0084`）** —— 上面「另两处」+ 读代码时找出的 **4 个同族遗漏**全部修掉：
+
+  | # | 位置 | 承诺 0 有意义的出处 | 原被吞成 |
+  |---|---|---|---|
+  | 1 | `core/writer-materialize.ts` 的 `abstracts.showInIndex` | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 |
+  | 2 | `core/writer-core.ts` 的 `episodes.showInIndex` | 本条立账 | 8 |
+  | 3 | `core/writer-core.ts` 的 `episodes.gapMinutes` | 本条立账 | 60 |
+  | 4 | `core/episode.ts` 的 `deriveEpisodes`（**库层**） | 同 3 | 60 |
+  | 5 | `core/writer-materialize.ts` 的 `compact.gapMinutes` | 同 3 | `episodeGap` |
+  | 6 | **`query/reads.ts`** 的 `episodes.gapMinutes` | 同 3 | 60（**第三处口径分叉**） |
+
+  **新纪律（`adr/0084` §2）**：判据收一处 —— `core/util.ts:numOr(v, dflt, min)`；
+  **错类型（`false` / `""` / 对象）判为「未传」而不是 0**（读成 0 会静默关掉一个功能）；
+  `min > 0` 的调用点**不属本条**（本仓 25 处 `Number(x) || dflt` 里只有 `min <= 0` 的 6 处）；
+  `forget.minHits` 的 `|| 1` **判为正当并保留**（`minHits: 0` = 关掉遗忘，而该语义已由 `enabled: false` 承担）。
+  **副产品**：`typeof x === "<类型名>"` 是**定义上的假阳**，而「什么算一个比较点」此前有**两份实现**
+  ⇒ 收进 `tools/comparison-points.lib.ts`（`b_keys` **115→97**、`drift_keys` **11→9**、`drift_sites` **28→23**；
+  **逐键取证**见 `.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts`，18/18）。
+  **仍待办**：`min > 0` 的 19 处**未逐条审语义**（本轮只按必要判据 `min <= 0` 筛）。
 - **已在本轮修掉的同类（第 3 处）**：`knowledgeEngine.enabled` **生产零读取** ——
   `query/reads.ts:141` 无条件建树、`createKnowledgeEngine` 收 `config` 却从不使用（**已删死形参**）。
   ⇒ 原文档声称的「默认关 / `enabled: true` 启用」是**一处不存在的开关**，已在
@@ -455,6 +474,7 @@
   ⇒ 逐条定形态是**独立工作量**，本轮只做**清点与立账**（D8 的授权范围是「补表 + 记缺陷」）。
 - **完成判据**：7 条各落「补可见信号（给形态 + 测试）」或「判定为正当静默（给 ADR-0049 依据）」；
   两处开关缺陷各修（`||` → `??` 或显式 `undefined` 判定）+ 加锁。
+  **进度：B 部分 ✅ 已闭（v1.15.64）；A 部分 7 条仍待办。**
 
 ### T9. sidecar 的**读路径收益**与**真机规模**均未测（D6 交付后的诚实缺口）
 
@@ -1189,7 +1209,7 @@
 V1–V5  功能有没有            ✅ 已完成
 V6     验证系统会不会假绿      ✅ 已闭环（v1.15.45）
 V7     语料是不是可信         ✅ 已闭环（v1.15.46）
-T8     静默降级可见化          ← 下一步（判据已定，纯实现）
+T8     静默降级可见化          ← **B 部分（2 处开关缺陷）✅ v1.15.64**；A 部分（7 条可见信号）待办
 T15    什么东西是契约          ← 产出 Protected Contract Registry（见 T15）
 D1/D2/D3 + A 段 6 条 ⚠ **不要先拍** —— 它们本质都是「哪些东西算受保护契约」，故排在 T15 之后
 T2(B段) / T9 / T10 / T7

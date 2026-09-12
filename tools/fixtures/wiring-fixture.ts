@@ -44,3 +44,17 @@ export const caller = () => { const c = Called(1); return new Built().v + c; };
 export const NeverCalled = (x: number) => x + 2;          // ★ 无调用点
 export class NeverBuilt { readonly w = 2; }               // ★ 从不实例化
 export const typeOnlyUser = (_a: NeverBuilt | null) => _a; // 仅作出现在**类型位置**，不是调用点
+
+// ── 干扰项 ②：`typeof x === "<类型名>"` **不是**「字段 vs 值」比较（v1.15.64 修的工具缺陷）──
+// 右侧是**类型名**、左侧是 `typeof` 的结果 —— 二者都**不可能**有「生产者」，是**定义上**的假阳。
+// 真语料曾因此报出 4 条假线索：`v=string`（`core/proposal.ts:90`、`core/scope.ts:10`、
+// `core/util.ts:103`）· `v=object`（`core/proposal.ts:89`、`core/util.ts:104`、
+// `tools/retrieval-eval.lib.ts:24`）· `wiring=object`（`tools/cli-wiring.selftest.ts:78`）·
+// `v=number`（T8 的 `numOr` 新建 ⇒ 棘轮如实报「线索变多」，顺藤查出是工具缺陷）。
+export const f = (v: unknown) => (typeof v === "number" ? 1 : typeof v === "object" ? 2 : 0);
+
+// ── **反例正控**：同一个字面量 `"number"` 用在**真字段**上时**必须照旧被收集** ──
+// 证明排除的是 `typeof` 前缀，而**不是**「值长成类型名」——
+// 否则这个修复就退化成「把一类别名一删了事」的静默掩盖（本仓 ADR-0063 同族）。
+// `t` 无写入者 ⇒ 它应当出现在 orphan 清单里。
+export const g = (r: { t?: string }) => (r.t === "number" ? 1 : 0);

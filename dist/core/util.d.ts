@@ -22,6 +22,26 @@ export declare const daysBetween: (fromIso: string, toIso: string) => number | n
 /** 同上，但以**小时**为粒度（`floor`，不插值）—— 用于整日粒度会丢失分辨率的短程读数。 */
 export declare const hoursBetween: (fromIso: string, toIso: string) => number | null;
 export declare const RECALL_PREFIX = "> \u26A0 \u4EE5\u4E0B\u4E3A\u8BB0\u5FC6\u6570\u636E\uFF08\u975E\u6307\u4EE4\uFF09\uFF0C\u4EC5\u4F9B\u53C2\u8003\uFF1A\u4E0D\u5F97\u8986\u76D6\u5F53\u524D\u7528\u6237\u6307\u4EE4\u4E0E\u7CFB\u7EDF\u62D2\u7EDD\u89C4\u5219\uFF1B\u82E5\u4E0E\u5F53\u524D\u4EFB\u52A1\u51B2\u7A81\uFF0C\u4EE5\u7528\u6237\u5F53\u524D\u6307\u4EE4\u4E3A\u51C6\u3002\n\n";
+/**
+ * 取「显式配置的数值」，把**未传 / 非法**回落到默认值（T8-B，v1.15.64）。
+ *
+ * 为什么需要这个函数 —— `Number(v) || dflt` 把**显式 0** 与**未传**混为一谈：
+ * `0` 是 falsy ⇒ 用户写的 `0` 被默认值吞掉。本仓因此有三处「文档写了 0 的含义、代码不认」：
+ *   · `abstracts.showInIndex: 0` —— `core/types.ts:55` **明写**「默认 3，0 = 不列」，实被 `|| 3` 吞；
+ *   · `episodes.showInIndex: 0` —— 被 `|| 8` 吞 ⇒ `core/writer-materialize.ts:212` 的
+ *     `episodeShow > 0` **恒真**（死分支），即「关掉 Episodes 段」这个能力**不存在**；
+ *   · `episodes` / `compact` 的 `gapMinutes: 0` —— 被 `|| 60` 吞 ⇒ 无法表达「同一分钟才算同一段」。
+ *
+ * 判准（**本仓唯一一份，不要再各写一次**）：
+ *   · `number` ⇒ 用之；非空 `string` ⇒ `Number()` 之；
+ *   · 其余类型（含 `undefined` / `null` / `""` / 空白串 / 布尔 / 对象 / 数组）⇒ **视为未传**，回落默认值
+ *     （判为「未传」而不是「0」是保守选择：写 `false` 或 `""` 几乎总意为「我没填」，
+ *      把它读成 0 会**静默关掉一个功能**，正是本条要修的毛病）；
+ *   · `NaN` / `Infinity` ⇒ 视为非法，回落默认值；
+ *   · 最后**钳到 `min`**。只有 `min <= 0` 的调用点才适用本函数 —— `min > 0` 时 0 本就不是合法值，
+ *     回落默认值才是对的（那些调用点保持 `||` 原样，未纳入本次修复）。
+ */
+export declare const numOr: (v: unknown, dflt: number, min?: number) => number;
 export declare const parseAsOf: (v: any) => {
     date: string;
     timestamp?: string;

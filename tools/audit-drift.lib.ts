@@ -13,6 +13,7 @@
 //   ② 输出是**线索不是结论**：命中项一律人工复核。
 //
 // 纯函数：输入 `{file, text}[]`，输出线索数组。不做 IO。
+import { scanComparisons } from "./comparison-points.lib.ts";
 
 /** 去掉注释（尊重字符串），保持行号不漂移。与 `audit-wiring.lib.ts` 同一份实现（此处重复是为免跨工具耦合）。 */
 export const stripComments = (src: string): string => {
@@ -161,20 +162,24 @@ export const findFreshnessAsksProcess = (files: { file: string; text: string }[]
 export const findPredicateExpressedTwice = (files: { file: string; text: string }[]): DriftLead[] => {
   const byKey = new Map<string, { file: string; line: number; snippet: string }[]>();
   for (const { file, text } of files) {
-    stripComments(text).split("\n").forEach((line, i) => {
-      // ⚠ v1.15.32 修一处**漏报**（T5 第 4 次复核时亲手踩到）：
-      //   原正则 `\b([\w$.]+)` 的字符集**不含 `?`**，于是 `c?.status === "supported"`（可选链）
-      //   只能从 `status` 起匹配 ⇒ 键退化成 `status=…`，与不带 `?` 的 `c.status=…` **归不到一起**。
-      //   后果：同一条判据的三处里，用 `?.` 的那一处被算成「另一个键、只出现在一个文件」⇒ **静默漏报**。
-      //   实测案例：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（正是唯一判据源本身）
-      //   就是这样从 B 段消失的 —— 而它恰恰是「两处各自重写、没用它」这条真漂移的关键证据。
-      //   修法：允许 `?.`，并把键里的 `?` **归一掉**（`a?.b` 与 `a.b` 是同一条访问路径，语义等价）。
-      for (const m of line.matchAll(/\b([\w$]+(?:\??\.[\w$]+)*)\s*===\s*["']([^"']+)["']/g)) {
-        const key = `${m[1].replace(/\?/g, "")}=${m[2]}`;
-        if (!byKey.has(key)) byKey.set(key, []);
-        byKey.get(key)!.push({ file, line: i + 1, snippet: line.trim().slice(0, 120) });
-      }
-    });
+    // ⚠ v1.15.32 修一处**漏报**（T5 第 4 次复核时亲手踩到）：
+    //   原实现只认 `\b([\w$.]+)`，字符集**不含 `?`**，于是 `c?.status === "supported"`（可选链）
+    //   只能从 `status` 起匹配 ⇒ 键退化成 `status=…`，与不带 `?` 的 `c.status=…` **归不到一起**。
+    //   后果：同一条判据的三处里，用 `?.` 的那一处被算成「另一个键、只出现在一个文件」⇒ **静默漏报**。
+    //   实测案例：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`（正是唯一判据源本身）
+    //   就是这样从 B 段消失的 —— 而它恰恰是「两处各自重写、没用它」这条真漂移的关键证据。
+    //   修法：允许 `?.`，并把键里的 `?` **归一掉**（`a?.b` 与 `a.b` 是同一条访问路径，语义等价）。
+    //
+    // ⚠ **v1.15.64：扫描判据搬进 `tools/comparison-points.lib.ts`**（与 `audit-wiring` 共用一份）。
+    //   起因：`typeof x === "<类型名>"` 是**定义上的假阳**，但此前**两份实现各写一个正则** ⇒
+    //   修掉 wiring 那一份后，本工具的棘轮**立刻**报 `drift_sites` 28 → 29（键名不变、只多一处 site）
+    //   —— 同一个假阳在第二份实现里继续存在。**「什么算一个比较点」必须只有一个来源**；
+    //   而**键怎么取**两家**刻意不同**（本处取整条接收者链，wiring 只取最后一段），不要统一。
+    for (const p of scanComparisons(stripComments(text))) {
+      const key = `${p.lhs.replace(/\?/g, "")}=${p.value}`;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push({ file, line: p.line, snippet: p.snippet });
+    }
   }
   const leads: DriftLead[] = [];
   for (const [key, hits] of byKey) {

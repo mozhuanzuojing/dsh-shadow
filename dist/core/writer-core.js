@@ -1,3 +1,4 @@
+import { numOr } from "./util.js";
 export function createWriterCore(opts) {
     const { context, config, getAgentById } = opts;
     const episodeCfg = config.episodes ?? {};
@@ -24,8 +25,11 @@ export function createWriterCore(opts) {
         retentionCfg: config.retention ?? {},
         episodeCfg,
         writeConsent: config.writeConsent === true,
-        episodeGap: Math.max(0, Number(episodeCfg.gapMinutes) || 60),
-        episodeShow: Math.max(0, Number(episodeCfg.showInIndex) || 8),
+        // T8-B（v1.15.64）：`|| 60` / `|| 8` 会把**显式 0** 与「未传」混为一谈 ⇒ 改用 `numOr`。
+        // `showInIndex: 0` 的含义是「_index.md 不列 Episodes 段」，此前被吞成 8 ⇒
+        // `writer-materialize.ts:212` 的 `episodeShow > 0` 恒真 = **死分支**（那个开关不存在）。
+        episodeGap: numOr(episodeCfg.gapMinutes, 60),
+        episodeShow: numOr(episodeCfg.showInIndex, 8),
         abstractCfg: config.abstracts ?? {},
     };
 }

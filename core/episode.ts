@@ -12,6 +12,7 @@
 // 数据流：Events → Trace → Memory Atom → Episode/Decision（派生）→ 可穿透 Recall。
 
 import { scrubUnsafe } from "../security/scrub.js";
+import { numOr } from "./util.js";
 import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "./lineage.js";
 
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
@@ -227,7 +228,11 @@ export interface DeriveEpisodesOpts {
 }
 
 export const deriveEpisodes = (parsed: ParsedMemory[], opts: DeriveEpisodesOpts = {}): Episode[] => {
-  const gapMinutes = Math.max(0, Number(opts.gapMinutes) || 60);
+  // T8-B（v1.15.64）：`|| 60` 吞掉显式 `gapMinutes: 0`。0 是**有意义的**值 ——
+  // 判据 `diff <= gapMinutes` 在 0 时要求「同一分钟内」才并入同一段。
+  // 本函数是 `gapMinutes` 默认值的**唯一来源**（`writer-core.ts` 与 `query/reads.ts`
+  // 此前各自又算了一遍 `|| 60` ⇒ 三处口径分叉，现统一：调用方**原样传配置**，默认在这里落）。
+  const gapMinutes = numOr(opts.gapMinutes, 60);
   const sorted = [...parsed].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const eps: (Episode & Meta)[] = [];
   let cur: (Episode & Meta) | null = null;
