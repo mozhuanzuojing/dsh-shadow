@@ -3,6 +3,49 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.53] **对抗性审查 + 全部修复**：原语 4 处真缺陷、M1 读数 3 处缺维度 —— `verify` 51/51，棘轮如实变红并按规程重录
+
+**一句话**：对 `core/proposal.ts` / `core/decision-outcome.ts` 逐行做对抗性审查（判据：**同一份数据会不会给出两个答案**、
+**报了错是否仍然生效**），揪出并修掉 **4 处真缺陷 + 3 处缺维度**，然后用**同一批真实决策**重跑 dry run 作为证据。
+
+### 1. `core/proposal.ts`（ADR-0082 §8）
+
+| # | 缺陷 | 修复 |
+|---|---|---|
+| ① | **重复 id 报了违规却仍然生效**：`proposals.set()` 照旧覆盖 ⇒ 后一条静默顶掉前一条；confirmation 侧连重复检测都没有 | 重复 id ⇒ 违规 + **保留首见**（`continue`，不覆盖）；confirmation 补同样检测。闸 ⑭ |
+| ② | **判据分叉**：`candidateStats` 自写一遍分类，`action!=="confirm"` 即算「已裁决」⇒ **`revoke` 被算成「被拒」**，且被撤销的候选落进 `pendingConfirmation`（同一份记录，事实层说「消失」、统计层说「被拒/没人看」） | 抽出 `collect()` + `effectiveConfirmations()`，**事实层与统计层共用**；四分之一 `confirmed/rejected/revoked/pending`；可机械断言 `candidates = 四者之和`。闸 ⑬ |
+| ③ | `oldestCandidateDays` 统计**全部**候选的最老年龄，与用途（找「没人看的候选」）不符；且 `createdAt` 不可解析时**静默丢弃** | 改名 `oldestPendingDays`（**只统计 pending**）；补 `unmeasuredAges` 计数（缺件不静默） |
+| ④ | **F8**：`acceptanceRate` 把所有 `actor` 混在一个分子分母里 ⇒ **tool 自确认能把接受率刷成满分**（闸是绿的，数字是假的） | 新增 `byActor`（human→tool→ci，只列实际有裁决的）；**总体率只认 `human`，无 human 裁决 ⇒ `null`（不可测不报 0）**。闸 ⑫ |
+
+### 2. `core/decision-outcome.ts`（ADR-0081 §10）
+
+| 发现 | 修复 |
+|---|---|
+| **F6** 刻意不做 ≠ 忘了做 | `DecisionRecord.disposition?: "open" \| "deliberate-deferral"`（缺省 `open` ⇒ 向后兼容）；读数分 `pendingOpen`/`pendingDeferred`，**年龄分布 / 最老 / p90 只统计 `open`** |
+| **F7** 整日粒度丢分辨率 | `Attribution.lagHours`（floor，不插值）；`Confirmation.reason` 写成 `lag=<d>d(<h>h)` |
+| **注释撒谎** | `toPrimitiveRecords` 的 `continue` 处注释写着「故下面单独报」，**代码里没有那个报** ⇒ 新增 `missing: string[]`，观察缺失时报出缺了哪条 |
+| 读数口径分叉隐患 | `outcomeReadout` 改用 `AttributionResult.considered`，不再自己判断「有没有键」⇒ 差额报成 `unconsidered` |
+| 年龄不可测被吞 | `at` 不可解析 ⇒ 报 `unmeasurable`，不再当 0 岁混进分布 |
+
+### 3. 修复后用**同一批真实决策**重跑（证据）
+
+```text
+待结算 5 ·（<7d 2 · 7–30d 0 · 30–90d 1 · ≥90d 0）· p90 42d · 刻意推迟 2（不计入积压）
+在等(open) 3 · 刻意推迟 2 · 未参与归属 0 · 年龄不可测 0 · missing 0 ✅
+候选 7 · 口径自查 7 = 7+0+0+0 ✅ · [tool] 接受率 1 · **总体接受率 不可测（null）** ← F8 修复后的正确行为
+lag 粒度：lagDays=0 / 0h,1h,0h,0h,0h,0h,5h   ← F7 修复后能看到小时级差别
+```
+
+### 4. 边界（诚实标注）
+
+**F1/F2/F3**（行号谁填 / key 建议 / 确认时如何看证据）**只在载体里才有答案** ⇒ **不修**（载体仍刻意未定）；
+`inputRefs` 每项**未**做多余字段拒收；`factualOnly` 仍是**约定**入口、无机械强制；**未落盘、未接读路径 ⇒ 仍无生产消费者**。
+
+**验证**：`npm run verify` = **51/51**（检查数是「每文件一项」，故仍 51；**闸组数增加**：`proposal-firewall` 11 → **14**、
+`decision-outcome` 11 → **15**）。棘轮**如实变红**（`b_keys 104 → 105`，新键 `action=reject`
+**正是本版引入的 `revoke ≠ reject` 分类**），按 V6/V7 规程**记录理由后重录**。
+
+
 ## [v1.15.52] **M1-A′：拿本会话真实决策做端到端 dry run** —— 机制被真跑验证，载体只拿到「要求清单」；**发现两个契约缺维度**
 
 **一句话**：**无仓库代码变更**（探针在仓外：`.docs/fix/2026-09-12/m1-dry-run.ts`，TS/`node` 直跑/只读/不落盘）。

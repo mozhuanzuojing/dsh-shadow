@@ -130,11 +130,14 @@ const O = (over: Partial<OutcomeObservation> = {}): OutcomeObservation => ({
     D({ id: "d3", at: "2026-08-01T00:00:00Z" }), // 42d
     D({ id: "d4", at: "2026-01-01T00:00:00Z" }), // 254d
   ];
-  const settled = attributeOutcomes({ decisions: [decisions[3]], observations: [O({ key: "api-sync", at: "2026-01-05T00:00:00Z" })], windowDays: 30 });
+  const settled = attributeOutcomes({ decisions, observations: [O({ key: "api-sync", at: "2026-01-05T00:00:00Z" })], windowDays: 30 });
   const r = outcomeReadout({ decisions, result: settled }, "2026-09-12T00:00:00Z");
   assert.equal(r.decisions, 4);
   assert.equal(r.settled, 1, "d4 有结果 ⇒ 已结算（**年龄不改变状态**）");
   assert.equal(r.pending, 3);
+  assert.equal(r.pendingOpen, 3, "缺省 disposition = open ⇒ 全部是「在等」");
+  assert.equal(r.pendingDeferred, 0);
+  assert.equal(r.unconsidered, 0, "本次 result 覆盖全部决策 ⇒ 无「未参与归属」");
   assert.deepEqual(r.buckets, { lt7: 1, d7to30: 1, d30to90: 1, ge90: 0 });
   assert.equal(r.oldest?.id, "d3");
   assert.equal(r.oldest?.ageDays, 42);
@@ -147,6 +150,77 @@ const O = (over: Partial<OutcomeObservation> = {}): OutcomeObservation => ({
   assert.equal(none.pending, 0);
   assert.equal(none.pendingAgeP90, null, "无 pending ⇒ p90 报 null（**不可测，不报 0**）");
   console.log("✔ ⑨b 无 pending ⇒ p90 = null（不可测不报 0）");
+}
+
+// ⑫ F6（M1-A′ dry run 发现）：**「刻意不做」与「忘了做」必须可分** —— 否则年龄读数把两者一起报成积压
+{
+  const decisions = [
+    D({ id: "open-1", at: "2026-06-01T00:00:00Z" }), // 在等，103d
+    D({ id: "open-2", at: "2026-09-10T00:00:00Z" }), // 在等，2d
+    D({ id: "defer-1", at: "2026-01-01T00:00:00Z", disposition: "deliberate-deferral" }), // 刻意推迟，254d
+  ];
+  const r = outcomeReadout({ decisions, result: attributeOutcomes({ decisions, observations: [], windowDays: 30 }) }, "2026-09-12T00:00:00Z");
+  assert.equal(r.pending, 3, "pending 仍是三段之和");
+  assert.equal(r.pendingOpen, 2);
+  assert.equal(r.pendingDeferred, 1);
+  assert.equal(r.pending, r.pendingOpen + r.pendingDeferred, "pending = open + deferred（可机械断言）");
+  assert.equal(r.oldest?.id, "open-1", "最老**只看 open**：刻意推迟的 254d 不算积压");
+  assert.equal(r.buckets.ge90, 1, "★ 只有 open-1（103d）进 ≥90d —— 刻意推迟的 254d **不进任何桶**");
+  assert.equal(r.buckets.d30to90, 0);
+  assert.equal(r.buckets.lt7, 1, "open-2（2d）");
+  assert.equal(r.buckets.lt7 + r.buckets.d7to30 + r.buckets.d30to90 + r.buckets.ge90, r.pendingOpen,
+    "四个桶之和必须等于 pendingOpen（刻意推迟不进桶，但它在 pending 里）");
+  assert.equal(r.pendingAgeP90, 103, "p90 只吃 open 的年龄 [103, 2] ⇒ 取较大者");
+  const line = renderOutcomeReadout(r);
+  assert.ok(line.includes("刻意推迟 1（不计入积压）"), "渲染必须显式说明「不计入积压」");
+  console.log("✔ ⑫ F6：刻意推迟单独计数，年龄/最老/p90 **只统计 open**");
+}
+
+// ⑬ 无键 / 未参与归属的决策**不是「在等」**，且差额必须叫响（缺件不静默）
+{
+  const decisions = [D({ id: "no-key", key: "" }), D({ id: "keyed" })];
+  const result = attributeOutcomes({ decisions, observations: [], windowDays: 30 });
+  assert.deepEqual(result.considered, ["keyed"], "无键决策不参与归属");
+  const r = outcomeReadout({ decisions, result }, "2026-09-12T00:00:00Z");
+  assert.equal(r.pending, 1, "只有 keyed 在等");
+  assert.equal(r.unconsidered, 1, "无键的必须单独报，不得混进 pending");
+  assert.ok(renderOutcomeReadout(r).includes("未参与归属 1"));
+
+  // 调用方拿**子集**算的 result 配**全集** decisions ⇒ 差额同样叫响（不猜、不静默）
+  const subset = attributeOutcomes({ decisions: [decisions[1]], observations: [], windowDays: 30 });
+  assert.equal(outcomeReadout({ decisions, result: subset }, "2026-09-12T00:00:00Z").unconsidered, 1);
+  console.log("✔ ⑬ 无键/未参与 ⇒ 不计入 pending，且差额叫响");
+}
+
+// ⑭ F7：`lagDays` 是整日粒度**会丢分辨率** ⇒ 同时给 `lagHours`（同日晚 5 小时 vs 5 分钟都能区分）
+{
+  const r = attributeOutcomes({
+    decisions: [D({ id: "d1", at: "2026-09-01T08:00:00Z" })],
+    observations: [
+      O({ id: "o-5min", at: "2026-09-01T08:05:00Z" }),
+      O({ id: "o-5h", at: "2026-09-01T13:00:00Z" }),
+    ],
+    windowDays: 30,
+  });
+  assert.equal(r.attributions.length, 2);
+  assert.deepEqual(r.attributions.map((a) => a.lagDays), [0, 0], "整日粒度下两者都是 0d（**这就是分辨率丢失**）");
+  assert.deepEqual(r.attributions.map((a) => a.lagHours), [5, 0], "输出按观察 id 排序（`o-5h` 在前）：5 小时=5h、5 分钟=0h（floor，不插值）");
+  console.log("✔ ⑭ F7：lagHours 补上整日粒度丢失的分辨率（floor，不插值）");
+}
+
+// ⑮ `missing`：归属引用了、调用方没传的观察 ⇒ **报出来**，不静默少一条事实
+{
+  const decisions = [D({ id: "d1" })];
+  const obs = [O({ id: "o1" })];
+  const result = attributeOutcomes({ decisions, observations: obs, windowDays: 30 });
+  const ok = toPrimitiveRecords(result, obs);
+  assert.equal(ok.missing.length, 0);
+  assert.equal(ok.proposals.length, 1);
+  const lost = toPrimitiveRecords(result, []);
+  assert.equal(lost.proposals.length, 0, "观察没传 ⇒ 造不出事实（**不猜、不编**）");
+  assert.deepEqual(lost.missing, ["o1"], "但必须**报出缺了哪条**（ADR-0049：缺件不静默）");
+  assert.ok(lost.missing.length > 0, "曾经这里是 `continue` 静默跳过 —— 注释写了要报，代码没报");
+  console.log("✔ ⑮ toPrimitiveRecords 报 `missing`：观察缺失时不少一条事实还不出声");
 }
 
 // ⑩ **年龄不改变状态**：换 `now` 不改变归属，只改变读数

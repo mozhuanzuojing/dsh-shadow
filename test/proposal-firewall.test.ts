@@ -134,10 +134,12 @@ const C = (over: Partial<Confirmation> = {}): Confirmation => ({
   assert.equal(s.confirmed, 1);
   assert.equal(s.rejected, 1);
   assert.equal(s.pendingConfirmation, 1, "p3 无人看 ⇒ 待确认（**不计入分母**）");
-  assert.equal(s.oldestCandidateDays, 42, "最老候选年龄（2026-08-01 → 09-12）");
-  assert.equal(s.acceptanceRate, 0.5, "acceptance = 1/(1+1)");
+  assert.equal(s.oldestPendingDays, 2, "★ 最老**待确认**是 p3（09-10 → 09-12 = 2d）—— 已裁决的 p2 再老（42d）也不算「没人看」");
+  assert.equal(s.acceptanceRate, 0.5, "acceptance = 1/(1+1)（human 裁决）");
   assert.equal(s.rejectionRate, 0.5);
-  console.log("✔ ⑨ 候选可见性：条数/最老年龄/待确认/接受率（待确认不入分母）");
+  assert.equal(s.candidates, s.confirmed + s.rejected + s.revoked + s.pendingConfirmation,
+    "★ 口径可机械断言：candidates = confirmed + rejected + revoked + pending");
+  console.log("✔ ⑨ 候选可见性：条数/最老**待确认**/待确认/接受率（待确认不入分母）");
 }
 
 // ⑩ 分母为 0 ⇒ **报「不可测」（null），不报 0**（本仓既有纪律）
@@ -145,7 +147,7 @@ const C = (over: Partial<Confirmation> = {}): Confirmation => ({
   const s = candidateStats([P({ id: "p1" })], "2026-09-12T00:00:00Z");
   assert.equal(s.acceptanceRate, null, "无人裁决时 acceptanceRate 必须为 null（不可测），不得是 0");
   assert.equal(s.rejectionRate, null);
-  assert.equal(s.oldestCandidateDays, 11);
+  assert.equal(s.oldestPendingDays, 11);
   console.log("✔ ⑩ 分母为 0 ⇒ 报不可测（null），不报 0");
 }
 
@@ -155,6 +157,68 @@ const C = (over: Partial<Confirmation> = {}): Confirmation => ({
   assert.equal(v.length, 1);
   assert.ok(v[0].includes("未白名单字段"));
   console.log("✔ ⑪ 严格白名单：未列出字段拒收");
+}
+
+// ⑫ F8（M1-A′ dry run 发现）：**工具自确认不得刷高「接受率」** —— 总体率只认 human，且必须按 actor 分层
+{
+  // 场景就是 dry run 里的真实形状：确定性规则用 actor:"tool" 自动确认了一批候选，**没有一个人类裁决**。
+  const records = [
+    P({ id: "p1" }), P({ id: "p2" }), P({ id: "p3" }),
+    C({ id: "c1", proposal: "p1", actor: "tool", reason: "rule:same-key-window/v1" }),
+    C({ id: "c2", proposal: "p2", actor: "tool", reason: "rule:same-key-window/v1" }),
+    C({ id: "c3", proposal: "p3", actor: "tool", action: "reject", timestamp: "2026-09-03T00:00:00Z" }),
+  ];
+  const s = candidateStats(records, "2026-09-12T00:00:00Z");
+  assert.equal(s.acceptanceRate, null, "★ 无任何 human 裁决 ⇒ 总体接受率必须报**不可测**（否则 2/3 的假象会被当成质量指标）");
+  assert.equal(s.rejectionRate, null);
+  assert.equal(s.byActor.length, 1, "只列出实际有裁决的 actor");
+  assert.equal(s.byActor[0].actor, "tool");
+  assert.equal(s.byActor[0].acceptanceRate, 2 / 3, "工具自己的比率照实给（**分层可见，但不冒充总体**）");
+  assert.equal(s.byActor[0].rejectionRate, 1 / 3);
+  console.log("✔ ⑫ F8：总体率只认 human；tool 的比率**分层可见**但不冒充总体");
+}
+
+// ⑬ `revoke` **不是** `reject`（判据收一处：事实层与统计层必须给同一个答案）
+{
+  const records = [
+    P({ id: "p1" }),
+    C({ id: "c1", action: "confirm" }),
+    C({ id: "c2", action: "revoke", timestamp: "2026-09-03T00:00:00Z" }),
+  ];
+  assert.equal(projectFacts(records).facts.length, 0, "事实层：撤销 ⇒ 事实消失");
+  const s = candidateStats(records, "2026-09-12T00:00:00Z");
+  assert.equal(s.confirmed, 0);
+  assert.equal(s.rejected, 0, "★ 撤销**不是**被拒（此前统计层把任何非 confirm 都算成被拒 ⇒ 拒绝率虚增）");
+  assert.equal(s.revoked, 1);
+  assert.equal(s.pendingConfirmation, 0, "★ 撤销过的候选**不是**「还没人看」");
+  assert.equal(s.oldestPendingDays, null);
+  // 同一份数据、两个层，必须一致：事实为 0 ⇔ 统计里没有 confirmed
+  assert.equal(projectFacts(records).facts.length === 0, s.confirmed === 0, "两层判据一致");
+  console.log("✔ ⑬ revoke ≠ reject：三层（事实/统计/pending）口径一致");
+}
+
+// ⑭ 重复 id **不得静默覆盖**（此前：报了违规，却仍让后一条生效 ⇒ 「报错但仍生效」）
+{
+  const dupProposal = [
+    P({ id: "p1", proposedRelation: "第一条" }),
+    P({ id: "p1", proposedRelation: "第二条（重复 id）" }),
+    C({ id: "c1", proposal: "p1" }),
+  ];
+  const r = projectFacts(dupProposal);
+  assert.equal(r.violations.length, 1, "重复 id 必须报违规");
+  assert.ok(r.violations[0].includes("不覆盖"));
+  assert.equal(r.facts.length, 1);
+  assert.equal(r.facts[0].statement, "第一条", "★ 保留**首见**（此前后一条会静默顶掉前一条的语义）");
+
+  const dupConfirm = [
+    P({ id: "p1" }),
+    C({ id: "c1", action: "confirm", timestamp: "2026-09-02T00:00:00Z" }),
+    C({ id: "c1", action: "reject", timestamp: "2026-09-04T00:00:00Z" }),
+  ];
+  const r2 = projectFacts(dupConfirm);
+  assert.equal(r2.violations.length, 1, "重复 confirmation id 同样必须报");
+  assert.equal(r2.facts.length, 1, "★ 首见是 confirm ⇒ 事实仍在（并列裁决会让事实不可复现，故拒绝覆盖）");
+  console.log("✔ ⑭ 重复 id：报违规 + **保留首见**（不覆盖）");
 }
 
 console.log("");

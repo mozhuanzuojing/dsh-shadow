@@ -28,6 +28,14 @@ export interface DecisionRecord {
   readonly at: string;
   readonly action: string;
   readonly rationale?: string;
+  /**
+   * 决策的**处置状态**（M1-A′ dry run 的 F6）。
+   *
+   * `"open"`（默认，缺省即此）= 在等结果；`"deliberate-deferral"` = **刻意不做 / 刻意推迟**。
+   * **为什么必须有这个维度**：没有它，「刻意不做」与「忘了做」在数据上**完全同形**，
+   * 年龄读数会把两者一起报成「积压」—— 那不是算错，是**缺维度**。缺省为 `open` ⇒ 向后兼容。
+   */
+  readonly disposition?: "open" | "deliberate-deferral";
 }
 
 /** 观察侧：一条「实际发生了什么」的外部观察（来源必须是 user/tool/ci，**不得是模型**）。 */
@@ -48,7 +56,10 @@ export interface Attribution {
   readonly key: string;
   readonly rule: string;
   readonly windowDays: number;
+  /** 整日粒度（**会丢分辨率**：同日晚 5 小时与晚 5 分钟都算 0d）—— 与 `lagHours` 并用。 */
   readonly lagDays: number;
+  /** 小时粒度（F7）：支撑「结算得多快」这类读数；`floor` 取整，不插值。 */
+  readonly lagHours: number;
 }
 
 export interface AttributionResult {
@@ -57,6 +68,11 @@ export interface AttributionResult {
   readonly ambiguous: readonly { observation: string; key: string; candidates: readonly string[] }[];
   /** 没有任何在窗内决策的观察（同样**可见**，不是静默丢弃）。 */
   readonly unattributed: readonly { observation: string; key: string }[];
+  /**
+   * **实际参与归属的决策 id**（有键的那些）。读数层必须用这个集合，
+   * **不得自己再判断一次「有没有键」** —— 否则 `unkeyed:"include-as-unkeyed"` 模式下两处口径分叉。
+   */
+  readonly considered: readonly string[];
 }
 
 const ms = (iso: string): number => {
@@ -68,6 +84,12 @@ const days = (a: string, b: string): number | null => {
   const y = ms(b);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return Math.floor((y - x) / 86_400_000);
+};
+const hours = (a: string, b: string): number | null => {
+  const x = ms(a);
+  const y = ms(b);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return Math.floor((y - x) / 3_600_000);
 };
 
 /**
@@ -117,7 +139,8 @@ export const attributeOutcomes = (input: {
       continue;
     }
     const lag = days(latest.at, o.at);
-    if (lag === null) {
+    const lagHours = hours(latest.at, o.at);
+    if (lag === null || lagHours === null) {
       unattributed.push({ observation: o.id, key: o.key });
       continue;
     }
@@ -128,13 +151,19 @@ export const attributeOutcomes = (input: {
       rule: ATTRIBUTION_RULE,
       windowDays: input.windowDays,
       lagDays: lag,
+      lagHours,
     });
   }
 
   attributions.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
-  ambiguous.sort((a, b) => (a.observation < b.observation ? -1 : 1));
-  unattributed.sort((a, b) => (a.observation < b.observation ? -1 : 1));
-  return { attributions, ambiguous, unattributed };
+  ambiguous.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
+  unattributed.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
+  return {
+    attributions,
+    ambiguous,
+    unattributed,
+    considered: decisions.map((d) => d.id).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+  };
 };
 
 /**
@@ -143,14 +172,21 @@ export const attributeOutcomes = (input: {
  *
  * - `Proposal.source` = **观察的来源**（user/tool/ci；内容是他们给的）；
  * - `Confirmation.actor` = `"tool"`（**确定性规则**这条写入路径），`reason` 写明规则与数字 ⇒ **可审计**。
+ *
+ * `missing`：归属里引用了、但调用方**没传**对应观察的 id（调用方传错参数时**不猜**：
+ * 跳过会让事实凭空少一条，所以必须**报出来**，由调用方决定怎么处理）。
  */
 export const toPrimitiveRecords = (result: AttributionResult, observations: readonly OutcomeObservation[]) => {
   const byId = new Map(observations.map((o) => [o.id, o]));
   const proposals: Proposal[] = [];
   const confirmations: Confirmation[] = [];
+  const missing: string[] = [];
   for (const a of result.attributions) {
     const o = byId.get(a.observation);
-    if (o === undefined) continue; // 调用方传错 observations 时**不猜**：静默跳过会让事实凭空少一条，故下面单独报
+    if (o === undefined) {
+      missing.push(a.observation);
+      continue;
+    }
     const pid = `outcome-${a.decision}-${a.observation}`;
     proposals.push({
       type: "proposal",
@@ -169,10 +205,10 @@ export const toPrimitiveRecords = (result: AttributionResult, observations: read
       actor: "tool",
       action: "confirm",
       timestamp: o.at,
-      reason: `rule:${a.rule} key=${a.key} lag=${a.lagDays}d window=${a.windowDays}d`,
+      reason: `rule:${a.rule} key=${a.key} lag=${a.lagDays}d(${a.lagHours}h) window=${a.windowDays}d`,
     });
   }
-  return { proposals, confirmations };
+  return { proposals, confirmations, missing: missing.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)) };
 };
 
 /** 结果结算读数（**`pending` 不设窗口**；年龄只暴露风险，**不写回状态**）。 */
@@ -180,11 +216,19 @@ export interface OutcomeReadout {
   readonly decisions: number;
   readonly settled: number;
   readonly pending: number;
+  /** 在等结果的决策（`disposition:"open"`，缺省即此）。 */
+  readonly pendingOpen: number;
+  /** **刻意不做/刻意推迟**的决策（F6）—— 它们的年龄**不算积压风险**，故与 `open` 分开报。 */
+  readonly pendingDeferred: number;
+  /** 未参与本次归属的决策（没有归属键，或**不在本次 `result` 的决策集内**）⇒ 不判断，也不计入 pending。 */
+  readonly unconsidered: number;
+  /** `at` 无法解析 ⇒ 年龄**不可测**的条数（**缺件不静默**，ADR-0049）。 */
+  readonly unmeasurable: number;
   readonly ambiguous: number;
   readonly unattributed: number;
   readonly buckets: { readonly lt7: number; readonly d7to30: number; readonly d30to90: number; readonly ge90: number };
   readonly oldest: { readonly id: string; readonly at: string; readonly ageDays: number } | null;
-  /** 派生指标：待结算年龄的 p90（nearest-rank）。无 pending ⇒ `null`（**不可测，不报 0**）。 */
+  /** 派生指标：待结算（**仅 `open`**）年龄的 p90（nearest-rank）。无 ⇒ `null`（**不可测，不报 0**）。 */
   readonly pendingAgeP90: number | null;
 };
 
@@ -198,7 +242,10 @@ export const p90 = (values: readonly number[]): number | null => {
 
 /**
  * 结算读数。`now` **由调用方传入**（不读时钟 ⇒ 可复现）。
- * **注意**：本函数**不修改任何状态** —— 年龄只用于暴露「正常等待 / 长期积压 / 疑似永不结算」。
+ * **注意**：本函数**不修改任何状态** —— 年龄只用于暴露「正常等待 / 长期积压 / 刻意推迟」。
+ *
+ * 口径（F6）：年龄分布、最老、p90 **只统计 `disposition:"open"`**；
+ * `deliberate-deferral` 单独计数 —— 「刻意不做」不是积压，混在一起报就是**误导**。
  */
 export const outcomeReadout = (
   input: {
@@ -208,19 +255,36 @@ export const outcomeReadout = (
   now: string,
 ): OutcomeReadout => {
   const settledIds = new Set(input.result.attributions.map((a) => a.decision));
-  const pendingRecords = input.decisions.filter((d) => !settledIds.has(d.id));
-  const ages = pendingRecords
-    .map((d) => days(d.at, now))
-    .filter((d): d is number => d !== null)
-    .map((d) => Math.max(0, d));
-  const oldest = pendingRecords
-    .map((d) => ({ id: d.id, at: d.at, ageDays: Math.max(0, days(d.at, now) ?? 0) }))
-    .sort((a, b) => b.ageDays - a.ageDays || (a.id < b.id ? -1 : 1))[0] ?? null;
+  // 「有没有键」的判定**只用 attribution 给出的 `considered`**，本层不重判（避免口径分叉）。
+  // 注：若调用方拿**子集**算的 result 配**全集** decisions，这里会把差额算成 `unconsidered` —— 那是**故意叫响的**
+  // （不猜、不静默），正常调用下 `unconsidered` 只等于「无键」的条数。
+  const considered = new Set(input.result.considered);
+  const unconsidered = input.decisions.filter((d) => !considered.has(d.id)).length;
+  const pendingRecords = input.decisions.filter((d) => considered.has(d.id) && !settledIds.has(d.id));
+
+  const open = pendingRecords.filter((d) => d.disposition !== "deliberate-deferral");
+  let unmeasurable = 0;
+  const ages: number[] = [];
+  for (const d of open) {
+    const age = days(d.at, now);
+    if (age === null) unmeasurable += 1;
+    else ages.push(Math.max(0, age));
+  }
+  const oldest =
+    open
+      .map((d) => ({ id: d.id, at: d.at, ageDays: days(d.at, now) }))
+      .filter((x): x is { id: string; at: string; ageDays: number } => x.ageDays !== null)
+      .map((x) => ({ id: x.id, at: x.at, ageDays: Math.max(0, x.ageDays) }))
+      .sort((a, b) => b.ageDays - a.ageDays || (a.id < b.id ? -1 : 1))[0] ?? null;
 
   return {
     decisions: input.decisions.length,
     settled: settledIds.size,
     pending: pendingRecords.length,
+    pendingOpen: open.length,
+    pendingDeferred: pendingRecords.length - open.length,
+    unconsidered,
+    unmeasurable,
     ambiguous: input.result.ambiguous.length,
     unattributed: input.result.unattributed.length,
     buckets: {
@@ -244,6 +308,9 @@ export const renderOutcomeReadout = (r: OutcomeReadout): string => {
     `p90 ${r.pendingAgeP90 === null ? "不可测" : `${r.pendingAgeP90}d`}`,
   ];
   if (r.oldest !== null) parts.push(`最老 ${r.oldest.at}（${r.oldest.ageDays}d）`);
+  if (r.pendingDeferred > 0) parts.push(`刻意推迟 ${r.pendingDeferred}（不计入积压）`);
+  if (r.unconsidered > 0) parts.push(`未参与归属 ${r.unconsidered}（无键或不在本次 result 内）`);
+  if (r.unmeasurable > 0) parts.push(`年龄不可测 ${r.unmeasurable}`);
   if (r.ambiguous > 0) parts.push(`歧义 ${r.ambiguous}`);
   if (r.unattributed > 0) parts.push(`未归属 ${r.unattributed}`);
   return parts.join(" · ");

@@ -11,6 +11,13 @@ const days = (a, b) => {
         return null;
     return Math.floor((y - x) / 86_400_000);
 };
+const hours = (a, b) => {
+    const x = ms(a);
+    const y = ms(b);
+    if (!Number.isFinite(x) || !Number.isFinite(y))
+        return null;
+    return Math.floor((y - x) / 3_600_000);
+};
 /**
  * 按 `same-key-window/v1` 归属。**纯函数、不看时钟、不读文件**。
  * @param windowDays - 时间窗（天）。由调用方给出（走 config，**不是这里的硬编码魔数**）。
@@ -48,7 +55,8 @@ export const attributeOutcomes = (input) => {
             continue;
         }
         const lag = days(latest.at, o.at);
-        if (lag === null) {
+        const lagHours = hours(latest.at, o.at);
+        if (lag === null || lagHours === null) {
             unattributed.push({ observation: o.id, key: o.key });
             continue;
         }
@@ -59,12 +67,18 @@ export const attributeOutcomes = (input) => {
             rule: ATTRIBUTION_RULE,
             windowDays: input.windowDays,
             lagDays: lag,
+            lagHours,
         });
     }
     attributions.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
-    ambiguous.sort((a, b) => (a.observation < b.observation ? -1 : 1));
-    unattributed.sort((a, b) => (a.observation < b.observation ? -1 : 1));
-    return { attributions, ambiguous, unattributed };
+    ambiguous.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
+    unattributed.sort((a, b) => (a.observation < b.observation ? -1 : a.observation > b.observation ? 1 : 0));
+    return {
+        attributions,
+        ambiguous,
+        unattributed,
+        considered: decisions.map((d) => d.id).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+    };
 };
 /**
  * 把归属结果变成**原语记录**（Proposal + Confirmation）—— 这是「接线」的关键：
@@ -72,15 +86,21 @@ export const attributeOutcomes = (input) => {
  *
  * - `Proposal.source` = **观察的来源**（user/tool/ci；内容是他们给的）；
  * - `Confirmation.actor` = `"tool"`（**确定性规则**这条写入路径），`reason` 写明规则与数字 ⇒ **可审计**。
+ *
+ * `missing`：归属里引用了、但调用方**没传**对应观察的 id（调用方传错参数时**不猜**：
+ * 跳过会让事实凭空少一条，所以必须**报出来**，由调用方决定怎么处理）。
  */
 export const toPrimitiveRecords = (result, observations) => {
     const byId = new Map(observations.map((o) => [o.id, o]));
     const proposals = [];
     const confirmations = [];
+    const missing = [];
     for (const a of result.attributions) {
         const o = byId.get(a.observation);
-        if (o === undefined)
-            continue; // 调用方传错 observations 时**不猜**：静默跳过会让事实凭空少一条，故下面单独报
+        if (o === undefined) {
+            missing.push(a.observation);
+            continue;
+        }
         const pid = `outcome-${a.decision}-${a.observation}`;
         proposals.push({
             type: "proposal",
@@ -99,10 +119,10 @@ export const toPrimitiveRecords = (result, observations) => {
             actor: "tool",
             action: "confirm",
             timestamp: o.at,
-            reason: `rule:${a.rule} key=${a.key} lag=${a.lagDays}d window=${a.windowDays}d`,
+            reason: `rule:${a.rule} key=${a.key} lag=${a.lagDays}d(${a.lagHours}h) window=${a.windowDays}d`,
         });
     }
-    return { proposals, confirmations };
+    return { proposals, confirmations, missing: missing.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)) };
 };
 ;
 /** nearest-rank p90（确定性；不插值 —— 插值会造出不存在的年龄）。 */
@@ -115,22 +135,42 @@ export const p90 = (values) => {
 };
 /**
  * 结算读数。`now` **由调用方传入**（不读时钟 ⇒ 可复现）。
- * **注意**：本函数**不修改任何状态** —— 年龄只用于暴露「正常等待 / 长期积压 / 疑似永不结算」。
+ * **注意**：本函数**不修改任何状态** —— 年龄只用于暴露「正常等待 / 长期积压 / 刻意推迟」。
+ *
+ * 口径（F6）：年龄分布、最老、p90 **只统计 `disposition:"open"`**；
+ * `deliberate-deferral` 单独计数 —— 「刻意不做」不是积压，混在一起报就是**误导**。
  */
 export const outcomeReadout = (input, now) => {
     const settledIds = new Set(input.result.attributions.map((a) => a.decision));
-    const pendingRecords = input.decisions.filter((d) => !settledIds.has(d.id));
-    const ages = pendingRecords
-        .map((d) => days(d.at, now))
-        .filter((d) => d !== null)
-        .map((d) => Math.max(0, d));
-    const oldest = pendingRecords
-        .map((d) => ({ id: d.id, at: d.at, ageDays: Math.max(0, days(d.at, now) ?? 0) }))
+    // 「有没有键」的判定**只用 attribution 给出的 `considered`**，本层不重判（避免口径分叉）。
+    // 注：若调用方拿**子集**算的 result 配**全集** decisions，这里会把差额算成 `unconsidered` —— 那是**故意叫响的**
+    // （不猜、不静默），正常调用下 `unconsidered` 只等于「无键」的条数。
+    const considered = new Set(input.result.considered);
+    const unconsidered = input.decisions.filter((d) => !considered.has(d.id)).length;
+    const pendingRecords = input.decisions.filter((d) => considered.has(d.id) && !settledIds.has(d.id));
+    const open = pendingRecords.filter((d) => d.disposition !== "deliberate-deferral");
+    let unmeasurable = 0;
+    const ages = [];
+    for (const d of open) {
+        const age = days(d.at, now);
+        if (age === null)
+            unmeasurable += 1;
+        else
+            ages.push(Math.max(0, age));
+    }
+    const oldest = open
+        .map((d) => ({ id: d.id, at: d.at, ageDays: days(d.at, now) }))
+        .filter((x) => x.ageDays !== null)
+        .map((x) => ({ id: x.id, at: x.at, ageDays: Math.max(0, x.ageDays) }))
         .sort((a, b) => b.ageDays - a.ageDays || (a.id < b.id ? -1 : 1))[0] ?? null;
     return {
         decisions: input.decisions.length,
         settled: settledIds.size,
         pending: pendingRecords.length,
+        pendingOpen: open.length,
+        pendingDeferred: pendingRecords.length - open.length,
+        unconsidered,
+        unmeasurable,
         ambiguous: input.result.ambiguous.length,
         unattributed: input.result.unattributed.length,
         buckets: {
@@ -154,6 +194,12 @@ export const renderOutcomeReadout = (r) => {
     ];
     if (r.oldest !== null)
         parts.push(`最老 ${r.oldest.at}（${r.oldest.ageDays}d）`);
+    if (r.pendingDeferred > 0)
+        parts.push(`刻意推迟 ${r.pendingDeferred}（不计入积压）`);
+    if (r.unconsidered > 0)
+        parts.push(`未参与归属 ${r.unconsidered}（无键或不在本次 result 内）`);
+    if (r.unmeasurable > 0)
+        parts.push(`年龄不可测 ${r.unmeasurable}`);
     if (r.ambiguous > 0)
         parts.push(`歧义 ${r.ambiguous}`);
     if (r.unattributed > 0)

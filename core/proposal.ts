@@ -142,19 +142,12 @@ export const validateRecord = (record: unknown): string[] => {
   return out;
 };
 
-/**
- * 投影：由 `(proposals, confirmations)` 派生出**事实**。
- *
- * 判定（逐字对应 ADR-0082 的不变量）：
- *   ① 该 proposal 必须**通过校验**且 `inputRefs` 非空（「基于什么提议」在场）；
- *   ② 必须存在指向它的 confirmation；
- *   ③ 该 confirmation 的**有效动作**（按 timestamp 升序取最后一条，同刻按 id 升序）必须是 `confirm`；
- *      出现 `reject` / `revoke` ⇒ **不产生事实**（撤销即事实消失，且**历史保留**）。
- *
- * 不变量：**只有 FACT 能改变认知统计；CANDIDATE 只能改变「待确认候选」的统计。**
- * 故任何统计入口都应消费本函数的 `facts`，而不是原始 records —— `factualOnly()` 是那条唯一入口。
- */
-export const projectFacts = (records: readonly unknown[]) => {
+/** 确认事件的**确定性排序**：`timestamp` 升序；同刻按 `id` 升序；**完全同 ⇒ 0**（不能返回 1，否则排序不稳定）。 */
+const byTimeThenId = (a: Confirmation, b: Confirmation): number =>
+  a.timestamp === b.timestamp ? (a.id === b.id ? 0 : a.id < b.id ? -1 : 1) : a.timestamp < b.timestamp ? -1 : 1;
+
+/** 收一处的**校验 + 去重 + 分组**（事实层与统计层必须共用，见下方 `effectiveConfirmations` 的说明）。 */
+const collect = (records: readonly unknown[]) => {
   const violations: string[] = [];
   const proposals = new Map<string, Proposal>();
   const confirmations: Confirmation[] = [];
@@ -168,9 +161,18 @@ export const projectFacts = (records: readonly unknown[]) => {
     const rec = r as Record<string, unknown>;
     if (rec.type === "proposal") {
       const id = rec.id as string;
-      if (proposals.has(id)) violations.push(`proposal id 重复：${id}`);
+      // **重复 id 不覆盖**：报违规并保留**首见**（此前后一条会静默顶掉前一条 —— 报错却仍生效）。
+      if (proposals.has(id)) {
+        violations.push(`proposal id 重复：${id} —— **不覆盖**，保留首见（否则后一条静默改掉前一条的语义）`);
+        continue;
+      }
       proposals.set(id, rec as unknown as Proposal);
     } else {
+      const id = rec.id as string;
+      if (confirmations.some((c) => c.id === id)) {
+        violations.push(`confirmation id 重复：${id} —— **不覆盖**，保留首见（并列裁决会让事实不可复现）`);
+        continue;
+      }
       confirmations.push(rec as unknown as Confirmation);
     }
   }
@@ -186,18 +188,55 @@ export const projectFacts = (records: readonly unknown[]) => {
     byProposal.set(c.proposal, arr);
   }
 
+  return { violations, proposals, byProposal };
+};
+
+/**
+ * **判据收一处**（ADR-0063 / ADR-0070）：每个 proposal 的**有效动作** =
+ * 指向它的确认事件按 `(timestamp, id)` 升序排序后的**最后一条**（与插入顺序无关）。
+ *
+ * 事实层（`projectFacts`）与候选统计层（`candidateStats`）**必须共用本函数** ——
+ * 曾经两处各写一遍，后果是同一份数据两个答案：`revoke` 在事实层让事实消失，
+ * 在统计层却被算成「pending / 被拒」（`revoke` 与 `reject` 被混为一谈，拒绝率被虚增）。
+ */
+const effectiveConfirmations = (
+  proposals: ReadonlyMap<string, Proposal>,
+  byProposal: ReadonlyMap<string, Confirmation[]>,
+): Map<string, Confirmation> => {
+  const out = new Map<string, Confirmation>();
+  for (const id of proposals.keys()) {
+    const cs = (byProposal.get(id) ?? []).slice().sort(byTimeThenId);
+    const last = cs[cs.length - 1];
+    if (last !== undefined) out.set(id, last);
+  }
+  return out;
+};
+
+/**
+ * 投影：由 `(proposals, confirmations)` 派生出**事实**。
+ *
+ * 判定（逐字对应 ADR-0082 的不变量）：
+ *   ① 该 proposal 必须**通过校验**且 `inputRefs` 非空（「基于什么提议」在场）；
+ *   ② 必须存在指向它的 confirmation；
+ *   ③ 该 confirmation 的**有效动作**必须是 `confirm`（见 `effectiveConfirmations`）；
+ *      出现 `reject` / `revoke` ⇒ **不产生事实**（撤销即事实消失，且**历史保留**）。
+ *
+ * 不变量：**只有 FACT 能改变认知统计；CANDIDATE 只能改变「待确认候选」的统计。**
+ * 故任何统计入口都应消费本函数的 `facts`，而不是原始 records —— `factualOnly()` 是那条唯一入口。
+ */
+export const projectFacts = (records: readonly unknown[]) => {
+  const { violations, proposals, byProposal } = collect(records);
+  const effective = effectiveConfirmations(proposals, byProposal);
+
   const facts: Fact[] = [];
   for (const [id, p] of proposals) {
-    const cs = (byProposal.get(id) ?? [])
-      .slice()
-      .sort((a, b) => (a.timestamp === b.timestamp ? (a.id < b.id ? -1 : 1) : a.timestamp < b.timestamp ? -1 : 1));
-    const effective = cs[cs.length - 1];
-    if (effective === undefined || effective.action !== "confirm") continue;
+    const eff = effective.get(id);
+    if (eff === undefined || eff.action !== "confirm") continue;
     facts.push({
       type: "fact",
       id: `fact-${id}`, // **确定性派生**：同输入同 id
       proposal: id,
-      confirmation: effective.id,
+      confirmation: eff.id,
       kind: p.kind,
       statement: p.proposedRelation,
     });
@@ -209,17 +248,45 @@ export const projectFacts = (records: readonly unknown[]) => {
 /** **唯一**允许认知统计消费的入口（Pattern / M5 / 棘轮都必须走这里，不得直接吃 records）。 */
 export const factualOnly = (records: readonly unknown[]): Fact[] => projectFacts(records).facts;
 
+/**
+ * 单个 actor 的裁决分布。
+ * **为什么要分层**（M1-A′ dry run 的 F8）：确定性规则会用 `actor:"tool"` 自动确认大量候选，
+ * 若与人的裁决混在一个比率里，**工具自确认就能把「接受率」刷成满分** —— 那个数字不衡量任何东西。
+ */
+export interface CandidateActorStats {
+  readonly actor: ConfirmationActor;
+  readonly confirmed: number;
+  readonly rejected: number;
+  readonly revoked: number;
+  /** 该 actor 的 `confirmed / (confirmed + rejected)`；该 actor 分母 0 ⇒ `null`。 */
+  readonly acceptanceRate: number | null;
+  readonly rejectionRate: number | null;
+}
+
 /** 候选层的可见性读数（防「Silent Candidate Graveyard」：不污染主认知，**但必须可见**）。 */
 export interface CandidateStats {
   readonly candidates: number;
   readonly confirmed: number;
   readonly rejected: number;
+  /** 曾经确认、后被撤销（**不是「被拒」** —— 与 `reject` 是不同语义，不得合并）。 */
+  readonly revoked: number;
   readonly pendingConfirmation: number;
-  readonly oldestCandidateDays: number | null;
-  /** 分母为 0 时报 `null`（**不可测，不报 0**）。 */
+  /** 最老**待确认**候选的年龄（只看 pending —— 已裁决的候选再老也不是「没人看」）。 */
+  readonly oldestPendingDays: number | null;
+  /** `createdAt` 无法解析 ⇒ 年龄**不可测**的条数（**缺件不静默**，ADR-0049）。 */
+  readonly unmeasuredAges: number;
+  /**
+   * 总体接受率 = **仅 `human`** 的 `confirmed / (confirmed + rejected)`。
+   * **无任何 `human` 裁决 ⇒ `null`（不可测，不报 0）** —— 见 F8：否则工具自确认会报出一个满分假象。
+   * 需要工具/CI 的比率时读 `byActor`。
+   */
   readonly acceptanceRate: number | null;
   readonly rejectionRate: number | null;
+  /** 按 `human → tool → ci` 顺序，**只列出实际有裁决的 actor**。 */
+  readonly byActor: readonly CandidateActorStats[];
 }
+
+const ACTOR_ORDER: readonly ConfirmationActor[] = ["human", "tool", "ci"];
 
 const daysBetween = (fromIso: string, toIso: string): number | null => {
   const a = Date.parse(fromIso);
@@ -230,33 +297,67 @@ const daysBetween = (fromIso: string, toIso: string): number | null => {
 
 /**
  * 候选可见性。`now` **由调用方传入**（本层不读时钟 ⇒ 可复现）。
- * 统计口径：`acceptanceRate = confirmed / (confirmed + rejected)`；**待确认不计入分母**
- * （否则「还没人看」会被算成「被拒」，那是伪造精度）；分母 0 ⇒ `null`。
+ *
+ * 口径：每个 proposal 按 `effectiveConfirmations` 的判定落入
+ * `confirmed / rejected / revoked / pending` 之一 ⇒ **`candidates = 四者之和`**（可机械断言）。
+ * 比率的分母为 0 ⇒ `null`（**不可测不报 0**）；**待确认不计入分母**（否则「还没人看」会被算成「被拒」）。
  */
 export const candidateStats = (records: readonly unknown[], now: string): CandidateStats => {
-  const { facts } = projectFacts(records);
-  const confirmedIds = new Set(facts.map((f) => f.proposal));
-  const proposals = records.filter(
-    (r): r is Proposal => isObj(r) && r.type === "proposal" && validateRecord(r).length === 0,
-  );
-  const decided = new Set<string>();
-  for (const r of records) {
-    if (!isObj(r) || r.type !== "confirmation") continue;
-    if (!ACTIONS.includes(r.action as ConfirmationAction)) continue;
-    if (r.action !== "confirm") decided.add(String(r.proposal));
+  const { proposals, byProposal } = collect(records);
+  const effective = effectiveConfirmations(proposals, byProposal);
+
+  const perActor = new Map<ConfirmationActor, { confirmed: number; rejected: number; revoked: number }>();
+  const pendingAges: number[] = [];
+  let confirmed = 0;
+  let rejected = 0;
+  let revoked = 0;
+  let pending = 0;
+  let unmeasuredAges = 0;
+
+  for (const [id, p] of proposals) {
+    const eff = effective.get(id);
+    if (eff === undefined) {
+      pending += 1;
+      const age = daysBetween(p.createdAt, now);
+      if (age === null) unmeasuredAges += 1;
+      else pendingAges.push(Math.max(0, age));
+      continue;
+    }
+    const bucket = perActor.get(eff.actor) ?? { confirmed: 0, rejected: 0, revoked: 0 };
+    if (eff.action === "confirm") {
+      confirmed += 1;
+      bucket.confirmed += 1;
+    } else if (eff.action === "reject") {
+      rejected += 1;
+      bucket.rejected += 1;
+    } else {
+      revoked += 1;
+      bucket.revoked += 1;
+    }
+    perActor.set(eff.actor, bucket);
   }
-  const confirmed = proposals.filter((p) => confirmedIds.has(p.id)).length;
-  const rejected = proposals.filter((p) => !confirmedIds.has(p.id) && decided.has(p.id)).length;
-  const denominator = confirmed + rejected;
-  const ages = proposals.map((p) => daysBetween(p.createdAt, now)).filter((d): d is number => d !== null);
+
+  const rate = (num: number, den: number): number | null => (den > 0 ? num / den : null);
+  const byActor = ACTOR_ORDER.filter((a) => perActor.has(a)).map((actor) => {
+    const v = perActor.get(actor)!;
+    const den = v.confirmed + v.rejected;
+    return { actor, ...v, acceptanceRate: rate(v.confirmed, den), rejectionRate: rate(v.rejected, den) };
+  });
+
+  const human = perActor.get("human");
+  const humanDen = human === undefined ? 0 : human.confirmed + human.rejected;
+
   return {
-    candidates: proposals.length,
+    candidates: proposals.size,
     confirmed,
     rejected,
-    pendingConfirmation: proposals.length - denominator,
-    oldestCandidateDays: ages.length > 0 ? Math.max(...ages) : null,
-    acceptanceRate: denominator > 0 ? confirmed / denominator : null,
-    rejectionRate: denominator > 0 ? rejected / denominator : null,
+    revoked,
+    pendingConfirmation: pending,
+    oldestPendingDays: pendingAges.length > 0 ? Math.max(...pendingAges) : null,
+    unmeasuredAges,
+    acceptanceRate: human === undefined ? null : rate(human.confirmed, humanDen),
+    rejectionRate: human === undefined ? null : rate(human.rejected, humanDen),
+    byActor,
   };
 };
 

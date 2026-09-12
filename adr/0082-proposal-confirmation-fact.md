@@ -205,3 +205,61 @@ candidates · confirmed · rejected · pendingConfirmation · oldestCandidateDay
    该强制留到 P1 接入 M3 时做（可加「统计模块只能经该入口读取」的结构门）。
 2. 本闸只覆盖**内存中的记录校验与投影**，**不涉及落盘**（存储位置未定，见 §6）；
    也**没有真实 LLM 产生者与 Confirmation 入口**，故 `inputRefs` 只验到「在场」，未验其内容可信。
+
+---
+
+## 8. 对抗性审查发现的原语缺陷与修复（2026-09-12，v1.15.53）
+
+**触发**：M1-A′ dry run（`adr/0081` §9）之后，对本模块逐行做对抗性审查（**不是**「跑通就算」）。
+本节记录**真缺陷**与修复 —— 判据是「同一份数据会不会给出两个答案」「报错之后是否仍然生效」。
+
+### 8.1 缺陷 ①：重复 id **报了违规却仍然生效**（最严重）
+
+`proposals.set(id, rec)` 在报出 `proposal id 重复` 之后**照旧覆盖** ⇒ 后一条静默顶掉前一条的语义，
+事实层按**后一条**（`proposedRelation` / `kind` / `inputRefs`）派生事实。
+`confirmation` 侧连重复检测都没有 ⇒ 两条同 id 不同动作的裁决会让「有效动作」依赖排序实现。
+
+**修复**：重复 id ⇒ 记违规 + **保留首见**（`continue`，不覆盖）。confirmation 侧补同样的检测。
+**理由**：与 ADR-0061「错误关链是静默破坏」同一不对称 —— **宁可少一条，不可错一条**；
+且消除并列会让「有效动作」不可复现的可能。闸：⑭。
+
+### 8.2 缺陷 ②：统计层与事实层**判据分叉**（`revoke` 被算成「被拒 / 待确认」）
+
+`candidateStats` 自己写了一遍分类：`action !== "confirm"` 即视为「已裁决（被拒）」。
+后果：`revoke`（曾确认后撤销）被计入 **rejected** ⇒ 拒绝率虚增；
+被撤销的候选同时**不在** confirmed、又不在分母里 ⇒ 落到 `pendingConfirmation`（`proposals - denominator`），
+即「**已经有人裁决过、且已经撤销**」的候选被报成「**还没人看**」。
+同一份记录，`projectFacts` 说「事实消失」，`candidateStats` 说「被拒 / 待确认」—— **两个答案**。
+
+**修复**（判据收一处，ADR-0063 / ADR-0070）：
+抽出 `collect()`（校验 + 去重 + 分组）与 `effectiveConfirmations()`（有效动作），
+**事实层与统计层共用**；统计按有效动作落入 `confirmed / rejected / revoked / pending` **四分之一**，
+并给出可机械断言的口径：**`candidates = confirmed + rejected + revoked + pendingConfirmation`**。
+`revoke` 是独立桶，**不得**与 `reject` 合并。闸：⑬。
+
+### 8.3 缺陷 ③：`oldestCandidateDays` 的统计口径与用途不符（F8 同源）
+
+字段名与用途（防 **Silent Candidate Graveyard**：找「没人看的候选」）要求的是**待确认里最老的**；
+实现取的是**全部候选**里最老的（`Math.max(...ages)`）—— 一条两年前就已确认的候选会让读数据显得告警。
+**修复**：改名 `oldestPendingDays` 并只统计 pending；同时把「`createdAt` 不可解析 ⇒ 年龄不可测」的条数
+显式报成 `unmeasuredAges`（**缺件不静默**，ADR-0049）。
+**另外**：`Math.max(...ages)` 在候选数极大时有实参上限风险，改为对 pending 年龄数组求最大值。
+
+### 8.4 缺陷 ④（F8 本体）：**tool 自确认把「接受率」刷成满分**
+
+`acceptanceRate = confirmed / (confirmed + rejected)` 把**所有 actor 混在一个分子分母里**。
+确定性规则会用 `actor:"tool"` 自动确认大量候选 ⇒ 该比率会被工具自确认刷成 1，**不衡量任何东西**。
+这正是「candidate 统计只能用于待确认候选」最容易被绕开的口子：闸是绿的，数字是假的。
+
+**修复**：
+- 新增 `byActor: CandidateActorStats[]`（按 `human → tool → ci`，**只列实际有裁决的 actor**），各自的 `acceptanceRate` / `rejectionRate`，该 actor 分母 0 ⇒ `null`；
+- **总体 `acceptanceRate` / `rejectionRate` 只认 `human`**：**无任何 `human` 裁决 ⇒ `null`（不可测，不报 0）**；
+- 需要工具/CI 的比率时读 `byActor`。
+闸：⑫。**验证**：dry run 里 7 条确认全为 `actor:"tool"` ⇒ 总体报 `null`，`[tool]` 分层照实报 1.0。
+
+### 8.5 本轮**未做**（诚实标注）
+
+- **未改** `validateRecord` 的字段白名单与伪装字段清单（本轮没有发现绕过路径；**没有发现 ≠ 不存在**）；
+- `inputRefs` 每项**未**做「多余字段拒收」（`{file,line,note}` 仍会通过）—— 已知的宽松点，**未做**；
+- `factualOnly` 仍是**约定**入口，**无机械强制**（同 §7.5）；
+- 未落盘、未接读路径 ⇒ 仍**无生产消费者**。

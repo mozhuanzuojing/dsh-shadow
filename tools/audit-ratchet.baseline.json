@@ -13,10 +13,10 @@
     "findingsB": 103,
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
-      "dirs": 426,
+      "dirs": 427,
       "files": 784,
       "findingsA": 37,
-      "findingsB": 104,
+      "findingsB": 105,
       "fingerprint": "cce8084adbe97e7da0fd90754646e502642856f0d1fac0424fd9a796a0722346"
     }
   },
@@ -30,6 +30,6 @@
     "a2b": 0,
     "a3": 11,
     "a_total": 37,
-    "b_keys": 104
+    "b_keys": 105
   }
 }

@@ -6,11 +6,12 @@
 > **写法约定**：每条给出「内容 / 依据（可点的文件或 ADR）/ 为什么现在没做 / 完成判据」四项。
 > 没有依据的条目不写进来（本仓纪律：结论要有证据；宁可少列，不留悬空项）。
 >
-> 最后整理：2026-09-12（`v1.15.45`）—— **现存 22 条**（T 11 / D 6 / V 5 / G 4 + **T7**–**T11**、**T13 后半**–**T15**；
+> 最后整理：2026-09-12（`v1.15.45`）—— **现存 20 条**（T 11 / D 6 / V 5 / G 4 + **T7**–**T11**、**T13 后半**–**T15**；
 > **B3 / T12 / T16 / V6 已闭环**，**T13 前半 部分完成**）；
-> 已结案 **21 条**（B1 / B2 / **B3** / **T12** / **T16** / **V6** / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
+> 已结案 **23 条**（B1 / B2 / **B3** / **T12** / **T16** / **V6** / D4 / D5 / 命中数累积 / `_meta.json` 并发 / `_index.md` 投影漂移 /
 > 漂移审计工具 / 图快照顺序 / 台账版本出处 / **T5 漂移键复核** / **T1 A 类分诊** / **T4 零引用定性** /
-> **D8 能力矩阵补三列** / **D6 吸收 OpenViking 三条** / **W1 审计工具漏报** / **countInconsistency 接线**）。
+> **D8 能力矩阵补三列** / **D6 吸收 OpenViking 三条** / **W1 审计工具漏报** / **countInconsistency 接线** /
+> **M1⑥ `disposition`** / **M1⑦ 候选统计按 `actor` 分层**（v1.15.53：M1-A′ dry run 撞出的两个契约缺维度）。
 > **T5 已结案**（v1.15.32）· **T1/T4 已结案**（v1.15.33）· **D8 已结案**（v1.15.34）·
 > **D6 已结案**（v1.15.35）· **审计工具盲区已修**（v1.15.36，顺带新开 **T10**）·
 > **重点材料 hl_mem 深读第二遍**（v1.15.37，`adr/0076`）·
@@ -1232,7 +1233,7 @@ V/G/T6 真机与外部条件项
 - **⏭ 下一步（P1③④）**：LLM 产生者（候选层，写入候选视图）· Confirmation 入口（载体**刻意延迟决定**）。
   **M1 真实场景已跑过一轮（M1-A′ dry run，见 `adr/0081` §9）⇒ 载体拿到的是「要求清单」而非「形状」**：
   **F1** 行号必须自动填（手填 ⇒ 退化成 `line: 1`，闸在证据没了）· **F2** key 建议 + 人确认（与 P1 两层同构，不需要第二套机制）·
-  **F3** 确认必须看得见证据（否则 `actor:"human"` 是**盲签**）· **F8** 接受率必须按 `actor` 分层（否则 tool 自确认刷满分）。
+  **F3** 确认必须看得见证据（否则 `actor:"human"` 是**盲签**）· **F8 ✅ 已做（v1.15.53）** 接受率按 `actor` 分层、总体率只认 human（否则 tool 自确认刷满分）。
   仍未定（不得据 dry run 拍）：**确认是否高频 / 是否要批量 / 是否要 diff**（本次 **0 次真实确认动作**）。
 - **待建验证（含负例）**：① proposal 计入 Pattern ⇒ 必须失败（**当前靠 `factualOnly` 约定 + M3 接入时补结构门**）；② 缺 `input_refs` ⇒ 拒收 **✅ 已做**；
   ③ 无 confirmation 的 Fact 进事实视图 ⇒ 必须失败 **✅ 已做**；④ P→C→F lineage 可追 **✅ 已做**；⑤ `pending_age_p90` 为 derived、不写回状态（**留给 M1**）。
@@ -1246,8 +1247,8 @@ V/G/T6 真机与外部条件项
 |---|---|---|---|
 | **M1** | **Decision Memory**（决策 → 结果 → 经验） | 🟢 **M1-A 已落地（v1.15.51）+ M1-A′ dry run 已跑（v1.15.52）**：确定性归属 + 接进原语**已被真跑验证**；**还剩 M1③（`key` 的显式入口）· 落盘 · 读路径渲染 · M1⑥/M1⑦（dry run 新发现的两个契约缺维度）** | **已有 50%**（`DecisionEvent`/`DecisionReason` 分离由 ADR-0037 冻结，见 `adr/0037:29-42`）。**M1-A（已做）**：`core/decision-outcome.ts` = 归属规则 `same-key-window/v1`（**确定性 + 保守**：同 key·窗内·取最晚前驱·**并列不归属**）+ `toPrimitiveRecords`（**结果事实只能经 `projectFacts` 产生**，内容来源=观察者、确认=`actor:"tool"` 的**确定性规则**且 `reason` 可审计）+ `pending` 读数（**年龄分布 + 最老 + `pendingAgeP90`**；**年龄只暴露风险、不改变状态**）。**闸 11 组**，`verify` **51/51**。**未做（诚实）**：`key` 由调用方显式传入 ⇒ **「key 从哪来」这条链未接**（M1③）；**无落盘**；**未接读路径** ⇒ 目前**没有生产消费者**（棘轮已按规程重录并说明）。**用户拍板**：`subject` 与 `entry` 并存（**只接受显式提供**）· **不设结算窗口**（永远 `pending`）· 结果来源走**两层**（`adr/0082`）。 |
 | **M2** | **Outcome Memory**（记结果 + 评价 + 以后是否继续相信） | ⬜ 待 M1 拍板后 | **不新建对象**：`validation/types.ts:23` 已有完整 outcome 状态机（`validated/observed/rejected/expired`）+ append-only 历史（实测场景 88）；`observer/trace.ts:26` 已有 `outcome{expected,actual}`；`long-horizon` 已有 ActionFeedback。**唯一要做的**：把已有 outcome 形态**接到 Decision 上**（否则就是第二个平行 outcome 概念＝判据分叉）。 |
-| **M1⑥** ⭐ | **决策的 `disposition`**（「刻意不做」≠「忘了做」） | 🆕 **待做（优先级高于 M1③ 入口形状）** | **来源 = M1-A′ dry run 的 F6（`adr/0081` §9.2）**：4 条 pending 里 2 条是「**刻意不做**」（`invariants` 暂不吸收 / T13 后半判据未定），而当前 schema **区分不出「刻意不做」与「忘了做」** ⇒ age 读数把两者一起报成「积压」。**不是错，是缺维度**。要求：`disposition: "open" \| "deliberate-deferral"`（+ 可选 `deferred_reason`）；**读数按 disposition 分层**，只有 `open` 的年龄才算「积压风险」。**未定**：`deliberate-deferral` 是否允许设复查期（到期转回 `open`？）——**需用户拍板**。 |
-| **M1⑦** ⭐ | **候选统计按 `actor` 分层**（防 tool 自确认刷分） | 🆕 **待做** | **来源 = M1-A′ dry run 的 F8（`adr/0081` §9.2）**：dry run 报「接受率 **1**」，而这 7 条确认**全部是规则代码生成的**（`actor:"tool"`）、**0 条来自人** ⇒ 100% **零信息量**。**这正是用户那条「candidate 统计只能用于待确认候选」最容易被绕开的地方**。要求：`candidateStats` 的 `acceptanceRate`/`rejectionRate` **按 `actor` 分组给出**（human / tool / ci 各自一组；分母为 0 时仍返回 `null`）；`human` 组为空时**不得**报告总体率。 |
+| **M1⑥** ⭐ | **决策的 `disposition`**（「刻意不做」≠「忘了做」） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F6**。**已做**：`DecisionRecord.disposition?: "open" \| "deliberate-deferral"`（缺省 `open` ⇒ 向后兼容）；读数分 `pendingOpen` / `pendingDeferred`，**年龄分布 / 最老 / p90 只统计 `open`**；渲染显式标注「刻意推迟 N（不计入积压）」。闸 `test/decision-outcome.test.ts` ⑫。**仍待用户拍板**：`deliberate-deferral` 是否允许设复查期（到期转回 `open`？）——**未替用户决定**。 |
+| **M1⑦** ⭐ | **候选统计按 `actor` 分层**（防 tool 自确认刷分） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F8**。**已做**：新增 `byActor`（`human → tool → ci`，只列实际有裁决的）；**总体 `acceptanceRate`/`rejectionRate` 只认 `human`**，无 human 裁决 ⇒ `null`（不可测不报 0）；`revoke` 独立成桶（**不再与 `reject` 合并**，也不再落进 pending）；口径可机械断言 `candidates = confirmed + rejected + revoked + pendingConfirmation`。闸 `test/proposal-firewall.test.ts` ⑫⑬⑭。 |
 | **M3** | **Pattern Memory**（从 N 个 Episode 产生经验） | ⬜ | **算法内核已存在**：`reflection/patterns/success-rate.ts`（decision→outcome 相关性，纯统计、确定性标记集、无 AI）+ `decision-outcome.ts`（重复决策/结果 tally）+ `dream/compress.ts`（cross-domain 抽象）。**真缺口**：Pattern 不是一等对象，且 `reflection/types.ts:8` 的结构**没有反例字段** —— 用户 schema 要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺）。 |
 | **M4** | **Memory Revision**（记忆自己纠错，保留时间连续性） | ⬜ | **机制已有**：`Forget ≠ Delete`（ADR-0031）、`superseded` 生命周期（`core/lifecycle.ts`、ADR-0061）、append-only 历史、取代的确定性（ADR-0059/0061，`adr/0080` 给了「阈值不可达」的证明）。**真缺口**：`revision` 不是一等对象 —— **没有留下「因哪条证据而改判」的可追溯对象**（裁决只给 verdict/outcome/reflection，不改写原记忆，这是对的）。 |
 | **M5** | **Memory Utility**（让系统知道什么值得记） | ⬜ | **只有 `recall_count` 的雏形**（`hits` 累积，见 D7；`queryLog`）+ 衰减（MemoryBank hotness）。`useful_count` / `influenced_decision` / `prevented_duplicate_work` / `caused_rework` **全缺**。**前提是 M1**：没有「决策→结果」就无从判断某条记忆**是否影响了决策**。 |
