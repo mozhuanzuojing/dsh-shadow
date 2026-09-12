@@ -146,7 +146,7 @@ the configured root is the fallback for agentless calls and sessions without a c
 
 | 论文 | 为什么对本项目重要 |
 |---|---|
-| **Temporal Validity in Retrieval Memory: Eliminating Stale-Fact Errors for AI Agents over Evolving Knowledge**（**MemStrata**；Neeraj Yadav；2026-06-25；21 页 / 5 表；**已发布 harness、数据集与评测协议**） | ⭐⭐ **与 D3 直接同题，且是同题里证据最强的一份**（唯一**带数据集与 harness** 的）。摘要原文要点：① RAG「**has no model of time**」，事实变更时 stale 与 current 值**嵌入相似度几乎相同**；② **量化**：「cosine similarity distinguishes a contradicted fact from a duplicated one with **AUROC 0.59** (near chance)」——并解释「contradictions are often **more** embedding-similar to the original than rephrased duplicates」；③ 机制：「a **deterministic `(subject, relation, object)` supersession rule** retires the stale value in a **bi-temporal ledger** — with **no similarity threshold and no LLM call**」；④ 读数（**作者声称，未复现**）：六基准 / 本地 7B，「ties RAG on static knowledge」、演化知识 **0.95–1.00**（RAG **0.20–0.47**）、**stale-fact-error rate：RAG 15–40% → 它 ~0%**、延迟 **~2.1s** vs LLM-reranking **~16–18s**。⇒ 对本仓：**为 ADR-0059 补独立量化证据**（相似度不能裁决矛盾）；**为 D3 提供第三个独立样本**（hl_mem 四元坐标 / 本仓单键 + 时间序 / 它用**三元组**）；并给出一个本仓**没有的指标**——「**stale-fact-error rate**」（正好是「错误方向不对称」的可测形态）。 | [arXiv:2606.26511](https://arxiv.org/abs/2606.26511) · [HTML](https://arxiv.org/html/2606.26511v1) |
+| **Temporal Validity in Retrieval Memory: Eliminating Stale-Fact Errors for AI Agents over Evolving Knowledge**（**MemStrata**；Neeraj Yadav；**arXiv:2606.26511v1**，2026-06-25；21 页 / 5 表） | ⭐⭐ **与 D3 直接同题，且是同题里证据最硬的一份**。**已一手读完正文（§1–§8）+ Appendix B/C/D + Table 1/2/3 表体**；**A.1/A.2 表体与 Table 4/5 未读到**（HTML 截断，尝试路径见 `adr/0080`）。**裁定见 `adr/0080-memstrata-temporal-validity-paper.md`**。要点：① 取代键是 **`(subject, relation)` 二元组**（**不是**三元组；`object` 是被比较的值）——⚠ **第 2 轮我写成三元组，已更正**；② 机制「If one exists with a *different* object, the new assertion supersedes it ... **No cosine, no LLM judge**」（§4.1）；③ 账本**实现只有三个字段** `valid_from/valid_to/superseded_by`（§4.2），**as-of 查询作者自陈「build on but do not evaluate here」**；④ ⭐ **ADR-0059 的不可达性证明**（Table 1：cosine 分 duplicate/其余 **AUROC 0.5926**，**任何阈值 precision 上限 0.667**，「0.95 floor 不可达」）——**本仓 README/CONTEXT 早已引用的「0.59」原始出处即此**；⑤ ⭐ **「错误方向不对称」的可测形态**：`stale-fact-error rate`（分子=以被取代值作答的矛盾题数，分母=矛盾题数 30/20/20/20）+ **允许弃答 / 强制作答两 regime 必须同报**（Table 3：naive_rag 0.10→0.40 等）；⑥ ⭐ **去掉取代层的消融**：演化准确率 **0.99→0.33**（≈naive_rag 0.32）、**条件编造率 0.04→0.25（~6×）**、峰值 0.56（D.1b，`retain_all_turns` 默认关、写路径其余冻结）；⑦ **两处它自己的不诚实，本仓引以为戒**：摘要写「**~0%**」而表体是 `0.03`（**实为 1/30**）、且**准确率与 stale 错误复用同一 3B 判官**（作者自陈有「同行重叠」）。**⚠ 可复现材料：Reproducibility Statement 声称发布 harness/数据集/prompt，但**本版未给任何 URL/仓库名**（双盲匿名）⇒ **不得写作「已发布」**（第 2 轮措辞已降级）。 | [arXiv:2606.26511](https://arxiv.org/abs/2606.26511) · [HTML](https://arxiv.org/html/2606.26511v1) · 裁定 `adr/0080` |
 | **A Survey of Agent Memory in the Second Half: Towards Self-Evolving and Long-Horizon Agents** | 综述：可能给出「记忆系统」的分类学与**评测现状**（对 T11、G1–G4 的空白判断有用） | [arXiv:2602.06052](https://arxiv.org/abs/2602.06052) |
 | **From Storage to Experience: A Survey on the Evolution of LLM Agent Memory Mechanisms** | 综述（ACL Findings 2026）：**记忆机制的演化分期** | [ACL 2026 Findings](https://aclanthology.org/2026.findings-acl.2069/) |
 | **Caching for the Future: Scrub Jay Episodic Memory Principles for Agent Memory Systems** | 从动物认知取原则（**缓存/前瞻性记忆**）——与「什么该忘、什么该留」的判据可能有关 | [arXiv:2608.04746](https://arxiv.org/abs/2608.04746) |
@@ -165,7 +165,18 @@ the configured root is the fallback for agentless calls and sessions without a c
 | 材料 | 喂给 | 动作词 |
 |---|---|---|
 | harness `docs/` + `vendor/cordis` + `.agents/` | **平台契约**（工具注册 / fs 契约 / 组合与 preset / 能力接缝） | **审查 + 纠错**（若下游理解有错，最高价值） |
-| harness 运行体（`cordis_inspect_*`） | 版本偏差的**唯一裁判**（克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2） | **标定** |
+| harness 运行体（`cordis_inspect_*`） | 版本偏差与**契约语义**的**唯一裁判**（克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2） | **标定** |
+
+**运行体 Service 目录的两个结论（v1.15.40 第 2–3 轮，均取自运行体而非文档）**：
+1. `ctx.sandboxPolicy` / `invariants` / `jobs` / `storage` / `storageDomain` / `sessionProjections` **都存在且可见**
+   （access 同时给出 `optional: ctx.get(...)` 与 `hardDependency: inject:[...]`）。
+2. 但「**平台已有 ⇒ 本仓可能在重造**」这个怀疑，**四项里只对一项成立**：
+   `sessionProjections`（本仓是**文件派生**、非会话事件折叠）· `storage`/`storageDomain`（会撞 ADR-0001 的
+   「人类可读文件树」）· `jobs`（本仓无后台长任务）**三项均不适用**；
+   唯一候选是 **`invariants`**（可把本仓**只活在测试里**的不变量注册成宿主可执行的检查），
+   但**有两条前置未确认**（失败是否阻断宿主 / 选择机制由谁配置）⇒ 入 T16 第 3 条。
+   ⇒ **教训（可复用）**：怀疑「重造」时，**先取契约判用途，再判是否重造**——
+   服务同名不等于用途相同（本条避免了一次无效改造）。
 | hl_mem（余下 `tests/` + `evaluation/`） | T13（结构性门禁）/ T14（确定性基准门）/ T11①（评测纪律） | 吸收（形态） |
 | openviking（未吸收面） | T9 / T13 / T14 / T15 / G1 / D3 | 吸收（**只取概念**，AGPL） |
 | archify / ppt-master / voyager / awesome-dsh-plugin | DSH 插件工程的**对照样本** + 生态索引可信度 | 定位 → 按需审查 |

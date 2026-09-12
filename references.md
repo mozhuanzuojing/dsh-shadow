@@ -288,3 +288,22 @@
 
 **本轮之后仍未读**（诚实边界）：`src/` 绝大部分（~344 文件）、`tests/` 全量（384）、`docs/archive/`（21）、`docs/*.md` 顶层（13）、`evaluation/` 的 65 个文件。
 **纪律**：本台账的数字来自 `git ls-files` + `Get-ChildItem` 实测；**任何一轮改这张表必须重跑枚举命令**，不得凭记忆改数。
+
+### 6.4 **MemStrata 论文（2026-09-12 第 3 轮；裁定 `adr/0080`）** —— 并**认领本仓早已引用的「0.59」的原始出处**
+
+**为什么单列**：本仓 `README.md` / `CONTEXT.md` 早就引用过「**余弦相似度分辨「被推翻」vs「换个说法」AUROC 仅 0.59**」
+这条数字，但**从未标注它的一手来源**。本轮深读 **MemStrata**（*Temporal Validity in Retrieval Memory*，
+`arXiv:2606.26511v1`）后确认：**该数字的原始出处就是这篇**（Table 1：duplicate n=32 均值 0.7998 /
+contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926**）。
+
+**引用级别从「二手数字」升级为「一手可核」**，且拿到了比 AUROC 更强的表述：
+
+> 「The **maximum precision achievable at any duplicate threshold is 0.667**; the **0.95 floor a safe automatic
+> rule would need is unreachable**.」
+
+⇒ 这直接否证「**调阈值即可安全自动化取代**」，是 **ADR-0059**（不把语义裁决交给 LLM/相似度）的**不可达性证明**。
+**措辞纪律不变**：这是「**别家的读数支持我们的判据**」，**不是**「我们验证了」——其模型、语料、任务与本仓完全不同。
+
+**其余可吸收项**（指标与协议，见 `adr/0080`）：`stale-fact-error rate` + 允许/强制作答**两 regime 同报**；
+**marker-free 不变式 + 词边界 tell 自检**（T11①）；**两侧夹逼的消融形态**（G1）。
+**边界**：A.1/A.2 表体与 Table 4/5 **未读到**（HTML 截断，尝试路径见 `adr/0080`）；**本版无任何可克隆地址**（双盲）。

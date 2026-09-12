@@ -491,6 +491,12 @@
   ⑤ **无效传播**：`:73-76` 任一臂身份无效 ⇒ **整轮 A/B 无效**（即使另一臂分高也不作因果结论）。
   另有 `c-series-relation-experiment-protocol.md`（子代理回报）的 **dev/sealed 分离 + 题面外置 + 造臂人不得看题面**。
   ⇒ **本条的 ① 现在只差「定用哪份语料当留出集」这一个决策**（伦理问题不变）。
+- **进度（v1.15.40 第 3 轮 / `adr/0080` §5，MemStrata）**：**又多了一条「可用测试强制的评测不变式」**——
+  **marker-free**：语料里**不得出现任何文本过期标记**（`[OUTDATED]` / `(legacy)` / `deprecated` …），
+  否则基线可以**读标签**而不是靠时间机制得分（「silently inflating its score」）。
+  它的可执行形态可直接照抄三点：① 不变式**由测试强制**（不靠自觉）；② **按词边界**检测 tell
+  （避免 `new` 命中 `renew`）；③ **量化污染**：去掉一个 `[OUTDATED]` 标记后，重排臂掉 **14 点**、纯门控臂掉 **18 点**，
+  而时间法只动 **-4** ⇒ **用「对照组掉多少」证明污染真实存在**。（原文见 `adr/0080` §5 引用。）
 
 ### T12. **时间炸弹 fixture**：测试里硬编码的「最近日期」会随时间静默变红（v1.15.38 新发现）
 
@@ -546,6 +552,16 @@
 - **完成判据**：① 产出一份带 `dataset_sha256 / protocol_sha256 / case_count` 的基线文件（**signin 前先确认可公开**）；
   ② 加 `npm run eval:retrieval:compare`（比对基线，超容差非零退出）；
   ③ 用它给 **T9**（sidecar 读路径收益）与 **T11①** 的评测提供可机器判读的基线。
+- **进度（v1.15.40 第 3 轮 / `adr/0080` §3，MemStrata）**：**拿到了一个可直接落地的「破坏性错误」指标**——
+  **`stale-fact-error rate`**：分子 = **以被取代值作答的题数**，分母 = **矛盾题数**（该论文 30/20/20/20）。
+  四条随指标必须一起抄的纪律（前三条是它**自己踩过的坑**）：
+  ① **两 regime 必须同报**：「允许弃答」与「**强制作答（forced-answer）**」——
+     论文原文说后者是为了「expose the stale-commitment that **abstention otherwise hides**」；
+     只报允许弃答那一列，弃答会把 stale 错误**洗成低准确率**（Table 3：naive_rag 强制后 0.10→0.40、0.30→0.35）。
+  ② **必须印分子/分母**：摘要写「**~0%**」而表体是 `0.03`（**实为 1/30**）⇒ 本仓不得只写百分比（「不伪造精度」）。
+  ③ **两指标判据必须独立**：它自陈准确率与 stale 错误**复用同一个 3B 判官**，出现「**同行既正确又 stale 错误**」；
+     本仓若同时报「正确率」与「错误关链率」，必须各自独立判定并**显式列出重叠行**。
+  ④ **分母为 0 要报「不可测」而非 0**（该论文**未定义** zero-denominator；本仓移植时须自己定义）。
 
 ### T15. **兼容性与弃用纪律**（本仓**完全没有**；v1.15.39 新开，来源 `adr/0078` D4c）
 
@@ -589,16 +605,37 @@
      部署组合 `dsh-base/cordis.patch.yml:208-212` 才把它们配成 `DSH_PERMISSION_MODE` / `process.cwd()`），
      并**留档我的一次范围性错误**（只对三个包 grep `DSH_PERMISSION_MODE` 得 0 命中就断言「不存在」，
      漏了部署组合 ⇒ **grep 之前先写清枚举范围**）。**ADR-0074 正文与旧注释的描述是对的。**
-  2. **`isolate` 是行级 option，`group` 不继承**（`vendor/loader/src/config/isolate.ts:79`）⇒
-     `editing-cordis-compositions` 技能里「wrap the provider **and every consumer** in one group carrying an isolate realm」
-     这句**散文不精确**：**每一行都要各自写 `isolate`**。若本仓/本用户预设里有 `group + isolate` 的写法，需按此复核。
-     （**注意**：技能文件位于 harness 侧，**不在本仓**；本轮只记录，不改外来仓。）
-  3. **评估「平台已有而本仓可能在重造」的四项**：`ctx.sessionProjections`（纯 fold 单元 ⇒ 取代自建
-     `ctx.on('session/event')` + 缓存 + 推送）、`ctx.storageDomain`（非会话持久数据）、`ctx.invariants`（注册不变量）、
-     `ctx.jobs`（后台任务）。**判据**：先用运行体确认可见性与语义，再判「重造 vs 委派」，**不凭文档直接改**。
-     **进度（v1.15.40 第 2 轮）**：四个服务**在运行体 Service 目录里都存在**（`invariants` / `jobs` /
-     `storage` / `storageDomain` / `sessionProjections` 均已列出）；**语义与可见性（optional vs hard）尚未逐条取契约**。
+  2. ✅ **已结案（v1.15.40 第 3 轮，读 `vendor/loader/src/config/isolate.ts`）——子代理 B 的说法被推翻**：
+     它说「`group` 不继承、**每一行都要各自写 `isolate`**」，据此要复核本仓预设。**源码不支持该说法**：
+     `isolate.ts:98` `const newMap = Object.create(entry.parent.ctx[Context.isolate])`（新隔离表**以父表为原型**）、
+     `:99-101` 只把**本行自己声明**的 `options.isolate` 键写进新表、`:123` 再 `setPrototypeOf(entry.ctx[Context.isolate], entry.parent.ctx[Context.isolate])`
+     ⇒ **未声明 `isolate` 的子行通过原型链继承父行的 realm** ⇒ 服务由子行提供时**落在父 group 的 realm 里**。
+     ⇒ **本仓 `agent-presets/projection/agent.cordis.yml:123-125/156-158/193-195`（`cordis:group` + `isolate` + 子行）
+     的写法本来就是对的**；`editing-cordis-compositions` 技能那句散文**准确，无需更正**。
+     **对的那一半**：「`isolate` 是**逐行** option（每行可各自声明/覆盖）」——`isolate.ts:79` 确实按行读 `entry.options.isolate`。
+     ⇒ **教训**：子代理的「应当如何」类结论，**必须回到源码判**（本轮第二次：第一次是「重造 `ctx.sandboxPolicy`」）。
+  3. ✅ **已逐条判定（v1.15.40 第 3 轮，四份契约取自运行体）**：四个服务**都存在且可见**，
+     但**「本仓在重造」这个怀疑只对其中一项成立，三项不成立**：
+     | 服务 | 判定 | 理由（基于运行体契约） |
+     |---|---|---|
+     | `sessionProjections` | **不适用** | 它是「**投影单元表 + 每会话状态 + 变更通知**」（`register(definition)` / `stateOf(session,key)` / `snapshot` / `cachedSnapshot` / `onChanged`）。本仓的派生是**文件派生**（`.shadow/` → `_index.md`/`_meta.json`），**不是会话事件折叠**；引入它等于**换一套来源**（撞 ADR-0003/0069 的来源纪律） |
+     | `storage` / `storageDomain` | **不适用** | 它是**不透明持久化后备**（`mount(form, facility)` / `open(spec)` / `get(name)`）。本仓的记忆**必须是人类可读的 Markdown 文件树**（ADR-0001 的核心取舍）⇒ 用它就是**范畴变更**，不是优化 |
+     | `jobs` | **不适用** | 本仓无后台长任务（写入在 `agent/turn-stopping` 一次 flush 内完成）；且平台已有 job 工具面覆盖我自己的长任务 |
+     | `invariants` | ⭐ **候选吸收（唯一一项）** | 见下 |
+     **`invariants` 契约原文（运行体）**：`register(packageName: string, installer: InvariantInstaller): () => void`；
+     `InvariantInstaller = (ctx: Context, fail: InvariantFailure) => void | Promise<void>`；
+     `InvariantFailure = (message: string) => never`（**失败是响亮的**）；
+     说明原文：「**Enabled installers run in a child fiber; failure disposes that fiber and releases the reservation.**」；
+     `access.optional = { expression: "ctx.get(\"invariants\")", requiresUndefinedCheck: true }`。
+     **为什么值得**：本仓有一批**只活在测试里**的不变量——生命周期信号可达性（`test/lifecycle-signal-table.test.ts`）、
+     判据单一源（`test/claim-admission-single-source.test.ts`）、sidecar 漂移（`sidecarDrift`）、台账自洽
+     （`countInconsistency`）——注册进平台后，它们从「我记得跑测试」变成「**宿主可执行**」。
+     **为什么先不做**：有两条**必须先确认**（未确认前不得引入）：**(a)** installer 失败**是否阻断宿主启动**
+     （还是只 dispose 那个子 fiber 并记录）；**(b)** 「global 与 regex-based selection」**由谁配置**、
+     默认是否执行（若默认不跑，注册了也等于没有 ⇒ 那就是**假闸门**）。
+     方法：取 `invariants` 的宿主侧实现（安装树里 `dsh-*` 对应包）读 `installer` 的调用与失败处理。
   4. **版本偏差**：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2 ⇒ 上述结论凡未回运行体核对的，**一律标注未核对**。
+     **进度**：本节第 1/3 条的契约**都取自运行体**（`cordis_inspect_query`），不是文档。
 - **为什么现在没做**：① 每条都要**回运行体**核对（文档可能落后），属逐条实测，不是批量替换；
   ② 涉及**改变本仓写入路径**（`core/fs-scope.ts`）与**引入平台服务**，须先有可见性结论，否则会引出新的
   「机制存在但读不到」的假闸门。
@@ -638,15 +675,19 @@
 
 ### D3. 是否引入 `(subject, relation, object)` 细粒度取代？
 
-> **★★★ 第三个独立样本（v1.15.40 第 2 轮，论文层；`MATERIALS.md` §3.2）**：**MemStrata**
-> （[arXiv:2606.26511](https://arxiv.org/abs/2606.26511)，2026-06-25，21 页，**已发布 harness + 数据集 + 评测协议**）
-> —— 它用的正是 **`(subject, relation, object)` 三元组**，机制是「**确定性取代规则 + 双时间账本**，
-> **无相似度阈值、无 LLM 调用**」，并用 **AUROC 0.59（近随机）** 量化「相似度分辨不出『被推翻』与『换说法』」。
-> 它的读数（**作者声称，本仓未复现**）：演化知识 **0.95–1.00**（RAG **0.20–0.47**）、
-> **stale-fact-error rate：RAG 15–40% → 它 ~0%**、延迟 ~2.1s vs 重排基线 ~16–18s。
-> ⇒ 对 D3 的两条直接用途：① **第三个独立样本**（hl_mem 用四元坐标 / 本仓用单键+时间序 / 它用三元组），
-> 且**唯一带数据集**；② 给出一个本仓**没有的指标**——「**stale-fact-error rate**」，
-> 它是「错误方向不对称」的**可测形态**（正是本仓 T11/T14 缺的判据面）。**未读全文，不得引用其结论**。
+> **★★★ 第四个独立样本（v1.15.40 第 2–3 轮，论文层；`MATERIALS.md` §3.2，裁定 `adr/0080`）**：**MemStrata**
+> （[arXiv:2606.26511](https://arxiv.org/abs/2606.26511)，2026-06-25，21 页；**已一手读完正文 + Appendix B/C/D + Table 1/2/3**）
+> —— **取代键是 `(subject, relation)` 二元组**（`object` 是被比较的值；**我第 2 轮写成三元组，已更正**），
+> 机制「If one exists with a *different* object, the new assertion supersedes it ... **No cosine, no LLM judge**」，
+> 账本实现只有 `valid_from / valid_to / superseded_by` 三字段（as-of **作者自陈未评测**）。
+> **两条对 D3 最有用的读数**：① **`stale-fact-error rate`**（分子=以被取代值作答的矛盾题数，分母=矛盾题数 30/20/20/20）
+> 且**允许弃答 / 强制作答两 regime 必须同报**（Table 3：naive_rag forced 0.40/0.35/0.15/0.35 vs 它 0.03/0/0/0）；
+> ② **去掉取代层的消融**：演化准确率 **0.99→0.33**（≈naive_rag 0.32），而**条件编造率 0.04→0.25（~6×）**
+> ⇒ **这是「错误方向不对称」的另一侧代价**（不取代 ⇒ 编造暴增），本仓此前只有「并存噪音」那一侧。
+> **⚠ 它的键相等性靠 LLM 抽取保证**（Appendix C.1：prompt 要求「differ only in the value must produce the SAME
+> subject and relation」），且 §7 把 `entity canonicalization, relation typing` 列为**未来工作** ⇒
+> **键这一层不可照抄**（与本仓 ADR-0059 写路径无 LLM 冲突）；可照抄的只有**指标与协议**（→ T11①/T14）。
+> **⚠ 可复现材料**：声称发布 harness/数据集，但**本版未给地址**（双盲）⇒ 不得写作「已发布」。
 
 > **★★ 对照面已在 v1.15.39 被实质改写（`adr/0078` D6，**首次本地克隆读源码**）**：
 > 0076 读到的 `docs/adr/0004` 是**文档层面**的完整协议；**落地形态**是**窄面 + 默认只建议**：
@@ -858,6 +899,12 @@
 - **依据**：知识库治理调研的空白第 1 条。
 - **现状**：证据只到「过期知识造成伤害」+「确定性取代有效」，**没跨到「必须存 expiry 字段」**。
 - **纪律**：落地该字段**需自证**，不能引文献充当已证。
+- **进度（v1.15.40 第 3 轮 / `adr/0080` §2，MemStrata 全文）**：**文献缺口的范围被精确化**——
+  连一份**专门讲时间有效性**的论文，也**没有对「有效期/双时间字段」做对照消融**：它只对**取代层**做了消融
+  （D.1/D.1b），而账本侧自陈「as-of 是 **a capability we build on but do not evaluate here**」，
+  且实现里只有 `valid_from / valid_to / superseded_by` 三字段（§4.2）。
+  ⇒ **G1 仍然只能自建**，但可借它的**消融形态**：单变量 flag（`retain_all_turns`，**默认关**、写路径其余冻结）、
+  **两侧夹逼**（过度合并丢静态召回 vs 不取代丢时间有效性）、以及**同时报代价方向**（不取代 ⇒ 条件编造率 ~6×）。
 
 ### G2. CLI / 本地二进制层的「工具数量拐点」无论文
 
