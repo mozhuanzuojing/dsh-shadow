@@ -16,7 +16,7 @@
       "dirs": 168,
       "files": 787,
       "findingsA": 39,
-      "findingsB": 107,
+      "findingsB": 110,
       "fingerprint": "fd98f8e3d00bb8c6e214f0a9d7553c57d9f1f60becfb1984fa561accc499b242"
     }
   },
@@ -30,6 +30,6 @@
     "a2b": 0,
     "a3": 11,
     "a_total": 39,
-    "b_keys": 107
+    "b_keys": 110
   }
 }

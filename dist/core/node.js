@@ -9,6 +9,26 @@ import { validateAtomProjection } from "./lineage-validator.js";
 const CODE_EXT = /\.(java|kt|ts|tsx|js|jsx|py|go|rs|vue|scala|cs|cpp|c|h|sql|xml|json|yaml|yml)$/i;
 const DOC_EXT = /\.(md|markdown|pdf|docx?|txt|rst)$/i;
 const CODE_PREFIX = /(src|backend|frontend|impl|core|main|api|io|service|controller|module)\//;
+/**
+ * 被 Evidence Gate 拒收的原子（**可观测**：manifest 的「失败项」必须反映它）。
+ *
+ * 为什么需要它（v1.15.57 修）：`deriveShadowNodes` 里 `if (!gate.allowed) continue` 把拒收
+ * **只丢不记**，而 manifest 的唯一诊断通道是 `buildManifest("1", nodes)` —— 第三个参数
+ * （`failures`）**从来没被传过**，于是 `renderManifest` 恒报「失败项 0」，
+ * 而实际有一批原子被挡在投影之外（ADR-0066 校准后仍有约 1.3% 的库）。
+ * 「报告 0 失败而实际有失败」比不报告更坏 —— 它让人以为这条路径没有问题。
+ *
+ * 判据与 `deriveShadowNodes` **同源**（同一个 `validateAtomProjection` 调用），不另写一套。
+ */
+export const deriveShadowNodeFailures = (parsed) => {
+    const out = [];
+    for (const p of parsed) {
+        const gate = validateAtomProjection({ type: nodeTypeOf(p), kind: p.kind, lineage: p.lineage });
+        if (!gate.allowed)
+            out.push({ path: String(p.rel || `${p.date}/${p.entry || p.goal || "memory"}`), reason: String(gate.reason || "未通过 Evidence Gate") });
+    }
+    return out;
+};
 export const nodeTypeOf = (p) => {
     const entry = String(p.entry || "");
     if (p.decisions.length || p.goal)

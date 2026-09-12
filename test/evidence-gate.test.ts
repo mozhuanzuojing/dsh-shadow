@@ -40,4 +40,30 @@ const src = deriveShadowNodes.toString();
 assert.ok(!/\b(generate|infer|guess)\b/.test(src), "deriveShadowNodes 源码不应含 generate/infer/guess");
 console.log("✔ evidence-gate：metadata memory 与无证据 decision 被排除，有证据 decision/code 保留，且 projection 无 generate/infer/guess");
 
+// ── v1.15.57：**被拒收的原子必须可观测**（manifest 曾恒报「失败项 0」） ──
+{
+  const { deriveShadowNodeFailures } = await import("../dist/core/node.js");
+  const { buildManifest, renderManifest } = await import("../dist/core/manifest.js");
+  const parsed = [
+    meta,      // 排除
+    decNoEv,   // 排除
+    decEv,     // 保留
+    atom({ entry: "src/AuthFilter.java", materials: ["src/AuthFilter.java"], kind: "experience", lineage: lin([{ type: "file", locator: "src/AuthFilter.java" }], "tool") }), // 保留
+  ];
+  const ns = deriveShadowNodes(parsed as any);
+  const fails = deriveShadowNodeFailures(parsed as any);
+
+  // **不变量**：进来的原子 = 投影成节点的 + 被拒收的（没有「凭空少一条」的第三条路）
+  assert.equal(ns.length + fails.length, parsed.length, `节点 ${ns.length} + 失败 ${fails.length} 必须等于原子 ${parsed.length}`);
+  assert.equal(fails.length, 2, "两个被拒原子必须都被记下来");
+  assert.ok(fails.every((f) => f.path && f.reason), "每条失败都要有 path 与 reason（否则等于没记）");
+
+  // manifest 必须显示真实失败数，而不是恒 0
+  const rendered = renderManifest(buildManifest("1", ns, fails) as any);
+  assert.ok(rendered.includes(`失败项：${fails.length}`), `manifest 必须报真实失败数，实际渲染：${rendered.split("\n")[3]}`);
+  assert.ok(!rendered.includes("失败项：0"), "★ 不得再恒报「失败项 0」");
+  assert.ok(rendered.includes("## 失败项"), "有失败时必须列出失败项");
+  console.log("✔ v1.15.57：被拒收的原子进 manifest（失败项不再恒 0；节点+失败=原子）");
+}
+
 console.log("ALL PASS ✅");

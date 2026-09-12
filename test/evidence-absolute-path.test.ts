@@ -35,7 +35,7 @@ const absExisting = [
 ];
 for (const p of absExisting) {
   assert.ok(existsSync(p), `夹具应存在：${p}`);
-  assert.equal(await fsExists(fs, WS, p), true, `绝对路径存在却被判不存在（双前缀回归）：${p}`);
+  assert.equal(await fsExists(fs, WS, p), "exists", `绝对路径存在却被判不存在（双前缀回归）：${p}`);
 }
 console.log(`✔ ① 绝对路径（存在）正确判 true：${absExisting.length} 条（修复前全为 false）`);
 
@@ -45,7 +45,7 @@ console.log(`✔ ① 绝对路径（存在）正确判 true：${absExisting.leng
 const outside = resolve(REPO, "adr");                   // 目录也可（readText 会抛 → 见下）
 const outsideFile = resolve(REPO, "README.md");
 assert.ok(existsSync(outsideFile));
-assert.equal(await fsExists(fs, WS, outsideFile), true, "工作区外的绝对路径存在 → true");
+assert.equal(await fsExists(fs, WS, outsideFile), "exists", "工作区外的绝对路径存在 → true");
 console.log("✔ ② 工作区外的绝对路径同样正确（跨项目引用不再被误判）");
 
 // ─────────────────────────────────────────────
@@ -54,7 +54,7 @@ console.log("✔ ② 工作区外的绝对路径同样正确（跨项目引用�
 const absMissing = [resolve(REPO, "definitely-__nope__", "x.ts"), "D:/__nope__/y.ts"];
 for (const p of absMissing) {
   assert.ok(!existsSync(p), `夹具不应存在：${p}`);
-  assert.equal(await fsExists(fs, WS, p), false, `不存在的绝对路径应判 false：${p}`);
+  assert.equal(await fsExists(fs, WS, p), "missing", `不存在的绝对路径应判 false：${p}`);
 }
 console.log("✔ ③ 绝对路径（不存在）仍正确判 false（没有变成「一律为真」）");
 
@@ -62,19 +62,22 @@ console.log("✔ ③ 绝对路径（不存在）仍正确判 false（没有变�
 // ④ 相对路径：行为不变（拼工作区）
 // ─────────────────────────────────────────────
 const rel = "package.json";
-assert.equal(await fsExists(fs, REPO, rel), true, "相对路径应按工作区解析（行为不变）");
-assert.equal(await fsExists(fs, WS, "definitely/__nope__.ts"), false, "相对路径不存在 → false");
+assert.equal(await fsExists(fs, REPO, rel), "exists", "相对路径应按工作区解析（行为不变）");
+assert.equal(await fsExists(fs, WS, "definitely/__nope__.ts"), "missing", "相对路径不存在 → false");
 console.log("✔ ④ 相对路径行为不变（拼工作区）");
 
 // ─────────────────────────────────────────────
-// ⑤ 无法判定时不误伤（沿用原口径：视为存在）
+// ⑤ **判不了 ≠ 存在**（v1.15.57 改口径）
+//    旧口径把「无 fs / 无工作区」都 `return true`，于是 provider 报
+//    `verified / confidence 0.99 / fresh` —— **缺件被伪装成已核实**（而且是最高置信度那档）。
+//    现在报 `undecidable` ⇒ provider 返回 `status:"unavailable"`（消费方打印 reason、不计入 missing）。
 //    注意：ws 缺失**不再**让绝对路径自动为真 —— 那正是修复点
 // ─────────────────────────────────────────────
-assert.equal(await fsExists(fs, "", rel), true, "无工作区 + 相对 → 无法判定，视为存在");
-assert.equal(await fsExists(fs, "", outsideFile), true, "无工作区 + 绝对存在 → 仍可判 true");
-assert.equal(await fsExists(fs, "", "D:/__nope__/z.ts"), false, "无工作区 + 绝对不存在 → 可判 false");
-assert.equal(await fsExists(null, WS, rel), true, "无 fs → 视为存在");
-console.log("✔ ⑤ 无法判定时不误伤；无工作区也能正确判绝对路径");
+assert.equal(await fsExists(fs, "", rel), "undecidable", "无工作区 + 相对 → **判不了**（不再伪装成存在）");
+assert.equal(await fsExists(fs, "", outsideFile), "exists", "无工作区 + 绝对存在 → 仍可判 exists");
+assert.equal(await fsExists(fs, "", "D:/__nope__/z.ts"), "missing", "无工作区 + 绝对不存在 → 可判 missing");
+assert.equal(await fsExists(null, WS, rel), "undecidable", "无 fs → **判不了**（不再伪装成存在）");
+console.log("✔ ⑤ 判不了 ⇒ undecidable（不再伪装成存在）；无工作区也能正确判绝对路径");
 
 // ─────────────────────────────────────────────
 // ⑥ isAbsoluteLocator：单一来源判定（filesystem 与 semble 共用）
@@ -93,11 +96,11 @@ console.log(`✔ ⑥ isAbsoluteLocator 单一来源：绝对 ${abs.length} 例 /
 const dirs = [REPO, resolve(REPO, "evidence"), WS];
 for (const d of dirs) {
   assert.ok(existsSync(d), `夹具目录应存在：${d}`);
-  assert.equal(await fsExists(fs, WS, d), true, `目录存在却被判缺失：${d}`);
+  assert.equal(await fsExists(fs, WS, d), "exists", `目录存在却被判缺失：${d}`);
 }
-assert.equal(await fsExists(fs, WS, "D:/__nope__/dir"), false, "不存在的目录应判 false");
-assert.equal(await fsExists(fs, REPO, "evidence"), true, "相对目录名（拼工作区）应判 true");
-assert.equal(await fsExists(fs, REPO, "__nope_dir__"), false, "相对目录不存在 → false");
+assert.equal(await fsExists(fs, WS, "D:/__nope__/dir"), "missing", "不存在的目录应判 false");
+assert.equal(await fsExists(fs, REPO, "evidence"), "exists", "相对目录名（拼工作区）应判 true");
+assert.equal(await fsExists(fs, REPO, "__nope_dir__"), "missing", "相对目录不存在 → false");
 console.log("✔ ⑧ 目录引用正确判存在（修复前全为 false）");
 
 // ─────────────────────────────────────────────
@@ -129,4 +132,28 @@ console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · `[object Object]` 类脏 locator 的处理（属证据清洗，不在本修复范围）；");
 console.log("  · 真机 DSH 内 host.fs 的 resolve 语义（本测试用 node:path + 真实磁盘模拟）。");
+// ─────────────────────────────────────────────
+// ⑪ **判不了 ⇒ unavailable，不得报 verified**（v1.15.57）
+//    「缺件伪装成已核实」是本仓最贵的一类错：它给的是 0.99 置信度 + fresh，
+//    直接决定召回打分（×0.5）与 stale 裁决，而它依据的其实是一次「没读到」。
+// ─────────────────────────────────────────────
+{
+  const { fsEvidenceProvider } = await import("../dist/evidence/filesystem.js");
+  const ctx = (fsv) => ({ fs: fsv, ws: "" }); // 无工作区 ⇒ 相对 locator 判不了
+  const und = await fsEvidenceProvider.verify({ path: "some/rel.ts" }, ctx(fs));
+  assert.equal(und.status, "unavailable", "★ 判不了必须是 unavailable，不是 verified");
+  assert.equal(und.confidence, 0, "判不了不得给置信度");
+  assert.equal(und.freshness, "stale", "判不了不得报 fresh");
+  assert.equal(und.provenance.reason, "undecidable_input", "原因必须可见（ADR-0049）");
+
+  // 对照：绝对路径存在 ⇒ 仍然 verified（修复不能把「真能判」的那些也降级）
+  const ok = await fsEvidenceProvider.verify({ path: outsideFile }, ctx(fs));
+  assert.equal(ok.status, "verified");
+  assert.equal(ok.confidence, 0.99);
+  // 对照：确认不存在 ⇒ not_found
+  const nf = await fsEvidenceProvider.verify({ path: "D:/__nope__/zz.ts" }, ctx(fs));
+  assert.equal(nf.status, "not_found");
+  console.log("✔ ⑪ fsEvidenceProvider：判不了 ⇒ unavailable(0/stale) · 存在 ⇒ verified(0.99) · 不存在 ⇒ not_found");
+}
+
 console.log("ALL PASS ✅");

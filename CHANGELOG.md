@@ -3,6 +3,28 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.57] **证据面与报告面：「判不了」不得伪装成「已核实」** —— `verify` 52/52
+
+**一句话**：这一轮修的是**会直接改变裁决**的两种谎 —— **「读不出」被说成「证据仍在」**（还带 `0.99` + `fresh`），
+与**「工具报错」被说成「证据不存在」**。
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **`fsExists` 把「判不了」返回 `true`** | 无 `fs` / 无工作区 / `ref.path` 为空 ⇒ provider 报 **`verified` + `confidence 0.99` + `fresh`**：**缺件伪装成已核实**，而且是**最高置信度那一档**；它直接决定召回 `score × 0.5` 与 stale 裁决 —— 依据却是一次「没读到」 | `fsExists` 改**三态**；`undecidable` ⇒ `status:"unavailable"`（既有状态，消费方已会打印 reason、不计入 missing），`confidence: 0`、`freshness: "stale"` |
+| **「读不出来」被判成「不存在」** | `readText` + `listDir` 都抛时一律 `false` ⇒ **EACCES / 后端异常**被当成「证据失效」⇒ `×0.5 + stale`（**假漂移**） | 只有**明确不存在**才算 `missing`：判据认**宿主契约自己的** `FS_NOT_FOUND`（`dsh-fs-local` 用这个，不是 `ENOENT`）与 ENOENT 文本；其余 `undecidable` |
+| **zg 报错被改写成 `not_found`** | `unavailable:false, reason:"error"` ⇒ 落到 `not_found` 分支 ⇒ **一次工具失败被当成「该证据已失效」**。语义上我们**没能验证**，不是「验证了它不在」 | `unavailable: true, reason:"error"`；`ERR_CHILD_PROCESS_STDIO_MAXBUFFER`（缓冲太小）单列 `reason:"output_too_large"` |
+| **manifest 恒报「失败项 0」** | `if (!gate.allowed) continue` **只丢不记**，而 `buildManifest("1", nodes)` **从不传第三参**（`failures`）⇒ 恒报 0，而实际有一批原子被挡在投影外。**报 0 失败比不报更坏** | 新增 `deriveShadowNodeFailures`（与 `deriveShadowNodes` **同源**）；`rebuild(derive, failures)` → `buildManifest(..., failures)`；`loadOrBuildProjection` 加**惰性** failures thunk（命中缓存时**不多付**物化代价）；`query/reads.ts` 接上 |
+
+**闸**：`test/evidence-gate.test.ts` 新增不变量「**节点数 + 失败数 = 原子数**」+ `renderManifest` 必须显示真实失败数且**不得**出现「失败项：0」；
+`test/evidence-absolute-path.test.ts` ⑤ 改口径 + 新增 ⑪（判不了 ⇒ `unavailable`/0/stale · 存在 ⇒ `verified`/0.99 · 不存在 ⇒ `not_found`）。
+
+**证据**：`verify` **52/52**；棘轮如实变红 `b_keys 107 → 110`（**+3 正是本轮新增的三态判据**），逐条点名后重录。
+
+**仍未修**：`_index.md` 不进指纹 · 证据路径上限无披露 · `observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 ·
+`reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · `adr/0083` §6.3 六条待定语义 ·
+**169 个既存测试类型错误** · **整目录未读**。
+
+
 ## [v1.15.56] **继续 review fix all：修 5 处「报告面/闸面会说谎」** —— `verify` 52/52
 
 **挑选原则**：**报告的诚实性优先于功能** —— 一个报告「失败项 0」而实际有失败的系统，会让人做出错误决定。

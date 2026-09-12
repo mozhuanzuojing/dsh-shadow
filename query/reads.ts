@@ -5,6 +5,7 @@
 import {
   deriveEpisodes, renderEpisodes, deriveDecisions, renderDecisions,
 } from "../core/episode.js";
+import type { ParsedMemory } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
@@ -18,7 +19,7 @@ import {
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
 import { loadOrBuildProjection, shadowSourcesFingerprint } from "../core/projection-store.js";
-import { deriveShadowNodes, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
+import { deriveShadowNodes, deriveShadowNodeFailures, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
 import { listResourceCards, deriveResourceNodes } from "../core/resource.js";
 import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
@@ -106,12 +107,16 @@ const shadowQuery: ReadQuery = {
     const { fs, ws, flushWarn } = ctx;
     const topicQ = String(args?.topic || "").trim();
     const qStart = Date.now();
+    // `parsedAtoms` 只被 `failures` 在**真正 rebuild 时**读取（此时 derive 刚跑过 ⇒ 已填充）；
+    // 命中投影缓存时不会多付一次物化/解析代价（那是投影缓存存在的意义）。
+    let parsedAtoms: ParsedMemory[] | undefined;
     const { nodes, cached } = await loadOrBuildProjection(fs, ws, deps.config, async () => {
       const { parsed } = await materializeAtoms(fs, ws, deps.config);
+      parsedAtoms = parsed;
       // 记忆原子投影 + 资源卡投影（.shadow/resources/，无证据的卡片不上投影）
       const cards = await listResourceCards(fs, ws);
       return [...deriveShadowNodes(parsed), ...deriveResourceNodes(cards)];
-    }, () => shadowSourcesFingerprint(fs, ws));
+    }, () => shadowSourcesFingerprint(fs, ws), () => (parsedAtoms ? deriveShadowNodeFailures(parsedAtoms) : []));
     const scope = Array.isArray(args?.scope) ? args.scope.filter((t: string) => ["memory", "code", "document", "decision", "concept", "resource"].includes(t)) : [];
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 8));
     const items = queryShadow(nodes, topicQ, scope, limit);

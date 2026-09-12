@@ -1403,3 +1403,16 @@ V/G/T6 真机与外部条件项
 `observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 · `reads.ts` 截断只写 log ·
 `episode.ts` 缺时刻被默认值掩盖 · zg 报错→not_found · `filesystem.ts` 读失败/不存在不分 ·
 缺 locator 当存在 · §6.3 六条待定语义 · **169 个测试类型错误** · 整目录未读。
+
+### 6.7 状态更新（v1.15.57）：又修 4 处（**证据面/报告面** —— 会直接改变裁决的两种谎）
+
+| 原线索 | 状态 |
+|---|---|
+| 缺 locator 被当成「存在」（`evidence/filesystem.ts:22`）⇒ `verified`/0.99/fresh | ✅ **已修**：`fsExists` 改三态；`undecidable` ⇒ `unavailable`（0/stale + reason） |
+| `filesystem.ts` 读失败与不存在不分 | ✅ **已修**：只有明确不存在（`FS_NOT_FOUND` / ENOENT）算 `missing`，其余 `undecidable` |
+| zg 报错 → `not_found`（`evidence/zg.ts:72`）⇒ 假漂移 | ✅ **已修**：`unavailable: true, reason:"error"`；`MAXBUFFER` 单列 `output_too_large` |
+| `manifest.failures` 恒空（`core/node.ts:49` + `projection-store.ts:70`） | ✅ **已修**：`deriveShadowNodeFailures`（同源判据）+ `rebuild(derive, failures)` + 惰性 thunk；不变量「节点+失败=原子」成闸 |
+
+**仍未修**：`_index.md` 不进指纹 · 证据路径上限无披露 · `observer/projection.ts` 可见性不一致 ·
+快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · §6.3 六条待定语义 ·
+**169 个测试类型错误** · 整目录未读（含 `tools/*.selftest.ts`）。

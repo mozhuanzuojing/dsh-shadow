@@ -4,7 +4,10 @@ export interface ShadowProjectionStore {
     save(nodes: ShadowNode[]): Promise<void>;
     load(): Promise<ShadowNode[] | null>;
     invalidate(): Promise<void>;
-    rebuild(derive: () => Promise<ShadowNode[]>): Promise<ShadowNode[]>;
+    rebuild(derive: () => Promise<ShadowNode[]>, failures?: {
+        path: string;
+        reason: string;
+    }[]): Promise<ShadowNode[]>;
     /**
      * ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。
      *
@@ -65,7 +68,15 @@ export declare const shadowSourcesFingerprint: (fs: any, ws: string) => Promise<
  *   - 提供了但不一致 / 任一侧不可判定（旧缓存无指纹、后端不报 size/version） → **保守重建**。
  *   理由：缓存是**性能特性不是真相**（ADR-0046），宁可重建也不返回陈旧投影。
  */
-export declare const loadOrBuildProjection: (fs: any, ws: string, cfg: any, derive: () => Promise<ShadowNode[]>, sourceFingerprint?: () => Promise<string | undefined>) => Promise<{
+export declare const loadOrBuildProjection: (fs: any, ws: string, cfg: any, derive: () => Promise<ShadowNode[]>, sourceFingerprint?: () => Promise<string | undefined>, 
+/**
+ * **被拒收的原子**（只在真正 rebuild 时求值 ⇒ 命中缓存时不会多付一次物化代价）。
+ * v1.15.57：不传就还是旧行为（`failures = []`），但生产调用点必须传 —— 否则 manifest 会谎报 0。
+ */
+failures?: () => {
+    path: string;
+    reason: string;
+}[]) => Promise<{
     nodes: ShadowNode[];
     cached: boolean;
 }>;

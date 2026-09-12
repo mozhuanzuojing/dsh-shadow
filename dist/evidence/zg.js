@@ -54,10 +54,17 @@ export const runZg = async (args, ctx, timeoutMs = 8000) => {
                         return resolve({ unavailable: true, reason: "zg_not_installed" });
                     if (err.killed || err.signal)
                         return resolve({ unavailable: true, reason: "timeout" });
+                    // 缓冲太小**不是**「zg 坏了」，也不是「证据不存在」——单独给一个可诊断的原因（v1.15.57）。
+                    if (err.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")
+                        return resolve({ unavailable: true, reason: "output_too_large" });
                     const s = String(stderr || "");
                     if (/index/i.test(s))
                         return resolve({ unavailable: false, freshness: "possibly_stale", reason: "index_missing", stdout: s });
-                    return resolve({ unavailable: false, reason: "error", stdout: (stdout || "") + s });
+                    // **工具报错 ≠ 证据不存在**（v1.15.57 修）：旧版这里 `unavailable: false, reason:"error"`，
+                    // 于是落到下面的 `not_found` 分支 ⇒ 一次 zg 失败被当成「**该证据已失效**」：
+                    // `arbitrate` 把它计进 missing、召回 `score × 0.5` + `stale=true`（**假漂移**）。
+                    // 语义上我们**没能验证**，而不是「验证了它不在」⇒ 必须报 `unavailable`（消费方会打印 reason）。
+                    return resolve({ unavailable: true, reason: "error", stdout: (stdout || "") + s });
                 }
                 resolve({ unavailable: false, stdout: String(stdout || "") });
             });

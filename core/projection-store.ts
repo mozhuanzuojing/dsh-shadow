@@ -12,7 +12,7 @@ export interface ShadowProjectionStore {
   save(nodes: ShadowNode[]): Promise<void>;
   load(): Promise<ShadowNode[] | null>;   // null = 无缓存 / 读到坏数据（需 rebuild）
   invalidate(): Promise<void>;
-  rebuild(derive: () => Promise<ShadowNode[]>): Promise<ShadowNode[]>;
+  rebuild(derive: () => Promise<ShadowNode[]>, failures?: { path: string; reason: string }[]): Promise<ShadowNode[]>;
   /**
    * ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。
    *
@@ -63,11 +63,12 @@ export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectio
     async invalidate() {
       try { const t = await target(); await fs.writeText(t, ""); } catch { /* best-effort */ }
     },
-    async rebuild(derive) {
+    async rebuild(derive, failures = []) {
       const nodes = await derive();
       await this.save(nodes);
-      // ADR-0048⑧：重建后写 manifest（可观测：节点数/来源数/构建时间）。
-      await writeManifest(fs, ws, buildManifest("1", nodes));
+      // ADR-0048⑧：重建后写 manifest（可观测：节点数/来源数/构建时间/失败项）。
+      // v1.15.57：`failures` 必须**真的传进来** —— 此前该参数从不被传，`renderManifest` 恒报「失败项 0」。
+      await writeManifest(fs, ws, buildManifest("1", nodes, failures));
       return nodes;
     },
     async invalidateFor(set) {
@@ -163,6 +164,11 @@ export const loadOrBuildProjection = async (
   cfg: any,
   derive: () => Promise<ShadowNode[]>,
   sourceFingerprint?: () => Promise<string | undefined>,
+  /**
+   * **被拒收的原子**（只在真正 rebuild 时求值 ⇒ 命中缓存时不会多付一次物化代价）。
+   * v1.15.57：不传就还是旧行为（`failures = []`），但生产调用点必须传 —— 否则 manifest 会谎报 0。
+   */
+  failures?: () => { path: string; reason: string }[],
 ): Promise<{ nodes: ShadowNode[]; cached: boolean }> => {
   if (!cfg?.projectionStore?.enabled) return { nodes: await derive(), cached: false };
   const store = getProjectionStore(fs, ws);
@@ -175,7 +181,7 @@ export const loadOrBuildProjection = async (
     const fpSaved = await readFingerprint(fs, ws);
     if (fpNow !== undefined && fpSaved !== undefined && fpNow === fpSaved) return { nodes: cached, cached: true };
   }
-  const nodes = await store.rebuild(derive);
+  const nodes = await store.rebuild(derive, failures ? failures() : undefined);
   if (fpNow !== undefined) await writeFingerprint(fs, ws, fpNow);
   return { nodes, cached: false };
 };

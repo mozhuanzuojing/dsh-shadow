@@ -120,3 +120,30 @@
 `filesystem.ts` 读失败/不存在不分 · 缺 locator 当存在 · §6.3 六条**待定语义** ·
 **169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
 以及审查者点名「可能是最高危假绿源」的 `tools/*.selftest.ts`）。
+
+---
+
+## 8. 第五轮（v1.15.57）：证据面与报告面 —— 「判不了」不得伪装成「已核实」
+
+挑选原则同第四轮（**报告/证据的诚实性优先**）。这一轮修的是**会直接改变裁决**的两种谎：
+**「读不出」被说成「证据仍在」**（还带 0.99 置信度 + fresh），与**「工具报错」被说成「证据不存在」**。
+
+| 缺陷 | 为什么是真缺陷 | 修法 |
+|---|---|---|
+| **`fsExists` 把「判不了」返回 `true`** | 无 `fs` / 无工作区 / `ref.path` 为空时旧实现 `return true`（注释写「无法判定时视为存在，避免误伤」）⇒ provider 报 **`status:"verified", confidence:0.99, freshness:"fresh"`**：**缺件伪装成已核实**，而且是**最高置信度那一档**。它直接决定召回 `score × 0.5` 与 stale 裁决 —— 依据却是一次「没读到」 | `fsExists` 改**三态** `"exists" \| "missing" \| "undecidable"`；`undecidable` ⇒ `status:"unavailable"`（既有状态，消费方已会打印 reason、不计入 missing），`confidence: 0`、`freshness: "stale"` |
+| **「读不出来」被判成「不存在」** | `readText` + `listDir` 都抛时旧实现一律 `return false` ⇒ **EACCES / 后端异常**被当成「证据失效」⇒ `score×0.5 + stale`（**假漂移**） | 只有**明确的不存在**才算 `missing`：判据认**宿主契约自己的标记** `FS_NOT_FOUND`（`dsh-fs-local` 对不存在路径抛这个，不是 `ENOENT`）以及 ENOENT 文本；其余一律 `undecidable` |
+| **zg 报错被改写成 `not_found`** | `runZg` 在非 ENOENT / 非超时时返回 `unavailable:false, reason:"error"` ⇒ 落到 `zgVerify` 的 `not_found` 分支 ⇒ **一次工具失败被当成「该证据已失效」**：`arbitrate` 计入 missing、召回 `×0.5 + stale`。语义上我们**没能验证**，不是「验证了它不在」 | `unavailable: true, reason: "error"`；并把 `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`（缓冲太小）单列为 `reason: "output_too_large"` —— 那个此前混在 `error` 里，看起来像「zg 坏了」 |
+| **manifest 恒报「失败项 0」** | `deriveShadowNodes` 的 `if (!gate.allowed) continue` **只丢不记**，而 manifest 的唯一诊断通道 `buildManifest("1", nodes)` **从不传第三个参数**（`failures`） ⇒ `renderManifest` 恒报「失败项 0」，而实际有一批原子被挡在投影之外。**报 0 失败比不报更坏**：它让人以为这条路径没有问题 | 新增 `deriveShadowNodeFailures`（与 `deriveShadowNodes` **同源**，同一个 `validateAtomProjection`）；`rebuild(derive, failures)` → `buildManifest(..., failures)`；`loadOrBuildProjection` 增加**惰性** `failures` thunk（只在真正 rebuild 时求值 ⇒ 命中投影缓存时**不多付**一次物化代价）；唯一生产调用点 `query/reads.ts` 接上 |
+
+**标定**：
+- `test/evidence-gate.test.ts` 新增**不变量**：`节点数 + 失败数 = 原子数`（没有「凭空少一条」的第三条路），且 `renderManifest` 必须显示真实失败数、**不得**出现「失败项：0」。
+- `test/evidence-absolute-path.test.ts` ⑤ 改口径（**判不了 ⇒ `undecidable`**，不再是「视为存在」）、新增 ⑪（provider：判不了 ⇒ `unavailable`/0/stale · 存在 ⇒ `verified`/0.99 · 不存在 ⇒ `not_found`）。
+
+**证据**：`verify` **52/52**；棘轮如实变红 `b_keys 107 → 110`（**+3 正是本轮新增的三态判据** `state=exists` / `state=undecidable` 等），逐条点名后重录。
+
+### 8.1 仍未修
+
+`_index.md` 不进指纹 · 证据路径上限（`.slice(0,12)`）无披露 · `observer/projection.ts` 可见性不一致 ·
+快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · **§6.3 六条待定语义** ·
+**169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
+以及 `tools/*.selftest.ts`）。
