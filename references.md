@@ -308,7 +308,7 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 **marker-free 不变式 + 词边界 tell 自检**（T11①）；**两侧夹逼的消融形态**（G1）。
 **边界**：A.1/A.2 表体与 Table 4/5 **未读到**（HTML 截断，尝试路径见 `adr/0080`）；**本版无任何可克隆地址**（双盲）。
 
-### 6.5 **平台 `invariants` 契约实测**（2026-09-12 第 4 轮，T16 第 3 项前置）—— 两问已答，一问**仍未定位**
+### 6.5 **平台 `invariants` 契约实测**（2026-09-12 第 4 轮，T16 第 3 项前置）—— 两问已答，第三问**经实测改判（见 §6.5.1）**
 
 **为什么单列**：`BACKLOG.md` T16 第 3 项把 `ctx.invariants` 列为本仓**唯一**值得吸收的平台服务，但挂了
 **两条前置未确认**（(a) 失败是否阻断宿主启动；(b) 选择由谁配置、默认是否执行）。若 (b) 的答案是「默认不跑」，
@@ -346,7 +346,8 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
    产品检查；只挂载服务的组合观察不到任何行为」。⇒ 即使拿到 registry，**检查是否真的跑，取决于 `register()` 是否被调用**，
    而不是取决于服务在不在。对本仓的含义：**必须在插件体里主动 `register()`**（别人不会替本仓挂配套入口），
    这反而是**有利**的——不需要改宿主组合。
-4. **仍未定位（诚实标注，不猜）**：**运行中的 web 宿主确实有 `invariants` 服务**（`cordis_inspect_query` 宿主
+4. ⚠ **【本条已作废 —— 同轮运行时实测推翻，见 §6.5.1】** 原文（保留以留档我的错误）：
+   **仍未定位（诚实标注，不猜）**：**运行中的 web 宿主确实有 `invariants` 服务**（`cordis_inspect_query` 宿主
    Service 目录里有该项，描述逐字为「Package-owned invariant registry with global and regex-based selection」），
    但**我没有在它声明的任何一层组合里找到挂载行**。已排除（逐项 grep，见下）：`dsh-base` / `dsh-web-app` /
    `@tt-a1i/archify-dsh` / `dsh-shadow` 的 `cordis.patch.yml`、用户在 `~/.dsh/profiles/web/cordis.patch.yml` 的补丁层、
@@ -370,6 +371,62 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 > ⇒ 与 ADR-0074 补记里那次「只 grep 三个包就断言环境变量不存在」是**同一族错误的第二个变体**：
 > **不是范围写小了，而是工具静默缩小了范围**。**纪律**：凡以「0 命中」为结论的搜索，
 > 必须**先证明枚举到了一个非空且完整的语料**（计数、或同时用第二种工具交叉验证）。
+
+#### 6.5.1 **更正（同轮，实测后）—— 上面第 4 条是错的：`invariants` 并没有被挂载**
+
+> 上面第 4 条写「**运行中的 web 宿主确实有 `invariants` 服务**」，依据是**运行体 Service 目录**。
+> 我随后做了一次**运行时读取**，结论被推翻。**第 4 条作废**，本条取代它。
+
+**探测方式**：定义一个**只读**动态 Host 插件，在 `apply(ctx)` 里读 `ctx.get(name)`，把结果以异常送出
+（动态插件没有别的即时回传通道；`console.log` **不进** `~/.dsh/dsh-web.stdout.log`——该文件是**旧文件**，
+2026-08-20 之后未再写入）。探测代码**不 `JSON.stringify` 任何活对象**，只读 `constructor.name` 这类叶子字段。
+
+**逐名读数（verbatim，两次探测合并）**：
+| 名字 | `ctx.get` 结果 | 名字 | `ctx.get` 结果 |
+|---|---|---|---|
+| `llm` / `tools` / `web` / `sessions` / `agents` | 有 | **`invariants`** | **`undefined`** |
+| `jobs` / `storage` / `storageDomain` / `sessionProjections` / `sandboxPolicy` | 有 | `e2b` / `terminal` / `terminals` | `undefined` |
+| `subprocess` / `attachments` / `skills` / `goals` / `subagents` / `settings` / `commands` | 有 | **`authorization`** / **`inspector`** | `undefined` |
+| `spillStore` / `tokenMeter` / `shellEnv` / `userQuestions` / `codeRuntime` / `sessionTitle` | 有 | `definitelyNotAServiceControl`（对照） | `undefined` |
+| `credentials` / `fs` / `shell` / `sessionTelemetry` / `fileReferences` / `directoryPicker` | 有 | | |
+| `webServer` / `clientModules` / `typert` / `agentLoop` / `sessionQuery` / `agentDefaultModel` / `agentPresets` / `approval` | 有 | | |
+
+**为什么这组读数能定性**：左列里 `spillStore` / `tokenMeter` / `shellEnv` / `codeRuntime` / `webServer` /
+`clientModules` / `sessionTitle` / `sessionQuery` **都是只在宿主 / Web 层 patch 里挂载、任何 agent 预设都不提供的行**
+（`dsh-base/cordis.patch.yml`、`dsh-web-app/cordis.patch.yml`）——它们**全都读到了** ⇒
+**动态沙箱的 `ctx.get` 读的是全局服务表，不是「本 realm 的表」**（否则这些宿主层服务一个都不该可见）。
+⇒ 左列「有」是真的有，右列 `undefined` 是**真的没有**；对照名 `undefined` 说明这不是「什么都返回对象」的假门面。
+
+**于是得到两条新事实（都带反例，不是推断）**：
+1. **`@deepseek-ai/dsh-invariants` 在正在运行的 web 部署里没有被挂载**（`ctx.get('invariants') === undefined`）。
+   ⇒ **T16 第 3 项的「阻塞项」不成立**：不是「挂在宿主根还是会话 realm」的问题，而是**根本没挂**。
+   ⇒ **本仓若照原计划写 `ctx.get('invariants')?.register(...)`，在这个部署里是静默 no-op = 假闸门。**
+   要用它必须**同时把挂载行写进部署组合**（`dsh-sdk-minimal/cordis.patch.yml:103-104` 是范本；
+   本仓 `cordis.patch.yml` 只有一行 `dsh-shadow`），或退一步在**缺件时响亮报告**（ADR-0049）。
+2. **「运行体 Service 目录」不是活性判据 —— 它是「已声明的契约目录」。**
+   三条反例：① **`e2b` 在目录里，而 `dsh-e2b` 在本 profile 里根本没有安装**（`Test-Path` = `False`）；
+   ② `dsh-invariants` **装了但没挂**（上条）；③ `authorization` / `inspector` 在目录里而 `ctx.get` 均为 `undefined`
+   （`inspector` 尤其反直觉：它是 Inspect 自身的宿主侧门面）。
+   ⇒ **`cordis_inspect_query` 的 Service 目录可以读「契约原文」，不能判断「运行时在不在」。**
+   这与 §6.5 那条枚举纪律**同族但更险**：那条是**范围被工具静默缩小**，这条是**工具回答的不是我问的问题**
+   （我拿「契约目录」当「活性表」用）。
+   **纪律**：凡结论是「某能力在运行体里有没有」，**唯一判据是运行时读取**（真实插件里的 `ctx.get` 或等效运行时观测），
+   **不得**用目录、文档、或「安装包里存在」代替。
+
+**动态沙箱的另两条边界事实（同一次探测得到，供写 Cordis 插件时参考）**：
+- **沙箱 ctx 不暴露** `root` / `fiber` / `registry` / `extend` / `plugin`。运行体原话：
+  「sandbox ctx does not expose "root". Available: ctx.tools.register / ctx.on / ctx.provide /
+  the timer helpers after injecting timer, and any service you declared in inject.
+  **Framework internals (root, fiber, registry, extend, plugin, …) are withheld by design.**」
+  ⇒ 动态插件**无法**枚举运行时树；判活性只能**逐名 `ctx.get`**。
+- **回传通道只有三种**：`console.log`（**不入宿主日志文件**）、`harness.handle`（Client→Host）、
+  `harness.registerTool`（模型可见工具）；**抛异常**是最省事的诊断通道（本轮用它）。
+  ⚠ **本轮我自己踩了坑**：第二次探测把 promise 链写成**浮动**的（`apply` 没 `await` / `return`），
+  产生一个**未处理的 Promise 拒绝**；紧接着宿主进程在 `16:40:02` **被整体重启**（pnpm wrapper 与 node 主进程
+  **PID 全新**），本会话动态插件表被清空（`cordis_inspect_self` → `{"mode":"plugins","plugins":[]}`，
+  此后 `realm-1` 报「lost on DSH restart」）。**因果未证明**（也可能是一次有意重启），但两条事实成立：
+  ① 我写出了一个未被消费的拒绝；② 动态插件定义**不跨进程存活**（文档早已声明）。
+  **纪律**：动态插件的 `apply` 里**不得留浮动 promise**。
 
 ### 6.6 **hl_mem 测试面/评测门禁的可移植机制**（2026-09-12 第 4 轮，服务 T13 / T14 / T11① / V6）
 

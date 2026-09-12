@@ -665,16 +665,25 @@
      **(a) 失败 = dispose 子 fiber + 回滚保留 + 注册方自身 `apply` 失败**（`:161-163` `fail` 抛 `InvariantError`
      → `:172-175` `child.dispose()` 后 rethrow → 从 `ctx.effect` 冒出 → `register()` 的 thenable reject）。
      ⚠ **「是否阻断整个宿主启动」仍未验证**（取决于 Loader 对单行激活失败的处置，属运行体实验），**不得写成已知**。
-     **新查到的第三条（比 (a)(b) 更影响裁决）**：**「只挂服务不挂配套入口 == 没有检查」**
+     **新查到的第三条（仍然成立，只是本部署连服务都没有）**：**「只挂服务不挂配套入口 == 没有检查」**
      （`README.zh.md:12,156`：「注册表自身不携带产品检查」）⇒ 检查是否真跑，取决于**本仓自己有没有调用 `register()`**，
-     不取决于服务在不在 —— 对本仓**有利**（不必改宿主组合）。
-     **🔴 仍未定位（阻塞项，未定位前不开工）**：运行中的 web 宿主**确实有** `invariants` 服务（运行体 Service 目录可证），
-     但我**在它声明的每一层组合里都没找到挂载行**（已逐项排除：`dsh-base` / `dsh-web-app` / `archify-dsh` / `dsh-shadow`
-     的 patch、用户补丁层、4 个随包 preset、部署闭包内**任何 `*.js` 对 `dsh-invariants` 的引用**；
-     **唯一含该行的 `dsh-sdk-minimal/cordis.patch.yml:103-118` 不是 web profile 的 bundle**）。
-     ⇒ **必须定位「它挂在宿主根上下文还是会话/`isolate` realm 内」**：`dsh-shadow` 是 **host-plane bundle 插件**，
-     若服务只在会话 realm 内，`ctx.get('invariants')` 在宿主面**取不到** ⇒ 本仓用不了。**下一步 = 一次宿主面可达性探测**
-     （本仓已有「挂载时能力探测 + 报告缺件」的现成机制，ADR-0049）。
+     不取决于服务在不在。
+     **⛔ 已裁定（v1.15.40 第 4 轮，改用运行时读取）：服务在这个部署里根本没挂 ⇒ `invariants` 判「暂不吸收」。**
+     我原先写「运行中的 web 宿主确实有 `invariants` 服务」（依据**运行体 Service 目录**）——**这条是错的**。
+     随后用**只读动态 Host 插件**做运行时读取：`ctx.get('invariants') === undefined`；
+     同一次探测里 `spillStore` / `tokenMeter` / `shellEnv` / `codeRuntime` / `webServer` / `clientModules`
+     等**只在宿主/Web 层挂载、任何预设都不提供**的服务**全都读到了** ⇒ 沙箱 `ctx.get` 读的是**全局服务表**，
+     故 `undefined` 就是**真的没挂**（对照名 `definitelyNotAServiceControl` 也 `undefined`，排除「假门面恒返回对象」）。
+     ⇒ 本仓即使写 `ctx.get('invariants')?.register(...)`，**在这个部署里也是静默 no-op = 假闸门**。
+     **要重启该项的前置条件 = 同时把挂载行写进部署组合**
+     （`- id: invariants` / `name: '@deepseek-ai/dsh-invariants'`，范本 `dsh-sdk-minimal/cordis.patch.yml:103-104`；
+     本仓 `cordis.patch.yml` 只有一行 `dsh-shadow`），或退一步在**缺件时响亮报告**（ADR-0049）。
+     **并得到一条更一般的纪律（已落 `references.md` §6.5.1）**：**Service 目录 ≠ 活性表**。反例三条：
+     `e2b` 在目录里而 `dsh-e2b` **在本 profile 里根本没安装**；`dsh-invariants` **装了但没挂**；
+     `authorization` / `inspector` 在目录里而 `ctx.get` 均 `undefined`（`inspector` 尤其反直觉——它是 Inspect 自身门面）。
+     ⇒ 凡结论是「某能力运行体里有没有」，**唯一判据是运行时读取**。
+     **✅ 附带好处**：第 1 条（`sandboxPolicy` 可见）在本次探测里**被更硬的判据复核**——
+     `ctx.get('sandboxPolicy')` 读到对象 ⇒ **ADR-0074 结论不变、证据从「目录」升级为「运行时读取」**。
   4. **版本偏差**：克隆 0.1.2-alpha.1 vs 运行 0.1.5-rc.2 ⇒ 上述结论凡未回运行体核对的，**一律标注未核对**。
      **进度**：本节第 1/3 条的契约**都取自运行体**（`cordis_inspect_query`），不是文档；
      第 3 项第 4 轮**又加一个数据点**：`dsh-invariants` 0.1.5-rc.2 的 `files` **不发布** `lib/invariant.js`（0.1.1-rc.x 发布）

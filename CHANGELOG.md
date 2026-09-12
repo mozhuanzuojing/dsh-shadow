@@ -3587,6 +3587,38 @@ ADR-0023.1 的 5 条边界固化为**不可回退测试**（invariant 111–115�
   A/B 证据」）+ 一个可执行字段（`relation_chain_holdout_manifest.json:17` `access_policy: sealed_..._only`），
   **无强制机制** ⇒ 本仓若要，必须**自建**。
 
-**本轮变更文件**：`references.md`（**新增 §6.5**：`invariants` 三面互核 + 枚举纪律；**新增 §6.6**：hl_mem 门禁形状清单）·
-`BACKLOG.md`（T16 第 3/4 项 + T13 / T14 / V6 各加一节进度）· `CHANGELOG.md`（本块）。
+**D.（同轮勘误，同日）A 段第 2 条是错的 —— 改用运行时可读取，`invariants` 根本没挂**
+
+上面 A 段写「运行中的 web 宿主确实有 `invariants` 服务」，依据是**运行体 Service 目录**（`cordis_inspect_query`）。
+我随后做了**运行时读取**，结论被推翻；**A 段第 2 条作废**（A 段第 1 条 (b)、第 2 条 (a)、第 3 条仍成立）。
+
+- **探测方式**：一个**只读**动态 Host 插件，在 `apply(ctx)` 里逐名读 `ctx.get(name)`，结果以**抛异常**送出
+  （动态 Host 半没有别的即时回传通道；`console.log` **不进** `~/.dsh/dsh-web.stdout.log`，那文件是旧的）。
+  **不 `JSON.stringify` 任何活对象**，只读 `constructor.name`。
+- **读数**：`ctx.get('invariants') === undefined`。而同一次探测里，
+  **只在宿主/Web 层 patch 挂载、任何 agent 预设都不提供**的服务——`spillStore` / `tokenMeter` / `shellEnv` /
+  `codeRuntime` / `webServer` / `clientModules` / `sessionTitle` / `sessionQuery`——**全部读到了**
+  ⇒ 沙箱 `ctx.get` 读的是**全局服务表**，因此 `undefined` 是**真的没挂**（对照名 `definitelyNotAServiceControl`
+  同样 `undefined`，排除「门面恒返回对象」）。
+- **裁决**：本仓若写 `ctx.get('invariants')?.register(...)`，在这个部署里是**静默 no-op = 假闸门** ⇒
+  **T16 第 3 项 `invariants` 判「暂不吸收」**；将来重启该项的前置 = **同时把挂载行写进部署组合**
+  （范本 `dsh-sdk-minimal/cordis.patch.yml:103-104`；本仓 `cordis.patch.yml` 只有一行 `dsh-shadow`）
+  或**缺件时响亮报告**（ADR-0049）。
+- **由此得到一条更一般的纪律**：**Service 目录 ≠ 活性表**。反例三条：`e2b` 在目录里而 `dsh-e2b`
+  **在本 profile 里根本没安装**（`Test-Path` = `False`）；`dsh-invariants` **装了但没挂**；
+  `authorization` / `inspector` 在目录里而 `ctx.get` 均 `undefined`（`inspector` 尤其反直觉——它是 Inspect 自身门面）。
+  ⇒ **凡结论是「某能力运行体里有没有」，唯一判据是运行时读取**；不得用目录、文档或「安装包里存在」代替。
+  这与 B 段那条枚举纪律**同族但更险**：B 段是**范围被工具静默缩小**，本条是**我拿「契约目录」当「活性表」用**。
+- **✅ 附带好处**：第 1 条（`sandboxPolicy` 对普通插件可见）在本次探测里被**更硬的判据复核**——
+  `ctx.get('sandboxPolicy')` 读到对象 ⇒ **ADR-0074 的结论不变，证据从「目录」升级为「运行时读取」**。
+- **顺带记录两条动态插件边界事实**：① 沙箱 ctx **不暴露** `root` / `fiber` / `registry` / `extend` / `plugin`
+  （运行体原话「Framework internals … are withheld by design」）⇒ 动态插件**无法**枚举运行时树；
+  ② **我自己踩了坑**：第二次探测把 promise 链写成浮动的（`apply` 没 `await`/`return`），产生一个**未处理的拒绝**；
+  紧接着宿主进程在 `16:40:02` **被整体重启**（pnpm wrapper 与 node 主进程 PID 全新），本会话动态插件表清空。
+  **因果未证明**（也可能是有意重启），但两条事实成立：我写出了未被消费的拒绝；动态插件定义**不跨进程存活**。
+  **纪律**：动态插件的 `apply` 里不得留浮动 promise。
+
+**本轮变更文件**：`references.md`（**新增 §6.5**：`invariants` 三面互核 + 枚举纪律；
+**新增 §6.5.1**：同轮勘误 + 运行时读数表 + 沙箱边界事实；**新增 §6.6**：hl_mem 门禁形状清单）·
+`BACKLOG.md`（T16 第 3/4 项改判 + T13 / T14 / V6 各加一节进度）· `CHANGELOG.md`（本块）· `README.md`（v1.15.40 行追加）。
 **未改动**：任何 `*.ts` / `dist/` / `cordis.patch.yml` / `agent-presets/`。
