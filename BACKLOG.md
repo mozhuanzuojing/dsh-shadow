@@ -760,7 +760,15 @@
 ⇒ `emit` 递归自调 ⇒ `Maximum call stack size exceeded`。**改名/批量替换是「断的是谁调用它」的高发区**，
 已在代码注释里写明，并靠 `--determinism-check` 的一次真实运行抓到。
 
-### T15. **Protected Contract Registry**（本仓**完全没有**兼容性政策）—— 用户 2026-09-12 指定为**下一阶段的主产物** —— 🟡 **切片 1 已交付（v1.15.69，`adr/0086`）**
+### T15. **Protected Contract Registry**（本仓**完全没有**兼容性政策）—— 用户 2026-09-12 指定为**下一阶段的主产物** —— 🟡 **判据 ①②③ 全完成 + 十字段（8 条 × 10 字段）已填（v1.15.72，`adr/0086` / `README.md`）；切片 3（D2/D3）未做）**
+
+> **状态口径（v1.15.72 现数）**：用户三条**完成判据**（见本节末尾）**全部完成**；
+> 契约本体 = **8 条**（`tool-name-v1` / `tool-schema-v1` / `read-mode-v1` / `retired-mapping-v1` /
+> `config-keys-v1` / `memory-file-v1` / `derived-file-v1` / `prompt-segment-v1`），
+> **每条 10 字段已填**（`README.md` 表 A + 表 B）。
+> **净发现**：八族里 **6 族有强门 / 1 族部分设防（`tool-schema-v1`，参数名无人枚举）/ 1 族完全未设防（`config-keys-v1`，删键无门会红）**；
+> `ratchet` 一列 8 条均「无桶覆盖」——棘轮桶按**缺陷类**分、不按契约面分，故**没有为凑字段新造桶**。
+> **未做**：D2 的漂移细分（名称/结构/语义/行为）· D3 的再框定 —— 有了十字段后可**按契约机械判定**，不必拍脑袋。
 
 > **用户原话要点**：T15 的产物**不要只是「受保护文件清单」**，而要是 **Protected Contract Registry**：
 > **Contract ≠ API list**，而是 **Surface + Semantics + Stability + Allowed Drift + Verification**。

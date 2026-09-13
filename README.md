@@ -234,9 +234,10 @@ npm run verify
 
 ### 受保护契约面（Protected Contract Registry · `adr/0086`）
 
-**契约 ≠ API 清单。** 一条契约 = **Surface + Semantics + Stability + Allowed Drift + Verification**
-（十条字段缺一不得入册）。本节按 `adr/0086` §6 的交付范围，只给**已核实的面清单 + 稳定性分档 + 弃用流程**；
-**逐条十字段尚未填**，故**不叫「已完成登记册」**。
+**契约 ≠ API 清单。** 一条契约 = **Surface + Semantics + Stability + Allowed Drift + Verification**，
+**十条字段缺一不得入册**（`adr/0086` §2）。本节是**登记册本身**：**8 条契约，每条 10 个字段全填**
+（表 A 前五字段 / 表 B 后五字段，`id` 对齐）。**判据与理由在 `adr/0086`，清单在这里**（该 ADR §5 的分工）。
+⚠ **「字段已填」不等于「都已设防」** —— `verification` 一列如实写出**哪些面根本没人守**（见本节末的完成度表）。
 
 **稳定性用内部三档**（本仓**不自造** `stable/beta/experimental` 等级 —— D8 已判：凭空造等级就是让文档比事实强）。
 判据落在**「违反时的后果」**上，因为后果**可从代码核对**，成熟度不能：
@@ -247,16 +248,31 @@ npm run verify
 | **`soft`** | 会改变可观察行为，但**不破坏数据**（派生件可整份重建 / 文本可改） | 需写 `CHANGELOG`；不需弃用窗口 |
 | **`experimental`** | 无承诺 | 可随时改，但**必须就地可见地标注**（ADR-0049 同族） |
 
-| 面族 | 内容（**已实测**，命令见括注） | 稳定性 | 允许 | 禁止 |
+**表 A：结构与语义**（`id` / `surface` / `owner` / `semantic meaning` / `stability`）
+
+| `id` | `surface`（**已实测**，命令见 `t15-counts-verify.ts`） | `owner`（一级模块） | `semantic meaning`（对使用者意味着什么） | `stability` |
 |---|---|---|---|---|
-| **工具名** | `read_shadow` / `recall_shadow` / `shadow_query`（`index.ts` 三处 `name:`） | **`hard`** | 新增工具 | 改名/删除（除非走弃用流程） |
-| **工具 schema（参数名）** | `read_shadow` **127** · `recall_shadow` **2**（`query`/`limit`）· `shadow_query` **3**（`query`/`scope`/`limit`）—— 判据：`index.ts` 里从 `name: "X",` 到**下一个工具**之间的 `parameters.properties` 键 | **`hard`**（已有调用依赖参数名与枚举） | 新增参数（可选） | 改名/删除参数；**未知参数值不得落回默认**（同 `mode`） |
-| **`mode` 串** | **62 个**（口径：`query/*.ts` 里出现过的 mode 字面量，三种形态 `MODES = new Set([…])` / `modes: […]` / `mode [!=]== "…"`；命令见 `adr/0086` §6）。**受门保护**：`test/recall-envelope.test.ts:96` 断言恰为 **62**、`:103` 断言 `CONTEXT.md` 的 mode 参考表**覆盖全部 62 个**（**新增 mode 不写文档就红**）。⚠ v1.15.70 曾在此写「**实测 61**」、并把 `CONTEXT.md` 的 62 判成「**来源不可考**」——**因果反了**：62 才是受门保护的数，61 是我的探针把判等形态写死成 `===`、漏掉 `query/planning.ts:15` 的 `!== "plan"`（对账探针 `.docs/fix/2026-09-12/t15-mode-count-reconcile.ts`，A=62 / B=61 / B′=62） | **`hard`** | 新增 mode | 删除/改名旧 mode；**未知 mode 不得静默落回默认召回** |
-| **已废止映射（兼容面）** | `RETIRED_MODES` 4 条（`recall→recovery` · `identity→identity-advance` · `reality→real-evidence` · `verify→verification`）+ **参数级废止 2 条**（`retiredApiMessage`：`args.verify`→`verifyEvidence:true` · `args.recall`→`mode:"recovery"`） | **`hard`**（兼容面） | 追加映射 | 移除映射（调用旧名/旧参数必须仍返回可见提示） |
-| **配置键** | `core/types.ts` 的 `ShadowConfig` **顶层 19 键**（`shadowRoot` · `projectRoot` · `observerGlobalRoot` · `summary` · `recall` · `retention` · `episodes` · `forget` · `compact` · `context` · `llmRecall` · `writeConsent` · `queryLog` · `projectionStore` · `indexEngine` · `knowledgeEngine` · `abstracts` · `evidenceProvider` · `evidenceProviders`） | **`soft`**（加键）/ **`hard`**（**已生效键的语义**） | 加键、加可选子键 | 改默认语义（见 `adr/0084`：**显式 0 ≠ 未传**）；删键 |
-| **落盘：记忆（source）** | `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md`（`SHADOW_ROOT}/${today()}/${compact()}-${slug(entry)}.md`） | **`hard`** | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名时间格式（`persistence/files.ts` 的 `timeFromName` 反解依赖它）；删字段 |
-| **落盘：派生件** | `_index.md` · `_meta.json` · `_abstract.md`（`SIDECAR_NAME`）· `_recall_log.json` · `query-log/<date>.jsonl` · `shadow-index/nodes.jsonl` · `shadow-index/sources.fingerprint` · `shadow-manifest.json` · `shadow-report.md` · `observation/` · `hypothesis/` · `future-evidence/` · `validation/` · `reality/` · `model/observations/` · `identity/` · `resources/` · `soul/soul.json` · `taste/taste.json` | **`soft`** | 改格式（`rm -rf` 可重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049 / v1.15.55） |
-| **提示段（面向 agent 的文本）** | `RECALL_PREFIX`「数据非指令」前缀 · `flushWarn` 横幅 · 「能力降级」标记（`adr/0085`） | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 |
+| `tool-name-v1` | public-api · 工具名 **3**：`read_shadow` / `recall_shadow` / `shadow_query` | `index.ts`（三处 `name:`） | 工具名是**调用契约**：名字一改，已写进记忆、文档与别的会话里的调用**全部失效** | **`hard`** |
+| `tool-schema-v1` | 工具 schema · 参数名 **132**（`read_shadow` **127** / `recall_shadow` **2** / `shadow_query` **3**） | `index.ts` | 参数名与枚举是**调用方写出来的字面量**；`mode` 的描述还进**常驻上下文** ⇒ 它同时是上下文预算的一部分 | **`hard`** |
+| `read-mode-v1` | public-api（枚举） · `mode` 串 **62** | `query`（`query/reads.ts` 登记 + 各模块分派） | `mode` 决定**读到的是哪一类东西**；未知值必须**显式失败**，不得静默落回默认召回 | **`hard`** |
+| `retired-mapping-v1` | public-api（兼容层） · 已废止映射 **4 + 2**（4 个 mode 名 + 2 个参数级） | `query`（`query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage`） | 旧名与旧参数**仍然可用、但返回可见提示并点名替代品** —— 兼容层本身就是承诺 | **`hard`** |
+| `config-keys-v1` | 配置键 · `ShadowConfig` 顶层 **19** 键 | `core`（`core/types.ts`） | 键名是**用户写在配置里的字面量**；加键安全，改**已生效键的语义**会让既有配置悄悄换行为 | **`soft`**（加键）/ **`hard`**（已生效键的语义） |
+| `memory-file-v1` | 落盘格式 · `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md` | `persistence`（`persistence/files.ts`）；头字段由 `core/memory.ts` 的 `buildClueHeader` 造 | 记忆文件是**唯一的 source**；文件名里的时间是**读侧反解**的依据 ⇒ 改了会让**已记录的东西读不出来** | **`hard`** |
+| `derived-file-v1` | 派生件 · `_index.md` / `_meta.json` / `_abstract.md` / `_recall_log.json` / `shadow-manifest.json` / `shadow-index/*` / `soul/soul.json` / `taste/taste.json` 等 | `core`（`core/meta.ts` 定性、`core/manifest.ts` 格式）；写入方散在 `retrieval`（`ledger.ts`）/ `query`（`projection-store.ts`） | 派生件**可整份重建**，坏了不算数据损失；但**不可解析必须报错，不能当空件** | **`soft`** |
+| `prompt-segment-v1` | prompt 段 · `RECALL_PREFIX`「数据非指令」前缀 / `flushWarn` 横幅 / 「能力降级」标记 | `core`（`core/util.ts` 的 `RECALL_PREFIX` · `core/writer.ts` 的 `getFlushWarn`） | 「数据非指令」前缀是**护栏**：去掉它，召回内容可能被后续模型当命令读 | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） |
+
+**表 B：治理**（`id` / `allowed changes` / `forbidden changes` / `evidence` / `verification` / `ratchet`）
+
+| `id` | `allowed changes` | `forbidden changes` | `evidence`（符号名优先，行号会腐烂） | `verification`（**谁真的在守**） | `ratchet` |
+|---|---|---|---|---|---|
+| `tool-name-v1` | 新增工具（加名是加法） | 改名 / 删除（除非走下面的弃用流程） | `index.ts` 三处 `name:` | **有**：`test/host-probe.test.ts:104` 断言三个都在注册表里 | **无桶覆盖** —— 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** |
+| `tool-schema-v1` | 新增**可选**参数；新增枚举值 | 改名 / 删除参数；让未知枚举值落回默认 | `index.ts` 各工具的 `parameters.properties` 第一层键 | **部分**：`test/recall-envelope.test.ts:79-84` 只守 `mode` 描述的长度 / 指针 / 关键字；**没有一处枚举参数名** ⇒ **删参数没有门会红** | 无桶覆盖 |
+| `read-mode-v1` | 新增 mode | 删除 / 改名旧 mode；**未知 mode 静默落回默认召回** | `query/reads.ts` 的 `modes: […]` + 各模块 `MODES` / `if` | **强**：`test/recall-envelope.test.ts:96`（断言恰为 **62**）+ `:103`（`CONTEXT.md` 的表必须覆盖全部 62） | **`:103` 本身就是棘轮**：新增 mode 不写进 `CONTEXT.md` 就红 |
+| `retired-mapping-v1` | 追加映射 | 移除映射；让旧名 / 旧参数静默落空 | `query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage` | **强**：`test/recall-envelope.test.ts:201-223`（含参数级 `verify:true` / `args.recall`，且带**正控**：正名不得被拒） | 无桶覆盖，但**每条废止配一个断言** —— 等价于逐条棘轮 |
+| `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **无枚举门**：各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用**，但**没有一处枚举顶层键** ⇒ **删键 / 改名没有门会红** | 无桶覆盖 |
+| `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
+| `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `core/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
+| `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
 
 **最小弃用流程**（用户 T15 判据 ②，`adr/0086` §4）：① 旧名**至少保留一个版本** →
 ② 调用旧名**返回可见提示且点名替代品**（**没有替代品就明说「无替代」**，不得留空）→
@@ -267,8 +283,17 @@ npm run verify
 **先例（为什么这条政策是必要的）**：`adr/0050`（v1.13.0）**曾把旧 `mode` 名直接废止、无任何弃用窗口**，
 代价全靠 `CHANGELOG` 的可读性承担 —— 本政策就是为**不再重犯**而写。
 
-**未做**：逐条十字段（`allowed`/`forbidden changes` / `verification` / `ratchet` 三列基本空缺）·
-`mode` 全量枚举（12 显式 + 13 个模块的内联分派）· D2 的漂移细分 · D3 的再框定 —— 见 `adr/0086` §6/§7。
+**完成度（**「字段已填」≠「都已设防」**）**：
+
+| 设防状态 | 契约 | 含义 |
+|---|---|---|
+| **有强门** | `tool-name-v1` · `read-mode-v1` · `retired-mapping-v1` · `memory-file-v1` · `derived-file-v1` · `prompt-segment-v1` | 有具体断言在守，改了会红（多条还带**正控**） |
+| **部分设防** | `tool-schema-v1` | 只守 `mode` 的描述；**参数名无人枚举** ⇒ 删参数不会红 |
+| **未设防** | `config-keys-v1` | 键被真实使用，但**没有一处枚举键名** ⇒ 删键 / 改名不会红 |
+| **8 条全无棘轮桶** | —— | 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** ⇒ 契约面的守卫方式是 `verification`，不是 `ratchet`。**这是两类工具的分工，不是缺口** —— 不要为凑字段而新造桶（本仓已因「为凑形状而造东西」清理过一批） |
+
+**仍未做（切片 3）**：D2 的漂移细分（**名称 / 结构 / 语义 / 行为**）· D3 的再框定 —— 见 `adr/0086` §6/§7。
+**没有生产消费者**：这份登记册是**给将来的人与 agent 读的政策**，**没有代码读它** —— 现在说清楚，免得它变成本仓清理过的那类「写好了但从不执行」的东西。
 ### 读取（`read_shadow`，可穿透）
 
 - 无参数返回 `_index.md`（目录）；带 `topic`/`entry` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签 → 路径 → 正文 + 时间衰减」打分排序，在 token 预算内按深度返回——高分记忆给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控制预算（默认 1600）。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
@@ -513,10 +538,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.71`**（元审查第七轮：把 `mode` 面的 **62** 与「受门保护的数」的因果正过来）—— 最新几版摘要：
+**当前版本：`v1.15.72`**（**`T15` 切片 2**：十字段填完 8 条契约 × 10 字段 —— 并暴露「八族里有一族其实没人守」）—— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.72 | **`T15` 切片 2：十字段填完（8 条契约 × 10 字段）**（`adr/0086` §8.6）；`verify` **56/56**。把 `T15` 从「面清单」推进成**登记册**：`README` 的「受保护契约面」改为**两张对齐的表**（表 A 结构语义 / 表 B 治理，`id` 相同），每条契约 10 个字段全填。**真正的产出不是那 80 个格子，而是 `verification` 一列逼出来的问题**：**八族里 6 族有强门 · 1 族部分设防（`tool-schema-v1`：`recall-envelope.test.ts:79-84` 只守 `mode` 的描述，**参数名无人枚举** ⇒ 删参数不会红）· 1 族完全未设防（`config-keys-v1`：`ShadowConfig` 顶层 19 键被真实使用，但**没有任何一处枚举键名** ⇒ **删键 / 改名没有门会红**）**。**`ratchet` 一列 8 条全写「无桶覆盖」，这是结论不是欠账** —— 棘轮桶按**缺陷类**分（接线 / 漂移）、不按契约面分，契约面的守卫手段是 `verification`；**没有为凑这一列新造桶**（本仓已清理过一批「写好了但从不执行」的东西），唯一例外是 `read-mode-v1` 的「`CONTEXT.md` 必须覆盖全部 62 个 mode」**本身就是棘轮**。**也故意没给 `config-keys-v1` 加门**（目标是填完登记册不是扩工具；「删键是否真危险」还**没有生产证据**）⇒ 先如实登记为未设防。**四个数由一个命令一次算清**：`t15-counts-verify.ts` ⇒ 工具名 **3** · 参数 **132**（127+2+3）· mode **62** · 配置键 **19**；②④改用**花括号深度**切第一层键（**不是行数窗口** —— v1.15.70 正是用「`name:` 后 40 行窗口」把 `recall_shadow` 的 2 个参数算成 5 个），小样本全量打印可肉眼核对。**顺带立第 4 条长文档规矩**：在长文档顶部插新条目时**别把下一条的标题当锚点**（`new_string` 忘了写回就等于删掉它）—— **v1.15.71 与 v1.15.72 各犯一次**，两次都靠数 `## [v` 标题数才发现。**未做**：切片 3（D2 漂移细分 / D3 再框定）· 登记册仍**无生产消费者** · 两处未设防**只登记、不修**。 |
 | v1.15.71 | **第七轮元审查：把「62」的因果正过来 + 一条按「数的来源」分待遇的纪律**（`adr/0086` §8.5 / `AGENTS.md`）；`verify` **56/56**。**① 纠正因果（我上一轮把两类数弄反了）**：v1.15.70 我用一个**没有门的探针**算出 `mode` 面 **61**，据此把 `CONTEXT.md` 里**受门保护的 62** 判成「**未复核的旧测量、来源不可考**」，还把 61 写进了 `README`（当前态层）—— **方向反了**。`test/recall-envelope.test.ts:96` **一直在断言 `modes.size === 62`**，而且 `verify` 是绿的 ⇒ **62 是受门保护的数，61 才是我算错的**。**② 根因（可机械复现，不靠推理）**：探针两条判等形态都写死 `===`，漏了 `query/planning.ts:15` 的 `if (String(args?.mode \|\| "") !== "plan")` ⇒ 少 1；判据改成 `[!=]==` 后即 **62**。新对账探针 `.docs/fix/2026-09-12/t15-mode-count-reconcile.ts`（A=62 / B=61 / B′=62，**B′==A**）—— 我的**第一版解释（「差在排除了 `.selftest.ts`」）被它当场否掉**（`query/` 下 0 个 selftest）。**③ 遗漏更正**：`adr/0086` 的面族数「**六个**」→ **七个** —— 它自己那一行就列了 **7** 个名字、§8.4 的表也是 **7** 行，**数字与列表互相矛盾**（与 v1.15.69 那个旧病同型）。**④ 纪律（进 `AGENTS.md`）**：**受门保护的数 vs 没有门的数，待遇不同** —— 前者**先假定它对**，要改必须**同时改门**并说明门为什么错，**不许拿探针去推翻**；**「来源不可考」这句话本身要有证据**（说之前先 `grep` 仓库里是否已有门断言它）。**未做**：只纠正这一处因果与计数，**不做批量刷新**（其余派生计数一律不碰）· 十字段仍缺 ⇒ **仍不宣称登记册完成**。 |
 | v1.15.70 | **第六轮元审查 + `T15` 切片 1 补完**（mode 面 **61** 可复核 / 工具 schema 面 / 参数级废止，`adr/0086` §8）；`verify` **56/56**。**① 纠正因果：第 5 次「测量错、不是被测量错」，这次在发布前拦住了** —— 探针把每个模块的 `MODES` 集合与 `if (mode === "…")` 链做差集，**第一版报 13 个「会被接受后静默落空」**，看起来像一批真缺陷；但本仓的分派是**「前面的 mode 各写一个 `if`，最后一个走兜底」**（`query/adaptation.ts` 的 `adapt-validation` 即如此）⇒ **探针不认这个写法，13 条全是假警报**；**没报出去的原因是**按 v1.15.69 刚立的规矩**先读了一个文件**才下结论。判据已修正：`MODES \ ifs` 允许**恰好 1 个**（兜底）、>1 才可疑；`ifs \ MODES` 才是死代码；**没有 `MODES` 集合的文件不适用该比较**（`reads.ts` 修正前被误报「`episode` 是死代码」）。⇒ 修正后 **0 异常**。**② 遗漏：我上一轮漏了一整个面族，且两个数都偏小** —— **「工具 schema（参数名）」是用户在 T15 里明列的 5 个 `surface` 类型之一，上一轮整族缺失** ⇒ 实测 `read_shadow` **127** / `recall_shadow` **2** / `shadow_query` **3**（= **132**）；`mode` 面从「显式 12 + 内联未枚举完」补成**实测 61**（12 + 49）；兼容面补上**参数级废止 2 条**（`args.verify`→`verifyEvidence:true`、`args.recall`→`mode:"recovery"`，`retiredApiMessage`）。**参数计数我也算错过**：第一版用「`name:` 后 40 行窗口」抓，把 `recall_shadow` 算成 **5**（**串到了下一个工具**）⇒ 改成按**工具边界**（到下一个 `name: "`）切才得到 2 ⇒ **窗口式提取必然串边界，边界要从结构里取、不要从行数猜**。**③ 因果：`CONTEXT.md` 的「62 个 mode」与实测差 1、来源不可考** —— **没有去凑成 62**（那正是本仓反复禁止的「让文档比事实强」），而是同时写下旧值 62、实测 61、差多少、以及**为什么可能还差**（探针声明了它认不出的分派形态）。**④ 结果**：T15 判据 ① 的**面清单已穷尽**（六族：工具名 / 工具 schema / mode 串 / 已废止映射含参数级 / 配置键 19 / 落盘格式 / 提示段），判据 ②③ 上轮已完成。**未做**：十字段的 `allowed`/`forbidden changes`/`verification`/`ratchet` 三列 · D2 漂移细分 · D3 再框定 ⇒ **按「缺一不得入册」仍不宣称登记册完成** · 仍无生产消费者 · **61 是「按该探针」的数，不是神谕**。 |
 | v1.15.69 | **第五轮元审查 + `T15` 切片 1**（受保护契约面 / 稳定性分档 / 最小弃用流程，`adr/0086`）；`verify` **56/56**。同一条指令第五次下达，本轮做了两件事。**① 审 v1.15.68 本身：我在「修计数腐烂」的同一段里又写了一个错的计数** —— v1.15.68 在 `BACKLOG` 表头修「现存 20 条」时写下「13 个标题，其中 `T12/T14/T16` 带 ✅ ⇒ 现存 **10** 条」，**实测**：带 ✅ 的是 **4** 个（**漏了刚结案的 `T8`**）⇒ **现存 9 条**，`13−3=10` 的算术跟着错，**而它自己列的名字只有 9 个**（数字与列表互相矛盾）；**`audit:docs` 抓不到**（检查③只管 `README` 表格行数）⇒ 两条规矩写进 `AGENTS.md`：**最好只给规则与命令、不写数**；**写了就当场用命令核一遍并写下口径**（按标记 9 / 按实质可能 8 —— `T3` 未带 ✅ 但正文称已分诊）。**② 干扰：`adr/0085` 的节序错了** —— `§8.7`/`§8.8` **追加在 `§9` 之后**，与第一轮我**亲手记成缺陷**的「`### 6.11` 被追加到 §七之后」同型 ⇒ 已把 `§9` 移到最后（节序 `1…8·8.5·8.7·8.8·9`，`## ` 标题数 12 不变、内容不丢），并显式标注「该 ADR 标题只覆盖前半，`§8.x` 占全文 **58%**」。**③ 缺失环节：证据没人能找到** —— 前四轮产物散在 `CHANGELOG` 四条 + `adr/0085` 三节 + `AGENTS.md` 五段，**没有任何地方指向** `meta-review-four-rounds.md` ⇒ 在 `AGENTS.md` 显式写出**证据入口**并要求每轮结束时更新。**④ `T15` 切片 1（本轮主产物）**：用户三条判据完成 **②③**、部分完成 **①** —— **② 最小弃用流程完成**：旧名**至少保留一个版本** → 调用旧名**返回可见提示且点名替代品**（**无替代就明说「无替代」**）→ `CHANGELOG` 写迁移说明 → 移除前需**跨度 ≥1 个版本**的弃用记录（本仓只有一个使用者，硬套 major/minor 是形式大于实质）→ **未知枚举不得落回默认**（未知 mode/provider/版本一律显式失败或 `unavailable`）；先例是 `adr/0050`（v1.13.0 **无窗口硬切**）—— 本政策就是为不再重犯而写。**③ 清单进 `README.md` 新节**。**① 面清单（已实测）**：工具名 **3** 个（`hard`）· `mode` 串（`hard`；`query/*.ts` 显式 **12** 个 + 已废止映射 **4** 条）· 配置键（`ShadowConfig` 顶层 **19** 个；加键 `soft`/改语义 `hard`）· 落盘格式（记忆 `hard` / 派生件 `soft`）· 提示段（措辞 `soft` / **「数据非指令」前缀与降级标记 `hard`**）；**`mode` 全量枚举未完成**（另有 13 个模块的内联分派未读，方法与命令留在 `adr/0086` §6）。**稳定性判据落在「后果」而非「成熟度」** —— D8 已判本仓不给自己打 `stable/beta/experimental`（凭空造等级就是让文档比事实强），而「改了会不会让已记录的东西读不出来 / 调用失败」**可从代码核对**。**顺带结掉一处腐烂计数**：`CONTEXT.md` 的「共 **62 个** mode」**做不出来**（枚举只得到 12 显式 + 13 模块待读）⇒ 就地标注为「**未被复核的旧测量**」并指向 `adr/0086` §6，**不再假装它准确**。**未做**：十字段逐条登记（`allowed`/`forbidden`/`verification`/`ratchet` 三列基本空缺 ⇒ 按用户「缺一不得入册」规则，**不宣称登记册已完成**）· D2 漂移细分 · D3 再框定 · 该登记册**当前没有生产消费者**（是给将来的人与 agent 读的政策，必须现在说清，否则会变成本仓清理过的那类「写好了但从不执行」的东西）。 |
