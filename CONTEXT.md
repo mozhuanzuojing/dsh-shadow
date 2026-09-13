@@ -64,9 +64,14 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## mode 参考（`read_shadow` 的 mode 串）
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
-> 共 **62 个** mode。⚠ **这个数字是未被复核的旧测量** —— **v1.15.70 实测为 61**（`query/reads.ts` 显式 12 + 各模块 `if (mode === "…")` 内联 49；探针 `.docs/fix/2026-09-12/t15-mode-surface-audit.ts`），**旧文的 62 与实测差 1、来源不可考**。
-> 另有 13 个模块的**内联分派**未枚举完 ⇒ **我做不出 62 这个数**）。**权威面清单见 `README.md` 的「受保护契约面」（`adr/0086`）**，
-> 枚举方法与缺口列在 `adr/0086` §6。**不要再把 62 当现行事实引用**，除非按那里的命令重新数过。
+> 共 **62 个** mode。**这个数不是手抄的，是被门守着的**：`test/recall-envelope.test.ts:96` 断言
+> `modes.size === 62`（口径：`query/*.ts` 里出现过的 mode 字面量，三种形态 `MODES = new Set([…])` /
+> `modes: […]` / `mode [!=]== "…"`），同文件 `:103` 断言**本表覆盖全部 62 个** ——
+> **新增 mode 不写进本表就红**（棘轮）。
+> ⚠ **v1.15.70 曾把这里标成「未被复核的旧测量、来源不可考」，并把数改成 61 —— 那是错的**：
+> 我的探针把判等形态写死成 `===`，漏掉 `query/planning.ts:15` 的 `if (String(args?.mode || "") !== "plan")` ⇒ 少 1。
+> **对账探针（可重放）**：`.docs/fix/2026-09-12/t15-mode-count-reconcile.ts`（A=62 / B=61 / B′=62，B′==A）。
+> **权威面清单见 `README.md` 的「受保护契约面」（`adr/0086`）**；枚举方法见 `adr/0086` §6。
 > 通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
 > **命名口径（ADR-0050 / ADR-0053）**：读侧 mode 名与参数名以本表 + 工具 schema 为唯一现行口径；被取代的旧名不在本文档登记（映射与理由见 ADR-0050 / ADR-0053），调用旧名会返回「已废止：X → 请用 Y」，不落空进默认召回。
 
@@ -105,7 +110,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `verification` | VerificationRun（只读只报；禁改 authority/identity） |
 
 ## 关联
-- **`resource` 是第 6 个 NodeType（ADR-0051，v1.14.0）**：卡片=source、节点=投影；无 `source` 的卡片不上投影；不新增 mode（仍 61）。
+- **`resource` 是第 6 个 NodeType（ADR-0051，v1.14.0）**：卡片=source、节点=投影；无 `source` 的卡片不上投影；**不新增 mode**（本条原写「仍 61」，是个会腐烂的派生计数，v1.15.71 删去：mode 总数以 `test/recall-envelope.test.ts:96` 的门为准）。
 - **Semble 是 Index Engine 的第 3 个候选 provider（ADR-0054，v1.15.6）**：`indexEngine.provider = "semble"`（本地语义检索 CLI）。**它是检索层，不是裁决层**——只产候选，从不 `verify`；实测它**无阈值、无负信号**（无关查询同样返回最高分），故**不得**进 Evidence Gateway 的裁决面。未装 → `unavailable`，调用方回退 `fs` 全量扫描。
 - **工具集台账两级（ADR-0055，v1.15.10）**：`kind:"provider"`（插件内接线，缺它 = 能力降级）与 `kind:"reference"`（**通用 CLI 目录**，插件不接线，只做检测 + 装法提示）。目录文档在 `docs/toolchain-windows.md`（Windows 口径，winget ID 实测）与 `docs/toolchain-wsl.md`，由 `test/toolset-catalog.test.ts` **双向棘轮**保护（台账↔文档漂移即红）。**插件绝不代装**：安装仅显式调用 + 宿主审批（`allowed-once` 才执行），这是 inv 178 `Authority ≠ Ownership` / inv 182「scope 不可隐式扩大」的落点。
 - **台账扩源（ADR-0058，v1.15.14）**：50 → **107 项**、分类 13 → **17**。**包 ID 由人裁决、机器只做核验**——按名字自动解析**已被实测证伪**（`xh`→`Mozilla.Firefox.xh`、`delta`→`eToro.Delta`、`nix`→`LabChart` 等 9 例假阳性）。核验工具 `tools/winget-verify.ts`（对精确包 ID 调 `winget show`，locale 无关解析）+ 种子 `tools/toolset-seed.json`。**拐点口径**：arXiv 2606.30317 的「10–15 个工具选择准确率跌破 90%」量的是**每次请求注入的工具 schema 数（per context）**，**不是目录条目数**——台账不进上下文，故**可扩**；**禁止把条目暴露成独立工具**（那才会踩爆拐点）。运行期**仍不依赖网络**（ADR-0055 的否决不变，新增的是构建期工具）。
