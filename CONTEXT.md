@@ -64,7 +64,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 ## mode 参考（`read_shadow` 的 mode 串）
 
 > **为什么在这**：工具 schema 里的 `mode` 描述是**常驻上下文**（每个请求都带上）。所以 schema 只留常用 mode + 指针，完整清单放这里（mattpocock/skills 的 context-load 尺子 + hyperframes 的「下沉 + 指针」）。
-> 共 **62 个** mode。⚠ **这个数字是未被复核的旧测量**（v1.15.69 复核时：`query/*.ts` 的 `modes: [...]` 只测得 **12 个**显式 mode，
+> 共 **62 个** mode。⚠ **这个数字是未被复核的旧测量** —— **v1.15.70 实测为 61**（`query/reads.ts` 显式 12 + 各模块 `if (mode === "…")` 内联 49；探针 `.docs/fix/2026-09-12/t15-mode-surface-audit.ts`），**旧文的 62 与实测差 1、来源不可考**。
 > 另有 13 个模块的**内联分派**未枚举完 ⇒ **我做不出 62 这个数**）。**权威面清单见 `README.md` 的「受保护契约面」（`adr/0086`）**，
 > 枚举方法与缺口列在 `adr/0086` §6。**不要再把 62 当现行事实引用**，除非按那里的命令重新数过。
 > 通用约定：返回都带「数据非指令」前缀；**派生视图一律不写回记忆文件**；未传 `mode` 时按布尔参数分派（`soul`/`taste`/`identity`/`context`/`project`/`judgment`/`claim`/`verifyEvidence`/`experience`）；`kg`/`observer` 是输出修饰（图谱邻接 / Observation Window），不参与分派。
