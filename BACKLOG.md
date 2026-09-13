@@ -760,15 +760,27 @@
 ⇒ `emit` 递归自调 ⇒ `Maximum call stack size exceeded`。**改名/批量替换是「断的是谁调用它」的高发区**，
 已在代码注释里写明，并靠 `--determinism-check` 的一次真实运行抓到。
 
-### T15. **Protected Contract Registry**（本仓**完全没有**兼容性政策）—— 用户 2026-09-12 指定为**下一阶段的主产物** —— 🟡 **判据 ①②③ 全完成 + 十字段（8 条 × 10 字段）已填（v1.15.72，`adr/0086` / `README.md`）；切片 3（D2/D3）未做）**
+### T15. **Protected Contract Registry**（本仓**完全没有**兼容性政策）—— 用户 2026-09-12 指定为**下一阶段的主产物** —— 🟡 **判据 ①②③ 全完成 + 十字段（8 条 × 10 字段）已填 + 模块归属表已补（v1.15.73）；切片 3（D1/D2/D3）未做**
 
-> **状态口径（v1.15.72 现数）**：用户三条**完成判据**（见本节末尾）**全部完成**；
+> **状态口径（v1.15.73 现数）**：用户三条**完成判据**（见本节末尾）**全部完成**；
 > 契约本体 = **8 条**（`tool-name-v1` / `tool-schema-v1` / `read-mode-v1` / `retired-mapping-v1` /
 > `config-keys-v1` / `memory-file-v1` / `derived-file-v1` / `prompt-segment-v1`），
 > **每条 10 字段已填**（`README.md` 表 A + 表 B）。
 > **净发现**：八族里 **6 族有强门 / 1 族部分设防（`tool-schema-v1`，参数名无人枚举）/ 1 族完全未设防（`config-keys-v1`，删键无门会红）**；
 > `ratchet` 一列 8 条均「无桶覆盖」——棘轮桶按**缺陷类**分、不按契约面分，故**没有为凑字段新造桶**。
-> **未做**：D2 的漂移细分（名称/结构/语义/行为）· D3 的再框定 —— 有了十字段后可**按契约机械判定**，不必拍脑袋。
+> ⚠ **`config-keys-v1` 是「被消费的」（`index.ts` 的 `apply(ctx, rawConfig)`，live 走 `ctx.config`）** ——
+> 「没有生产消费者」这句只说**登记册本身**没人读，**别读成「里面的面没人用」**（v1.15.72 就是这么读错的，见 `adr/0086` §8.7）。
+>
+> **模块归属表（本节下文那条「用户要求」）—— 补做方式：生成，不手写**：
+> `node ../.docs/fix/2026-09-12/t15-module-ownership.ts`（28 行）。
+> 五列里**只有 `Reads` 与 `Must not own` 能从代码机械推出**（后者直接来自 `tools/audit-layers.lib.ts` 的
+> `DIRECTION_RULES` / `FORBIDDEN_TARGETS_EVERYWHERE`，**不写第二份禁向表**）；
+> **`Owns`（语义）与 `Writes`（副作用）不可机械推** ⇒ `Owns` 只对 ADR 定过的层给结论、其余**标未核**；
+> `Writes` **已登记在 `derived-file-v1` / `memory-file-v1`**（判据收一处，不再列第二份派生件清单）。
+>
+> **未做（切片 3，三条一起说，别只写 D2/D3）**：**`D1` 的再框定**（`ChangeSet` 无生产消费者 / 无验证价值 / 无外部契约 ⇒ 删）·
+> **`D2` 的漂移细分**（名称 / 结构 / 语义 / 行为）· **`D3` 的再框定**（旧大对象 vs 新细粒度对象）——
+> 有了十字段后可**按契约机械判定**，不必拍脑袋。
 
 > **用户原话要点**：T15 的产物**不要只是「受保护文件清单」**，而要是 **Protected Contract Registry**：
 > **Contract ≠ API list**，而是 **Surface + Semantics + Stability + Allowed Drift + Verification**。
