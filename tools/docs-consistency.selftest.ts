@@ -29,6 +29,9 @@ interface Fixture {
   tableRows?: number;              // 默认开关表的**实际**数据行数（默认 2）
   declaredRows?: number | null;    // 表注声明的行数；null ⇒ 不写声明（测结构缺失）
   crlf?: boolean;                  // 用 CRLF 写全部文件（本仓工作副本就是 CRLF）
+  rowText?: string;                // README 版本历史表里**当前版本那一行**的正文（检查④）
+  entryBody?: string;              // CHANGELOG 同名条目的正文（检查④）
+  omitRow?: boolean;               // 不写当前版本那一行（测检查④的结构缺失）
 }
 
 const FULL_VERIFY = "npm run a:x && npm run b:y && npx tsc --noEmit";
@@ -51,13 +54,18 @@ const run = (f: Fixture) => {
 
     const decoy = f.decoyAbove ? `> 说明：本仓的「当前版本：\`v0.0.1\`」是举例，不是真的。\n\n` : "";
     const verLine = f.readmeVersion === undefined ? "" : `**当前版本：\`v${f.readmeVersion}\`** —— 最新几版摘要：\n`;
-    let readme = `# x\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n| v0.0.1 | 旧行（归档层，**不该**参与判据） |\n`;
+    // **检查④的前置**：版本历史表里要有**当前版本那一行**，否则 ④ 会以结构缺失(2)退出，
+    // 把别的组的断言短路（第一版加 ④ 时就踩在这里 —— 见 ⑰）。
+    const pkgVer = f.pkg ?? "1.2.3";
+    const curRow = f.omitRow ? "" : `| v${pkgVer} | ${f.rowText ?? "摘要"} |\n`;
+    let readme = `# x\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n${curRow}| v0.0.1 | 旧行（归档层，**不该**参与判据） |\n`;
     if (f.readmeGateBlock !== null) {
       const block = f.readmeGateBlock ?? verify.split(" && ").map((s) => (s.startsWith("npm run ") ? `+ ${s}` : `+ npx ${s}`)).join("\n");
-      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}`;
+      // ⚠ 这一支**也要带版本历史表**（检查④的前置），否则 ④ 报结构缺失(2) 会短路别的组。
+      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n${curRow}`;
     }
 
-    const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n正文\n`;
+    const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n${f.entryBody ?? "正文"}\n`;
     const older = f.changelogVersion === undefined ? "" : `## [v0.0.1] 更旧的一条\n`;
     const changelog = `# Changelog\n\n${head}${older}`;
 
@@ -214,6 +222,32 @@ const run = (f: Fixture) => {
   const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", tableRows: 2, declaredRows: 2, crlf: true });
   assert.equal(r.code, 0, `**CRLF 不得造成假警报**（本仓工作副本就是 CRLF）；实际 ${r.code}：${r.out}`);
   console.log("✔ ⑭ CRLF：整份语料 CRLF ⇒ 行数判定仍然正确（不再把分隔行当数据行）");
+}
+
+// ── 检查 4：README 当前版本那一行不得与 CHANGELOG 同名条目逐字重复 ──
+{
+  // ⑮ 负对照（本检查存在的理由）：**整段复制**。用一段 ≥40 字的中文，同时放进 README 行与 CHANGELOG 正文。
+  const dup = "这是一整句从_CHANGELOG_条目里原样复制过来的论证文字，长度远超四十个字，用来触发检查四的逐字重复判据。";
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", rowText: dup, entryBody: dup });
+  assert.equal(r.code, 1, `README 版本行整段复制 CHANGELOG ⇒ 必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /整段重复/, `报文应说清是逐字重复：${r.out.slice(0, 300)}`);
+  assert.match(r.out, /第 4 次出现/, "报文应带上复发次数（这是本缺陷的由来）");
+  console.log("✔ ⑮ 负对照：README 版本行与 CHANGELOG 条目 ≥40 字逐字重复 ⇒ 1");
+}
+{
+  // ⑯ 正对照 + **短片段放行**：版本号、标题这类**必然重合**的短串不得触发（阈值 40 的意义）。
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", rowText: "**摘要**：只回答自己那个问题，细节见 `CHANGELOG`。", entryBody: "**摘要**：只回答自己那个问题，细节见 `CHANGELOG`。" });
+  assert.equal(r.code, 0, `短片段重合（<40 字）不得触发 ⇒ 0；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /无 ≥40 字逐字重复/);
+  console.log("✔ ⑯ 正对照：只重合短片段（含同一条指向语）⇒ 0（阈值 40 生效）");
+}
+{
+  // ⑰ 结构缺失：版本历史表里**没有当前版本那一行** ⇒ 2（不是「一致」）。
+  //    本组同时是**加检查④时踩到的坑**的留档：fixture 的前置不齐会让 ④ 以 2 退出、短路别的组。
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", omitRow: true });
+  assert.equal(r.code, 2, `缺「当前版本」那一行应报结构缺失（2）；实际 ${r.code}`);
+  assert.match(r.out, /找不到当前版本那一行/);
+  console.log("✔ ⑰ 负对照：README 版本历史表缺当前版本那一行 ⇒ 2（结构缺失 ≠ 重复）");
 }
 
 console.log("ALL PASS ✅");

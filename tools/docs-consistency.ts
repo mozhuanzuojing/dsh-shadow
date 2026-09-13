@@ -254,11 +254,83 @@ export const checkDeclaredTableRows = (root: string): { ok: boolean; code: numbe
   };
 };
 
+// ── 检查 4：README「当前版本」那一行**不得与 CHANGELOG 同名条目逐字重复** ─────
+/**
+ * 判据（v1.15.75 补，**因为同一个缺陷出现了三次**）：
+ * `README.md` 版本历史表里**当前版本**那一行，与 `CHANGELOG.md` 的同名条目之间，
+ * **不得有 ≥ 40 字的连续逐字重复** —— 那一行应该是**摘要 + 指向**，不是第二份条目。
+ *
+ * 由来（三次同病，每一次我都「当成个例修掉了事」）：
+ *   v1.15.66 §5 整表复制 `adr/0085` §8.6 → v1.15.72 的 README 版本行整段复制 CHANGELOG
+ *   → v1.15.74 的 README 版本行**又**整段复制（881 字，而 v1.15.73 那行 **1222 字**）。
+ *   `AGENTS.md` 的文档归属表早写了「同一条事实出现在多层时，**每层只回答它自己那个问题**」，
+ *   但**它只是散文** ⇒ 三次都没拦住。⇒ 按本仓自己的先例（检查 ②③ 都诞生于「同一处手工纪律反复失效」）：
+ *   **反复失效的手工纪律要变成门**，而不是第四次靠自觉。
+ *
+ * 为什么**只查当前版本那一行**：历史行属于**归档叙述**（v1.15.71 起按「归档不改写」保留原样），
+ * 拿新门去要求重写历史行，等于用一道门去改写归档 ⇒ 本检查**不碰历史**，只在**新的那一行被写出来时**拦住。
+ *
+ * 阈值 40：版本号、条目标题这类**必然重合**的短片段要放行（它们本就该一致），
+ * 而一整句论证远超 40 字。**只有连续重合**才算 —— 换个说法复述不算（那正是「只回答自己那个问题」）。
+ */
+export const checkReadmeRowNotDuplicate = (root: string): { ok: boolean; code: number; lines: string[] } => {
+  const readme = readLines(root, "README.md");
+  const changelog = readText(root, "CHANGELOG.md");
+
+  // ⚠ **不要在这里用含引号的正则字面量**（如 `/"version"\s*:\s*"([^"]+)"/`）：
+  //   `audit-wiring.lib.ts` 的 `stripComments`/`maskStrings` 是**单趟状态机**，
+  //   其**已知边界**就是「不处理正则字面量里的引号」——正则里的 `"` 会让它**错位**，
+  //   把本文件**其后所有内容**当成字符串抹掉 ⇒ `audit:wiring` 会把这 4 个导出误报成「生产无调用点」。
+  //   v1.15.75 实测：加完检查 ④ 后 a1 由 24 跳到 28，被 `audit:ratchet` 拦住（**工具互相干扰**那类缺陷）。
+  //   ⇒ 这里直接 `JSON.parse`：既避开该边界，也比正则更对。
+  let ver = "";
+  try { ver = String(JSON.parse(readText(root, "package.json")).version ?? ""); } catch { /* 下面按缺失处理 */ }
+  if (!ver) return { ok: false, code: 2, lines: ["❌ ④ **结构缺失**：`package.json` 里读不到 `version`。"] };
+
+  const rowIdx = readme.findIndex((l) => l.startsWith(`| v${ver} |`));
+  if (rowIdx < 0) {
+    return {
+      ok: false, code: 2,
+      lines: [`❌ ④ **结构缺失**：README 版本历史表里找不到当前版本那一行（\`| v${ver} |\`）。`,
+              "  怎么修：发版时在 README 的版本历史表里加一行 —— 本检查就是冲着「那一行」来的。"],
+    };
+  }
+
+  const row = readme[rowIdx];
+  // 在 CHANGELOG 里取同名条目（从 `## [vX.Y.Z]` 到下一条 `## [` 之间）。
+  const start = changelog.indexOf(`## [v${ver}]`);
+  if (start < 0) {
+    return { ok: false, code: 2, lines: [`❌ ④ **结构缺失**：CHANGELOG 里找不到 \`## [v${ver}]\` 条目。`] };
+  }
+  const nextAt = changelog.indexOf("\n## [", start + 1);
+  const entry = changelog.slice(start, nextAt > 0 ? nextAt : undefined);
+
+  const WIN = 40;
+  let worst = "";
+  for (let i = 0; i + WIN <= row.length; i++) {
+    const win = row.slice(i, i + WIN);
+    if (entry.includes(win)) { worst = win; break; }
+  }
+
+  if (!worst) {
+    return { ok: true, code: 0, lines: [`✔ ④ README 的 v${ver} 行与 CHANGELOG 同名条目**无 ≥${WIN} 字逐字重复**（该行 ${row.length} 字）`] };
+  }
+  return {
+    ok: false, code: 1,
+    lines: [
+      `❌ ④ **README 的 v${ver} 版本行与 CHANGELOG 条目整段重复**：发现 ≥${WIN} 字的连续逐字片段 ——`,
+      `  「${worst.slice(0, 60)}…」`,
+      `  （该行 **${row.length} 字**。这是本缺陷第 4 次出现：v1.15.66 §5 / v1.15.72 / v1.15.74 / 本次。）`,
+      "  怎么修：README 那一行**只留摘要 + 指向 `CHANGELOG`**；详细论证只写 `CHANGELOG` 与 `adr/` 下的 ADR。",
+    ],
+  };
+};
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop()!);
 if (isMain || process.argv[1]?.endsWith("docs-consistency.ts")) {
   const ROOT = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
-  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT)];
+  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT)];
   for (const r of results) for (const l of r.lines) console.log(l);
   const failed = results.find((r) => !r.ok);
   if (!failed) {
