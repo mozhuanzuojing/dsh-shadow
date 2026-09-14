@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "两仓吸收判定：rtk 与 langextract（ADR-0087）",
+    "output": "absorb-verdict.html",
+    "quality_profile": "showcase",
+    "viewBox": [1320, 600]
+  },
+  "lanes": [
+    { "id": "prep", "label": "拉取" },
+    { "id": "evidence", "label": "取证" },
+    { "id": "gates", "label": "三道判定闸" },
+    { "id": "outcome", "label": "处置出路" }
+  ],
+  "mainPath": ["corpus", "deepread", "gate1", "gate2", "gate3"],
+  "nodes": [
+    { "id": "corpus", "lane": "prep", "col": 0, "type": "external", "label": "一手克隆", "sublabel": "HEAD 写死" },
+    { "id": "deepread", "lane": "evidence", "col": 0, "type": "backend", "label": "两路深读", "sublabel": "含独立复核" },
+    { "id": "gate1", "lane": "gates", "col": 1, "type": "security", "label": "① 消费方？", "sublabel": "无 ⇒ 只登记" },
+    { "id": "gate2", "lane": "gates", "col": 3, "type": "security", "label": "② 前置？", "sublabel": "有 ⇒ 记待办" },
+    { "id": "gate3", "lane": "gates", "col": 5, "type": "security", "label": "③ 铁律？", "sublabel": "撞 ⇒ 不吸收" },
+    { "id": "register", "lane": "outcome", "col": 1, "type": "database", "label": "只登记对照", "sublabel": "本仓无落点" },
+    { "id": "todo", "lane": "outcome", "col": 3, "type": "cloud", "label": "待办 D9-D11", "sublabel": "带完成判据" },
+    { "id": "reject", "lane": "outcome", "col": 5, "type": "security", "label": "不吸收", "sublabel": "逐条写理由" }
+  ],
+  "edges": [
+    { "from": "corpus", "to": "deepread", "label": "取快照", "variant": "emphasis" },
+    { "from": "deepread", "to": "gate1", "label": "带 文件:行号", "variant": "emphasis" },
+    { "from": "gate1", "to": "gate2", "variant": "emphasis" },
+    { "from": "gate2", "to": "gate3", "variant": "emphasis" },
+    { "from": "gate1", "to": "register", "label": "无消费方", "role": "branch" },
+    { "from": "gate2", "to": "todo", "label": "有前置", "role": "branch" },
+    { "from": "gate3", "to": "reject", "label": "撞铁律", "role": "error", "variant": "security" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "三道闸的顺序不是随便定的",
+      "items": [
+        "闸① 在前：没有消费方的机制一律不建 —— 本仓记录最多的一族缺陷正是「机制存在、没接线」",
+        "闸② 在后：有消费方但缺前置的先记待办，不静默替用户选一个",
+        "闸③ 兜底：撞铁律的直接否决，并把理由逐条写出，不留悬空项"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "一手源码会推翻只读文档的描述",
+      "items": [
+        "langextract 的 grounding 卖点是真的：char_interval 由确定性 token 级对齐算出，不是让模型吐位置",
+        "但它的纪律是软的：收下未对齐项后无计数、无告警，唯一的硬断言落在默认 CI 门之外",
+        "所以它不是「有门的先例」，恰是 ADR-0049 要防的形态：降级了，但不可见"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "本轮的真实产出",
+      "items": [
+        "ADR-0087：rtk 可吸收 8 条判据形状 / 不吸收 8 条；langextract 判据 7 条 / 不吸收 10 条",
+        "D9 / D10 / D11 三条待办，各带「完成判据」，卡在必须先拍板的前置上",
+        "三道闸全过的才实装 —— 本轮无一条走到那里，且这是写明的决定，不是漏做"
+      ]
+    }
+  ]
+}

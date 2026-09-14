@@ -3,6 +3,52 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.80] 吸收判定图**签入仓库**（archify）+ 发版 tag
+
+用户 2026-09-14 指令「tag 提交」。核实后：**上一轮的代码/文档早已提交并打过 `v1.15.79` tag**（远端指向 `33eb17a`，
+本地与远端 `0 0` 齐平）—— 所以这一轮唯一的新东西是**那期的图**，它此前只落在工作区 `_reports/`（不进版本库）。
+
+### 1. 按**仓库既有惯例**签入，不自创一套
+
+`docs/` 里早有先例：`architecture-seams.candidate.json` + `architecture-seams.html` 被跟踪，
+而 `architecture-seams.visual-check.*` 被 `.gitignore` 明确排除（那条注释就是为它写的）。本版照抄该口径：
+
+| 文件 | 处置 |
+|---|---|
+| `docs/absorb-verdict.candidate.json` | **签入**（规格源，`meta.output` 按惯例写**裸文件名**） |
+| `docs/absorb-verdict.html` | **签入**（635 KB 自包含可交互 HTML） |
+| `docs/absorb-verdict.visual-check.*` | **忽略**（4 张 PNG + contact sheet + JSON sidecar，可重出） |
+
+### 2. 图本身（发布级）
+
+- `validate --quality showcase` → **9/9 项 artifact 检查通过**，`composition` 0 错 0 警
+  （`minLabelRouteClearance 34.7` · `shortSegment 0` · `microSegment 0`）。
+- `deliver` → ok，9/9，0 错 0 警；规格 SHA-256 `12a1a691…`、产物 SHA-256 `5b85caac…`。
+- `visual-check` → **pass**：1440×900→900 · 1600×1000→1000 · 1920×1080→1080 · 2048×1320→1320，
+  四档 `overflowY=false`。**本轮实际读过截图**（1440×900 浅色与 2048×1320 浅色），不是只跑命令。
+
+### 3. 出图过程里两条**可复用的判据**（比这张图本身值钱）
+
+1. **同泳道相邻列放不了节点**：列距约 80px 而节点默认宽 92px ⇒ 必然重叠；相邻列之间的边只有 22px，
+   低于 28px 下限。⇒ **同一泳道的节点必须隔列放**。（第一版把两个节点同列同泳道，直接报错。）
+2. **容器门由 `meta.viewBox` 的宽高比决定，不由内容多少决定**：viewer **按宽度**缩放 SVG。
+   第一版留给自动 viewBox（`720×652`，近正方），在 1440 宽视口下 `scale=2` ⇒ 高度被放大成 1304 ⇒
+   四档视口**全溢出**。修法是**显式写 `meta.viewBox: [1320, 600]`**（2.2:1 横向）。
+
+   ⚠ **这条差一点被写成「技能缺陷」**：我当时去测了技能自带的 `release-delivery` 示例，它是 **2020px**，
+   比我的 1549 还差，几乎据此下「这门对多泳道流程图不可达」的结论。**接着去查了我们自己之前出过的两份图** ——
+   `dsh-shadow-v1.12.5-references` 与 `projection-creative-scout` **都是 pass**（`scrollHeight` 精确等于视口）。
+   ⇒ **门是可满足的，是我的图不对**；打开那份 pass 的规格一看就明白它显式写了 viewBox。
+   **用通过的先例校准，而不是用失败的下结论** —— 差一步就把自己的错记成外部缺陷。
+
+### 4. 未做 / 诚实边界
+
+- **未出讲解视频**（hyperframes，L3）：本轮判断它是**决策留档**而非演示交付，故未起视频链路。**要就补。**
+- 工作区 `_reports/` 下仍留一份同名副本（报告交付面，按用户「报告落盘 `_reports/`」的约定）；
+  `docs/` 是**版本化的产物源**。两者由**同一份规格**生成，**若重出请以 `docs/` 的 candidate 为准**（避免分叉）。
+- 图**讲的是判定流程，不是事实清单**：具体的 8/8、7/10 条要在 `adr/0087` 里核。
+
+
 ## [v1.15.79] 吸收判定：`rtk` 与 `langextract`（ADR-0087）—— **只登记，不实装**，并写明这是有意的
 
 用户 2026-09-14 指令：把 `rtk-ai/rtk` 与 `google/langextract`「**拉取后，学习，吸收**」。本轮完成
