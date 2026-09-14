@@ -544,3 +544,54 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   （§3 记录时为 47,082 / 4,362）；最近推送 **2026-09-14**；最新 release **v0.8.37**（2026-09-13）；
   许可仍 **Apache-2.0**；仓库体积 417,703 KB（约 408 MB）。
 - **本机状态**：已装（9 个技能 + CLI），是报告 L3 视频链路 —— 该用途与 §3 记录一致，**未变化**。
+
+## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
+
+> 用户 2026-09-14 指令「这两个**拉取后，学习，吸收**」。本轮完成**拉取 + 学习 + 判定**，
+> **实装按待办走**（`BACKLOG.md` 的 D9 / D10 / D11），**理由与逐条判定见 `adr/0087` §C**。
+> **口径**：本节只记「克隆落点 + HEAD + 对前文的更正 + 结论摘要」；**完整判定不在此重复**，去 `adr/0087`。
+
+### 10. 两仓的一手事实（写死快照，避免引用会漂的数字）
+
+| 仓库 | 本地落点 | HEAD | 声明版本 | 许可（`LICENSE` 原文） |
+|---|---|---|---|---|
+| `rtk-ai/rtk` | `vendor/_src/rtk` | `d402152`（2026-09-14） | `Cargo.toml` = **0.48.0** | **Apache-2.0** |
+| `google/langextract` | `vendor/_src/langextract` | `70cfb98`（Prepare v1.7.0） | `pyproject.toml` = **1.7.0** | **Apache-2.0** |
+
+- **langextract 此前在本机已有副本，但那是「无 `.git` 的 v1.6.0 快照」** —— 落后一个小版本，**且不是克隆**。
+  本轮按「可逆改动先备份」改名为 `vendor/_src/langextract--snapshot-v1.6.0` 后重拉正规克隆。
+  （**要删那份旧快照说一声**；它完全可由 GitHub 复现。）
+- 第一次克隆被代理掐断（`early EOF`），按「网络受限换可达通道」降到 `--depth 1` 才过。
+- **`rtk` 与 DSH / DeepSeek 无任何关联**（全仓搜 `dsh|deepseek` 的命中全是 *benchmark harness* 之类无关词）；
+  它确有宿主无关的接入面（子进程 `rtk rewrite <cmd>` 退出码协议 / `rtk hook <agent>` / 环境变量），
+  但那条面做的事（**改写命令**）正是本仓不该做的（见 `adr/0087` §A 不吸收项 2）。
+
+### 11. ⚠ 对 §7 / §8 的更正（读源码后推翻只读 README 的描述 —— `adr/0078` D1 更正① 同款纪律）
+
+**§8（langextract）的描述此前不完整，现更正**：
+
+- 原描述只说了「它**自动检测**：定位不到原文的抽取项其 `char_interval = None`」，读起来像是**一道门**。
+- **一手源码核实后的事实**：那是一个**软约定，不是门**。
+  `langextract/resolver.py:1021-1038` 收 `unaligned_extractions` 只为跑一次 fuzzy 重试，
+  **之后无计数、无 warn、无 raise**；`align_extractions` 在 `:1073` 直接 `return`
+  （父代理复核：全文件仅两处 `logging.warning`，`:311`/`:319`，**都是解析错误，与对齐失败无关**）。
+  唯一的硬断言 `tests/test_live_api.py:279-302` 落在 `tests/test_live_api.py`，
+  而默认门 `tox.ini:25` 是 `pytest -m "not live_api and not requires_pip and not integration"` ⇒ **被排除**。
+- ⇒ **本仓不得把它当「有门的先例」引用**。它恰好是 **ADR-0049 要防的那种形态：降级了，但不可见**。
+  这条是本次学习**最值钱的单点结论**。
+
+**§7（rtk）补充一条我方引用口径的更正**：仓库描述里的「Single Rust binary, **zero dependencies**」
+在 `README.md` 里**找不到**；最接近的原句在 `docs/contributing/TECHNICAL.md:15`
+（*"a single Rust binary with no runtime dependencies beyond the compiled binary itself"*），
+而 `Cargo.toml` 有 **24 个直接依赖**。⇒ 引用这句时应引 `TECHNICAL.md` 的原句，且**说清是「无运行时外部依赖」**。
+
+### 12. 结论摘要（**完整判定见 `adr/0087`**）
+
+- **rtk**：压缩实现层（63 个 TOML 过滤器 + 命令改写 hook）对本仓**无用**（无共同消费方）；
+  但**记账层与门禁层有 8 条判据形态**值钱，其中 `never_worse` 守卫与「实测/估算分类型」两条最贴本仓。
+  **不吸收 8 条**，逐条理由见 `adr/0087` §A。
+- **langextract**：**卖点是真的**（`char_interval` 是确定性 token 级对齐算出来的，不是让模型吐位置），
+  但**纪律是软的**；它的精华判据（对齐分级 / 逐字判定 / 覆盖率+密度双闸）在**本仓今日没有消费方**
+  —— 本仓 Evidence Gateway 判的是**路径是否存在**，不是文本对齐。⇒ **登记为对照，不实装**（避免假闸门）。
+  **不吸收 10 条**，逐条理由见 `adr/0087` §B。
+- **两仓均未安装、未运行**（本机无 Rust 工具链；langextract 未 `pip install`）⇒ 结论**止于源码阅读**。
