@@ -64,8 +64,10 @@
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
 
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6）；
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§9）；
 > 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
+> **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
+> （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
 
 ## 按与本项目（dsh-shadow / 投影模式 / 能力扩展）的关联度粗分
 
@@ -460,3 +462,85 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 + `check_complexity_budget.py:25-27,221-229`（预算 + 白名单腐化自检）；T14 = 协议 JSON + 比较器 + **签入 `results/*.json`**
 + **双跑逐字比**；V6 = 退出码用**合取式**表达（`run_extraction_quality_smoke.py:255-257`
 「全通过 ∧ 恰好 1 次外部调用 ∧ 保留 ≤16」）。
+
+## 补充材料（2026-09-14 用户提供，本轮已核实）
+
+> 用户 2026-09-14 指定补录三条：`rtk-ai/rtk`（**新**）、`google/langextract`（清单里已有裸 URL，**此前无核实段**）、
+> `heygen-com/hyperframes`（**§3 已完整登记**）。
+> **已核实**：GitHub API + 原始 raw 文件，抓取 **2026-09-14 09:13 +08:00**。
+> **可重放**：`node ..\.docs\fix\2026-09-14\fetch-references-meta.ts`（元数据）与 `dump-readmes.ts`
+> （README 原文落盘，产物见同目录 `readme-*.md`）；怎么跑写在两个文件头的注释里。
+> **口径**：同一条材料**只在一处完整登记** —— 重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数（§8 = 补核实，§9 = 只刷新）。
+
+### 7. rtk-ai/rtk（RTK — Rust Token Killer）— **新**
+
+- 链接：https://github.com/rtk-ai/rtk ｜ 官网：https://www.rtk-ai.app
+- **是什么**：把 shell 命令输出**在到达 LLM 上下文之前**做过滤与压缩的 CLI 代理（仓库自述
+  `CLI proxy that reduces LLM token consumption by 60-90% on common dev commands. Single Rust binary, zero dependencies`）。
+  单一 Rust 二进制、零依赖、README 自报 <10ms 开销。安装面：Homebrew（`brew install rtk`）、
+  **Windows：`winget install rtk-ai.rtk`**、`cargo install --git …`、`install.sh`。
+- **核实**（GitHub API，抓取 2026-09-14 09:13 +08:00）：**80,196** ⭐ / 5,079 fork / **1,733** open issues；
+  创建 2026-01-22、最近推送 2026-09-13；**Apache-2.0**；默认分支 **`develop`**（不是 `main`）；
+  最新 release 是 `dev-0.50.0-rc.*`（同日多个 RC），稳定 tag 到 **v0.49.0**；
+  topics 含 `token-optimization` / `agentic-coding` / `claude-code` / `cost-reduction`。
+- **核心机制**：`rtk init --global` 装一个**命令改写 hook**（README 以 Claude Code 为例：`git status` → `rtk git status`），
+  结果送进四种策略 —— **智能过滤**（去注释 / 空白 / 样板）、**分组**（按目录 / 规则聚合）、
+  **截断**（保相关上下文）、**去重**（重复日志行折叠计数）。覆盖面：`ls/read/find/grep` ·
+  `git status/log/diff/push` · `pytest/go test/vitest/jest` · `lint/tsc/cargo build/ruff` ·
+  `docker ps/logs` · `kubectl pods`。另有两条分析命令：**`rtk gain`**（节省统计，可 `--graph`）与
+  **`rtk discover`**（发现遗漏的节省机会）。
+- **值得借鉴（本条最有价值的不是压缩算法，而是它的自曝口径）**：README 把自己的头条数字**当场切开量纲** ——
+  「削减**多达 90% 的 bash 输出**」紧接一句「**这正是 RTK 所测量的指标，它与「账单降低 90%」不是一回事**」；
+  并继续说明：bash 输出只是**输入 token 的来源之一**（还有提示词 / 系统提示词 / 对话历史），
+  输入 token 又**只是账单的一部分**（还有输出 token），「削减效果在每一步都会被稀释」；
+  且「token 数量按 `字节数 / 4` 估算：RTK 不内置分词器，因此**百分比是可靠的，但 token 绝对数值只是近似值**」。
+  ⇒ 这与本仓 **ADR-0072**（台账「实测」标签比事实强 —— **标签不得强于事实**）是同一纪律的外部样本；
+  它比本仓更狠之处是：**连自己产品的头条数字都当场限定口径**。可作材料核实记录的对照范文。
+- **另一条**：`rtk discover`「主动找还没省的地方」与本仓 `tools/audit-drift.ts` / `tools/audit-wiring.ts`
+  （**造工具去发现缺口**，而不是等人来报）同族，且它把这个能力做成了**用户可见的一等命令**。
+- **与 dsh-shadow 的关系（三条要分清）**：
+  1. **互补，不是替代**：本仓的 token 预算是**记忆侧**（`tierFor`/`renderByTier` 的 L0/L1/L2 分层渲染、
+     `max_tokens`、`recall.cooldownTurns` 冷热淘汰）；RTK 削的是**工具输出侧**。**本仓现在没有工具输出压缩这一层** ——
+     证据：刚落盘的一条记忆正文只有 `- [09:11:18] [pwsh] 调用 pwsh` 这类**动作行，不含命令输出**。
+  2. **它是工具台账的候选 `kind:"reference"` 条目**（通用 CLI 目录，不影响插件行为），且**恰好满足台账格式**
+     （Windows 有精确 winget 包 ID `rtk-ai.rtk`）。**但入台账必须走 ADR-0058 的纪律**：**包 ID 由人裁决、机器只核验**
+     （按名字自动解析已被实测证伪）；台账硬边界仍在 —— **装完本会话不可见**（宿主 PATH 是启动时快照）
+     ⇒ **不能按「先装再派」做计划**。**本条目只是登记，不代替那个裁决。**
+  3. **一条边界要先想清楚再采**：RTK 靠**改写命令**介入执行路径（hook 层）。本仓取向是**不代装 / 不扩执行范围**
+     （inv 178–182、ADR-0049）；采它意味着在**宿主 / 预设层**接线，属**外部环境决策**，不在本仓代码面内。
+- **未核实**：**未装、未跑、未复现 90%**；未核实其 hook **是否支持 DSH**（README 只举 Claude Code）；
+  未核实 winget 包 `rtk-ai.rtk` 在**本机**是否可解析（此处只记录仓库 README 自述）。
+
+### 8. google/langextract —— **注册补全（此前只有清单里一个裸 URL，无核实段）**
+
+- 链接：https://github.com/google/langextract ｜ PyPI：https://pypi.org/project/langextract/
+  ｜ demo：https://google-langextract.hf.space/
+- **是什么**：用 LLM 从非结构化文本里抽结构化信息的 Python 库（自述 `extracting structured information from
+  unstructured text using LLMs with precise source grounding and interactive visualization`）。Apache-2.0；有 Zenodo DOI。
+- **核实**（GitHub API，抓取 2026-09-14 09:13 +08:00）：**38,577** ⭐ / 2,705 fork / 124 open issues；
+  创建 2025-07-08、最近推送 2026-09-13；最新 release **v1.7.0**（2026-09-13）。
+- **核心机制**：**Precise Source Grounding** —— 每个抽取结果都映射到原文的**精确字符区间**（`char_interval`），
+  可视化时据此在原文里高亮。长文走「切块 + 并行 + 多轮」提高召回。
+- **值得借鉴（与本仓证据门同族，且把「指不回去」处理得比一般实现诚实）**：README 明写一个已知失效模式 ——
+  **LLM 有时会从 few-shot 示例里抄内容，而不是从输入文本里抽**；它的处理是**自动检测**：
+  定位不到原文的抽取项，其 `char_interval = None`，并给出用法 `[e for e in result.extractions if e.char_interval]`
+  **只保留 grounded 的结果**。
+  ⇒ 这正是本仓「**无证据不返回**」（Evidence 门 / ADR-0044）的 **LLM 侧对应实现**：
+  **不让模型保证，而让产出可复算** —— 指不回原文的一律降级为 `None`，而不是当成事实。
+  差别在对象：本仓的 Evidence Gateway 判**路径是否存在**，它判**抽取片段是否真落在原文的字符区间内**；
+  两者同族（**可复算的存在性**）。
+- **另一条**：few-shot 示例不逐字会触发 **`Prompt alignment` 警告（默认出声，需主动清理）** ——
+  又一例「默认不静默」（ADR-0049 同向）。
+- **与本仓的硬冲突（必须先记）**：它的整条写入路径**就是 LLM 抽取**；本仓铁律是**纯函数派生、不猜字段、
+  LLM 不能制造关系**（ADR-0042 / 0043 / 0051）⇒ **只取「grounding 可复算」这个判据形态，不取它的抽取路径**
+  （与 `adr/0073` 对 hl_mem 的处置同型）。
+- **未核实**：未装、未跑；`char_interval` 在**中文 / 多语言**上的定位质量未验；「多轮提高召回」的调用量代价未读细节。
+
+### 9. heygen-com/hyperframes —— **§3 已完整登记（2026-09-08）；本条只刷新读数，不重复事实**
+
+- 链接：https://github.com/heygen-com/hyperframes
+- **不重复登记**：是什么 / README 写法与安装坑 / 与本仓的关系，**全部见 §3**（一处事实只在一处）。
+- **本条只做一件事：刷新读数**（抓取 2026-09-14 09:13 +08:00）——**49,604** ⭐ / 4,532 fork
+  （§3 记录时为 47,082 / 4,362）；最近推送 **2026-09-14**；最新 release **v0.8.37**（2026-09-13）；
+  许可仍 **Apache-2.0**；仓库体积 417,703 KB（约 408 MB）。
+- **本机状态**：已装（9 个技能 + CLI），是报告 L3 视频链路 —— 该用途与 §3 记录一致，**未变化**。
