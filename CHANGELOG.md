@@ -55,6 +55,19 @@
 
 **验证**：`npm run verify` ⇒ **59 个检查**（58 + 新增 `tools/audit-scripts.selftest.ts`）· `[run-tests] ALL PASS ✅`；
 `audit:docs` ①~⑤ 全绿（② 报 **9 步**双向点名）。取证入口：`../.docs/fix/2026-09-15/volume-defaults-and-index-budget.md`。
+**④ 用户随后选了「①②都做」，两条都落地（同日追加）**
+
+- **① 4 个只读漂移探针搬出仓库**：`_research/drift_{survey,measure,measure2,residual}.ts` ⇒
+  `../.docs/fix/2026-09-15/probe-drift-*.ts`。搬运**只改两件事** —— `../dist/...` 的相对 import 改成
+  **从参数给的仓库根动态 import**、硬编码的工作区根改成**命令行参数**（两个参数都必填：缺参 / 依赖缺件 ⇒ **exit 2**，
+  不猜路径）；**测量逻辑一字未动**。核对方式是把 stdout 与搬运前**逐字比对**：四个文件**全部逐字相同**。
+  三条控制也实测过：缺参 ⇒ 2、仓库根指向一个没有 `dist/` 的目录 ⇒ 2（带「先跑 `npm run build`」的提示）、正常 ⇒ 0。
+- **② 13 个一次性脚本删除**：`upd_readme{,2,3,4,5,6}` · `upd_changelog19` · `upd_context` · `upd_docs19` · `upd_v1520`
+  · `fix_block` · `gen_doc_insert` · `gen_ledger`。判据写进了 `AGENTS.md`：**会改写文档/源码的脚本，在它那一版发完之后
+  只剩余危险**（再跑一次 = 拿当时的脚本改写现在的文档）。`_research/` 余下：`checkver.ts`（只读，已被 `audit:docs` ① 取代）
+  + 6 个 `.py`（用户边界内保留）+ 数据文件。
+- ⚠ **仍未做**：`_research/` 依旧不进版本控制 ⇒ 这 4 个探针**只在本机 `../.docs` 下**（与 `adr/0064` §5 对
+  「`_research/` 有意不纳入版本控制」的既有口径一致）。
 
 
 

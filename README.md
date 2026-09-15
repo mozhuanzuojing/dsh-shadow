@@ -584,7 +584,7 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.87`**（给「脚本一律 `.ts`」**配门**：新增 `audit:scripts` 进 `verify` —— 仓内不得有手写 `.js` / `.mjs` / `.cjs`，`.ts` 与 `.py` / `.ps1` 等允许；同时把两个审计工具各写一份的 walker 收进 `tools/audit-corpus.lib.ts`）—— 最新几版摘要：
+**当前版本：`v1.15.87`**（给「脚本一律 `.ts`」**配门**：新增 `audit:scripts` 进 `verify` —— 仓内不得有手写 `.js` / `.mjs` / `.cjs`，`.ts` 与 `.py` / `.ps1` 等允许；同时把两个审计工具各写一份的 walker 收进 `tools/audit-corpus.lib.ts`。随后把 4 个只读漂移探针搬进 `../.docs`（改掉 `../dist` 依赖，stdout 与搬运前逐字相同），并删掉 13 个「只会改写文档」的一次性脚本）—— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
