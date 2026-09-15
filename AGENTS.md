@@ -37,6 +37,13 @@
 - **跑测试前必须 `npm run build`**：`test/*.test.ts` 与 `tools/*.selftest.ts` **import 的是 `dist/`**。
   只跑 `npx tsc --noEmit`（**不产出**）就去跑测试，读到的是**旧代码**，
   会得到「明明改了却没生效」的假象（v1.15.65 实测踩过一次）。
+- **语料根（v1.15.83）**：`eval:retrieval:check` 要一个带 `.shadow` 的**工作区根** —— 默认由 `tools/retrieval-eval.ts` 的位置**往上找**（最多三级，取第一个存在的）。
+  一个都没有 ⇒ **exit 2，且后面 3 步（分诊棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。
+  兜底：`SHADOW_EVAL_ROOT=<工作区> npm run verify`（本机 = `D:\project\dsh1`）。
+- **`dist/` 不该出现在 `git status` 里（v1.15.83）**：`.gitattributes` 已钉 `dist/** text eol=lf`。
+  此前 `core.autocrlf=true` 把它按 CRLF **检出**、`tsc` 按 LF **重写** ⇒ 每次 build 后 388 个文件报「已修改」，
+  而它们与索引**逐字节相同**（`git diff --numstat -- dist` = 0 行 · `git add --dry-run -- dist` = 0 条）。
+  若它又出现，先用这两条命令判真假，别急着 `git add -A`。
 - 源码入口：`index.ts`（Cordis adapter）→ tsc → `dist/index.js`（DSH 加载编译后 JS）。
 
 ## 脚本一律 TypeScript

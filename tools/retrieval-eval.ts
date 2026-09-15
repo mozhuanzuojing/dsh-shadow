@@ -36,12 +36,17 @@ const PROTOCOL_PATH = join(here, "retrieval-eval.protocol.json");
 const BASELINE_PATH = join(here, "retrieval-eval.baseline.json");
 
 /**
- * **默认语料根**：从本文件位置推出**工作区根**（`<workspace>/dsh-shadow/tools` ⇒ `<workspace>`）。
+ * **默认语料根**：从本文件位置往上找**第一个带 `.shadow` 的候选根**（候选顺序 = 由近到远）。
  * ⚠ v1.15.41 前这里硬编码 `D:/project/dsh1` —— 在本机（工作区在 `G:\`）**根本不存在**
  * ⇒ `npm run eval:retrieval` 实际在**空语料**上评测（`docs=0`，看起来还「跑通了」）。
- * 现在默认值由位置推导，环境变量仍可覆盖；找不到 `.shadow` 时**响亮报错**而不是默默评空语料。
+ * ⚠ v1.15.83 前只往上推**一层**（隐含布局是 `<工作区>/dsh-shadow/tools`）—— 而本仓实际是
+ * `<工作区>/vendor/dsh-shadow/tools` ⇒ 推导落到 `<工作区>/vendor`（**没有 `.shadow`**）
+ * ⇒ `npm run verify` 在第 5 步红、**后 3 步（分诊棘轮 / 插件面类型门 / 全部测试）根本不跑**（实测 exit 2）。
+ * 现在按候选顺序取第一个存在的 `.shadow`；候选全都不存在时**响亮报错并逐个列出候选**，
+ * 仍然不默默评空语料。`SHADOW_EVAL_ROOT` 优先级最高（冻结语料快照走它）。
  */
-const ROOT = process.env.SHADOW_EVAL_ROOT || join(here, "..", "..");
+const CANDIDATE_ROOTS = [join(here, ".."), join(here, "..", ".."), join(here, "..", "..", "..")];
+const ROOT = process.env.SHADOW_EVAL_ROOT || CANDIDATE_ROOTS.find((r) => existsSync(join(r, ".shadow"))) || CANDIDATE_ROOTS[0];
 const SHADOW = join(ROOT, ".shadow");
 const K = Number(process.env.SHADOW_EVAL_K || 5);
 const MAX_DOCS = Number(process.env.SHADOW_EVAL_DOCS || 1500);
@@ -72,7 +77,9 @@ const emit = (...args: unknown[]) => {
 
 if (!existsSync(SHADOW)) {
   console.error(`找不到语料根：${SHADOW}`);
-  console.error(`（用 SHADOW_EVAL_ROOT 指定工作区根；默认由本文件位置推导 = ${ROOT}）`);
+  console.error("（候选 = 由本文件位置往上找，按顺序；全都不存在 ⇒ 拒绝产出读数：");
+  for (const r of CANDIDATE_ROOTS) console.error(`   · ${join(r, ".shadow")}${existsSync(join(r, ".shadow")) ? "  ✅" : ""}`);
+  console.error(" 用 SHADOW_EVAL_ROOT=<工作区> 显式指定）");
   process.exit(2);
 }
 

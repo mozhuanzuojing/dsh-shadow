@@ -56,7 +56,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | 验证某条记忆的证据还在不在 | `read_shadow(topic, { verifyEvidence: true })` | Evidence Gateway：fs（默认）/ zg（CLI）可插拔；zg 未装报 `unavailable`，不静默当成已核实 |
 | 体检：召回质量与稳定性 | `read_shadow({ mode: "shadow-report" })` / `{ mode: "query-log" }` | Evidence Density / Node 稳定性 / 类型分布 |
 
-另有长程与边界族 mode（`agency-*`、`delegation-*`、`adapt-*`、`horizon-*`、`recall-*`、`federation*`、`distortion`、`real-evidence`/`real-refer`、`simulate`/`candidate`/`execute`、`validate`/`evidence`、`model-*`、`world-*`、`temporal`、`reflection`、`observer-*`、`workspace-*`、`continuity-index`、`identity-advance`、`recovery`），属 ADR 落地的按需查询，不是日常入口；**全部 61 个 mode 的语义、入参与返回见 `CONTEXT.md` 的「mode 参考」表**（工具 schema 里的 `mode` 描述只留常用 mode + 指针，避免每个请求都背上这份清单）。
+另有长程与边界族 mode（`agency-*`、`delegation-*`、`adapt-*`、`horizon-*`、`recall-*`、`federation*`、`distortion`、`real-evidence`/`real-refer`、`simulate`/`candidate`/`execute`、`validate`/`evidence`、`model-*`、`world-*`、`temporal`、`reflection`、`observer-*`、`workspace-*`、`continuity-index`、`identity-advance`、`recovery`），属 ADR 落地的按需查询，不是日常入口；**每个 mode（条数不写在这里 —— 由 `test/recall-envelope.test.ts` 断言，并要求 `CONTEXT.md` 覆盖齐全）的语义、入参与返回见 `CONTEXT.md` 的「mode 参考」表**（工具 schema 里的 `mode` 描述只留常用 mode + 指针，避免每个请求都背上这份清单）。
 > **命名口径（ADR-0050 / ADR-0053）**：mode 名与参数名以工具 schema + `CONTEXT.md` 为唯一现行口径；被取代的旧名本文件不登记（映射与理由见 ADR-0050 / ADR-0053），调用旧名会返回「已废止：X → 请用 Y」，不落空进默认召回。
 > **取舍（有意为之）**：schema 不再携带各族边界语（如「非 Autonomous Agent」「不提升 epistemic/authority」）。不读 `CONTEXT.md` 的模型会少这层提醒——换来的是每个请求少约 1.2k 字符常驻上下文。要恢复，把 `CONTEXT.md` 的 mode 参考表接回 `mode` 描述即可。
 
@@ -105,6 +105,8 @@ npm run verify
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
 + npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名）
 + npm run eval:retrieval:check 评测门完整性（v1.15.42：协议自检 / 基线只含聚合面 / 同源 / 读数齐备）
++                               ⚠ **语料根**：它要一个带 `.shadow` 的**工作区根** —— 默认由本工具位置**往上找**（最多三级，取第一个存在的）；
++                                 一个都没有 ⇒ **exit 2，后面 3 步（棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。兜底：`SHADOW_EVAL_ROOT=<工作区>`（本机 = `D:\project\dsh1`）
 + npm run audit:ratchet        分诊棘轮（v1.15.45：线索数只能降不能升；桶消失或新桶即红）
 + npx tsc --noEmit             插件面类型门
 + npm run test:all             = npm run build && node tools/run-tests.ts
@@ -134,7 +136,7 @@ npm run verify
 | 档 | 命令 | 查什么 | 本部署可用性 |
 |---|---|---|---|
 | 确定性 | `npm run eval:retrieval:determinism` | 同一输入**两跑功能字段逐字节相同** | ✅ 恒可用 |
-| 完整性 | `npm run eval:retrieval:check`（**在 `verify` 里**） | 协议自检 / 基线**只含聚合面** / 协议同源 / 门控读数齐备 | ✅ 恒可用 |
+| 完整性 | `npm run eval:retrieval:check`（**在 `verify` 里**） | 协议自检 / 基线**只含聚合面** / 协议同源 / 门控读数齐备 | ✅ 可用，**但要有一个带 `.shadow` 的工作区根**（默认由工具位置往上找，最多三级；一个都没有 ⇒ **exit 2**） |
 | 回归 | `npm run eval:retrieval:compare` | 与**签入基线**比，超容差即失败 | ⚠ **只在冻结语料上**；本部署的正常结论是**「不可比」**（退出码 **3**） |
 
 **为什么回归档在本部署恒「不可比」**：本仓语料是**活的 `.shadow` 记忆**，插件每回合都在写新记忆
@@ -270,10 +272,10 @@ npm run verify
 | `id` | `allowed changes` | `forbidden changes` | `evidence`（符号名优先，行号会腐烂） | `verification`（**谁真的在守**） | `ratchet` |
 |---|---|---|---|---|---|
 | `tool-name-v1` | 新增工具（加名是加法） | 改名 / 删除（除非走下面的弃用流程） | `index.ts` 三处 `name:` | **有**：`test/host-probe.test.ts:104` 断言三个都在注册表里 | **无桶覆盖** —— 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** |
-| `tool-schema-v1` | 新增**可选**参数；新增枚举值 | 改名 / 删除参数；让未知枚举值落回默认 | `index.ts` 各工具的 `parameters.properties` 第一层键 | **部分**：`test/recall-envelope.test.ts:79-84` 只守 `mode` 描述的长度 / 指针 / 关键字；**没有一处枚举参数名** ⇒ **删参数没有门会红** | 无桶覆盖 |
+| `tool-schema-v1` | 新增**可选**参数；新增枚举值 | 改名 / 删除参数；让未知枚举值落回默认 | `index.ts` 各工具的 `parameters.properties` 第一层键 | **有**：`tools/contract-surface.selftest.ts`（**冻结参数名清单**：缺名即红并点名、新增只报告；含差集判据与抽取判据的标定）+ `test/recall-envelope.test.ts:79-84`（`mode` 描述的长度 / 指针 / 关键字）。⚠ **只守「名字还在不在」** —— 参数的类型 / 枚举值 / 默认语义仍无人守 | 无桶覆盖 |
 | `read-mode-v1` | 新增 mode | 删除 / 改名旧 mode；**未知 mode 静默落回默认召回** | `query/reads.ts` 的 `modes: […]` + 各模块 `MODES` / `if` | **强**：`test/recall-envelope.test.ts:96`（断言恰为 **62**）+ `:103`（`CONTEXT.md` 的表必须覆盖全部 62） | **`:103` 本身就是棘轮**：新增 mode 不写进 `CONTEXT.md` 就红 |
 | `retired-mapping-v1` | 追加映射 | 移除映射；让旧名 / 旧参数静默落空 | `query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage` | **强**：`test/recall-envelope.test.ts:201-223`（含参数级 `verify:true` / `args.recall`，且带**正控**：正名不得被拒） | 无桶覆盖，但**每条废止配一个断言** —— 等价于逐条棘轮 |
-| `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **无枚举门**：各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用**，但**没有一处枚举顶层键** ⇒ **删键 / 改名没有门会红** | 无桶覆盖 |
+| `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **有**：`tools/contract-surface.selftest.ts`（**冻结 `ShadowConfig` 顶层键清单**：缺键即红并点名、新增只报告；键由 `core/types.ts` 按**大括号深度**抽，避开嵌套键）+ 各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用** | 无桶覆盖 |
 | `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
 | `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `core/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
 | `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
@@ -293,8 +295,7 @@ npm run verify
 | 设防状态 | 契约 | 含义 |
 |---|---|---|
 | **有强门** | `tool-name-v1` · `read-mode-v1` · `retired-mapping-v1` · `memory-file-v1` · `derived-file-v1` · `prompt-segment-v1` | 有具体断言在守，改了会红（多条还带**正控**） |
-| **部分设防** | `tool-schema-v1` | 只守 `mode` 的描述；**参数名无人枚举** ⇒ 删参数不会红 |
-| **未设防** | `config-keys-v1` | 键**是被消费的**（`index.ts` 的 `apply(ctx, rawConfig)`），但**没有一处枚举键名** ⇒ 删键 / 改名不会红 |
+| **有门（只守名字面，v1.15.83 补）** | `tool-schema-v1` · `config-keys-v1` | `tools/contract-surface.selftest.ts` 冻结**清单**：缺名即红并**点名**、新增只报告。⚠ **覆盖面就这么大** —— `tool-schema-v1` 只守参数**名**（类型 / 枚举值 / 默认语义不守）；`config-keys-v1` 只守**顶层键名**（子键不守，已生效键的默认语义归 `adr/0084`） |
 | **8 条全无棘轮桶** | —— | 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** ⇒ 契约面的守卫方式是 `verification`，不是 `ratchet`。**这是两类工具的分工，不是缺口** —— 不要为凑字段而新造桶（本仓已因「为凑形状而造东西」清理过一批） |
 
 ### 模块归属表（`| Module | Owns | Reads | Writes | Must not own |`）
@@ -579,10 +580,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.82`**（给 tag 仪式配了一道门，并把那条核对口径的适用范围写清 —— 论证见 `CHANGELOG`）—— 最新几版摘要：
+**当前版本：`v1.15.83`**（按一次设计检查的四条发现各修一处：契约的**名字面**补门 · 评测门的语料根改候选三级 · `dist/` 假脏根除 · 删掉一处与门冲突的手写旧数）—— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.83 | **按一次设计检查的四条发现各修一处**（契约名字面补门 · 删掉一处与门冲突的手写计数 · 评测门的语料根不再只推一层 · 消除 build 后的假脏条目）。**覆盖面写小**：只守名字，参数语义仍无人守；依据与边界见 `adr/0086` §8.13。 |
 | v1.15.82 | **给 tag 仪式配门**（`audit:docs` 检查 ⑤）：`CHANGELOG` 里**已经过去**的每一版（≥ `v1.15.77`、且版本号小于当前）都必须存在同名 tag，缺一个就红。**当前版本被豁免** —— tag 要指向该版的发布提交，而那笔提交只有在版本号改完之后才建得出来，门却跑在提交之前 ⇒ 它回答的是「有没有漏打」，**代价是迟一版才发现**（换来的是不会再攒成 73 个版本）。标定：selftest 新增 6 组（边界豁免 / 当前版本豁免 / `packed-refs` 第二来源 / 读不到 `.git` 报结构缺失），并对真仓做了负向实验（临时移走 `v1.15.78` 的 ref ⇒ 红、移回 ⇒ 绿）。另把 `AGENTS.md` 那条核对口径补上**适用范围**（按字面它在全历史上不成立）。细节见 `CHANGELOG`。 |
 | v1.15.81 | **给新收的那条外部资料补上发版这一半**（资料本体在 `references.md` §13：一个把 Claude Code / Codex 变成动效工作室的 agent skill —— Remotion 做电影感产品宣传片，Apache-2.0、8,578⭐、157 张镜头配方卡、149 个 SFX/16 类、5 个 BGM、成片模板 + 浏览器工作台 + 剪映工程导出）。**最值钱的不是视频，是一条判据**：它要求每条 SFX 在**渲染产物**里验证是否真听得见，并明写「**不看预览**」（预览把 volume 钳到 1.0）⇒ 与本仓「唯一判据是运行时读取」「工件存在 ≠ 已验证」是同一判据在另一领域的实例。另核出一处**口径适用范围**问题（历史 tag 的对象类型），处置是**不追溯改建**。细节见 `CHANGELOG`。 |
 | v1.15.80 | **判定图签入仓库**（`docs/absorb-verdict.candidate.json` + `.html`，与 `architecture-seams` 同一惯例；`visual-check.*` 按 `.gitignore` 排除）。图是发布级的：9/9 检查 · 0 错 0 警 · 四档视口零溢出。**顺带记下两条判据**：① 同泳道相邻列放不了节点（列距 80px < 节点宽 92px）；② **容器门由 `meta.viewBox` 的宽高比决定** —— viewer 按宽缩放，近正方的自动 viewBox 会被放大两倍，必须显式写横向 viewBox。第 ② 条**差点被误记成技能缺陷**（技能自带示例 2020px 更差），是拿**我们自己两份 pass 的图**校准后才判明「门可达、是我图不对」。细节见 `CHANGELOG`。 |
