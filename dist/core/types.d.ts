@@ -25,6 +25,7 @@ export interface ShadowConfig {
         debug?: boolean; /** v1.12.6 只降权不移除：命中的路径/入口含这些子串时打分乘 0.4（仍可搜到，只排名靠后）。默认空=不降权。 */
         deprioritize?: string[];
     };
+    /** 记忆保留（老化 hotness + `_meta.json` 建档）。**默认开**（v1.15.85「默认全开」）；`enabled: false` 关。 */
     retention?: {
         enabled?: boolean;
         halfLifeDays?: number;
@@ -35,14 +36,14 @@ export interface ShadowConfig {
         gapMinutes?: number;
         showInIndex?: number;
     };
-    /** 遗忘（GC/归档）：把低价值记忆移出「活跃索引/召回」热扫描集（文件保留，Forget≠Delete）。默认关。 */
+    /** 遗忘（GC/归档）：把低价值记忆移出「活跃索引/召回」热扫描集（文件保留，Forget≠Delete）。**默认开**（v1.15.85「默认全开」）；`enabled: false` 关掉 ⇒ 低价值记忆不再移出活跃集。 */
     forget?: {
         enabled?: boolean;
         staleDays?: number;
         minHits?: number;
         maxActive?: number;
     };
-    /** Episode 收口归档：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件并归档个体（File 少；原子保留可回放）。默认关。 */
+    /** Episode 收口归档：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件并归档个体（File 少；原子保留可回放）。**默认开**（v1.15.85「默认全开」）；`enabled: false` 关。 */
     compact?: {
         enabled?: boolean;
         gapMinutes?: number;

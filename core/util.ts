@@ -97,6 +97,15 @@ export const numOr = (v: unknown, dflt: number, min = 0): number => {
   return Number.isFinite(raw) ? Math.max(min, raw) : dflt;
 };
 
+/**
+ * **默认开的开关**（v1.15.85「默认全开」）：`undefined` = **开**，只有**显式 `false`** 才关。
+ *
+ * 与 `numOr` 同族，理由是同一个：把「**未传**」与「**显式关**」分开 —— 这是 `adr/0084`「显式 0 ≠ 未传」的**布尔版**。
+ * 判据收一处：`retention` / `forget` / `compact` 三个开关原先各写一遍 `=== true`（默认关，共三处），
+ * 现在各写一遍 `onByDefault(...)`；要关就在配置里写 `{ enabled: false }`。
+ */
+export const onByDefault = (v: unknown): boolean => v !== false;
+
 // Observer v2 时间锚定：asOf 支持 `{ timestamp, timezone }` 对象形态或 YYYY-MM-DD 日期串。
 // 记忆按日期归档，故主过滤按 date；timestamp/timezone 供窗口展示与语义锚定（Observer v2 / realityAnchor）。
 export const parseAsOf = (v: any): { date: string; timestamp?: string; timezone?: string } | null => {

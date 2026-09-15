@@ -42,6 +42,14 @@ export declare const RECALL_PREFIX = "> \u26A0 \u4EE5\u4E0B\u4E3A\u8BB0\u5FC6\u6
  *     回落默认值才是对的（那些调用点保持 `||` 原样，未纳入本次修复）。
  */
 export declare const numOr: (v: unknown, dflt: number, min?: number) => number;
+/**
+ * **默认开的开关**（v1.15.85「默认全开」）：`undefined` = **开**，只有**显式 `false`** 才关。
+ *
+ * 与 `numOr` 同族，理由是同一个：把「**未传**」与「**显式关**」分开 —— 这是 `adr/0084`「显式 0 ≠ 未传」的**布尔版**。
+ * 判据收一处：`retention` / `forget` / `compact` 三个开关原先各写一遍 `=== true`（默认关，共三处），
+ * 现在各写一遍 `onByDefault(...)`；要关就在配置里写 `{ enabled: false }`。
+ */
+export declare const onByDefault: (v: unknown) => boolean;
 export declare const parseAsOf: (v: any) => {
     date: string;
     timestamp?: string;

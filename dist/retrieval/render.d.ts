@@ -19,4 +19,24 @@ export declare const truncationNote: (o: {
         score: number;
     }[];
 }) => string;
+/**
+ * `_index.md` 的小节切分（`## ` 起头；其前的正文归 `(前言)`）。**确定性**、无正则回溯。
+ * 用途：无参 `read_shadow()` 的预算信封要能**按段名**披露「丢了哪几段」（`tool-output-v1` 的 hard 半边）。
+ */
+export declare const splitIndexSections: (text: string) => {
+    title: string;
+    body: string;
+}[];
+/**
+ * **无参 `read_shadow()` 的预算信封**（v1.15.85）：索引是入口路径，此前**整篇原样返回** ——
+ * 真 `.shadow` 实测 `_index.md` **2199 KB / 24628 行**（8310 条记忆）；而带 `topic` 的路径一直有预算 + 披露。
+ *
+ * 判据（与 `truncationNote` 同族）：
+ *   ① **结构感知** —— 按 `## ` 小节整段装进预算，**不腰斩**；
+ *   ② **按名字披露** —— 丢掉的段名逐个列出（截断必须自报，不得静默丢内容）；
+ *   ③ **放得下就零多余文字** —— 整篇 ≤ 预算 ⇒ 原样返回，不添一句；
+ *   ④ **给可执行的下一步**（穿透 / 提高预算 / 直接读文件）。
+ * 连第一节都放不下时按字符硬截断，并在披露里写明「已按字符硬截断」（不假装那是完整段）。
+ */
+export declare const renderIndexBudgeted: (idx: string, maxChars: number) => string;
 export declare const renderByTier: (s: any, budgetChars: number, forceL0?: boolean, tokens?: string[]) => string;

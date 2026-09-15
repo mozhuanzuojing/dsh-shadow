@@ -32,7 +32,8 @@ const makeHost = (seeds: { rel: string; text: string }[]) => {
   const registry = new Map<string, any>();
   const services: any = { fs, agents: { currentInitiator: () => null, get: (id: string) => agentsById.get(id) }, systemPrompt: { context: () => {} }, tools: { register: (def: any) => registry.set(def.name, def) }, llm: undefined, agentDefaultModel: undefined };
   const ctx: any = { get: (k: string) => services[k], on: () => () => {}, inject: (_d: string[], cb: Function) => cb({ get: (k: string) => services[k] }) };
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  // v1.15.85：本测试是**召回排序评测**，语料日期是合成的 ⇒ 显式关掉「默认全开」的 forget/compact，别让它测到删减而不是排序
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } });
   return { files, read: (args: any) => registry.get("read_shadow").execute(args, { agent: A }) };
 };
 

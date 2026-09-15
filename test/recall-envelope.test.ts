@@ -3,11 +3,12 @@
 //   ② 召回信封：截断自报家门（总数 = 命中 − 返回，冷却也算在内）+ 空命中给可执行下一步与近似候选（标「未验证」）。
 //   ③ deprioritize：只降权、不移除（被降权的树仍可搜到，只是排名靠后，且 debug 能解释）。
 //   ④ v1.12.7 修复：scrubFinal 不再把整篇读侧输出压成一行（保留 \t\n\r）。
+//   ⑥ 无参读索引的**预算**（v1.15.85）：入口路径不得把整篇 `_index.md` 塞回来（真 `.shadow` 实测 2199 KB / 24628 行）。
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import * as mod from "../dist/index.js";
 import { deprioritizeFactor, DEPRIORITIZE_FACTOR, approxEntries } from "../dist/retrieval/rank.js";
-import { truncationNote } from "../dist/retrieval/render.js";
+import { truncationNote, renderIndexBudgeted } from "../dist/retrieval/render.js";
 import { intentOf } from "../dist/core/intent.js";
 
 const { apply, name, inject } = mod;
@@ -232,5 +233,41 @@ assert.equal(intentOf({ mode: "identity-advance" }, "x").goal, "推进身份时�
 assert.equal(intentOf({ identity: true }, "x").goal, "确认主体");
 assert.equal(intentOf({}, "topic").goal, "召回相关记忆");
 console.log("✔ ⑤ intentOf mode/旗标 goal 消歧");
+
+// ─────────────────────────────────────────────
+// ⑥ 无参读索引的**预算**（v1.15.85）：入口路径不得把整篇 `_index.md` 塞回来
+// ─────────────────────────────────────────────
+// 真 `.shadow` 实测：`_index.md` **2199 KB / 24628 行**（8310 条记忆）⇒ 此前那条路径整篇原样返回。
+const manySeeds = Array.from({ length: 300 }, (_, i) => ({
+  rel: mem(`2026-09-0${(i % 8) + 1}`, `1000${String(i).padStart(2, "0")}`, `idx-${i}`),
+  text: memText(`src/idx${i}.ts`, `索引填充 alpha ${i}`),
+}));
+const bigHost = makeHost(baseCfg, manySeeds);
+const rIdx = String(await bigHost.read({}));
+assert.ok(rIdx.includes("# shadow 目录说明与索引"), `预算内应保留索引**前言**（说明 + 今日摘要）：\n${rIdx.slice(0, 200)}`);
+assert.ok(rIdx.includes("> 未返回的内容："), `索引超预算必须披露：\n${rIdx.slice(-400)}`);
+const im = /共 (\d+) 行 \/ (\d+) 字，本次返回 (\d+) 字/.exec(rIdx);
+assert.ok(im, `披露要给行数/总字数/返回字数：\n${rIdx.slice(-400)}`);
+assert.ok(Number(im![3]) <= 1600 * 4, `返回字数不得超预算（实际 ${im![3]} > 6400）`);
+assert.ok(Number(im![2]) > Number(im![3]), "总字数应大于返回字数（确属截断）");
+assert.ok(/未返回的段：[\s\S]*\(\d+ 行\)/.test(rIdx), `未返回的段应带**行数**（知道丢了多少）：\n${rIdx.slice(-400)}`);
+assert.ok(/未返回的段：[\s\S]*(主题索引|意识轨迹)/.test(rIdx), `未返回的段应**点名**：\n${rIdx.slice(-400)}`);
+assert.ok(rIdx.includes("> 部分返回的段："), `装不下整段时应标「部分返回」——否则会出现「预算 6400 字、只返回 1260 字」那种**把预算浪费掉**的结果：\n${rIdx.slice(-400)}`);
+assert.ok(rIdx.length >= 1600 * 4 * 0.8, `预算应被基本用满（实际 ${rIdx.length} / ${1600 * 4}）`);
+assert.ok(rIdx.includes("> 下一步："), "应给下一步（穿透 / 提高预算 / 直接读文件）");
+assert.ok(rIdx.length <= 1600 * 4 + 1200, `整体长度也应受约束（实际 ${rIdx.length}）`);
+// 正控：索引本来就小 ⇒ **零多余文字**（不得出现信封），且段落原样
+const tinyR = String(await makeHost(baseCfg, seeds).read({ max_tokens: 8000 }));
+assert.ok(!tinyR.includes("未返回的内容"), `索引放得下时不得出现预算信封：\n${tinyR.slice(-200)}`);
+assert.ok(tinyR.includes("## 近期记忆（按日期）"), "小索引应原样返回（含段结构）");
+// 负控（纯函数）：连第一节都放不下 ⇒ 硬截断也必须自报；预算内 ⇒ 逐字原样
+// 负控：连**第一行**都放不下（这里是单行 403 字 > 预算 20 字）⇒ 只能硬截断，且必须自报
+const hardIdx = renderIndexBudgeted("## " + "字".repeat(400), 20);
+assert.ok(hardIdx.includes("已按字符硬截断"), `硬截断必须自报：\n${hardIdx}`);
+// 正控：能装下若干行 ⇒ 走「部分返回」而不是硬截断
+const partIdx = renderIndexBudgeted("## 甲\n" + "字".repeat(400), 50);
+assert.ok(partIdx.includes("> 部分返回的段：") && !partIdx.includes("已按字符硬截断"), `能按行装就不该硬截断：\n${partIdx}`);
+assert.equal(renderIndexBudgeted("## 甲\n短", 4000), "## 甲\n短", "预算内必须逐字原样");
+console.log(`✔ ⑥ 索引预算：${im![2]} 字 → 返回 ${im![3]} 字 + 按段披露；小索引零多余文字`);
 
 console.log("ALL PASS ✅");

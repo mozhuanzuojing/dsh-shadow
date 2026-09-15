@@ -41,7 +41,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 
 | 你想做的事 | 用这个 | 说明 |
 |------------|--------|------|
-| 看记忆目录 / 有哪些主题 | `read_shadow()` | 无参数返回 `_index.md`：格式说明 + 近期记忆 + 入口索引 + 意识轨迹 |
+| 看记忆目录 / 有哪些主题 | `read_shadow()` | 无参数返回 `_index.md`：格式说明 + 近期记忆 + 入口索引 + 意识轨迹；**与带 `topic` 的路径共用同一份 token 预算**（`max_tokens`，默认 1600），超预算按段返回并**按段名 + 行数披露**丢了什么（v1.15.85，见 `adr/0088`） |
 | 回忆「上次在做什么、为什么、做到哪」 | `recall_shadow("一句话查询")` | 任务恢复包（内部 `mode:"recovery"`）：任务/状态/关键决定(含理由)/证据是否仍有效/观测结果 |
 | 按主题穿透到具体记忆 | `read_shadow(topic)` / `{ entry: "…" }` | 分层召回：高分给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控预算 |
 | 跨「记忆 / 决策 / 代码 / 文档 / 概念 / 资源」找上下文 | `shadow_query(query, scope?)` | 返回带证据的 ShadowNode，每条可追溯；`scope: ["resource"]` 单查资源卡 |
@@ -69,7 +69,7 @@ agent「思维/上下文/灵魂」的投影——每条记忆都是一个文件�
 | `read_shadow` / `recall_shadow` / `shadow_query` | 模型可自动调用 | 纯读：不写工作区、不落盘、不改索引；提示词已接线「缺上下文先查」 |
 | `read_shadow(..., { debug: true })` / `{ verifyEvidence: true }` / `{ kg: true }` | 模型可自动调用 | 只是多返回 trace / 证据验证 / 图谱邻接，仍不改状态 |
 | `mode: "shadow-report"` / `mode: "query-log"` 体检 | 用户要求，或定期自查 | 只读、只生成派生报告（`rm -rf` 可重建） |
-| 开启 `retention` / `forget` / `compact` / `projectionStore` / `knowledgeEngine` | **仅用户显式要求** | 会改召回集与索引行为，属有后果动作（改配置 + 重启） |
+| **改** `retention` / `forget` / `compact`（**v1.15.85 起默认开**）· **开** `projectionStore` / `knowledgeEngine.llmNavigate` | **仅用户显式要求** | 会改召回集与索引行为，属有后果动作（改配置 + 重启）。**方向已变**：三件套现在是「**关掉**才是显式动作」（唯一判据 `core/util.ts` 的 `onByDefault`，见 `adr/0088`） |
 | `mode:"toolset"`（只读巡检 / 能力预检） | 模型可自动调用 | 只是探测可选 CLI 是否可用，不改任何东西 |
 | `mode:"toolset"` + `install:"<id>"`（**安装**） | **仅用户显式要求** | 有后果动作：**一律先经宿主审批**，只有 `allowed-once` 才执行；装完**重探**再报结果 |
 | `writeConsent: true` 之后的落盘 | **仅用户显式要求** | 用户没明说「记住」时只累积不落盘（默认 `false` 照常采集） |
@@ -162,7 +162,7 @@ npm run verify
 
 ### 默认开关（装完什么都不动会怎样）
 
-**只读工具不写工作区；会写、会烧 token 的增强默认都关。**默认开的是**四项**（采集与落盘、一句话摘要 `summary`、查询观测 `queryLog`、Episode 回溯 `episodes`）—— `summary` / `queryLog` / `episodes` 都能一行关掉（`episodes.showInIndex: 0`，**v1.15.64 修好了**：此前被 `|| 8` 吞掉 ⇒ 那个开关**不存在**，见注①），采集本身**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
+**只读工具不写工作区；默认值以本表为唯一台账。**两条方向的读法（**v1.15.85「默认全开」**起，「默认」列逐项对源码默认值）：**「默认开」= 关掉才是显式动作** —— 判据只有一处，`core/util.ts` 的 `onByDefault`（`undefined` = 开，**只有显式 `false`** 才关；`retention` / `forget` / `compact` 三件套共用它，见 `adr/0088`）；**「默认关」= 打开才是显式动作**，且按下面的权限轴**仅用户显式要求**（那一族多为需要外部 LLM / CLI 的增强）。`summary` / `queryLog` / `episodes` 都能一行关掉（`episodes.showInIndex: 0`，**v1.15.64 修好了**：此前被 `|| 8` 吞掉 ⇒ 那个开关**不存在**，见注①），采集本身**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
 
 > **关于「成熟度」列的读法（v1.15.34 / D8）**：本仓**不给自己打 `stable`/`beta`/`experimental` 等级**
 > （全仓无此口径；`adr/0073:53` 亦自陈「0 个 ADR 带『重新评估条件』小节」）。若要凭空造一套等级，
@@ -177,6 +177,9 @@ npm run verify
 > （统一进「能力降级台账」→ 读侧横幅），**1 条裁定为正当静默**（`projectionStore`；类判据是
 > **「读者拿到的内容逐字节不变」**，见 `adr/0085` §5 与 `core/projection-store.ts`）。
 > 下表**仍标 ⚠️静默** 的格子是**尚未进 T8 的同族**（如 `retention`），不是已修项。
+> **⚠ 但 v1.15.85「默认全开」改了这一格的语义**：该格描述的现在只可能是**用户显式关掉**之后的样子，
+> 而按 `adr/0085` 的裁定「**用户显式 `enabled:false` 不留痕** —— 关掉是用户的选择，渲染成告警＝把读者的决定当故障」
+> ⇒ 它**不再是候选缺陷**，只是一句如实的后果说明（`adr/0088` §A.3-④）。
 
 | 能力 | 默认 | 成熟度 | 降级行为（关闭 / 缺件时退到哪） | 晋级 / 启用标准 | 开着会怎样 · 怎么开 |
 |------|------|--------|--------------------------------|------------------|----------------------|
@@ -188,9 +191,9 @@ npm run verify
 | 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账读不到 / 坏件 / 写失败 → 各自留痕 ⇒ 冷却失效**可见**（T8 第 5 条，v1.15.65。注：v1.15.55 留的 `corrupt` 标记**此前没有任何消费者** = 等价于没留） | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
 | 召回 trace `recall.debug` | 关 | 无开放未验证项 | 无降级（仅不输出 diag，答案路径不变） | 仓库未定义 | 开需 `{ debug: true }` 或 `recall.debug: true` |
 | 召回降权 `recall.deprioritize` | 空（不降权） | 无开放未验证项 | 无降级（空配置不降权）。注：**启用后**降权只在 debug 输出可见 | 仓库未定义 | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**）；如 `["references-agents", "_reports"]` |
-| 记忆遗忘 `retention` | 关 | 有开放未验证项（ADR-0067 / ADR-0068 真机待验） | 关闭 → 不做 hotness 加权、`registerMeta` 直接 return ⇒ `_meta.json` 不建档；差异**不可见** ⚠️**静默** | 仓库未定义 | `retention = { enabled: true, halfLifeDays: 7 }`：hotness 加权（注③：`stale` **不是**排除项，它喂生命周期标签） |
-| GC / 归档 `forget` | 关 | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | 关闭 → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | `forget.enabled: true` 才把低价值记忆移出活跃召回集（文件保留，Forget≠Delete） |
-| Episode 收口归档 `compact` | 关 | 有开放未验证项（ADR-0068 `runCompact` delta 真机未验） | 关闭 → 直接 return，不合并（无降级） | 仓库未定义 | `compact.enabled: true` 才合并原子文件 |
+| 记忆遗忘 `retention` | **开**（v1.15.85；`retention: { enabled: false }` 关） | 有开放未验证项（ADR-0067 / ADR-0068 真机待验） | **显式关掉** → 不做 hotness 加权、`registerMeta` 直接 return ⇒ `_meta.json` 不建档；差异**不可见** ⚠️**静默**（v1.15.85 起这是**用户的选择** ⇒ 按 `adr/0085` 不再是候选缺陷，见上注） | 仓库未定义 | 默认即 hotness 加权（注③：`stale` **不是**排除项，它喂生命周期标签）；`retention = { halfLifeDays: 7 }` 调半衰期 |
+| GC / 归档 `forget` | **开**（v1.15.85；`forget: { enabled: false }` 关） | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | **显式关掉** → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | 默认即把低价值 / 过期记忆移出活跃召回集（**文件保留，Forget≠Delete ⇒ 不减磁盘占用**）；`staleDays` / `minHits` / `maxActive` 可调 |
+| Episode 收口归档 `compact` | **开**（v1.15.85；`compact: { enabled: false }` 关） | 有开放未验证项（ADR-0068 `runCompact` delta 真机未验） | **显式关掉** → 直接 return，不合并（无降级） | 仓库未定义 | 默认即把结束的 episode 合成 consolidated 文件（**原子保留可回放**） |
 | LLM 推理导航 `llmRecall` | 关 | 无开放未验证项 | 缺 `llm`/route/解析不出编号 → `[]` → 确定性 `renderRecovery` ✅**可见**（T8 第 1 条，v1.15.65。修前是**最彻底**的一条：`label:""` 使异常**连 log 都没有**，且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） | 仓库未定义 | 开需 `llmRecall = { enabled: true, provider, model }` |
 | Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 未接线） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 —— **裁定为正当静默**（`adr/0049:38` 行级豁免 + `adr/0085` §5 的类判据：**读者拿到的内容逐字节不变**） | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
 | 目录级摘要 `abstracts`（v1.15.35 / ADR-0075） | **开** | **边界 ADR 已接受但收益未验证**（ADR-0075 自陈：召回收益未测 → T9） | 写失败 → 该目录**不列入** `_index.md`（索引少一行 = 内容变了）✅**可见**（v1.15.65 复查时补：它**不属于**正当静默那一类，判据同上；`showInIndex: 0` 的「不列」v1.15.64 才真的生效） | 仓库未定义 | 每日期目录写一份 `_abstract.md`（L1 + L0）；`abstracts.enabled: false` 关、`showInIndex` 控制索引里列几个（默认 3） |
@@ -338,7 +341,7 @@ node ../.docs/fix/2026-09-12/t15-module-ownership.ts   # 输出 27 行（**批�
 （`config-keys-v1` 的键**就被消费**）。说清楚免得它变成本仓清理过的那类「写好了但从不执行」的东西。
 ### 读取（`read_shadow`，可穿透）
 
-- 无参数返回 `_index.md`（目录）；带 `topic`/`entry` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签 → 路径 → 正文 + 时间衰减」打分排序，在 token 预算内按深度返回——高分记忆给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控制预算（默认 1600）。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
+- 无参数返回 `_index.md`（目录）；带 `topic`/`entry` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签 → 路径 → 正文 + 时间衰减」打分排序，在 token 预算内按深度返回——高分记忆给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控制预算（默认 1600）。**无参读索引也走同一份预算**（v1.15.85）：超预算时按 `## ` 段整段装、**不腰斩行内**，并按**段名 + 行数**披露「未返回的段 / 部分返回的段」+ 三条下一步（穿透 / 提高 `max_tokens` / 直接读文件）；**装得下则逐字原样、零多余文字**。⛔ 由来是实测：本机 `.shadow/_index.md` = **2 251 348 字节 / 24 639 行**（8310 条记忆 / 7 个日期目录），而此前无参路径**整篇原样返回**（`adr/0088`）。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
 - **冷热淘汰（默认关，显式开启）**：`rawConfig.recall.cooldownTurns = 5` 时，`.shadow/_recall_log.json` 记录「带内容」发过的路径，N 回合内不重复返回；纯 URI 不带内容则不冷却。写失败降级为「不去重」，且**读侧横幅披露**（T8 第 5 条，v1.15.65：台账读不到 / 坏件 / 写失败各自留痕）。
 - **语义召回（B 档，默认关）**：`read_shadow(topic)` 默认走加权关键词召回（A 档，无外部依赖）。要更接近语义，配置 `rawConfig.recall = { enabled, provider, model, maxTokens, timeoutMs }`——`enabled: true` 且给了 `provider/model` 时，先用 `llm.stream` 扩展几个相关检索词，再打分召回；失败/未配置时退回 A 档并**在读侧横幅披露**（T8 第 3 条，v1.15.65；修前是**静默**的 —— 这条此前由本文档自己承认）。
 - **Memory Debugger**：`read_shadow(topic, { debug: true })`（或 `recall.debug: true`，默认关）返回召回管线 trace——`候选 → 命中(打分>0) → 冷却 → 预算 → 返回` 计数 + 每条召回「为什么命中（入口/主题/路径/正文打分拆解）/为什么被降权(cooldown/deprioritize)/状态」。默认路径不变。
@@ -371,7 +374,7 @@ node ../.docs/fix/2026-09-12/t15-module-ownership.ts   # 输出 27 行（**批�
 
 ### 记忆生命周期与遗忘
 
-- **记忆遗忘（retention，默认关）**：`rawConfig.retention = { enabled: true, halfLifeDays: 7 }` 时，`.shadow/_meta.json` 记录每条记忆的 `created/hits/status/confidence/pinned`；召回用 **hotness**（命中数 × 半衰期衰减）加权（替换旧的「21 天归零」线性衰减），并把 `status: stale/superseded/archived` 的记忆**默认排除**。这是「记忆+遗忘=高效」的落地（借鉴 **MemoryBank** 衰减 —— Ebbinghaus 遗忘曲线按回忆时间与频率衰减，[arXiv:2305.10250](https://arxiv.org/abs/2305.10250) / A-MEM 动态合并 / MemGPT archival）。**两处勘误**：① **（ADR-0065）** 本行曾把 hotness 标成「OpenViking 式」——**标错了**，在 OpenViking 官方 README 与 Context Layers / Retrieval 两份文档里 `decay`/`hotness`/`half-life`/`reinforce`/`recency` **全部 0 命中**，真实出处是同一句里本来就引了的 **MemoryBank**；② **（ADR-0066 / 待办 D4）** 本行曾写「`pinned` 永存」——**该状态不可达**：生产只写 `pinned: false`，`pinned: true` 全仓零处，故「永存」这条路径**当前走不到**。真正的保留语义由 `status` 与 `hits` 派生（见下行）。
+- **记忆遗忘（retention，**v1.15.85 起默认开**）**：默认即开（写 `rawConfig.retention = { enabled: false }` 关；`{ halfLifeDays: 7 }` 调半衰期）；开时 `.shadow/_meta.json` 记录每条记忆的 `created/hits/status/confidence/pinned`；召回用 **hotness**（命中数 × 半衰期衰减）加权（替换旧的「21 天归零」线性衰减），并把 `status: stale/superseded/archived` 的记忆**默认排除**。这是「记忆+遗忘=高效」的落地（借鉴 **MemoryBank** 衰减 —— Ebbinghaus 遗忘曲线按回忆时间与频率衰减，[arXiv:2305.10250](https://arxiv.org/abs/2305.10250) / A-MEM 动态合并 / MemGPT archival）。**两处勘误**：① **（ADR-0065）** 本行曾把 hotness 标成「OpenViking 式」——**标错了**，在 OpenViking 官方 README 与 Context Layers / Retrieval 两份文档里 `decay`/`hotness`/`half-life`/`reinforce`/`recency` **全部 0 命中**，真实出处是同一句里本来就引了的 **MemoryBank**；② **（ADR-0066 / 待办 D4）** 本行曾写「`pinned` 永存」——**该状态不可达**：生产只写 `pinned: false`，`pinned: true` 全仓零处，故「永存」这条路径**当前走不到**。真正的保留语义由 `status` 与 `hits` 派生（见下行）。
 - **记忆生命周期（deriveLifecycle）**：从 `_meta.json` 信号**派生状态机**——`NEW → OBSERVED → VERIFIED → TRUSTED → STALE/DECAYING → SUPERSEDED`。触发信号：独立 session 确认（`confirmedBy`）、命中次数、新鲜度、冲突。召回 provenance + debug 暴露 `生命周期 <态>`。**可达性（ADR-0063 分诊 / 待办 D4 已决策为「纠正文档」）**：状态机里 **`TRUSTED`（经 `pinned`）与 `ARCHIVED` 两态当前不可达** —— `pinned: true` 与 `status: "archived"` 在**生产中都没有写入者**（生产只写 `pinned: false`）。**不补写入口**：那会把外部权威状态落进可重建的 `_meta.json`，与 ADR-0003 冲突；若将来确实需要「人工钉住/归档」，须先起 ADR 论证状态落在 **source** 层。**另一处口径不一致**：`lifecycleOf` 的两条最前置判断读的是**写侧** `rec.status`/`rec.pinned`，而 `MEMORY.md` 声明的口径是「纯按信号派生、不做写侧硬状态迁移」（已在 `MEMORY.md` 就地加勘误）。
 - **冲突检测**：召回时校验每条记忆的**证据路径在当前工作区是否存在** → 缺失即**降权 + 标记 stale**，provenance 暴露 `(⚠证据缺N)` + `生命周期 STALE`（"capture handler 已不存在"类过时）。证据存在则无冲突；无法判定时视为存在（避免误伤非代码路径）。
 
@@ -580,10 +583,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.84`**（把「证据入口在仓库之外、不受版本控制」这条写进 `AGENTS.md`，并落一条「能复现的放 `tools/`」的判据）—— 最新几版摘要：
+**当前版本：`v1.15.85`**（**「默认全开」**：`retention` / `forget` / `compact` 三个量控开关翻成默认开，判据收一处 `onByDefault`；并给无参 `read_shadow()` 补上索引预算 —— 此前入口路径会把 2.2 MB 的 `_index.md` 整篇返回）—— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.85 | **「默认全开」+ 入口读的预算**：`retention` / `forget` / `compact` 三个量控开关从「默认关」改为「**默认开**」，并把四处各写一遍的 `=== true` 收成一个 `onByDefault`；`read_shadow()` 无参读索引从「整篇返回」改为**与含 `topic` 的路径共用预算**（超预算按段整段装、按段名 + 行数披露）。⚠ 边界：**Forget ≠ Delete、收口不删原子 ⇒ 不减磁盘占用**。判据、四条边界与重放命令见 `adr/0088`。 |
 | v1.15.84 | **只动 `AGENTS.md`**：证据入口不再钉某个日期目录，改成「规则 + 找最近一份的命令」，并写明「能复现的进 `tools/`、`.docs` 只放当时的取证」。无源码改动。 |
 | v1.15.83 | **按一次设计检查的四条发现各修一处**（契约名字面补门 · 删掉一处与门冲突的手写计数 · 评测门的语料根不再只推一层 · 消除 build 后的假脏条目）。**覆盖面写小**：只守名字，参数语义仍无人守；依据与边界见 `adr/0086` §8.13。 |
 | v1.15.82 | **给 tag 仪式配门**（`audit:docs` 检查 ⑤）：`CHANGELOG` 里**已经过去**的每一版（≥ `v1.15.77`、且版本号小于当前）都必须存在同名 tag，缺一个就红。**当前版本被豁免** —— tag 要指向该版的发布提交，而那笔提交只有在版本号改完之后才建得出来，门却跑在提交之前 ⇒ 它回答的是「有没有漏打」，**代价是迟一版才发现**（换来的是不会再攒成 73 个版本）。标定：selftest 新增 6 组（边界豁免 / 当前版本豁免 / `packed-refs` 第二来源 / 读不到 `.git` 报结构缺失），并对真仓做了负向实验（临时移走 `v1.15.78` 的 ref ⇒ 红、移回 ⇒ 绿）。另把 `AGENTS.md` 那条核对口径补上**适用范围**（按字面它在全历史上不成立）。细节见 `CHANGELOG`。 |

@@ -46,8 +46,9 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T1");
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   fire("fs/observed", { targetKey: `${WS}/pkg-a/util.js`, displayPath: `${WS}/pkg-a/util.js` }, { kind: "present", version: "v1" }, { agent: { id: "T1" } });
@@ -69,8 +70,9 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T2");
   const rd = (x: any) => toolRegistry.get("read_shadow").execute(x, { agent: T });
   // 直接种 4 条记忆（绕开写侧时间戳不确定性，专测读侧派生分组）：
@@ -109,8 +111,9 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T3");
   const rd = (x: any) => toolRegistry.get("read_shadow").execute(x, { agent: T });
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-io.md",
@@ -131,8 +134,9 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T4");
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   // assistant 明确决策 + 明确理由（应捕获为 DecisionEvent 带 reason）
@@ -166,8 +170,9 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T5");
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
   const userMsg5 = (text: string) =>
@@ -205,7 +210,7 @@ const toolRegistry = new Map<string, any>();
     ".shadow/2026-09-05/2026-09-05--110000-old.md": { created: "2026-09-05", hits: 0, status: "archived", pinned: false },
     ".shadow/2020-01-01/2020-01-01--000000-low.md": { created: "2020-01-01", hits: 0, status: "active", pinned: false },
   }));
-  const P = { name, inject, apply };
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: true, staleDays: 14, minHits: 1 } });
   const T = agent("T6");
   const fire = (ev: string, ...a: any[]) => { const fn = listeners.get(ev); assert.ok(fn, `missing ${ev}`); return fn(...a); };
@@ -241,7 +246,7 @@ const toolRegistry = new Map<string, any>();
   seedA("2026-09-07/2026-09-07--090500-pkg-a.md", "重构 resolver", "pkg-a/x3.js");
   // Episode B（当前/打开）：12:00
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--120000-pkg-b.md", "# pkg-b\n\n> 完整线索\n> 背景/材料：pkg-b/y.js\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T7\n\n- [12:00:00] [pkg-b] 改/读 pkg-b/y.js\n");
-  const P = { name, inject, apply };
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: true, gapMinutes: 60 } });
   const T = agent("T7");
   const rs = toolRegistry.get("read_shadow");
@@ -277,8 +282,9 @@ const toolRegistry = new Map<string, any>();
     `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-task.md",
     `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T8");
   const r = String(await toolRegistry.get("read_shadow").execute({ mode: "task" }, { agent: T }));
   assert.ok(!r.startsWith("ERR"), "mode:task 不应报错");
@@ -319,7 +325,7 @@ const toolRegistry = new Map<string, any>();
   const services9 = { fs: sf, agents: { currentInitiator: () => null, get: (id: string) => agentsById.get(id) }, systemPrompt: { context: () => {} }, tools: { register: (d: any) => toolRegistry.set(d.name, d) }, llm: undefined, agentDefaultModel: undefined };
   const listeners9 = new Map<string, Function>();
   const ctx9 = { get: (k: string) => (services9 as any)[k], on: (e: string, fn: Function) => { listeners9.set(e, fn); return () => listeners9.delete(e); }, inject: (_d: string[], cb: Function) => cb({ get: (k: string) => (services9 as any)[k] }) };
-  const P9 = { name, inject, apply };
+  const P9 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P9.apply(ctx9, { summary: { enabled: false }, recall: {}, context: { mappings: [{ from: "src", to: "/home/g/src", rule: "windows-wsl" }] } });
   const r9 = String(await toolRegistry.get("read_shadow").execute({ mode: "context" }, { agent: T9 }));
   assert.ok(!r9.startsWith("ERR"), "mode:context 不应报错");
@@ -343,8 +349,9 @@ const toolRegistry = new Map<string, any>();
     `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-recall.md",
     `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T10");
   const rec = toolRegistry.get("recall_shadow");
   assert.ok(rec, "应注册 recall_shadow 工具");
@@ -377,7 +384,7 @@ const toolRegistry = new Map<string, any>();
     `# u8\n\n> 完整线索\n> 决策：〔user〕采用 U8 同步补丁\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：U8 同步补丁\n\n- [09:30:00] [u8] 改/读 u8/patch.java\n`);
   const llmMock = { stream: async function* () { yield { type: "text-delta", index: 0, text: "1" }; yield { type: "finish", reason: { kind: "stop" } }; } };
   services.llm = llmMock;
-  const P = { name, inject, apply };
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, llmRecall: { enabled: true, provider: "p", model: "m" } });
   const T = agent("T11");
   const rec = toolRegistry.get("recall_shadow");
@@ -390,8 +397,9 @@ const toolRegistry = new Map<string, any>();
   const store2 = new Map<string, string>();
   const ctx2 = mkCtx(store2);
   store2.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-a.md", `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
-  const P2 = { name, inject, apply };
-  P2.apply(ctx2.ctx, { summary: { enabled: false }, recall: {} });
+  const P2 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P2.apply(ctx2.ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T2 = ctx2.agent("T11");
   const r2 = String(await toolRegistry.get("recall_shadow").execute({ query: "Todo" }, { agent: T2 }));
   assert.ok(r2.includes("删除 Todo 同步链路"), "llmRecall 关闭应回落确定性(选 Todo)");
@@ -414,8 +422,9 @@ const toolRegistry = new Map<string, any>();
   // document 节点（.md 文档入口）
   store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090200-doc.md",
     `# docs/sso.md\n\n> 完整线索\n> 背景/材料：docs/sso.md\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:02:00] [docs/sso.md] 改/读 docs/sso.md\n`);
-  const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T12");
   const q = toolRegistry.get("shadow_query");
   assert.ok(q, "应注册 shadow_query 工具");

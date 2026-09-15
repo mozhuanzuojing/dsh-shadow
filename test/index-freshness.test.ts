@@ -68,8 +68,9 @@ const mem = (entry: string, line: string) =>
 
 const store = new Map<string, string>();
 const { m, agent, ctx } = mkCtx(store);
-const P = { name, inject, apply };
-P.apply(ctx, { summary: { enabled: false }, recall: {} });
+const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
+  // v1.15.85：本测试测**索引新鲜度**，不是 Episode 收口合并（合并会额外产出 consolidated 文件，出现「幽灵条目」假红）
+P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
 const T = agent("T1");
 const rs = toolRegistry.get("read_shadow");
 assert.ok(rs, "read_shadow 应已注册");

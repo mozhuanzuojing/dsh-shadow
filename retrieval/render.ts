@@ -51,6 +51,75 @@ export const truncationNote = (o: {
   );
 };
 
+/**
+ * `_index.md` 的小节切分（`## ` 起头；其前的正文归 `(前言)`）。**确定性**、无正则回溯。
+ * 用途：无参 `read_shadow()` 的预算信封要能**按段名**披露「丢了哪几段」（`tool-output-v1` 的 hard 半边）。
+ */
+export const splitIndexSections = (text: string): { title: string; body: string }[] => {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const out: { title: string; body: string }[] = [];
+  let cur: { title: string; body: string } = { title: "(前言)", body: "" };
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      out.push(cur);
+      cur = { title: line.replace(/^##\s+/, "").trim(), body: line };
+      continue;
+    }
+    cur.body += (cur.body ? "\n" : "") + line;
+  }
+  out.push(cur);
+  return out.filter((s) => s.title !== "(前言)" || s.body.trim() !== "");
+};
+
+/**
+ * **无参 `read_shadow()` 的预算信封**（v1.15.85）：索引是入口路径，此前**整篇原样返回** ——
+ * 真 `.shadow` 实测 `_index.md` **2199 KB / 24628 行**（8310 条记忆）；而带 `topic` 的路径一直有预算 + 披露。
+ *
+ * 判据（与 `truncationNote` 同族）：
+ *   ① **结构感知** —— 按 `## ` 小节整段装进预算，**不腰斩**；
+ *   ② **按名字披露** —— 丢掉的段名逐个列出（截断必须自报，不得静默丢内容）；
+ *   ③ **放得下就零多余文字** —— 整篇 ≤ 预算 ⇒ 原样返回，不添一句；
+ *   ④ **给可执行的下一步**（穿透 / 提高预算 / 直接读文件）。
+ * 连第一节都放不下时按字符硬截断，并在披露里写明「已按字符硬截断」（不假装那是完整段）。
+ */
+export const renderIndexBudgeted = (idx: string, maxChars: number): string => {
+  const raw = String(idx || "");
+  if (!raw || raw.length <= maxChars) return raw;
+  const sections = splitIndexSections(raw);
+  const kept: string[] = [];
+  const dropped: { title: string; lines: number }[] = [];
+  const partial: { title: string; kept: number; total: number }[] = [];
+  let used = 0;
+  for (const s of sections) {
+    const remaining = maxChars - used;
+    if (remaining <= 0) { dropped.push({ title: s.title, lines: s.body.split("\n").length }); continue; }
+    if (s.body.length <= remaining) { kept.push(s.body); used += s.body.length; continue; }
+    // 装不下整段 ⇒ **按行**装到预算为止（**不腰斩行内**），并如实标「部分返回」——
+    // 否则会出现「预算 6400 字、只返回 1260 字」这种**把预算浪费掉**的结果（v1.15.85 实测）。
+    const bodyLines = s.body.split("\n");
+    const take: string[] = [];
+    let size = 0;
+    for (const ln of bodyLines) {
+      if (size + ln.length + 1 > remaining) break;
+      take.push(ln);
+      size += ln.length + 1;
+    }
+    if (take.length) { kept.push(take.join("\n")); used += size; partial.push({ title: s.title, kept: take.length, total: bodyLines.length }); }
+    else dropped.push({ title: s.title, lines: bodyLines.length });
+  }
+  const hard = kept.length === 0;
+  const body = hard ? raw.slice(0, maxChars) : kept.join("\n");
+  const totalLines = raw.split("\n").length;
+  const note: string[] = [
+    "",
+    `> 未返回的内容：\`_index.md\` 共 ${totalLines} 行 / ${raw.length} 字，本次返回 ${body.length} 字（预算 ${maxChars} 字 = max_tokens × 4）${hard ? "，**已按字符硬截断**（连第一节都放不下）" : ""}。`,
+  ];
+  if (partial.length) note.push(`> 部分返回的段：${partial.map((d) => `「${d.title}」(前 ${d.kept} 行 / 共 ${d.total} 行)`).join(" · ")}`);
+  if (dropped.length) note.push(`> 未返回的段：${dropped.map((d) => `「${d.title}」(${d.lines} 行)`).join(" · ")}（主题索引/意识轨迹是**派生视图**：按主题穿透比整篇读回更省）`);
+  note.push("> 下一步：① `read_shadow(topic)` 按主题**穿透**（主题索引/意识轨迹是派生视图，不必整篇读回）；② 提高 `max_tokens`（上限 8000）重读；③ 需要全文就直接读 `.shadow/_index.md`。");
+  return body + note.join("\n");
+};
+
 export const renderByTier = (s: any, budgetChars: number, forceL0 = false, tokens: string[] = []) => {
   const { mm, text, tier, score, stale, origin, currentOrigin, provenance, observer, asOf, verdict, outcome, reflection } = s;
   // 每条召回前加结构性边界标注（Memory ≠ Instruction / ≠ Current State / ≠ Trusted Input），

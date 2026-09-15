@@ -7,7 +7,7 @@ import { SHADOW_ROOT } from "./paths.js";
 import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "./abstract.js";
 import { resolveWorkspace } from "./scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
-import { today, compact, slug, topicsInText, numOr } from "./util.js";
+import { today, compact, slug, topicsInText, numOr, onByDefault } from "./util.js";
 import { readRel, listMemories, memoryFileName, timeFromName } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { buildClueHeader, registerMeta } from "./memory.js";
@@ -94,8 +94,8 @@ export function makeMaterialize(core, hooks) {
     //    个体原子 mark status=compacted 并移出活跃热集（文件保留、可回放；Forget≠Delete）。默认关。
     const compactSlug = (id) => String(id || "ep").replace(/[^a-z0-9_-]+/gi, "-").slice(0, 32) || "ep";
     const runCompact = async (fs, ws, cache) => {
-        if (core.compactCfg.enabled !== true)
-            return;
+        if (!onByDefault(core.compactCfg.enabled))
+            return; // v1.15.85「默认全开」
         const parsed = [...cache.values()].map((r) => r.parsed).filter(Boolean);
         if (!parsed.length)
             return;
@@ -210,7 +210,7 @@ export function makeMaterialize(core, hooks) {
                     cache.delete(rel);
             // 硬上限：活跃记忆超过 maxActive 时，遗忘最旧的（封顶热集大小）。
             const maxActive = Math.max(0, Number(core.forgetCfg.maxActive) || 0);
-            if (core.forgetCfg.enabled === true && maxActive > 0 && cache.size > maxActive) {
+            if (onByDefault(core.forgetCfg.enabled) && maxActive > 0 && cache.size > maxActive) {
                 const recsAll = [...cache.values()];
                 const drop = oldestBeyond(recsAll.map((r) => ({ rel: r.rel, date: r.date, time: r.time })), maxActive);
                 for (const rel of drop)
@@ -340,7 +340,7 @@ export function makeMaterialize(core, hooks) {
             core.indexDirty.add(ws); // 索引懒构建：不在此处重建，待 read_shadow 读索引时再 ensureIndex。
             // 记忆文件与索引缓存已写入；**元数据登记失败必须留痕**（否则这条记忆在索引里活跃、
             // 而 `_meta.json` 里没有它 ⇒ hits 永远不计、生命周期恒 NEW、遗忘判据落回默认值）。
-            if (!(await registerMeta(fs, ws, rel, id, core.retentionCfg.enabled === true))) {
+            if (!(await registerMeta(fs, ws, rel, id, onByDefault(core.retentionCfg.enabled)))) {
                 core.lastMetaError = { at: Date.now(), err: `元数据未登记（${rel}）：hits/生命周期/遗忘判据都看不到这条记忆` };
                 console.error("[dsh-shadow][error]", core.lastMetaError.err);
             }

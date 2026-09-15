@@ -2,9 +2,10 @@
 // 遗忘（GC）：把「低价值 + 旧 + 未 pinned / 已归档被取代」的记忆移出「活跃」扫描集。
 //   关键：Forget ≠ Delete（ADR-0031）——文件保留，只是不再被索引/召回当作活跃知识扫描；
 //   这样封顶热集大小（性能），同时不破坏「过去发生过」的可追溯性。
-import { ageDaysOf } from "./util.js";
+import { ageDaysOf, onByDefault } from "./util.js";
 export const isForgettable = (rel, meta, cfg = {}) => {
-    if (cfg.enabled !== true)
+    // v1.15.85「默认全开」：`undefined` = 开，只有**显式 `false`** 才关（判据见 `core/util.ts` 的 `onByDefault`）。
+    if (!onByDefault(cfg.enabled))
         return false;
     const m = meta && meta[rel] ? meta[rel] : {};
     if (m.pinned)

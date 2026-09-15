@@ -5,7 +5,7 @@ import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
-import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf } from "../core/util.js";
+import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf, onByDefault } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor, approxEntries, deprioritizeFactor } from "../retrieval/rank.js";
 import { dispatchReadQuery } from "./reads.js";
 import { runContVerify } from "./contverify.js";
@@ -22,7 +22,7 @@ import { runRecall } from "./recall.js";
 import { runAdaptation } from "./adaptation.js";
 import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
-import { renderByTier, noMatchText, truncationNote } from "../retrieval/render.js";
+import { renderByTier, noMatchText, truncationNote, renderIndexBudgeted } from "../retrieval/render.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf, EVIDENCE_PATH_CAP } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
@@ -149,14 +149,18 @@ export async function runReadShadow(deps, args, exec) {
         return scrubFinal(RECALL_PREFIX + renderObserverContext(ctx) + flushWarn);
     }
     const topic = String(args?.topic || "").trim();
+    // v1.15.85：`max_tokens` 提到分支**之前** —— 无参（索引）路径与 topic 路径共用**同一份**预算判据。
+    // 此前只有 topic 路径有预算：无参 `read_shadow()` 把 `_index.md` **整篇原样**返回，而真 `.shadow`
+    // 实测该文件 **2199 KB / 24628 行**（8310 条记忆）⇒ 入口路径被自己的索引压死。
+    const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
+    const maxChars = maxTokens * 4;
     if (!topic) {
         await deps.ensureIndex(ws, agent?.session); // 索引懒构建：flush 只置 dirty，这里真正读索引时才构建/落盘。
         const idx = await readRel(fs, ws, `${SHADOW_ROOT}/_index.md`);
-        return scrubFinal(RECALL_PREFIX + (idx || "（暂无 shadow 索引）") + flushWarn);
+        // 预算内 ⇒ 原样返回（零多余文字）；超预算 ⇒ 按 `## ` 小节装 + **按段名披露**丢掉的段。
+        return scrubFinal(RECALL_PREFIX + (renderIndexBudgeted(idx, maxChars) || "（暂无 shadow 索引）") + flushWarn);
     }
     const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
-    const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
-    const maxChars = maxTokens * 4;
     let memories = await listMemories(fs, ws);
     const debugMode = recallCfg.debug === true || Boolean(args?.debug);
     const diag = [];
@@ -314,7 +318,7 @@ export async function runReadShadow(deps, args, exec) {
         const origin = originM ? scrubUnsafe(originM[1]).trim() : "";
         const staleDays = Math.max(1, Number(retentionCfg.staleDays) || 7);
         let stale = ageDaysOf(mm.rel) >= staleDays;
-        if (retentionCfg.enabled) {
+        if (onByDefault(retentionCfg.enabled)) { // v1.15.85「默认全开」
             const rec = meta[mm.rel];
             if (rec && rec.status && rec.status !== "active" && !rec.pinned)
                 continue;
