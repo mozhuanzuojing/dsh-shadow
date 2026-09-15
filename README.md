@@ -215,9 +215,9 @@ npm run verify
    现统一走 `core/util.ts:numOr`（判据只此一处），并把默认值的落点收成 `deriveEpisodes` 一处。
 ② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
 ③ **`retention` 的「stale 默认排除」在代码里没有对应实现**：`staleDays`/`stale` 在
-   `retention.enabled` 判断**之外**计算（`query/query.ts:275-276`），关闭 retention 也照标 stale；
+   `retention.enabled` 判断**之外**计算（`query/query.ts` 的 `const staleDays = …` 与 `let stale = ageDaysOf(mm.rel) >= staleDays;` 两行），关闭 retention 也照标 stale；
    而 `stale` 只喂生命周期标签（`observer/arbitrate.ts:15,28,39`、`core/lifecycle.ts:33`），**不做排除**。
-   唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts:279`）。
+   唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts` 的 `if (rec && rec.status && rec.status !== "active" && !rec.pinned) continue;`）。
    原表把它写在「默认」列，属**串列**。
 ④ **`knowledgeEngine` 的闸门不存在（v1.15.34 实测校正的硬缺陷）**：`ShadowConfig.knowledgeEngine.enabled`
    **生产零读取**（全仓唯一读取是 `core/writer.ts` 读 `.llmNavigate`）；`query/reads.ts`

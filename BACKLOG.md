@@ -282,8 +282,8 @@
 - **两者的可达性**：
   | 状态 | 读点 | 语义 | 生产可达？ |
   |---|---|---|---|
-  | `pinned: true` | `core/lifecycle.ts:27`（→`TRUSTED`）、`core/forget.ts:17`（→**永不被遗忘**） | 「人工显式信任」 | ❌ **恒为 false** |
-  | `status: "archived"` | `core/lifecycle.ts:28`（→`ARCHIVED`）、`core/forget.ts:18`（→**立即遗忘**） | 「人工归档」 | ❌ **无写入者** |
+  | `pinned: true` | `core/lifecycle.ts:27`（→`TRUSTED`）、`core/forget.ts` 的 `m.pinned` 分支（→**永不被遗忘**） | 「人工显式信任」 | ❌ **恒为 false** |
+  | `status: "archived"` | `core/lifecycle.ts:28`（→`ARCHIVED`）、`core/forget.ts` 的 `archived/superseded` 分支（→**立即遗忘**） | 「人工归档」 | ❌ **无写入者** |
 - **判定：这是「已文档化但无入口的能力」，不是「接线断了」**。三条依据：
   1. **`_meta.json` 是 Derived Artifact**（ADR-0003：Memory 文件 = source of truth，
      `_meta.json` 可被 `rebuild-index` 重建）⇒ **手工编辑它会被下次重建抹掉**，
