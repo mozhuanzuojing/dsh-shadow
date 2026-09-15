@@ -19,16 +19,23 @@
 //
 // 纯函数：输入是 `{path, text}[]`（path 为**仓库相对 posix 路径**），输出是违规数组。不做任何 IO。
 import { stripComments } from "./audit-wiring.lib.ts";
+import { NON_REPO_DIRS } from "./audit-corpus.lib.ts";
 
-/** 收集源码时要跳过的目录（CLI 与测试共用，避免两处各写一份而漂移）。 */
+/**
+ * 收集**源码**时要跳过的目录（CLI 与测试共用，避免两处各写一份而漂移）。
+ *
+ * `.git` / `_research` **不在这里手写** —— 它们属于更一般的判断「**哪些目录不属于这个仓库**」，
+ * 收在 `tools/audit-corpus.lib.ts` 的 `NON_REPO_DIRS`（v1.15.87 收口；此前这里手写一份、
+ * `audit-wiring` / `audit-drift` 各写一份 ⇒ **同一个事实三处**，v1.15.86 修 `_research` 时正是这个代价）。
+ * 本数组再补上「不是**源码**」的那几个（产物 / 依赖 / 文档 / 预设）。
+ */
 export const SOURCE_EXCLUDED_DIRS = [
   "dist",
   "node_modules",
-  ".git",
+  ...NON_REPO_DIRS,
   ".docs",
   "agent-presets",
   "docs",
-  "_research",
 ];
 
 /** 声明为「纯模块」的文件：不得有**任何** import（本仓当前实测如此）。 */

@@ -31,7 +31,7 @@
 
 - 构建：`npm run build`（= `tsc`）。`dist/` 由构建生成，**改源码后必须重编译并保持 `dist/` 与源码同步提交**。
 - **验证只用一条命令：`npm run verify`** —— 它串行跑 `typecheck:tools` → `typecheck:tests` →
-  `audit:layers` → `audit:docs` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
+  `audit:layers` → `audit:scripts` → `audit:docs` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
   （**检查条数不写在这里**：由 `run-tests` 自己打印，末行应为 `[run-tests] ALL PASS ✅`）。
   ⚠️ **本文件曾写「仓库没有配置 test runner」—— 那是过期信息**（运行器是 `tools/run-tests.ts`）。
 - **跑测试前必须 `npm run build`**：`test/*.test.ts` 与 `tools/*.selftest.ts` **import 的是 `dist/`**。

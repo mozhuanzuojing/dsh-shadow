@@ -3,6 +3,61 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.87] 给「脚本一律 `.ts`」配门（`audit:scripts`）+ 语料判据收一处（`audit-corpus.lib.ts`）；`_research/` 只搬了 1 个进 `tools/`
+
+用户 2026-09-15 对我上一轮列的两条选了「**都做**」。两条都在这一版：
+
+**① 配门：`npm run audit:scripts`（进 `verify`，第 4 步）**
+
+- 新三个文件：判据（纯函数）`tools/audit-scripts.lib.ts` · CLI `tools/audit-scripts.ts` · 标定 `tools/audit-scripts.selftest.ts`。
+- **口径（工具自己打印）**：语料 = 根下**所有文件**（递归），跳过 `.git` / `node_modules` / `dist`
+  —— 前两者不是本仓的东西，`dist/` 是 **tsc 产物**（本仓 195 个 `.js` 就是它，属「不保留**手写** `.js`」的例外）；
+  **不跳过 `_research/`**：本门问的是「本机有没有手写 js/mjs」，不是「产品语料是什么」——与两个审计工具的
+  `NON_REPO_DIRS` **刻意不同**（那边问「哪些目录不属于这个仓库」）。**大小写不敏感**（`.JS` 也是同一类東西）。
+  允许：`.ts` 与 `.py` / `.ps1` 等其它脚本语言（用户当天立的边界）。
+- **退出码**：0 干净 / 1 有违规（逐条点名 + 给改名修法）/ 2 结构缺失。
+- **标定 ⑨ 组**（`audit-scripts.selftest.ts`）：正/负对照之外，有两条是专门防「假绿」的 ——
+  **⑧ 把门弄坏**（把 `dist` 从排除表里拿掉 ⇒ 同一条路径立刻变红，证明排除确实在起作用）；
+  **⑦ 端到端**（临时树里 `dist/built.js` 与 `node_modules/pkg/dep.js` **确实在磁盘上存在**却被排除）。
+- **写门时撞到一处假绿并修掉**：CLI 起初对**不存在的根**报「全部判据通过」（exit 0）——
+  根因是 `walkTree` 的 `readdirSync` 是 try/catch 的，缺件静默返回 0 个文件。**这是本仓已知同族**
+  （v1.15.45：漏根参数 ⇒ 0 文件 ⇒ 假全绿；那两个 CLI 只**手工**验过）。现补两道闸：
+  root `stat` + `corpusVerdict(0)`；**后者做成了纯判据**并进标定 ⑨（比另两个 CLI 的「只手工验证」更硬）。
+  三条退出码路径已实测：根不存在 ⇒ 2、临时树放 `.mjs` ⇒ 1、真仓 ⇒ 0。
+
+**② 语料判据收一处（这是配门的副产品，但不是顺手）：`tools/audit-corpus.lib.ts`**
+
+- 由来：v1.15.86 修 `_research` 进语料时，我**必须同时改两处**（`audit-wiring.ts` / `audit-drift.ts` 各有一份
+  walker）——**判据散在两处**正是本仓两次代价明确的教训（`comparison-points.lib.ts`、`core/util.ts` 的 `numOr`）。
+  现抽成一份：`NON_REPO_DIRS`（`.git` / `_research`）+ `walkTree(root, {match, skip})`，两个工具都改用它。
+- **顺带查出一件更值得记的事**：`tools/audit-layers.lib.ts` 的 `SOURCE_EXCLUDED_DIRS` **本来就含 `_research`**
+  ⇒ 同一个事实此前在**三处**各写一遍（那三个地方谁都不知道对方有）。现改成**从 `NON_REPO_DIRS` 派生**，
+  `_research` / `.git` 只有 `audit-corpus.lib.ts` 一处。两份数组的**差异是刻意的**，已在注释里写清
+  （一个问「不是源码」、一个问「不属于本仓库」）。
+- **等价性证据（不是「看着对」）**：重构后 `audit-drift` 的语料**指纹 `7d771706cac4…` 与基线逐字节相同**
+  （`files 196` / `dirs 193` / findings `0+23`，**本版收尾实测仍如此**），`audit-wiring` `files 888 → 893`（+5 = `audit-corpus.lib.ts` 与这一版新增的 4 个 `tools/` 文件；888 是重构前值）、findings `38+97` 不变
+  ⇒ **两个棘轮都通过**，没有任何计数漂移。
+
+**③ `_research/` 只搬了 1 个进 `tools/`（其余 18 个的「不搬」是判断，不是漏做）**
+
+- 搬：`triage.ts` → **`tools/audit-triage.ts`**。判据：它是**可复用的只读助手**（把 `audit:wiring` 给出的
+  `字段=值` + `文件:行` 的上下文摆到人眼前，**自己不做判定**），与 `verify` 里那两个审计门配对。
+  搬运时踩到一处：我去掉头注释时**把两行 `import` 一起删了** ⇒ `readFileSync` 变 `undefined`、被 `catch`
+  吞成「读不到 core/forget.ts」——`node --check` **照样通过**，是**真跑一次**才发现的（判据：`--check` 只证语法）。
+- **不搬**（逐类给理由）：**13 个是单次改写文档的**（`upd_*` / `gen_*` / `fix_block`）——它们会**改写
+  `README` / `CHANGELOG` / `CONTEXT` / `core/toolset.ts` / `docs/`**，搬进 `tools/` 等于**留一个能把当前文档改坏的脚本**；
+  **4 个 `drift_*`** 是**当时取证**（ADR-0069/0070 那轮的实测探针，其能力已被 `tools/audit-drift.ts` 覆盖）
+  ⇒ 按 `AGENTS.md` 归 `../.docs/fix/<日期>/` 那一类，**不归 `tools/`**；**`checkver.ts`** 已被 `audit:docs` ① 取代；
+  **6 个 `.py`** 按用户边界原样保留。分类表在取证入口里（见下）。
+- ⚠ **仍未做**：`_research/` 依然**不进版本控制**（已被 `.gitignore`，两个审计工具与本次新门都不扫它内部的语义）
+  ⇒ 那 18 个脚本**换机就没有**。让它们可复核只有两条路：搬 `tools/`（上面逐条给了「不搬」的理由）或搬
+  `../.docs/fix/<日期>/`（会破坏它们 `../dist/...` 的相对 import，**未做**）。
+
+**验证**：`npm run verify` ⇒ **59 个检查**（58 + 新增 `tools/audit-scripts.selftest.ts`）· `[run-tests] ALL PASS ✅`；
+`audit:docs` ①~⑤ 全绿（② 报 **9 步**双向点名）。取证入口：`../.docs/fix/2026-09-15/volume-defaults-and-index-budget.md`。
+
+
+
 ## [v1.15.86] 脚本扩展名收口：禁 `.js` / `.mjs` / `.cjs`（已有的迁成 `.ts`），`.py` / `.ps1` 明确允许（`AGENTS.md`）
 
 用户 2026-09-15 用两句话定死边界：「脚本一律 .ts 修改 不要出现 js mjs 脚本 如果有改为 ts」→

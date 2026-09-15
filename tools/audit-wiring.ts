@@ -13,55 +13,31 @@
 //
 // **本工具的结论必须经标定**：见 `tools/audit-wiring.selftest.ts`。
 // 一个抓不到已知缺陷的检测器，报「0 findings」是没有意义的（本仓纪律：先证工具，再用工具）。
-import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectComparisons, hasProducer, findOrphanComparisons, isCallerCorpusPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
 import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
+import { walkTree } from "./audit-corpus.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 const ROOT = process.argv[2] || ".";
 /** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断，比文件数更早暴露问题）。 */
 let dirCount = 0;
-/**
- * **必须排除 `.git`**（v1.15.55 修一处**假阳性**）：
- * `.git/objects/xx` 是**松散对象**的散列目录，`git gc`/repack 会把它们打包 ⇒ 目录数**骤降**，
- * 而语料一个字都没变（指纹相同）。实测：`count: 0 / in-pack: 4025` 之后 dirs 428 → 185，
- * 于是 V7 语料闸报 **PARTIAL** 并拒绝比较 —— 那是**闸自己把 git 内部当成了语料**。
- * 会把「一次 gc」误判成「语料坏了」的闸，会被当成狼来了（这正是 V7 要防的反面）。
- */
-/**
- * 排除 `.git`（上面的由来）与 `_research`（v1.15.86 补）。
- *
- * `_research/` 是**本地草稿目录**（已进 `.gitignore`、不进版本控制）⇒ **它不是产品语料**。
- * 由来：v1.15.86 把该目录里 **19 个 `.mjs` 改名成 `.ts`**（脚本扩展名收口）⇒ 它们**第一次**进了本工具语料，
- * `files 887 → 907` 且 `b_keys 97 → 100`（+3 全部来自 `_research/*.ts`）。这与 v1.15.55 排除 `.git` 是
- * **同一类判断**：**别把非产品的东西当语料** —— 否则「本机多了一个草稿文件」会被读成「产品接线变差了」。
- *
- * ⚠ **边界**：这是**按名字**排除。若哪天 `_research/` 被 `git add`（`git ls-files _research` 非空），
- *   这条排除**必须删掉** —— 那时它就是产品语料，不再豁免。
- * ⚠ **同一判据也写在 `tools/audit-drift.ts` 的 `SKIP_DIRS`**（两个工具各自持有一份 walker ⇒ 两处）。
- */
-const SKIP_DIRS = new Set([".git", "_research"]);
-const walk = (d, out = []) => {
-  let es; try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
-  for (const e of es) {
-    if (SKIP_DIRS.has(e.name)) continue;
-    const p = join(d, e.name);
-    if (e.isDirectory()) { dirCount++; walk(p, out); }
-    else if (e.name.endsWith(".ts")) out.push(p);
-  }
-  return out;
-};
+
+// 语料遍历 + 「哪些目录**不属于本仓库**」的判据都收在 `tools/audit-corpus.lib.ts`（v1.15.87；
+// 此前 `audit-wiring.ts` 与 `audit-drift.ts` 各有一份 walker ⇒ v1.15.86 修 `_research` 时要**改两处**）。
+const corpus = walkTree(ROOT, { match: (n) => n.endsWith(".ts") });
+dirCount = corpus.dirCount;
+const allTs = corpus.files;
 
 const rel = (p) => relative(ROOT, p).replace(/\\/g, "/");
 const read = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 
 // 按**路径分段**分类（见 lib 里 isCallerCorpusPath 的说明：正则判法曾漏掉顶层 test/）
-const allTs = walk(ROOT, []);
 const prodPaths = allTs.filter((f) => isCallerCorpusPath(rel(f)));
 /**
  * ⚠ **「测试」这一侧必须显式限定**（v1.15.43 修，来自 T2 分诊的标定发现）：

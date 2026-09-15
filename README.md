@@ -103,6 +103,7 @@ npm run verify
 = npm run typecheck:tools      工具面类型门
 + npm run typecheck:tests      测试面类型门（v1.15.62：`test/**/*.ts` 全量，曾报 83 条既存诊断）
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
++ npm run audit:scripts        脚本扩展名门（v1.15.87：仓内不得有**手写** `.js` / `.mjs` / `.cjs`；`.ts` 与 `.py` / `.ps1` 等允许）
 + npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名）
 + npm run eval:retrieval:check 评测门完整性（v1.15.42：协议自检 / 基线只含聚合面 / 同源 / 读数齐备）
 +                               ⚠ **语料根**：它要一个带 `.shadow` 的**工作区根** —— 默认由本工具位置**往上找**（最多三级，取第一个存在的）；
@@ -583,10 +584,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.86`**（**脚本扩展名收口**：`AGENTS.md` 写明「新脚本一律 `.ts`；`.js` / `.mjs` / `.cjs` 不许留、已有的迁成 `.ts`；`.py` / `.ps1` 等允许保留」。本仓已跟踪文件里只有 `dist/**` 是编译产物 `.js`，存量违规全在工作区内的 `_research/`（未跟踪）⇒ 19 个 `.mjs` 改名迁成 `.ts`，内容零改动）—— 最新几版摘要：
+**当前版本：`v1.15.87`**（给「脚本一律 `.ts`」**配门**：新增 `audit:scripts` 进 `verify` —— 仓内不得有手写 `.js` / `.mjs` / `.cjs`，`.ts` 与 `.py` / `.ps1` 等允许；同时把两个审计工具各写一份的 walker 收进 `tools/audit-corpus.lib.ts`）—— 最新几版摘要：
 
 | 版本 | 主题 |
 |------|------|
+| v1.15.87 | **给规则配门 + 语料判据收一处**：新增 `audit:scripts`（进 `verify`）—— 口径为「根下所有文件，跳过 `.git` / `node_modules` / `dist`」，故**不误伤 `dist/` 的 195 个 tsc 产物**，而**不跳过 `_research/`**（它问的是「本机有没有手写 js/mjs」）；退出码 0/1/2，标定含一条「**把门弄坏**」的假绿对照。写门时撞到并修掉一处假绿：**根不存在 ⇒ 报「全部通过」**（`walkTree` 的 readdir 是 try/catch ⇒ 0 文件；本仓 v1.15.45 同族），现做成**纯判据**进标定。另把 `audit-wiring` / `audit-drift` 各一份的 walker 收进 `tools/audit-corpus.lib.ts`，并发现 `audit-layers` 的排除表**本来就含 `_research`** ⇒ 同一个事实从**三处**收成**一处**；等价性由「`audit-drift` 语料指纹与基线逐字节相同 + 两个棘轮通过」证。`_research/` **只搬了 1 个**（`tools/audit-triage.ts`）：其余 13 个会**改写文档**（搬进 `tools/` = 留一个能把当前文档改坏的脚本）、4 个是**当时取证**、`checkver.ts` 被 `audit:docs` ① 取代 —— **不搬是判断，分类表在取证入口里**。
 | v1.15.86 | **脚本扩展名收口**（写进 `AGENTS.md`）：新脚本一律 `.ts`；`.js` / `.mjs` / `.cjs` 不许留、已有的**改名迁成 `.ts`**（`dist/` 编译产物除外）；`.py` / `.ps1` 等其它脚本语言**允许保留**。存量违规只在工作区内未跟踪的 `_research/` ⇒ 19 个 `.mjs` → `.ts`（内容零改动）。**验证**：`node --check` 19/19 · 6 个只读脚本前后逐字比对 · 一次离群用 A/B 对照查明是宿主并发写入而非扩展名。**连带**：改名后该目录首次进了两个审计工具的语料、棘轮如实变红 ⇒ 改**语料判据**（`SKIP_DIRS` 补 `_research` + 写进 `.gitignore`），并**未重录基线**；`audit-drift` 语料指纹与基线逐字节相同可证这是精确还原。细节见 `CHANGELOG`。 |
 | v1.15.85 | **「默认全开」+ 入口读的预算**：`retention` / `forget` / `compact` 三个量控开关从「默认关」改为「**默认开**」，并把四处各写一遍的 `=== true` 收成一个 `onByDefault`；`read_shadow()` 无参读索引从「整篇返回」改为**与含 `topic` 的路径共用预算**（超预算按段整段装、按段名 + 行数披露）。⚠ 边界：**Forget ≠ Delete、收口不删原子 ⇒ 不减磁盘占用**。判据、四条边界与重放命令见 `adr/0088`。 |
 | v1.15.84 | **只动 `AGENTS.md`**：证据入口不再钉某个日期目录，改成「规则 + 找最近一份的命令」，并写明「能复现的进 `tools/`、`.docs` 只放当时的取证」。无源码改动。 |

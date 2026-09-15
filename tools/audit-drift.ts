@@ -11,13 +11,14 @@
 //   · 夹具 10 组已知答案（POS-1..3 / NEG-1..5 / 检测 B 跨文件）
 //   · **git 历史里的真缺陷**：`0c4e06b:core/writer-materialize.ts` 的 :41 与 :215（修复前报 2 条、修复后 0 条）
 // 一个抓不到已知缺陷的检测器，报「0 findings」没有意义（本仓纪律：先证工具，再用工具）。
-import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductModulePath } from "./audit-drift.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
 import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
+import { walkTree } from "./audit-corpus.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -27,36 +28,16 @@ const asJson = process.argv.includes("--json");
 let driftCounts: Counts = {};
 /** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断）。 */
 let dirCount = 0;
-/** **排除 `.git`**：松散对象被打包会让目录数骤降而语料未变（详见 `audit-wiring.ts` 同处注释）。 */
-/**
- * 排除 `.git`（上面的由来）与 `_research`（v1.15.86 补）。
- *
- * `_research/` 是**本地草稿目录**（已进 `.gitignore`、不进版本控制）⇒ **它不是产品语料**。
- * 由来：v1.15.86 把该目录里 **19 个 `.mjs` 改名成 `.ts`**（脚本扩展名收口）⇒ 它们**第一次**进了本工具语料，
- * `files 887 → 907` 且 `b_keys 97 → 100`（+3 全部来自 `_research/*.ts`）。这与 v1.15.55 排除 `.git` 是
- * **同一类判断**：**别把非产品的东西当语料** —— 否则「本机多了一个草稿文件」会被读成「产品接线变差了」。
- *
- * ⚠ **边界**：这是**按名字**排除。若哪天 `_research/` 被 `git add`（`git ls-files _research` 非空），
- *   这条排除**必须删掉** —— 那时它就是产品语料，不再豁免。
- * ⚠ **同一判据也写在 `tools/audit-drift.ts` 的 `SKIP_DIRS`**（两个工具各自持有一份 walker ⇒ 两处）。
- */
-const SKIP_DIRS = new Set([".git", "_research"]);
-const walk = (d: string, out: string[] = []): string[] => {
-  let es: any[];
-  try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }
-  for (const e of es) {
-    if (SKIP_DIRS.has(e.name)) continue;
-    const p = join(d, e.name);
-    if (e.isDirectory()) { dirCount++; walk(p, out); }
-    else if (e.name.endsWith(".ts")) out.push(p);
-  }
-  return out;
-};
 
+// 语料遍历 + 「哪些目录**不属于本仓库**」的判据都收在 `tools/audit-corpus.lib.ts`（v1.15.87；
+// 此前 `audit-wiring.ts` 与 `audit-drift.ts` 各有一份 walker ⇒ v1.15.86 修 `_research` 时要**改两处**，
+// 而本文件当时那份注释还把「另一处」误写成自己 —— 两个人各写一遍判据的典型代价）。
+const corpus = walkTree(ROOT, { match: (n) => n.endsWith(".ts") });
+dirCount = corpus.dirCount;
 const rel = (p: string) => relative(ROOT, p).replace(/\\/g, "/");
 const read = (p: string) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 
-const prod = walk(ROOT, [])
+const prod = corpus.files
   .map((f) => ({ file: rel(f), text: read(f) }))
   .filter((f) => isProductModulePath(f.file));
 
