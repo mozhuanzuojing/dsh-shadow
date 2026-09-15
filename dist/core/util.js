@@ -1,4 +1,11 @@
 // dsh-shadow —— core/util.ts：纯辅助（时间/文件名/路径/分词/主题/索引前缀）。无运行时依赖，从 index.ts 迁出。
+/** 出处标签表（**唯一一份**；`note` 的渲染与下游读取都走它）。`none` 档不在表里 —— 它不出现在版本位。 */
+const VER_SRC_LABEL = { measured: "实测", authority: "权威核验" };
+/**
+ * 出处标签（`note` 的**渲染**用）。**查表**而不是 if/三元链：取值域是类型、映射也只有一份。
+ * 返回 `null` = 未知档位 ⇒ 调用方必须按「未标」处理，**不许**默认成强档。
+ */
+export const verSrcLabel = (kind) => VER_SRC_LABEL[String(kind)] ?? null;
 export const pad = (n) => String(n).padStart(2, "0");
 export const today = (offset = 0) => {
     const d = new Date();

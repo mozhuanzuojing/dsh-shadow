@@ -13,6 +13,8 @@
 //   故：默认只**检测与提示**；安装只在**显式调用**时发生，且**一律先经宿主审批**
 //   （`ctx.approval.request` 只有 `allowed-once` 是授予，见 core/toolset-exec.ts）。
 
+import { verSrcLabel, type VerSrcKind } from "./util.js";
+
 /** 缺件处置：一条可复制执行的命令 + 可选的坑说明。 */
 export interface CapabilityRemedy {
   cmd: string;
@@ -56,6 +58,14 @@ export interface Capability {
   note?: string;
   /** 文档锚。 */
   doc: string;
+  /**
+   * **版本号出处的类型化字段 —— 唯一事实源**（v1.15.89 / ADR-0090，来自 ADR-0087 的「甲-3」）。
+   * `note` 由它**派生**（渲染逐字不变），下游 `claimOf()` 不再正则反解散文 ——
+   * 「弱档被折进散文」正是 ADR-0072 要防的形态。
+   */
+  verSrcKind: VerSrcKind;
+  /** 台账**声称**的版本号（原样保留；`none` 档为 `""`）。 */
+  verSrcVersion: string;
 }
 
 /** winget 安装配方（`winget` 实测可被 execFile 直接起）。 */
@@ -94,10 +104,12 @@ const tool = (
   replaces: string,
   note?: string,
   /**
-   * 版本号出处（v1.15.14；**v1.15.29 改正默认值**）。**必须诚实区分**，否则会说谎：
-   *   - `"实测"`：在**本机**跑该条目的 `probe`（如 `--version`）拿到版本号。**只有这才叫实测。**
-   *   - `"权威核验"`（**现为默认**）：取自 `winget show` 的权威目录 —— 那是**最新发布版**，
+   * 版本号出处（v1.15.14；**v1.15.29 改正默认值**；**v1.15.89 改成类型**）。**必须诚实区分**，否则会说谎：
+   *   - `"measured"`（标签「实测」）：在**本机**跑该条目的 `probe`（如 `--version`）拿到版本号。**只有这才叫实测。**
+   *   - `"authority"`（标签「权威核验」，**现为默认**）：取自 `winget show` 的权威目录 —— 那是**最新发布版**，
    *     **不代表本机已装该版本**。
+   *   - `"none"`：**不声称版本**（无 winget 包等无版本可比对的条目）。
+   * ⚠ **取值域是类型**（`core/util.ts` 的 `VerSrcKind`），不是任意字符串 —— 见 ADR-0090。
    *
    * ⚠ **为什么改正默认值**（ADR-0072，实测证据）：本参数原默认为 `"实测"`，但 v1.15.10 加入的
    *   那 44 条，其版本号**其实全部取自 winget 目录**，并非本机 `--version` 跑出来的：
@@ -109,7 +121,7 @@ const tool = (
    *   ⇒ 「实测」这个标签**比事实强**，正是 v1.15.14 造 `verSrc` 要防的那种谎。
    *   改成 `"权威核验"` 后标签与事实一致，且**可复核**（重跑 `npm run verify:toolset` 即可确认）。
    */
-  verSrc = "权威核验",
+  verSrc: VerSrcKind = "authority",
 ): Capability => {
   const providesText = `${provides}${replaces && replaces !== "—" ? `（替代：${replaces}）` : ""}`;
   // pkg 为空 → **无可靠安装方式**：只陈述事实，不给命令（宁缺勿编）。
@@ -121,6 +133,8 @@ const tool = (
       remedy: noInstallRemedy(note || "本表未登记可靠安装方式"),
       probe: flag ? [bin, flag] : [bin],
       note: note ? `无 winget 包 · ${note}` : "无 winget 包",
+      verSrcKind: "none",
+      verSrcVersion: "",
       doc: "docs/toolchain-windows.md",
     };
   }
@@ -134,7 +148,9 @@ const tool = (
     probe: flag ? [bin, flag] : [bin],
     // v1.15.14 修一处**静默丢弃**：此前 `note` 只在无 pkg 分支被用，有 pkg 分支把它整条丢掉，
     //   于是传进来的许可证/坑说明**无声消失**。改为拼接，且把版本出处显式写出。
-    note: `winget ${pkg} · ${verSrc} ${ver}${note ? ` · ${note}` : ""}`,
+    note: `winget ${pkg} · ${verSrcLabel(verSrc)} ${ver}${note ? ` · ${note}` : ""}`,
+    verSrcKind: verSrc,
+    verSrcVersion: ver,
     doc: "docs/toolchain-windows.md",
   };
 };
@@ -231,195 +247,195 @@ const REFERENCE_TOOLS: Capability[] = [
   // ── 逆向与二进制分析 ──
   tool("dnspy", "dnSpy", "dnSpyEx", "逆向与二进制分析", "dnSpyEx.dnSpy", "6.6.0", "--version",
     ".NET 调试与反编译", "—",
-    ".NET 反编译首选；原 dnSpy 已停更，此为维护分支；许可证 GPL-3.0", "权威核验"),
+    ".NET 反编译首选；原 dnSpy 已停更，此为维护分支；许可证 GPL-3.0", "authority"),
   tool("exiftool", "exiftool", "ExifTool", "逆向与二进制分析", "OliverBetz.ExifTool", "13.59", "-ver",
     "文件元数据读写（EXIF 等）", "—",
-    "Windows 再打包；上游 philharvey/ExifTool；许可证 CC0-1.0", "权威核验"),
+    "Windows 再打包；上游 philharvey/ExifTool；许可证 CC0-1.0", "authority"),
   tool("ilspy", "ILSpy", "ILSpy", "逆向与二进制分析", "icsharpcode.ILSpy", "11.0.0.9375", "--version",
     ".NET 反编译（开源）", "—",
-    "上游组织 icsharpcode；许可证 MIT", "权威核验"),
+    "上游组织 icsharpcode；许可证 MIT", "authority"),
   tool("rizin", "rizin", "Rizin", "逆向与二进制分析", "Rizin.Rizin", "0.9.1", "-v",
     "逆向工程框架（radare2 分支）", "radare2",
-    "radare2 活跃分支；GUI 是 Rizin.Cutter；许可证 LGPL-3.0", "权威核验"),
+    "radare2 活跃分支；GUI 是 Rizin.Cutter；许可证 LGPL-3.0", "authority"),
   tool("upx", "upx", "UPX", "逆向与二进制分析", "UPX.UPX", "5.2.1", "--version",
     "可执行文件压缩/加壳", "—",
-    "上游自维护；许可证 GPL-2.0-or-later", "权威核验"),
+    "上游自维护；许可证 GPL-2.0-or-later", "authority"),
 
   // ── 网络与下载 ──
   tool("curl", "curl", "curl", "网络与下载", "cURL.cURL", "8.21.0.6", "--version",
     "HTTP 客户端", "—",
-    "Windows 自带的 curl.exe 版本旧，此为上游最新；许可证 Freeware", "权威核验"),
+    "Windows 自带的 curl.exe 版本旧，此为上游最新；许可证 Freeware", "authority"),
   tool("dog", "dog", "dog", "网络与下载", "ogham.dog", "0.1.0", "--version",
     "DNS 查询客户端", "dig / nslookup",
-    "作者 ogham（同 bat 系出）；许可证 EUPL-1.2 License", "权威核验"),
+    "作者 ogham（同 bat 系出）；许可证 EUPL-1.2 License", "authority"),
   tool("doggo", "doggo", "doggo", "网络与下载", "MrKaran.Doggo", "1.4.0", "--version",
     "DNS 查询（现代）", "dig",
-    "作者 MrKaran；许可证 GPL-3.0", "权威核验"),
+    "作者 MrKaran；许可证 GPL-3.0", "authority"),
   tool("httpie", "http", "HTTPie", "网络与下载", "HTTPie.HTTPie", "2025.2.0", "--version",
     "人性化 HTTP 客户端", "curl（可读性更好）",
-    "上游自维护；许可证 免费软件", "权威核验"),
+    "上游自维护；许可证 免费软件", "authority"),
   tool("iperf3", "iperf3", "iperf3", "网络与下载", "ar51an.iPerf3", "3.21", "--version",
     "网络带宽测试", "—",
-    "Windows 构建；上游 esnet/iperf；许可证 BSD-3-Clause", "权威核验"),
+    "Windows 构建；上游 esnet/iperf；许可证 BSD-3-Clause", "authority"),
   tool("mitmproxy", "mitmdump", "mitmproxy", "网络与下载", "mitmproxy.mitmproxy", "12.2.3", "--version",
     "HTTP(S) 抓包与改写", "Fiddler / Charles",
-    "命令行版是 mitmdump；另有 mitmweb/mitmproxy；许可证 MIT License", "权威核验"),
+    "命令行版是 mitmdump；另有 mitmweb/mitmproxy；许可证 MIT License", "authority"),
   tool("nmap", "nmap", "Nmap", "网络与下载", "Insecure.Nmap", "7.80", "--version",
     "端口扫描与网络探测", "—",
-    "上游 Insecure.Com（nmap 官方发布者名）；许可证 Modified GNU GPLv2", "权威核验"),
+    "上游 Insecure.Com（nmap 官方发布者名）；许可证 Modified GNU GPLv2", "authority"),
 
   // ── 文本与数据 ──
   tool("duckdb", "duckdb", "DuckDB CLI", "文本与数据", "DuckDB.cli", "1.5.5", "--version",
     "进程内分析型 SQL（可直接查 CSV/Parquet）", "sqlite3（分析场景）",
-    "上游自维护；许可证 MIT", "权威核验"),
+    "上游自维护；许可证 MIT", "authority"),
   tool("gron", "gron", "gron", "文本与数据", "TomHudson.gron", "0.7.1", "--version",
     "JSON → 可 grep 的赋值语句", "jq（grep 场景）",
-    "作者 TomHudson；许可证 MIT", "权威核验"),
+    "作者 TomHudson；许可证 MIT", "authority"),
   tool("miller", "mlr", "Miller", "文本与数据", "Miller.Miller", "6.20.2", "--version",
     "CSV/TSV/JSON 流式处理", "awk / cut / join",
-    "二进制名是 mlr；许可证 BSD-2-Clause", "权威核验"),
+    "二进制名是 mlr；许可证 BSD-2-Clause", "authority"),
   tool("xsv", "xsv", "xsv", "文本与数据", "BurntSushi.xsv.MSVC", "0.13.0", "--version",
     "CSV 命令行工具集", "csvkit",
-    "作者 BurntSushi（同 ripgrep）；许可证 Dual License (Unlicense & MIT)", "权威核验"),
+    "作者 BurntSushi（同 ripgrep）；许可证 Dual License (Unlicense & MIT)", "authority"),
 
   // ── Git 与版本控制 ──
   tool("git-absorb", "git-absorb", "git-absorb", "Git 与版本控制", "tummychow.git-absorb", "0.9.0", "--version",
     "自动把改动折进正确的提交（fixup）", "手动 git rebase -i",
-    "作者 tummychow；许可证 BSD-3-Clause", "权威核验"),
+    "作者 tummychow；许可证 BSD-3-Clause", "authority"),
   tool("glab", "glab", "GitLab CLI", "Git 与版本控制", "GLab.GLab", "1.117.0", "--version",
     "GitLab 命令行（MR/Issue/CI）", "网页操作",
-    "上游 glab（GitHub CLI 的 GitLab 对应物）；许可证 MIT", "权威核验"),
+    "上游 glab（GitHub CLI 的 GitLab 对应物）；许可证 MIT", "authority"),
   tool("jj", "jj", "Jujutsu", "Git 与版本控制", "jj-vcs.jj", "0.44.0", "--version",
     "VCS（Git 兼容，工作流不同）", "—",
-    "上游 jj-vcs；与 Git 仓库互操作；许可证 Apache-2.0", "权威核验"),
+    "上游 jj-vcs；与 Git 仓库互操作；许可证 Apache-2.0", "authority"),
 
   // ── 容器与编排 ──
   tool("dive", "dive", "dive", "容器与编排", "wagoodman.dive", "0.13.1", "version",
     "镜像分层分析", "docker history",
-    "作者 wagoodman；用于精简镜像；许可证 MIT", "权威核验"),
+    "作者 wagoodman；用于精简镜像；许可证 MIT", "authority"),
   tool("helm", "helm", "Helm", "容器与编排", "Helm.Helm", "4.3.0", "version",
     "Kubernetes 包管理", "—",
-    "版本子命令是 `helm version`；许可证 Apache-2.0", "权威核验"),
+    "版本子命令是 `helm version`；许可证 Apache-2.0", "authority"),
   tool("k9s", "k9s", "k9s", "容器与编排", "Derailed.k9s", "0.51.0", "version",
     "Kubernetes TUI", "kubectl 手敲",
-    "作者 derailed；许可证 Apache-2.0", "权威核验"),
+    "作者 derailed；许可证 Apache-2.0", "authority"),
   tool("kind", "kind", "kind", "容器与编排", "Kubernetes.kind", "0.33.0", "version",
     "本地 Kubernetes（容器内）", "minikube",
-    "上游 kubernetes-sigs；许可证 Apache-2.0", "权威核验"),
+    "上游 kubernetes-sigs；许可证 Apache-2.0", "authority"),
   tool("kubectl", "kubectl", "kubectl", "容器与编排", "Kubernetes.kubectl", "1.37.0", "version",
     "Kubernetes 命令行", "—",
-    "版本子命令是 `kubectl version`；许可证 Apache-2.0", "权威核验"),
+    "版本子命令是 `kubectl version`；许可证 Apache-2.0", "authority"),
   tool("kustomize", "kustomize", "kustomize", "容器与编排", "Kubernetes.kustomize", "5.8.1", "version",
     "K8s 清单定制（无模板）", "helm（轻量场景）",
-    "上游 kubernetes-sigs；许可证 Apache-2.0", "权威核验"),
+    "上游 kubernetes-sigs；许可证 Apache-2.0", "authority"),
   tool("minikube", "minikube", "minikube", "容器与编排", "Kubernetes.minikube", "1.39.0", "version",
     "本地单节点 Kubernetes", "—",
-    "上游 kubernetes；许可证 Apache-2.0", "权威核验"),
+    "上游 kubernetes；许可证 Apache-2.0", "authority"),
   tool("podman", "podman", "Podman", "容器与编排", "RedHat.Podman", "5.8.3", "--version",
     "无守护进程容器引擎", "docker",
-    "RedHat 官方；许可证 Apache-2.0", "权威核验"),
+    "RedHat 官方；许可证 Apache-2.0", "authority"),
   tool("skaffold", "skaffold", "Skaffold", "容器与编排", "Google.ContainerTools.Skaffold", "2.24.0", "version",
     "K8s 开发内循环", "手写 CI 脚本",
-    "Google 官方；许可证 Apache-2.0", "权威核验"),
+    "Google 官方；许可证 Apache-2.0", "authority"),
   tool("stern", "stern", "stern", "容器与编排", "stern.stern", "1.34.0", "--version",
     "多 Pod 日志聚合", "kubectl logs -f",
-    "上游 stern；许可证 Apache-2.0 license", "权威核验"),
+    "上游 stern；许可证 Apache-2.0 license", "authority"),
 
   // ── 安全与供应链 ──
   tool("cosign", "cosign", "Cosign", "安全与供应链", "Sigstore.Cosign", "3.1.3", "version",
     "制品签名与验签", "—",
-    "Sigstore 官方；许可证 Apache-2.0", "权威核验"),
+    "Sigstore 官方；许可证 Apache-2.0", "authority"),
   tool("gitleaks", "gitleaks", "gitleaks", "安全与供应链", "Gitleaks.Gitleaks", "8.30.1", "version",
     "Git 历史密钥扫描", "手写正则",
-    "上游 gitleaks；许可证 MIT", "权威核验"),
+    "上游 gitleaks；许可证 MIT", "authority"),
   tool("grype", "grype", "Grype", "安全与供应链", "Anchore.Grype", "0.118.0", "version",
     "SBOM/镜像漏洞扫描", "—",
-    "Anchore 官方，与 syft 配套；许可证 Apache-2.0", "权威核验"),
+    "Anchore 官方，与 syft 配套；许可证 Apache-2.0", "authority"),
   tool("kubescape", "kubescape", "Kubescape", "安全与供应链", "kubescape.kubescape", "4.0.14", "version",
     "K8s 安全基线扫描", "—",
-    "ARMO 官方；许可证 Apache-2.0", "权威核验"),
+    "ARMO 官方；许可证 Apache-2.0", "authority"),
   tool("sops", "sops", "SOPS", "安全与供应链", "SecretsOPerationS.SOPS", "3.13.3", "--version",
     "加密的配置文件管理", "明文密钥",
-    "上游 getsops；许可证 MPL-2.0", "权威核验"),
+    "上游 getsops；许可证 MPL-2.0", "authority"),
   tool("syft", "syft", "Syft", "安全与供应链", "Anchore.Syft", "1.51.0", "version",
     "SBOM 生成", "—",
-    "Anchore 官方；许可证 Apache-2.0", "权威核验"),
+    "Anchore 官方；许可证 Apache-2.0", "authority"),
   tool("trivy", "trivy", "Trivy", "安全与供应链", "AquaSecurity.Trivy", "0.74.0", "--version",
     "漏洞/配置/密钥扫描", "—",
-    "Aqua Security 官方；许可证 Apache-2.0", "权威核验"),
+    "Aqua Security 官方；许可证 Apache-2.0", "authority"),
 
   // ── 构建与任务 ──
   tool("bazelisk", "bazelisk", "Bazelisk", "构建与任务", "Bazel.Bazelisk", "1.29.0", "version",
     "Bazel 版本管理器", "手动装 bazel",
-    "上游 bazelbuild；许可证 Apache-2.0", "权威核验"),
+    "上游 bazelbuild；许可证 Apache-2.0", "authority"),
   tool("cmake", "cmake", "CMake", "构建与任务", "Kitware.CMake", "4.4.3", "--version",
     "跨平台构建系统", "手写 Makefile",
-    "Kitware 官方；许可证 BSD-3-Clause", "权威核验"),
+    "Kitware 官方；许可证 BSD-3-Clause", "authority"),
   tool("goreleaser", "goreleaser", "GoReleaser", "构建与任务", "goreleaser.goreleaser", "2.17.1", "--version",
     "Go 制品发布自动化", "手写发布脚本",
-    "上游自维护；许可证 MIT", "权威核验"),
+    "上游自维护；许可证 MIT", "authority"),
   tool("k6", "k6", "k6", "构建与任务", "GrafanaLabs.k6", "2.2.0", "version",
     "负载测试", "ab / jmeter",
-    "Grafana 官方；许可证 AGPL-3.0", "权威核验"),
+    "Grafana 官方；许可证 AGPL-3.0", "authority"),
   tool("ninja", "ninja", "Ninja", "构建与任务", "Ninja-build.Ninja", "1.13.2", "--version",
     "高速构建后端", "make（速度）",
-    "上游 ninja-build；许可证 Apache-2.0", "权威核验"),
+    "上游 ninja-build；许可证 Apache-2.0", "authority"),
 
   // ── 文档与转换 ──
   tool("pandoc", "pandoc", "Pandoc", "文档与转换", "JohnMacFarlane.Pandoc", "3.11", "--version",
     "文档格式互转（md/docx/pdf…）", "—",
-    "作者 John MacFarlane（上游本人）；许可证 GPL-2.0-or-later", "权威核验"),
+    "作者 John MacFarlane（上游本人）；许可证 GPL-2.0-or-later", "authority"),
   tool("poppler", "pdftotext", "Poppler", "文档与转换", "oschwartz10612.Poppler", "25.07.0-0", "-v",
     "PDF 文本/图片提取（pdftotext/pdftoppm）", "—",
-    "Windows 构建；上游 freedesktop/poppler；许可证 MIT", "权威核验"),
+    "Windows 构建；上游 freedesktop/poppler；许可证 MIT", "authority"),
   tool("qpdf", "qpdf", "qpdf", "文档与转换", "QPDF.QPDF", "12.4.1", "--version",
     "PDF 结构变换/修复", "—",
-    "上游 qpdf；许可证 Apache-2.0", "权威核验"),
+    "上游 qpdf；许可证 Apache-2.0", "authority"),
   tool("tesseract", "tesseract", "Tesseract OCR", "文档与转换", "UB-Mannheim.TesseractOCR", "5.4.0.20240606", "--version",
     "图片/PDF 文字识别", "—",
-    "Windows 常用再打包；上游 tesseract-ocr；许可证 Apache-2.0", "权威核验"),
+    "Windows 常用再打包；上游 tesseract-ocr；许可证 Apache-2.0", "authority"),
   tool("typst", "typst", "Typst", "文档与转换", "Typst.Typst", "0.15.1", "--version",
     "排版系统（LaTeX 替代，快）", "LaTeX",
-    "上游 typst；许可证 Apache-2.0", "权威核验"),
+    "上游 typst；许可证 Apache-2.0", "authority"),
 
   // ── 媒体处理 ──
   tool("imagemagick", "magick", "ImageMagick", "媒体处理", "ImageMagick.ImageMagick", "7.1.2.29", "--version",
     "图像转换与处理", "—",
-    "二进制名是 magick（IM7）；许可证 ImageMagick", "权威核验"),
+    "二进制名是 magick（IM7）；许可证 ImageMagick", "authority"),
   tool("mkvtoolnix", "mkvmerge", "MKVToolNix", "媒体处理", "MoritzBunkus.MKVToolNix", "100.0.0", "--version",
     "Matroska 封装/拆分", "—",
-    "作者 Moritz Bunkus（上游本人）；许可证 GPL-2.0", "权威核验"),
+    "作者 Moritz Bunkus（上游本人）；许可证 GPL-2.0", "authority"),
   tool("oxipng", "oxipng", "oxipng", "媒体处理", "Shssoichiro.Oxipng", "10.1.1", "--version",
     "PNG 无损压缩", "optipng",
-    "上游自维护；许可证 MIT", "权威核验"),
+    "上游自维护；许可证 MIT", "authority"),
   tool("yt-dlp", "yt-dlp", "yt-dlp", "媒体处理", "yt-dlp.yt-dlp", "2026.08.19", "--version",
     "网络视频/音频下载", "youtube-dl",
-    "上游自维护；许可证 Unlicense", "权威核验"),
+    "上游自维护；许可证 Unlicense", "authority"),
 
   // ── 磁盘与系统 ──
   tool("bottom", "btm", "bottom", "磁盘与系统", "Clement.bottom", "0.14.9", "--version",
     "系统监控（跨平台 top）", "任务管理器 / htop",
-    "二进制名是 btm；作者 ClementTsang；许可证 MIT", "权威核验"),
+    "二进制名是 btm；作者 ClementTsang；许可证 MIT", "authority"),
   tool("hwinfo", "HWiNFO64", "HWiNFO", "磁盘与系统", "REALiX.HWiNFO", "8.50", "--version",
     "硬件信息与传感器读取", "—",
-    "上游 REALiX；许可证 专有软件", "权威核验"),
+    "上游 REALiX；许可证 专有软件", "authority"),
   tool("sysinternals", "handle", "Sysinternals Suite", "磁盘与系统", "Microsoft.Sysinternals.Suite", "未取到（套件包）", "-?",
     "Windows 深度诊断（handle/procdump/autoruns…）", "—",
-    "微软官方；套件含数十个工具，此处探针用 handle；许可证 Proprietary", "权威核验"),
+    "微软官方；套件含数十个工具，此处探针用 handle；许可证 Proprietary", "authority"),
 
   // ── 版本与包管理 ──
   tool("chocolatey", "choco", "Chocolatey", "版本与包管理", "Chocolatey.Chocolatey", "2.7.4.0", "--version",
     "Windows 包管理器（winget 之外的第二渠道）", "—",
-    "上游 chocolatey；台账多条目在其上有包时可作补充渠道；许可证 Apache v2", "权威核验"),
+    "上游 chocolatey；台账多条目在其上有包时可作补充渠道；许可证 Apache v2", "authority"),
   tool("conan", "conan", "Conan", "版本与包管理", "JFrog.Conan", "2.32.0", "--version",
     "C/C++ 包管理", "vcpkg（另一选择）",
-    "JFrog 官方；许可证 MIT", "权威核验"),
+    "JFrog 官方；许可证 MIT", "authority"),
   tool("miniconda", "conda", "Miniconda3", "版本与包管理", "Anaconda.Miniconda3", "未取到（套件包）", "--version",
     "Python/Conda 环境管理", "—",
-    "二进制名是 conda；Anaconda 官方；许可证 专有软件", "权威核验"),
+    "二进制名是 conda；Anaconda 官方；许可证 专有软件", "authority"),
   tool("pixi", "pixi", "pixi", "版本与包管理", "prefix-dev.pixi", "0.80.0", "--version",
     "跨语言环境与包管理", "conda（更快）",
-    "上游 prefix-dev；许可证 BSD-3-Clause", "权威核验"),
+    "上游 prefix-dev；许可证 BSD-3-Clause", "authority"),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -441,6 +457,8 @@ const PROVIDERS: Capability[] = [
     },
     install: { kind: "npm-global", pkg: "@zvec/zvec-grep" },
     probe: ["zg", "--version"],
+    verSrcKind: "none",
+    verSrcVersion: "",
     doc: "README「可选外部 CLI（zg / Semble）」",
   },
   {
@@ -458,6 +476,8 @@ const PROVIDERS: Capability[] = [
     },
     install: { kind: "argv", argv: ["uv", "tool", "install", "semble"] },
     probe: ["semble", "--version"],
+    verSrcKind: "none",
+    verSrcVersion: "",
     doc: "README「可选外部 CLI（zg / Semble）」",
   },
 ];

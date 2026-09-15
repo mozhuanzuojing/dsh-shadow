@@ -1,3 +1,10 @@
+/** 版本号出处：`measured` = 本机实测；`authority` = winget 权威目录；`none` = **不声称版本**。 */
+export type VerSrcKind = "measured" | "authority" | "none";
+/**
+ * 出处标签（`note` 的**渲染**用）。**查表**而不是 if/三元链：取值域是类型、映射也只有一份。
+ * 返回 `null` = 未知档位 ⇒ 调用方必须按「未标」处理，**不许**默认成强档。
+ */
+export declare const verSrcLabel: (kind: unknown) => "实测" | "权威核验" | null;
 export declare const pad: (n: number) => string;
 export declare const today: (offset?: number) => string;
 export declare const stamp: () => string;

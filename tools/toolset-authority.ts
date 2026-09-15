@@ -46,7 +46,8 @@ const verFromDetail = (detail: unknown): string | null => {
 
 console.log(`核验 ${targets.length} 条（真调 winget show + 本机 probe，只读）…`);
 for (const c of targets) {
-  const claim = claimOf(c.note);
+  // v1.15.89（ADR-0090）：出处取自**类型化字段**（`verSrcKind`/`verSrcVersion`），不再正则反解 `note` 散文。
+  const claim = claimOf(c);
   const r: any = await verifyOne(c.winget, { expectedVersion: claim?.ver });
   let machineVersion: string | null = null;
   try {
@@ -101,7 +102,7 @@ if (checkOnly) {
   // 见 BACKLOG T2）⇒ 两处口径一旦分叉就会**静默不一致**（离线棘轮走 lib、CLI 走内联）。
   // 现在 CLI 直接调 lib 那份；`test/toolset-authority.test.ts` 的 ⑦ 棘轮锁住「CLI 必须调它」。
   const mismatches = ledgerMismatch(
-    (targets as { id: string; note: unknown; winget?: string }[]),
+    (targets as { id: string; verSrcKind?: unknown; verSrcVersion?: unknown; winget?: string }[]),
     Array.isArray(prev?.rows) ? prev.rows : [],
   );
   console.log(`--check：台账侧（版本/出处）与清单的差异 ${mismatches.length} 条`);

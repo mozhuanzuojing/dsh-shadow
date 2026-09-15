@@ -23,6 +23,7 @@ import { runAdaptation } from "./adaptation.js";
 import { runHorizon } from "./horizon.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
 import { renderByTier, noMatchText, truncationNote, renderIndexBudgeted } from "../retrieval/render.js";
+import { excerptWorthwhile, tierLossNote } from "../retrieval/loss.js";
 import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf, EVIDENCE_PATH_CAP } from "../observer/arbitrate.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
 import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
@@ -417,6 +418,14 @@ export async function runReadShadow(deps, args, exec) {
     }
     const n = available.length;
     const parts = [];
+    // v1.15.89（甲-1 / D9）：**本是够长、却被省略**的条目 —— 披露它们，才能与「本来就短」区分开。
+    const withheld = [];
+    // 恢复句柄 = 该条记忆的路径（+ 入口名）。本仓权威源就是文件 ⇒ **零新增存储**；拿不到 ⇒ null，
+    //   调用点据此**拒绝降档**（不许输出看起来可复取、实际不可复取的有损结果）。
+    const recoverHandleOf = (s) => {
+        const rel = s?.mm?.rel;
+        return rel ? { file: String(rel), locator: s?.entry ? String(s.entry) : undefined } : null;
+    };
     let used = 0;
     let droppedByLimit = 0;
     let droppedByBudget = 0;
@@ -433,12 +442,19 @@ export async function runReadShadow(deps, args, exec) {
         let render = renderByTier(s, cap, false, tokens);
         if (used + render.length > maxChars) {
             const degraded = renderByTier(s, cap, true, tokens);
+            // 甲-1：**不许**在没有句柄时降档（有损必须可复取）；甲-2：降档必须**真的更短**（否则白损一层）。
+            const handle = recoverHandleOf(s);
+            if (handle && degraded.length <= render.length)
+                render = degraded;
             if (used + degraded.length > maxChars) {
                 droppedByBudget = available.length - i;
                 break;
             }
-            render = degraded;
         }
+        // 「本是够长、却被省略」才记披露：渲染里**没有片段** 且该条正文**本身够长**
+        //   ⇒ 读侧必须能区分「本来就短」与「被省略」，否则二者在输出上不可区分。
+        if (!render.includes("…") && excerptWorthwhile(s.text))
+            withheld.push({ rel: s.mm.rel, entry: s.entry });
         parts.push(render);
         servedRels.push(s.mm.rel);
         used += render.length;
@@ -514,7 +530,9 @@ export async function runReadShadow(deps, args, exec) {
         });
     }
     const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
-    const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + envelope + flushWarn);
+    // v1.15.89：分层省略披露（**条内**损失）必须在信封（**条级**损失）之前，两者分开说。
+    const lossNote = tierLossNote({ withheld, returned: parts.length });
+    const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
     await recordObservationTrace(fs, ws, {
         observerId: obsCtx.observerId,
         createdAt: today(),

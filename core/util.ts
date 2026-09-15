@@ -1,5 +1,27 @@
 // dsh-shadow —— core/util.ts：纯辅助（时间/文件名/路径/分词/主题/索引前缀）。无运行时依赖，从 index.ts 迁出。
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 版本号出处的**类型化取值域**（v1.15.89 / ADR-0090；来自 ADR-0087 的「甲-3」与 BACKLOG D11）
+//
+// 为什么放在这里：它是**标签与事实之间的唯一那道桥** —— 写侧（`core/toolset.ts` 渲染 `note`）与
+//   读侧（`tools/toolset-authority.lib.ts#claimOf`）**必须用同一份映射**，否则「弱档被折进散文」
+//   会以另一种形式回来（ADR-0072 修掉的正是「标签比事实强」）。
+// 为什么是类型：此前它是字符串参数，唯一事实源是**拼进 `note` 的散文**，下游用**正则反解**它。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 版本号出处：`measured` = 本机实测；`authority` = winget 权威目录；`none` = **不声称版本**。 */
+export type VerSrcKind = "measured" | "authority" | "none";
+
+/** 出处标签表（**唯一一份**；`note` 的渲染与下游读取都走它）。`none` 档不在表里 —— 它不出现在版本位。 */
+const VER_SRC_LABEL: Readonly<Record<string, string>> = { measured: "实测", authority: "权威核验" };
+
+/**
+ * 出处标签（`note` 的**渲染**用）。**查表**而不是 if/三元链：取值域是类型、映射也只有一份。
+ * 返回 `null` = 未知档位 ⇒ 调用方必须按「未标」处理，**不许**默认成强档。
+ */
+export const verSrcLabel = (kind: unknown): "实测" | "权威核验" | null =>
+  (VER_SRC_LABEL[String(kind)] as "实测" | "权威核验" | undefined) ?? null;
+
 export const pad = (n: number) => String(n).padStart(2, "0");
 export const today = (offset = 0) => {
   const d = new Date();

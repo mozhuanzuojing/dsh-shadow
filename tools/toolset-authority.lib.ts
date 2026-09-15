@@ -4,10 +4,25 @@
 // 拆出来的理由（与 `audit-wiring.lib.ts` / `audit-drift.lib.ts` 同）：棘轮测试必须验**同一份逻辑**，
 // 否则测试过了产品没改、或反之。全部纯函数，不做 IO、不调 winget。
 
-/** 从 `note` 抽出出处的标签与版本（形如 `winget <pkg> · <verSrc> <ver> · …`）。 */
-export const claimOf = (note: unknown): { verSrc: string; ver: string } | null => {
-  const m = String(note || "").match(/·\s*(实测|权威核验)\s+([^\s·]+)/);
-  return m ? { verSrc: m[1], ver: m[2] } : null;
+import { verSrcLabel } from "../core/util.ts";
+
+/**
+ * 读出一条条目的**出处声明**（v1.15.89 / ADR-0090 —— rtk「甲-3」：**类型化字段是唯一事实源**）。
+ *
+ * 此前它 `String(note).match(/·\s*(实测|权威核验)\s+([^\s·]+)/)` —— **正则反解散文**：
+ *   出处的措辞一改（或有人把弱档写成强档的措辞），判据就**静默返回 null**（被当成「未标」）。
+ *   这正是 rtk `discover/report.rs:99-131` 那句注释要防的形态（*"Kept as its own field …
+ *   instead of silently going quiet about it"*），也是本仓 ADR-0072 的续。
+ * 现在读 `verSrcKind` / `verSrcVersion` 两个**类型化字段**；未知/非法取值一律 `null`（=「未标」），
+ *   **不许默认成强档** —— 弱档被折进散文的那条路，从这里被堵死。
+ */
+export const claimOf = (
+  cap: { verSrcKind?: unknown; verSrcVersion?: unknown } | null | undefined,
+): { verSrc: string; ver: string } | null => {
+  const label = verSrcLabel(cap?.verSrcKind);
+  const version = cap?.verSrcVersion;
+  if (!label || typeof version !== "string" || !version) return null;
+  return { verSrc: label, ver: version };
 };
 
 export interface AuthorityRow {
@@ -45,14 +60,14 @@ export const unsubstantiatedMeasured = (rows: AuthorityRow[]): AuthorityRow[] =>
  * 已记录在 `status`/`authorityVersion` 里供人看，不该让测试常红。
  */
 export const ledgerMismatch = (
-  current: { id: string; note: unknown; winget?: string }[],
+  current: { id: string; verSrcKind?: unknown; verSrcVersion?: unknown; winget?: string }[],
   manifest: AuthorityRow[],
 ): { id: string; was: string; now: string }[] => {
   const byId = new Map(manifest.map((r) => [r.id, r]));
   const out: { id: string; was: string; now: string }[] = [];
   for (const c of current) {
     if (!c.winget) continue; // 清单范围外（无 winget 包）—— 不参与比对
-    const claim = claimOf(c.note);
+    const claim = claimOf(c);
     const now = claim ? `${claim.verSrc} ${claim.ver}` : "(未标)";
     const m = byId.get(c.id);
     if (!m) { out.push({ id: c.id, was: "(清单无此条)", now }); continue; }

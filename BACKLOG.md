@@ -1145,7 +1145,12 @@
   `README` 的「都没装会怎样」小节**对照校验**）；若有能力当前**降级不可见**（违反 ADR-0049），
   须**单独记为缺陷**而不是在表里写一句敷衍的话。
 
-### D9. 投影侧「有损必须声明损失形态 + 交出恢复句柄」（ADR-0087 甲-1）
+### ✅ D9. 投影侧「有损必须声明损失形态 + 交出恢复句柄」（ADR-0087 甲-1）—— **已结案（v1.15.89）**
+
+**结论与三个前置的决定见 `adr/0090-rtk-three-shapes-implemented.md` §A**：① 恢复载体 = **已有的源文件**
+（句柄 = 路径 + 段名/入口名，**零新增存储**，故无需哈希去重与老化）；② 索引路径**不**退原文
+（2199 KB 会顶穿上下文）⇒ 改为「省略 + **显式写『不可复取』**」；召回路径**无句柄不许降档**。
+实装：`retrieval/loss.ts`（新）+ `retrieval/render.ts` + `query/query.ts`；测试：`test/loss-and-handle.test.ts`（新）。
 
 - **依据**：`adr/0087-absorb-rtk-langextract-verdicts.md` §A 甲-1（`vendor/_src/rtk` 的
   `src/core/toml_filter.rs:568-578` 的 `Lossiness{None,Tail,Whole}` + `src/main.rs:1606-1630` 的
@@ -1158,7 +1163,12 @@
 - **完成判据**：投影/读侧输出里能区分「无内容」与「被省略」；被省略的部分有**可复取的句柄**，
   且**拿不到句柄时不许输出有损结果**；两条各配一个测试（含**反向不变量**：句柄缺失时必须退原文）。
 
-### D10. `never_worse` 守卫：压完比原文长就退回原文（ADR-0087 甲-2）
+### ✅ D10. `never_worse` 守卫：压完比原文长就退回原文（ADR-0087 甲-2）—— **已结案（v1.15.89）**
+
+**口径已定（`adr/0090` §A③）：比**字符数**（与 `max_tokens × 4` 同单位），不用 rtk 的「字节 / 4」。**
+理由做成了可执行的对照断言：`raw = "中"×60`（60 字符 / 180 字节）vs `longer = "a"×62`（62 字符 / 62 字节）
+⇒ 字符口径判得出「更长」、字节口径漏判（见 `test/loss-and-handle.test.ts`）。出口唯一：
+`retrieval/render.ts` 的 `renderIndexBudgeted` 与 `query/query.ts` 的降档判定。
 
 - **依据**：`adr/0087` §A 甲-2（rtk `src/core/guard.rs:16-23` + `src/core/runner.rs:16-24` 的 `emit_guarded`
   是唯一出口；测试 `guard.rs:29-66` 含「相等 → 保留过滤结果」与空输入边界）。
@@ -1170,7 +1180,12 @@
   再在裁剪/摘要出口处接一处全函数守卫；配测试：**过滤结果更长 → 退原文**、相等 → 保留、
   空输入边界；并**在中文语料上实测一次**该守卫不误判。
 
-### D11. `verSrc` 从「嵌在 `note` 里的字符串 + 下游正则反解」改为**类型化字段**（ADR-0087 甲-3）
+### ✅ D11. `verSrc` 从「嵌在 `note` 里的字符串 + 下游正则反解」改为**类型化字段**（ADR-0087 甲-3）—— **已结案（v1.15.89）**
+
+**落地形态（`adr/0090` §A④）**：`core/util.ts` 新增 `VerSrcKind` + `verSrcLabel`（查表）；
+`Capability` 增 `verSrcKind` / `verSrcVersion` 作**唯一事实源**，`note` 由它**派生**（渲染逐字不变
+⇒ 签入的 `tools/toolset-authority.json` 与双向棘轮**未动一行**）；`claimOf()` 不再正则反解散文；
+未知/缺失取值 ⇒ 「未标」，**不许默认成强档**；负断言：把弱档合并进强档会被检出（`test/toolset-authority.test.ts` ⑧）。
 
 - **依据**：`adr/0087` §A 甲-3（rtk `src/discover/mod.rs:34-49` 的 `Coverage::Measured/Estimated` +
   `src/discover/report.rs:99-131` 的注释原文 *"Kept as its own field … instead of silently going quiet about it"*）；

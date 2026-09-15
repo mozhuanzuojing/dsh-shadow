@@ -1,3 +1,4 @@
+import { type VerSrcKind } from "./util.js";
 /** 缺件处置：一条可复制执行的命令 + 可选的坑说明。 */
 export interface CapabilityRemedy {
     cmd: string;
@@ -42,6 +43,14 @@ export interface Capability {
     note?: string;
     /** 文档锚。 */
     doc: string;
+    /**
+     * **版本号出处的类型化字段 —— 唯一事实源**（v1.15.89 / ADR-0090，来自 ADR-0087 的「甲-3」）。
+     * `note` 由它**派生**（渲染逐字不变），下游 `claimOf()` 不再正则反解散文 ——
+     * 「弱档被折进散文」正是 ADR-0072 要防的形态。
+     */
+    verSrcKind: VerSrcKind;
+    /** 台账**声称**的版本号（原样保留；`none` 档为 `""`）。 */
+    verSrcVersion: string;
 }
 /** 全台账：provider + reference。 */
 export declare const CAPABILITIES: Capability[];

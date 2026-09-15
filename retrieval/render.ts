@@ -2,6 +2,19 @@
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
 import { memorySummary, snippetFor } from "./rank.js";
+import { lossLine, neverWorseChars, type RecoverHandle } from "./loss.js";
+
+/** 索引路径的默认恢复句柄（`_index.md` 自身）。传 `null` = 显式声明没有源路径。 */
+export const INDEX_HANDLE: RecoverHandle = { file: ".shadow/_index.md" };
+
+/**
+ * 披露里段名的**长度上限**（v1.15.89，实测逼出来的）：段名在正常语料里是「主题索引」这种短语，
+ * 但**它可以等于一整行**（`renderIndexBudgeted("## " + 长文本, 小预算)`）⇒ 披露会把被省略的正文
+ * **原样抄一遍**，于是 never_worse 守卫只能退回原文（实测：4003 字的单段 ⇒ 披露也 4000+ 字）。
+ * ⇒ 披露里只留**名字**（截断 + 原长），不复制内容。
+ */
+const SHORT_TITLE_CHARS = 48;
+const shortTitle = (t: string) => (t.length > SHORT_TITLE_CHARS ? `${t.slice(0, SHORT_TITLE_CHARS)}…（段名共 ${t.length} 字）` : t);
 
 // v1.12.6 召回信封（借 PageIndex：成功/失败统一为「带下一步的信封」，失败不是死路）。
 // 空命中 → 给可执行的下一步 + 近似候选（显式标「近似·未验证」，绝不当事实、不当指令）。
@@ -82,7 +95,11 @@ export const splitIndexSections = (text: string): { title: string; body: string 
  *   ④ **给可执行的下一步**（穿透 / 提高预算 / 直接读文件）。
  * 连第一节都放不下时按字符硬截断，并在披露里写明「已按字符硬截断」（不假装那是完整段）。
  */
-export const renderIndexBudgeted = (idx: string, maxChars: number): string => {
+export const renderIndexBudgeted = (
+  idx: string,
+  maxChars: number,
+  source: RecoverHandle | null = INDEX_HANDLE,
+): string => {
   const raw = String(idx || "");
   if (!raw || raw.length <= maxChars) return raw;
   const sections = splitIndexSections(raw);
@@ -114,10 +131,20 @@ export const renderIndexBudgeted = (idx: string, maxChars: number): string => {
     "",
     `> 未返回的内容：\`_index.md\` 共 ${totalLines} 行 / ${raw.length} 字，本次返回 ${body.length} 字（预算 ${maxChars} 字 = max_tokens × 4）${hard ? "，**已按字符硬截断**（连第一节都放不下）" : ""}。`,
   ];
-  if (partial.length) note.push(`> 部分返回的段：${partial.map((d) => `「${d.title}」(前 ${d.kept} 行 / 共 ${d.total} 行)`).join(" · ")}`);
-  if (dropped.length) note.push(`> 未返回的段：${dropped.map((d) => `「${d.title}」(${d.lines} 行)`).join(" · ")}（主题索引/意识轨迹是**派生视图**：按主题穿透比整篇读回更省）`);
+  // v1.15.89（甲-1 / D9）：**损失形态 + 恢复句柄** —— 此前这里只说「未返回什么」，
+  //   没说**那部分去哪了**（能否取回、怎么取回），于是「被省略」与「本来就短」在读者眼里不可区分。
+  const loss = lossLine({
+    loss: hard ? "whole" : "tail",
+    handle: source,
+    because: `_index.md ${totalLines} 行 / ${raw.length} 字 > 预算 ${maxChars} 字`,
+  });
+  if (loss) note.push(loss);
+  if (partial.length) note.push(`> 部分返回的段：${partial.map((d) => `「${shortTitle(d.title)}」(前 ${d.kept} 行 / 共 ${d.total} 行)`).join(" · ")}`);
+  if (dropped.length) note.push(`> 未返回的段：${dropped.map((d) => `「${shortTitle(d.title)}」(${d.lines} 行)`).join(" · ")}（主题索引/意识轨迹是**派生视图**：按主题穿透比整篇读回更省）`);
   note.push("> 下一步：① `read_shadow(topic)` 按主题**穿透**（主题索引/意识轨迹是派生视图，不必整篇读回）；② 提高 `max_tokens`（上限 8000）重读；③ 需要全文就直接读 `.shadow/_index.md`。");
-  return body + note.join("\n");
+  // v1.15.89（甲-2 / D10）：**never_worse 守卫** —— 有损输出（正文 + 披露）若比原文还长，退回原文：
+  //   那才是**没有损失**的那一份（披露随之消失，因为此时没有损失可披露）。单位 = **字符**（与预算同单位）。
+  return neverWorseChars(body + note.join("\n"), raw);
 };
 
 export const renderByTier = (s: any, budgetChars: number, forceL0 = false, tokens: string[] = []) => {

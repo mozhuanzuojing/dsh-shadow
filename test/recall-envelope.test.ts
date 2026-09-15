@@ -9,6 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as mod from "../dist/index.js";
 import { deprioritizeFactor, DEPRIORITIZE_FACTOR, approxEntries } from "../dist/retrieval/rank.js";
 import { truncationNote, renderIndexBudgeted } from "../dist/retrieval/render.js";
+import { NEVER_WORSE_UNIT } from "../dist/retrieval/loss.js";
 import { intentOf } from "../dist/core/intent.js";
 
 const { apply, name, inject } = mod;
@@ -261,13 +262,37 @@ const tinyR = String(await makeHost(baseCfg, seeds).read({ max_tokens: 8000 }));
 assert.ok(!tinyR.includes("未返回的内容"), `索引放得下时不得出现预算信封：\n${tinyR.slice(-200)}`);
 assert.ok(tinyR.includes("## 近期记忆（按日期）"), "小索引应原样返回（含段结构）");
 // 负控（纯函数）：连第一节都放不下 ⇒ 硬截断也必须自报；预算内 ⇒ 逐字原样
-// 负控：连**第一行**都放不下（这里是单行 403 字 > 预算 20 字）⇒ 只能硬截断，且必须自报
-const hardIdx = renderIndexBudgeted("## " + "字".repeat(400), 20);
+// 负控：连**第一行**都放不下（这里是单行 4003 字 > 预算 20 字）⇒ 只能硬截断，且必须自报
+// ⚠ v1.15.89：这个用例的**长度**被放大了（原来 400 字）—— 因为 never_worse 守卫（甲-2/D10）在
+//   「原文只有 400 字、而披露要 400+ 字」时会**逐字退回原文**（那才是没有损失的那一份）。
+//   两件事因此拆成两条断言：**这里**证「超大原文 + 极小预算 ⇒ 硬截断且自报」，
+//   **下面**证「披露比原文长 ⇒ 退回原文」。
+const hardIdx = renderIndexBudgeted("## " + "字".repeat(4000), 20);
 assert.ok(hardIdx.includes("已按字符硬截断"), `硬截断必须自报：\n${hardIdx}`);
+// 反向不变量（甲-2）：有损输出（正文 + 披露）若比原文还长 ⇒ 逐字退回原文，且**不留任何披露**
+const smallIdx = "## " + "字".repeat(400);
+assert.equal(renderIndexBudgeted(smallIdx, 20), smallIdx, `披露比原文长时必须退回原文（单位：${NEVER_WORSE_UNIT}）`);
 // 正控：能装下若干行 ⇒ 走「部分返回」而不是硬截断
 const partIdx = renderIndexBudgeted("## 甲\n" + "字".repeat(400), 50);
 assert.ok(partIdx.includes("> 部分返回的段：") && !partIdx.includes("已按字符硬截断"), `能按行装就不该硬截断：\n${partIdx}`);
 assert.equal(renderIndexBudgeted("## 甲\n短", 4000), "## 甲\n短", "预算内必须逐字原样");
 console.log(`✔ ⑥ 索引预算：${im![2]} 字 → 返回 ${im![3]} 字 + 按段披露；小索引零多余文字`);
+
+// ─────────────────────────────────────────────
+// ⑦ 分层省略的披露与恢复句柄（v1.15.89 / ADR-0090 = rtk 甲-1 / 甲-2 落地）
+//    甲-1：有损必须声明**形态** + 交出**恢复句柄**（本仓句柄 = 记忆文件路径 ⇒ 零新增存储）；
+//    甲-2：有损输出不得比原文长（纯函数那一半由 `test/loss-and-handle.test.ts` 覆盖）。
+// ─────────────────────────────────────────────
+{
+  const rLoss = await budgetHost.read({ topic: "alpha", limit: 12, max_tokens: 256 });
+  assert.ok(rLoss.includes("> 分层省略："),
+    `条目被降档/省略片段时必须披露 —— 否则「被省略」与「本来就短」在输出上不可区分：\n${rLoss.slice(-400)}`);
+  assert.ok(rLoss.includes("> 可复取：") && /\.shadow\/\d{4}-\d{2}-\d{2}\//.test(rLoss),
+    `披露必须交出**句柄**（记忆文件路径）：\n${rLoss.slice(-400)}`);
+  // 正控：那些**本来就短**的记忆 ⇒ 不得被说成「被省略」（否则披露本身在撒谎）
+  const rShort = await host.read({ topic: "alpha", limit: 10, max_tokens: 4096 });
+  assert.ok(!rShort.includes("> 分层省略："), `本来就短 ⇒ 不添一句话：\n${rShort.slice(-300)}`);
+}
+console.log("✔ ⑦ 分层省略：给条数 + 逐条句柄（可复取）；本来就短的记忆不被说成省略");
 
 console.log("ALL PASS ✅");

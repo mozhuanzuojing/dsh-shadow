@@ -11,7 +11,8 @@
 //   · 标「实测 0.10.0」的 `zoxide`，`winget list` 显示**已装 0.9.9 / 可用 0.10.0**
 //     —— 台账抄的是**「可用」列**；
 //   · 本机可检出的 8 条里 **7 条台账版本比本机新**，方向一致。
-// ⇒ **标签比事实强**。默认值已改为 `"权威核验"`。
+// ⇒ **标签比事实强**。默认值已改为 `"权威核验"`（v1.15.89 起，出处是**类型化字段**
+//   `verSrcKind`/`verSrcVersion`，不再嵌在 `note` 散文里等下游正则反解 —— 见 ADR-0090）。
 //
 // 本测试用**离线**方式守住两件事（不联网、不重探测，以免把机器状态写进断言）：
 //   ① 台账的（出处 + 版本）与 `tools/toolset-authority.json` 记录的一致 —— 改了台账必须重跑生成器；
@@ -88,11 +89,11 @@ const { CAPABILITIES } = await import("../dist/core/toolset.js");
 // ─────────────────────────────────────────────
 {
   const withPkg = (CAPABILITIES as any[]).filter((c) => c.winget);
-  const unparsable = withPkg.filter((c) => !claimOf(c.note));
+  const unparsable = withPkg.filter((c) => !claimOf(c));
   assert.equal(unparsable.length, 0,
     `这些条目有 winget 包但 note 里解析不出（出处 + 版本）：${unparsable.map((c: any) => c.id).join(", ")}`);
   const dist = new Map<string, number>();
-  for (const c of withPkg) { const cl = claimOf(c.note)!; dist.set(cl.verSrc, (dist.get(cl.verSrc) || 0) + 1); }
+  for (const c of withPkg) { const cl = claimOf(c)!; dist.set(cl.verSrc, (dist.get(cl.verSrc) || 0) + 1); }
   console.log(`✔ ⑤ 口令可解析：${withPkg.length} 条全部可解析；出处分布 ${JSON.stringify(Object.fromEntries(dist))}`);
   assert.ok(!dist.has("实测") || manifest.counts.falseMeasured === 0, "若有「实测」条目，清单必须记 falseMeasured=0");
 }
@@ -140,6 +141,38 @@ const { CAPABILITIES } = await import("../dist/core/toolset.js");
   assert.ok(!/ledgerVerSrc\s*!==/.test(branch) && !/ledgerVersion\s*!==/.test(branch),
     "--check 分支里不得再手写 ledgerVerSrc/ledgerVersion 比对（判据必须收在 lib 一处）");
   console.log("✔ ⑦ 判据收一处棘轮：`--check` 直接调 lib 的 ledgerMismatch，分支内无第二份实现");
+}
+
+console.log("");
+// ─────────────────────────────────────────────
+// ⑧ **类型化字段棘轮**（v1.15.89 / ADR-0090）：字段是唯一事实源，且**渲染不许与它分叉**
+//    ① 渲染逐字不变 —— `note` 里那段散文必须与字段派生出的「标签 + 版本」逐字一致
+//       （本测试自带一个**独立**的正则 oracle：生产判据已不再用正则，这里只用它证明「派生没跑偏」）；
+//    ② **弱档不得被散文升格** —— 字段说 authority、散文写「实测」⇒ 判据必须取弱档；
+//    ③ 字段缺失/非法 ⇒ 「未标」，**不许默认成强档**；
+//    ④ 把弱档合并进强档（标签改成「实测」）必须被 ③ 的检测器检出。
+// ─────────────────────────────────────────────
+{
+  const withPkg = (CAPABILITIES as any[]).filter((c) => c.winget);
+  const prose = (note: unknown) => {
+    const m = String(note || "").match(/·\s*(实测|权威核验)\s+([^\s·]+)/);
+    return m ? `${m[1]} ${m[2]}` : null;
+  };
+  const drifted = withPkg.filter((c) => { const cl = claimOf(c); return !cl || `${cl.verSrc} ${cl.ver}` !== prose(c.note); });
+  assert.equal(drifted.length, 0,
+    `note 散文与类型化字段分叉（渲染必须逐字等于派生结果）：${drifted.map((c: any) => c.id).join(", ")}`);
+
+  const forged = { ...withPkg[0], verSrcKind: "authority" };
+  assert.equal(claimOf(forged)!.verSrc, "权威核验", "判据必须取**字段**：散文里的「实测」措辞不得把弱档升格");
+
+  assert.equal(claimOf({ verSrcKind: undefined, verSrcVersion: "1.0.0" }), null, "缺字段 ⇒ 未标（不得默认强档）");
+  assert.equal(claimOf({ verSrcKind: "实测", verSrcVersion: "1.0.0" }), null, "非类型取值 ⇒ 未标（取值域是类型，不是任意字符串）");
+  assert.equal(claimOf({ verSrcKind: "none", verSrcVersion: "" }), null, "none 档（不声称版本）⇒ 未标");
+
+  const synth: AuthorityRow[] = [{ id: "merge", pkg: "x", ledgerVerSrc: "权威核验", ledgerVersion: "1.0.0", authorityVersion: "1.0.0", machineVersion: "0.9.0", status: "ok" }];
+  assert.equal(unsubstantiatedMeasured(synth).length, 0, "权威核验档：本机版本不同**不算**违规（目录最新版 ≠ 本机已装）");
+  assert.equal(unsubstantiatedMeasured([{ ...synth[0], ledgerVerSrc: "实测" }]).length, 1, "**把弱档合并进强档必须被检出**");
+  console.log(`✔ ⑧ 类型化字段：${withPkg.length} 条渲染与字段逐字一致；弱档不被散文升格；字段缺失/非法 ⇒ 未标；弱档合并进强档可检出`);
 }
 
 console.log("");
