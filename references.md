@@ -64,7 +64,7 @@
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
 
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§9）；
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13）；
 > 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
 > **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
 > （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
@@ -544,6 +544,89 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   （§3 记录时为 47,082 / 4,362）；最近推送 **2026-09-14**；最新 release **v0.8.37**（2026-09-13）；
   许可仍 **Apache-2.0**；仓库体积 417,703 KB（约 408 MB）。
 - **本机状态**：已装（9 个技能 + CLI），是报告 L3 视频链路 —— 该用途与 §3 记录一致，**未变化**。
+
+## 补充材料（2026-09-15 用户提供，本轮已核实）
+
+> 用户 2026-09-15 指定补录一条：`Vincentwei1021/video-shotcraft`（**新**）。
+> **已核实**：GitHub API + 原始 raw 文件 + `tree?recursive=1`**逐目录计数**，抓取 **2026-09-15 12:22 +08:00**。
+> **可重放**（都在 `..\.docs\fix\2026-09-15\`，怎么跑写在各文件头注释里）：
+> `fetch-references-meta.ts`（元数据 + README 前 6000 字，产物 `raw-video-shotcraft.txt`）、
+> `dump-video-shotcraft-docs.ts`（原文落盘：`readme-video-shotcraft.md` / `readme-video-shotcraft-zh.md` /
+> `skill-video-shotcraft.md` / `plugin-manifest-video-shotcraft.json` / `tree-video-shotcraft.txt`）、
+> `count-video-shotcraft.ts`（**不采信自报计数，从 tree 逐目录数**，产物 `counts-video-shotcraft.txt`）、
+> `extra-video-shotcraft.txt`（`agents/openai.yaml` + `references/final-review.md` 原文）。
+> **口径**：同一条材料**只在一处完整登记** —— 重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数。
+
+### 13. Vincentwei1021/video-shotcraft —— **新**（agent skill 工程样本，不是记忆材料）
+
+- 链接：https://github.com/Vincentwei1021/video-shotcraft ｜ 在线 Gallery：https://vincentwei1021.github.io/video-shotcraft/
+  ｜ 姊妹仓库（口播版，2026-08 新开）：https://github.com/Vincentwei1021/video-talkcraft
+- **是什么**：把 Claude Code / Codex 变成「动效工作室」的 **agent skill** —— 用 [Remotion](https://www.remotion.dev/)
+  把前端项目 / 网页做成电影感产品宣传片（真实页面截图 + 2.5D 运镜 + 节奏卡点 + 声音设计）。TypeScript，**Apache-2.0**；
+  自述 `An agent skill for crafting cinematic product videos: 157 shot recipe cards · 214 styles · 214 motion previews ·
+  a production-ready template`。安装面：`npx skills add Vincentwei1021/video-shotcraft`，或 `git clone` 后软链进
+  `~/.claude/skills/` 或 `~/.codex/skills/`。仓库另有 AtomGit 镜像与 Trendshift 收录徽章。
+- **核实**（GitHub API + recursive tree，抓取 2026-09-15 12:22 +08:00）：**8,578** ⭐ / 775 fork / **4** open issues；
+  创建 2026-07-19、最近推送 2026-09-09；默认分支 `main`；仓库体积 **188,979 KB**（≈184.5 MB，API 口径）；
+  `tree?recursive=1` 读到 **truncated=false / 1,211 条 / 970 个 blob**，blob 字节和 **54,479,346**（≈52.0 MB）；
+  **无 semver tag**，只有两个媒体素材 release（`gallery-media` 2026-07-26 / `showcase-media` 2026-09-01）；
+  topics 含 `agent-skills` / `claude-code-skills` / `claude-skills` / `codex` / `remotion` / `motion-graphics` / `video-generation`。
+  **逐目录计数（不采信自报数）**：`references/shots/**/*.md` = **157**（自报 157 ✅；一级目录 11 个 = **10 个功能类别**
+  `camera data effects interaction opening outro rhythm transition typography ui-entrance` + `ATTRIBUTION.md`）；
+  `demos/**/*.tsx` = **221**、`demos/<类别>/<卡名>/` 目录 **158**；`assets/audio/sfx/**` = **149** 分 **16** 类、
+  `assets/audio/bgm/**` = **5**；`template/**` 60 · `workbench/**` 59 · `gallery/**` 238 · `assets/lib/**` 12。
+- **一处读数分层（不判谁错，先分层）**：同一材料里有两套计数 —— README 标题与 `SKILL.md` 写 **157 卡 / 214 样片**，
+  而「2026-08 · 新增 48 张」的归档条目与 **GitHub 仓库 description** 写 **152 卡 / 209 样片**。
+  按本仓 `AGENTS.md`「历史文档 vs 当前态文档」的口径分层：**归档条目里的 152/209 是当时事实（合法，不改）**；
+  而 **description 是当前态表面，未随卡库一并刷新**（落后 5 卡 / 5 样片）。**我未核实 description 的最近修改时间**，故只记现象。
+- **核心机制**：三层结构 ——
+  ① **契约层 `SKILL.md`**：调用时**先判三种模式**（直接使用模板 / 自主自由创作 / 共同创作；已选定时不重复询问、不改成另一种），
+  再用一张「**何时读哪个文件**」表把读取面指向 `references/`；
+  ② **方法论层 `references/`**：`pipeline.md` 六阶段流水线 · `shots/` **157 张镜头配方卡**（用途/能量/建议时长/参数/
+  实现要点/**已知坑**）· `sequences/` 桥段模板 · `aesthetic-rules.md`（视觉 QA 准则）/ `music-beat-sync.md` /
+  `sound-design.md` / `final-review.md`（独立终检清单）/ `workbench.md`（成片接入契约）；
+  ③ **产物层**：`demos/` 每卡一份**调校过的 TSX**（缓动与时值参数真相）· `template/`（36.2 秒 / 1920×1080 / 30fps /
+  10 镜头，`npm install && npx remotion render`）· `assets/{lib,audio,scripts}`（`assets/lib/` 主张 **copy 进新项目再改，
+  不 import 本库**）· `workbench/`（交付后开的浏览器时间线编辑器，5198 端口，预览与渲染**逐帧像素一致**）·
+  `jianying-export/`（剪映工程导出：Mac 11.2 实测，**Windows 自陈未真机验证**）。
+- **值得借鉴（四条，按对本仓的价值排序）**：
+  1. ⭐ **「测量对象必须是最终产物」**：`references/final-review.md` 的 A6 明写 —— 每条 SFX 要查「在**渲染产物**里是否真的
+     听得见（**不看预览** —— 预览把 volume 钳到 1.0）」。这与本仓 `MATERIALS.md` §6 的五级链（**工件存在 ≠ 已安装 ≠
+     已装载 ≠ 在跑 ≠ 可用 ≠ 已验证**）与「**凡『某能力在运行体里有没有』，唯一判据是运行时读取**」是**同一判据在另一个
+     领域的实例**：中间态的展示层（预览 / 目录 / 安装包）会给出乐观假象，判据必须落在最终产物上。**这是本次登记最值钱的一条。**
+  2. ⭐ **独立终检的三条硬约束**（`final-review.md` 头部）：审查 agent「**必须处于干净上下文**，不参与制作；**不要给它
+     制作过程中的理由、辩解、修改历史或预期结论**」；「**缺少某项输入时标记『无法验证』，不要自行猜测制作基准**」；
+     「索引、卡片文档、demo 源码与 Gallery 参考样片**互相冲突时，明确报告冲突来源，不自行挑一个当真相**」。
+     三条分别对应本仓：派**干净上下文**审查者（用户级规则 `moe-subagent-dispatch` 的「自我审查天然有盲区，自己的错自己看不见」）、
+     **ADR-0049 缺件不静默**、以及「**不猜字段**」（ADR-0042 / 0043 / 0051）。
+  3. **两条纪律的外部正例**：① **「质量标准只升不降」的棘轮** —— 「允许适配性改动，但卡上『已知坑/命门』标注的参数
+     **不得降档**」，对应本仓 `audit:ratchet`；② **确定性** —— 禁 `Date.now()` / `Math.random()`，伪随机固定种子
+     （mulberry32 / 哈希，seed 从 index 派生）**逐帧可复现**，且仓库根 `npm test` 就断言这些纯函数的确定性，
+     对应本仓「纯函数派生、可重建」（ADR-0042 / 0043）与确定性基准门（T14 / ADR-0078）。
+  4. **一处粒度不同的路由表**：`SKILL.md` 的「何时读哪个文件」是**阶段 → 读哪个文件**（文件级）；本仓对应物是
+     README「什么情况用哪个（模式路由表）」（**任务 → 用哪个 mode**，能力级，v1.12.3 已落地）与 `AGENTS.md` 的
+     「每份文档 owned by 什么」。⇒ **本仓不缺这张表，本条只作外部样本，不构成待办。**
+- **与 dsh-shadow 的关系（三条要分清）**：
+  1. **不同题**：本仓管「记忆 / 上下文投影」，它管「创意视频制作」；既不是本仓的替代品，也不喂本仓的任何 ADR。
+     它的价值是**「agent skill 工程」的对照样本** —— 本仓自己也是 skill / 预设双形态（`agent-presets/projection` +
+     DSH bundle 插件）。它的「卡片（语义）↔ demo 源码（调校真相）」对应关系与本仓同向：它明写「凭卡名和理解新写＝
+     **放弃全部调校积累**」，正是本仓**资源卡必须写 `source` 才上投影**（ADR-0051 证据门）与「每条断言带
+     `文件:行号`」的同一取向 —— **判据要能回查到实现**。
+  2. **对本工作区的实质用途**：它是在用的 hyperframes（报告 L3 视频链路）之外的**第二条视频路线**，且**技术栈不同** ——
+     hyperframes 走 HTML/CSS 时间线 → 确定性 MP4；它走 **React/Remotion 组件 + 镜头配方卡**，并附 **149 个 SFX /
+     5 个 BGM / 216 个 demo 动效 / 成片后浏览器工作台 / 剪映工程导出**。**它只声明 Claude Code 与 Codex 两个宿主，
+     不提供 DSH 插件或预设形态**；要落到本机需另判（见「未核实」）。**本条只登记，不代替那个裁决。**
+  3. **许可证要先分清两层**（与 OpenViking 的 AGPL 记号同型）：**仓库本体 Apache-2.0**，但它的渲染引擎 **Remotion
+     有自己的许可**（README 自陈「个人与小团队免费、公司可能需要付费」）⇒ **「仓库许可允许」≠「整条链路可商用」**。
+     另外它自陈多数配方卡是**研究官方产品片（ClickUp / Perplexity / Slack / Notion / Figma / Framer / Bear / Raycast /
+     Pitch / Miro / Superhuman / Loom 等）的运动语言后重写**的，仓库不含任何原片素材与品牌资产，逐批来源记在
+     `references/shots/ATTRIBUTION.md` —— 这条**取材与署名的处理方式**本身可作本仓「引外部材料必须写来源」的对照。
+- **未核实**：**未克隆、未安装、未渲染**（本机没跑过 Remotion）；**未验证**它能否以 `~/.agents/skills/`（本机 DSH 技能目录）
+  或 DSH 预设形态装载 —— 它只声明 Claude Code / Codex 两个宿主（`.claude-plugin/plugin.json` 的 `skills: "./"`，
+  `agents/openai.yaml` 是 Codex 的 UI 元数据，其注释写明「由 Codex harness 读取，不是给 agent 读的；
+  Claude Code 读的是 SKILL.md frontmatter」）；**214 条动态样片未逐条核对**（样片是生成的媒体，tree 里数不出来，
+  我只核到 157 张卡 / 221 个 TSX / 158 个卡目录）；38 秒 Gallery 介绍片与 Ink Press 模板**未播放核对**；
+  `jianying-export/windows_draft.py` 仓库自陈**未真机验证**。
 
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
