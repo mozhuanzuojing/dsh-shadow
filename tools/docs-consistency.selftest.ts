@@ -3,14 +3,19 @@
 // 纪律（ADR-0062 / v1.15.60）：**CLI 的行为要 spawn 子进程验** —— 否则「退出码写错」这类缺陷
 // 在测试里永远看不见，而 `npm run verify` 正是靠**退出码**串起来的。
 //
-// 十组，全是**正/负对照**：把门改成「永远 0」则全部负对照红；改成「永远 1」则正对照红。
+// 全是**正/负对照**：把门改成「永远 0」则全部负对照红；改成「永远 1」则正对照红。
 //   ①三方一致⇒0  ②README 落后⇒1  ③缺「当前版本」行⇒2  ④缺 CHANGELOG 首条⇒2
 //   ⑤归档层隔离（README 历史表里的旧版本号不得参与判据）⇒0
 //   ⑥**诱饵在上**：正文里出现的「当前版本：」不得抢走匹配 ⇒ 仍以**行首粗体**那一行为准 ⇒0
 //   ⑦链路：README 闸门块漏一步⇒1  ⑧链路：AGENTS 段漏一步⇒1  ⑨链路：闸门块锚点消失⇒2  ⑩链路：齐备⇒0
+//   ⑪假绿对照（步骤名在闸门块**之外**仍须红）  ⑫反向（点名 verify 里没有的步骤⇒1）  ⑫b反向假阳性对照
+//   ⑬a–c声明行数=实际行数（0 / 1 / 2）  ⑭CRLF 假警报锁  ⑮–⑰检查④（整段复制⇒1 / 短片段放行⇒0 / 缺当前版本行⇒2）
+//   ⑱–㉓检查⑤（已过去的版本齐备⇒0 / 缺一个⇒1 / **仪式起点之前豁免**⇒0 / **当前版本豁免**⇒1 /
+//            packed-refs 也能读到⇒0 / 读不到 `.git`⇒2）
+// ⚠ **不写总组数**（本仓规则：能数出来的别抄；条数随每轮增长，抄了必然腐烂）。
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +37,10 @@ interface Fixture {
   rowText?: string;                // README 版本历史表里**当前版本那一行**的正文（检查④）
   entryBody?: string;              // CHANGELOG 同名条目的正文（检查④）
   omitRow?: boolean;               // 不写当前版本那一行（测检查④的结构缺失）
+  changelogOlder?: string[];       // CHANGELOG 里**更旧**的版本号（检查⑤）；默认 ["0.0.1"]
+  tags?: string[];                 // 造出的 tag 名（检查⑤），写进 `.git/refs/tags/`
+  packedTags?: boolean;            // 把 tags 写进 `.git/packed-refs` 而不是松散 ref（测第二个来源）
+  noGit?: boolean;                 // 不造 `.git`（测检查⑤的结构缺失）
 }
 
 const FULL_VERIFY = "npm run a:x && npm run b:y && npx tsc --noEmit";
@@ -66,7 +75,7 @@ const run = (f: Fixture) => {
     }
 
     const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n${f.entryBody ?? "正文"}\n`;
-    const older = f.changelogVersion === undefined ? "" : `## [v0.0.1] 更旧的一条\n`;
+    const older = f.changelogVersion === undefined ? "" : (f.changelogOlder ?? ["0.0.1"]).map((v) => `## [v${v}] 更旧的一条\n`).join("");
     const changelog = `# Changelog\n\n${head}${older}`;
 
     const chain = f.agentsChain ?? verify.split(" && ").map((s) => s.replace(/^npm run /, "").replace(/^npx npx /, "")).join(" \u2192 ");
@@ -79,6 +88,21 @@ const run = (f: Fixture) => {
     writeFileSync(join(dir, "README.md"), enc(readme));
     writeFileSync(join(dir, "CHANGELOG.md"), enc(changelog));
     writeFileSync(join(dir, "AGENTS.md"), enc(agents));
+
+    // **检查⑤的前置**：必须有一个可读的 tag 集（`.git`）—— 否则 ⑤ 以**结构缺失(2)** 退出，
+    // 会把别的组的断言全短路。与上面「每个 fixture 都要有默认开关表」是同一条纪律
+    // （v1.15.82 加检查⑤时记：**新加一条门，就要给所有 fixture 补它的前置**）。
+    if (!f.noGit) {
+      mkdirSync(join(dir, ".git", "refs", "tags"), { recursive: true });
+      const names = f.tags ?? [];
+      if (f.packedTags) {
+        writeFileSync(join(dir, ".git", "packed-refs"),
+          "# pack-refs with: peeled fully-peeled sorted \n" +
+          names.map((t, i) => `${"0".repeat(39)}${i + 1} refs/tags/${t}`).join("\n") + "\n");
+      } else {
+        for (const t of names) writeFileSync(join(dir, ".git", "refs", "tags", t), "0".repeat(40) + "\n");
+      }
+    }
 
     let code = 0, out = "";
     try {
@@ -173,6 +197,7 @@ const run = (f: Fixture) => {
     writeFileSync(join(dir, "README.md"), withStepElsewhere);
     writeFileSync(join(dir, "CHANGELOG.md"), `# Changelog\n\n## [v1.2.3] 标题\n`);
     writeFileSync(join(dir, "AGENTS.md"), `# dsh-shadow\n\n## 本仓库常用的构建与验证\n\n- ${FULL_VERIFY.split(" && ").map((s) => s.replace(/^npm run /, "")).join(" → ")}\n\n## 其他\n\n正文。\n`);
+    mkdirSync(join(dir, ".git", "refs", "tags"), { recursive: true });   // 检查⑤的前置（同 `run()`）
     try { out = execFileSync(process.execPath, [CLI, dir], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
     catch (e: any) { code = e.status ?? -1; out = `${e.stdout || ""}${e.stderr || ""}`; }
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -248,6 +273,78 @@ const run = (f: Fixture) => {
   assert.equal(r.code, 2, `缺「当前版本」那一行应报结构缺失（2）；实际 ${r.code}`);
   assert.match(r.out, /找不到当前版本那一行/);
   console.log("✔ ⑰ 负对照：README 版本历史表缺当前版本那一行 ⇒ 2（结构缺失 ≠ 重复）");
+}
+
+// ── 检查 5：已经过去的版本必须都打过 tag ──
+{
+  // ⑱ 正对照：仪式起点之后的**已过去**版本都有 tag ⇒ 0（当前版本被豁免）
+  const r = run({
+    pkg: "1.15.80", readmeVersion: "1.15.80", changelogVersion: "1.15.80",
+    changelogOlder: ["1.15.79", "1.15.78", "1.15.77"],
+    tags: ["v1.15.77", "v1.15.78", "v1.15.79"],
+  });
+  assert.equal(r.code, 0, `已过去的版本都打过 tag 必须放行（0）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /已经过去的版本都打过 tag/);
+  assert.match(r.out, /逐版核对了 3 个/, `报文应打印核对范围：${r.out.slice(0, 300)}`);
+  console.log("✔ ⑱ 正对照：仪式起点起、已过去的版本都打过 tag ⇒ 0");
+}
+{
+  // ⑲ 负对照（本检查存在的理由）：缺一个过去的版本 ⇒ 1，且**要指出是哪一个**
+  const r = run({
+    pkg: "1.15.80", readmeVersion: "1.15.80", changelogVersion: "1.15.80",
+    changelogOlder: ["1.15.79", "1.15.78", "1.15.77"],
+    tags: ["v1.15.77", "v1.15.79"],
+  });
+  assert.equal(r.code, 1, `缺一个 tag 必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /漏打 tag.*v1\.15\.78/s, `报文应点名缺的是哪一个：${r.out.slice(0, 400)}`);
+  assert.match(r.out, /迟一版/, "报文应写清能力边界（当前版本豁免 ⇒ 迟一版才发现）");
+  console.log("✔ ⑲ 负对照：过去的版本漏打 tag ⇒ 1（点名 v1.15.78，并打印能力边界）");
+}
+{
+  // ⑳ **仪式起点之前豁免**：1.15.76 / 1.15.4 是「用户决定不补」的那一段 ⇒ 没有 tag 也放行。
+  //    这一组同时锁住 `TAG_RITUAL_FROM` 真的在起作用（否则会把 73 个历史版本全报成漏打）。
+  const r = run({
+    pkg: "1.15.79", readmeVersion: "1.15.79", changelogVersion: "1.15.79",
+    changelogOlder: ["1.15.78", "1.15.76", "1.15.4"],
+    tags: ["v1.15.78"],
+  });
+  assert.equal(r.code, 0, `仪式起点之前的版本不得要求 tag；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /逐版核对了 1 个/, `只应核对 1.15.78 一个版本：${r.out.slice(0, 300)}`);
+  console.log("✔ ⑳ 边界豁免：v1.15.76 / v1.15.4（仪式起点之前、用户定「不补」）不要求 tag ⇒ 0");
+}
+{
+  // ㉑ **当前版本豁免**（结构决定的，不是偷懒）：它的 tag 只能在版本号那笔提交建好之后才打得出来。
+  const r = run({
+    pkg: "1.15.85", readmeVersion: "1.15.85", changelogVersion: "1.15.85",
+    changelogOlder: ["1.15.84"],
+    tags: [],
+  });
+  assert.equal(r.code, 1, `缺 1.15.84 的 tag 必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /漏打 tag\*\*：`v1\.15\.84`/, `只应报 1.15.84，不该报当前版本：${r.out.slice(0, 400)}`);
+  assert.match(r.out, /当前 v1\.15\.85（\*\*豁免\*\*）/, "报文应显式写出当前版本被豁免");
+  console.log("✔ ㉑ 当前版本豁免：只报 1.15.84，不报 1.15.85（否则每次发版都会在提交前误红）");
+}
+{
+  // ㉒ tag 的**第二个来源**：`git gc` 之后 tag 进 `packed-refs`，此时松散 ref 目录是空的。
+  const r = run({
+    pkg: "1.15.80", readmeVersion: "1.15.80", changelogVersion: "1.15.80",
+    changelogOlder: ["1.15.79"],
+    tags: ["v1.15.79"], packedTags: true,
+  });
+  assert.equal(r.code, 0, `packed-refs 里的 tag 也算数；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /共读到 1 个 tag/, `应读到 packed-refs 里那一个：${r.out.slice(0, 300)}`);
+  console.log("✔ ㉒ 第二个来源：tag 在 `packed-refs` 里（松散 ref 目录为空）也能读到 ⇒ 0");
+}
+{
+  // ㉓ 结构缺失：不是 git 工作副本 ⇒ 2（**不是「通过」** —— ADR-0049 缺件不静默）
+  const r = run({
+    pkg: "1.15.80", readmeVersion: "1.15.80", changelogVersion: "1.15.80",
+    changelogOlder: ["1.15.79"], noGit: true,
+  });
+  assert.equal(r.code, 2, `读不到 .git 应报结构缺失（2）而不是放行；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /读不到本工作副本的 tag 集/, `报文应说清是缺件：${r.out.slice(0, 300)}`);
+  assert.match(r.out, /不是「通过」/, "报文必须显式否认「缺件 = 通过」");
+  console.log("✔ ㉓ 负对照：读不到 `.git` ⇒ 2（缺件不静默，不得当成「通过」）");
 }
 
 console.log("ALL PASS ✅");

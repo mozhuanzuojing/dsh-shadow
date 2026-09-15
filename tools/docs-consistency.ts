@@ -18,8 +18,9 @@
 //
 // 用法：node tools/docs-consistency.ts [仓库根]
 // 退出码：0 = 全部通过；1 = 不一致；2 = 结构缺失（找不到该有的锚点）。
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import type { Dirent } from "node:fs";
+import { join, resolve } from "node:path";
 
 // ── 公共：读文件并**归一化行尾** ─────────────────────────────────────────────
 /**
@@ -328,11 +329,130 @@ export const checkReadmeRowNotDuplicate = (root: string): { ok: boolean; code: n
   };
 };
 
+// ── 检查 5：**已经过去的版本**必须都打过 tag ─────────────────────────────────
+/**
+ * 判据（v1.15.82 补，**因为「每发一版打一个 tag」这条仪式是用户提醒驱动的**）：
+ * `CHANGELOG.md` 里所有 `## [vX.Y.Z]` 中，**已经过去的版本**（版本号 < `package.json.version`）
+ * 若 ≥ 仪式起点，则**必须**存在同名 tag `vX.Y.Z`；缺一个就红。
+ *
+ * 由来：tag 这半边连续两次由**用户提醒**才发生（v1.15.77/78 是补打，v1.15.80 与 v1.15.81 都是
+ * 用户先说「tag」）。而 `AGENTS.md` 自己写着「凡『每次发版都要做一次』的动作，**要么写进清单、
+ * 要么配一道门**；靠记性 = 迟早停」—— 同一条纪律在 v1.15.66（三方版本一致，停了 25 个版本）
+ * 与 v1.15.75（README 抄 CHANGELOG，第 4 次复发）上都是**先有门才停住**的 ⇒ 本轮把它配上。
+ *
+ * ⚠ **当前版本必须豁免，这不是偷懒而是结构决定的**：tag 要指向**该版本的发布提交**，
+ * 而那笔提交只有在版本号改完之后才建得出来；本门跑在 `verify` 里 = **提交之前**
+ * ⇒ 要求当前版本也必须有 tag 会让**每一次发版都在提交前误红**。
+ * ⇒ 本门实际回答的是「**已经过去的版本有没有漏打 tag**」，代价是**迟一版**发现：
+ * 漏打会在下一次发版时被抓住（而不是像 v1.15.4…v1.15.76 那样**攒到 73 个版本**）。
+ *
+ * **刻意不 spawn `git`**：一条只读的确定性判据不该依赖外部进程（本仓已有 `npm.cmd` 那类
+ * 平台陷阱的教训），而且 fixtures 只要造一个假的 `.git/refs/tags/` 就能标定。
+ * 两个来源都读：**松散 ref**（`git tag` 刚打的就是这种）与 `packed-refs`（`git gc` 之后的形态）。
+ *
+ * **不做的事**：不查远端有没有这个 tag（门里不联网），也不查 tag 指向哪个提交
+ * （那要读对象库、要 spawn `git`）—— 「指向发布提交」仍靠发版时那句 `git rev-parse --short` 人工核对。
+ */
+const TAG_RITUAL_FROM = "1.15.77";
+
+/** 版本号比较（只取 X.Y.Z 三段数字；缺段按 0）。仅用于本检查。 */
+const cmpVer = (a: string, b: string): number => {
+  const pa = a.split(".").map((n) => Number(n) || 0);
+  const pb = b.split(".").map((n) => Number(n) || 0);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  return 0;
+};
+
+/**
+ * 读本工作副本**已有的 tag 名**；读不到 `.git` ⇒ `null`（调用方按**结构缺失**报，不是「通过」——
+ * ADR-0049：缺件必须可见，**绝不把缺件说成已验证**）。
+ */
+export const readTags = (root: string): string[] | null => {
+  let gitDir = join(root, ".git");
+  try {
+    const st = statSync(gitDir);
+    if (st.isFile()) {
+      // 工作树 / 子模块：`.git` 是个文件，内容形如 `gitdir: <path>`
+      const m = readFileSync(gitDir, "utf8").match(/^gitdir:\s*(.+)$/m);
+      if (!m) return null;
+      gitDir = resolve(root, m[1].trim());
+    } else if (!st.isDirectory()) return null;
+  } catch { return null; }
+
+  const tags = new Set<string>();
+  const walk = (dir: string, prefix: string): void => {
+    let entries: Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      // tag 名可以带 `/`（如 `release/v1`）⇒ 递归拼回相对路径
+      if (e.isDirectory()) walk(join(dir, e.name), prefix + e.name + "/");
+      else tags.add(prefix + e.name);
+    }
+  };
+  walk(join(gitDir, "refs", "tags"), "");
+
+  try {
+    for (const line of readFileSync(join(gitDir, "packed-refs"), "utf8").split("\n")) {
+      if (!line || line.startsWith("#") || line.startsWith("^")) continue;
+      const ref = line.split(" ")[1];
+      if (ref && ref.startsWith("refs/tags/")) tags.add(ref.slice("refs/tags/".length));
+    }
+  } catch { /* 没有 packed-refs 是正常形态（未 gc 过的仓） */ }
+
+  return [...tags];
+};
+
+export const checkVersionTags = (root: string): { ok: boolean; code: number; lines: string[] } => {
+  let ver = "";
+  try { ver = String(JSON.parse(readText(root, "package.json")).version ?? ""); } catch { /* 下面按缺失处理 */ }
+  if (!ver) return { ok: false, code: 2, lines: ["❌ ⑤ **结构缺失**：`package.json` 里读不到 `version`。"] };
+
+  const versions = [...readText(root, "CHANGELOG.md").matchAll(/^##\s*\[v?(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]);
+  if (!versions.length) {
+    return { ok: false, code: 2, lines: ["❌ ⑤ **结构缺失**：`CHANGELOG.md` 里没有 `## [vX.Y.Z]` 形态的标题行。"] };
+  }
+
+  const tags = readTags(root);
+  if (tags === null) {
+    return {
+      ok: false, code: 2,
+      lines: [
+        "❌ ⑤ **结构缺失**：读不到本工作副本的 tag 集（找不到 `.git`，或 `.git` 文件里没有 `gitdir:`）。",
+        "  ⚠ 这**不是「通过」** —— 本门判的是「已经过去的版本有没有漏打 tag」，没有 tag 集就无从判定。",
+        "  （ADR-0049：缺件必须可见，不得把缺件说成已验证。）",
+      ],
+    };
+  }
+
+  const past = [...new Set(versions)].filter((v) => cmpVer(v, TAG_RITUAL_FROM) >= 0 && cmpVer(v, ver) < 0);
+  const have = new Set(tags);
+  const missing = past.filter((v) => !have.has(`v${v}`));
+  const scope = `仪式起点 v${TAG_RITUAL_FROM} · 当前 v${ver}（**豁免**）⇒ 逐版核对了 ${past.length} 个已过去的版本`;
+
+  if (!missing.length) {
+    return {
+      ok: true, code: 0,
+      lines: [`✔ ⑤ 已经过去的版本都打过 tag（${scope}；工作副本里共读到 ${have.size} 个 tag）`],
+    };
+  }
+  return {
+    ok: false, code: 1,
+    lines: [
+      `❌ ⑤ **有已经过去的版本漏打 tag**：${missing.map((v) => `\`v${v}\``).join(" · ")}`,
+      `  （${scope}）`,
+      "",
+      "  怎么修：`git tag vX.Y.Z` → `git push origin main vX.Y.Z`（**精确指定**，不要 `--tags`）。",
+      "  ⚠ 本门的能力边界：**当前版本被豁免**（它的 tag 必须在版本号那笔提交建好之后才打得出来，",
+      "  而本门跑在提交之前）⇒ 漏打会在**下一次发版**时才被抓住（迟一版），但不会攒成一串。",
+    ],
+  };
+};
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop()!);
 if (isMain || process.argv[1]?.endsWith("docs-consistency.ts")) {
   const ROOT = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
-  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT)];
+  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT), checkVersionTags(ROOT)];
   for (const r of results) for (const l of r.lines) console.log(l);
   const failed = results.find((r) => !r.ok);
   if (!failed) {
