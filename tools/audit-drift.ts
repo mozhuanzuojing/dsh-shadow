@@ -28,7 +28,19 @@ let driftCounts: Counts = {};
 /** 目录计数（V7 语料健康：目录数骤降 ⇒ 递归被静默截断）。 */
 let dirCount = 0;
 /** **排除 `.git`**：松散对象被打包会让目录数骤降而语料未变（详见 `audit-wiring.ts` 同处注释）。 */
-const SKIP_DIRS = new Set([".git"]);
+/**
+ * 排除 `.git`（上面的由来）与 `_research`（v1.15.86 补）。
+ *
+ * `_research/` 是**本地草稿目录**（已进 `.gitignore`、不进版本控制）⇒ **它不是产品语料**。
+ * 由来：v1.15.86 把该目录里 **19 个 `.mjs` 改名成 `.ts`**（脚本扩展名收口）⇒ 它们**第一次**进了本工具语料，
+ * `files 887 → 907` 且 `b_keys 97 → 100`（+3 全部来自 `_research/*.ts`）。这与 v1.15.55 排除 `.git` 是
+ * **同一类判断**：**别把非产品的东西当语料** —— 否则「本机多了一个草稿文件」会被读成「产品接线变差了」。
+ *
+ * ⚠ **边界**：这是**按名字**排除。若哪天 `_research/` 被 `git add`（`git ls-files _research` 非空），
+ *   这条排除**必须删掉** —— 那时它就是产品语料，不再豁免。
+ * ⚠ **同一判据也写在 `tools/audit-drift.ts` 的 `SKIP_DIRS`**（两个工具各自持有一份 walker ⇒ 两处）。
+ */
+const SKIP_DIRS = new Set([".git", "_research"]);
 const walk = (d: string, out: string[] = []): string[] => {
   let es: any[];
   try { es = readdirSync(d, { withFileTypes: true }); } catch { return out; }

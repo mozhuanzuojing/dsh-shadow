@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 # archify 视觉自检产物（可重出，不进版本库）
 docs/*.visual-check.*
+# 本地草稿目录（v1.15.86 立）：不进版本控制 ⇒ 也**不进审计语料**（见 tools/audit-wiring.ts 与 tools/audit-drift.ts 的 SKIP_DIRS）
+_research/
