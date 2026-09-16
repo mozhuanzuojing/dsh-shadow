@@ -390,3 +390,16 @@ FS provider ──▶ candidates ──▶ same canonical candidate universe
 
 > 名称校正：生产里的校验函数是 **`validateAtomProjection`**（`core/resource.ts` 等引用它）；
 > 口头称 "validateAgentProjection" 时以代码为准。**在 ADR/契约里写错符号名 = 给后来者埋一个假引用。**
+
+**(4) 方法学硬要求：基准必须跑在「语料冻结副本」上（T17-A 实测踩到）**
+
+T17-A 用生产 `fs` 路径跑全量时，**用户真实工作区的 `.shadow/_meta.json` 从 31,827 B 涨到 182,272 B**
+（mtime 与那次跑数逐秒吻合）。原因**不是 bug**：**生产读路径本来就会写盘**（召回时累加 `_meta.json` 的 `hits` / `lastSeen`，
+`index.ts:131` 的注释写着「读路径也会写盘」）。但后果必须写进 ADR：
+
+- **「只读探针」在语义上做不到** —— 只要走生产读路径，就会写 `_meta.json`；
+- ⇒ **每跑一次基准，输入就变一次 ⇒ 前后两次的数字不可比**（这会让「SQLite vs FS」的对比失去意义）；
+- ⇒ **铁律**：**所有基准与对照一律跑在 `.shadow` 的「冻结副本」上**（整目录复制到 scratch，让 `fs` 门面指向副本）。
+  这也是 T17-B 的验收前提之一 —— 否则性能数字不可复现。
+- ⇒ 另记一条**影响面**（据实）：被写的是 `hits` / `lastSeen` 这类**启发式热度**，不是 `pinned` / `archived` 这类人工状态；
+  但**无法精确回滚**（没有 13:41 之前的 `_meta.json` 快照）。
