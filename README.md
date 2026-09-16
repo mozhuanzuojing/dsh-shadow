@@ -232,11 +232,12 @@ npm run verify
 | 工程知识图谱 `kg` | 关（注⑤：**不是 config 键**，是 per-call 参数） | 无开放未验证项（已知局限：`MEMORY.md:92` 域推导，未解决） | 未传 → 不加图谱块；传入无匹配 → 输出「暂无匹配的组件/域」（无降级） | 仓库未定义 | 按需 `read_shadow(topic, { kg: true })` |
 | 证据 Provider `evidenceProvider` | `fs` | 有开放未验证项（ADR-0059 真机 `host.fs`；V1 zg 未装未实测） | zg 未装 → `unavailable` + `zg_not_installed`；provider 拼错 → `unavailable` + `provider_unknown`；逐条 status+reason + 可执行缺件提示（可见） | 仓库未定义 | 换 `zg` 需已装 CLI；未装报 `unavailable`，不静默 fallback |
 | 索引候选 `indexEngine`（**原表缺此行**） | `fs` | 有开放未验证项（V1：本机 `zg`/`semble` 均未装 ⇒ 两条 provider 路径**未实测**） | `fs` = 全量扫描（无外部依赖）；`zg`/`semble` 未装 → `unavailable` + 缺件提示，**绝不**冒充候选（可见） | 仓库未定义 | `indexEngine.provider` = `fs`（默认）/ `zg` / `semble` |
+| 派生索引 `derivedIndex`（**T17-B** / `adr/0095`） | `fs`（**即不加速**） | 有开放未验证项（T17-C 的 9 项验证矩阵未跑；并发/多进程与跨平台锁未测；真实流量漏召回率未测） | 拿不到宿主路径 / 会话只读 / `node:sqlite` 缺失 → `unavailable` + **回退 fs 全量**（读侧横幅可见）；`corrupt`（schema 不符）→ 挪走坏件、本次回退、**下次整体重建**；`query error` → 回退本次；**合法 0 行不算降级** | **有**：`adr/0095` §七的 T17-C 矩阵全过之后才考虑把 `sqlite` 设为默认 | `derivedIndex: { provider: "sqlite" }`：候选改从 `.shadow/index.sqlite` 取（稳态一次查询 = 根 `listDir` ~5 ms + 查索引）；首次付一次冷建索引；`verifySources: "full"` 是「外部原地改内容」的逃生口 |
 
 **表注（每条都对应一处实现与文档不符，或一处「看起来有开关其实没有」）**
 
 ⓪ **行数**：原表 16 行 ⇒ v1.15.34 补 **`indexEngine`**（原缺行）、v1.15.35 补 **`abstracts`**（D6 新能力）
-⇒ **现 19 行**（v1.15.91 补 `lossDisclosure`，见 `adr/0092`）。
+⇒ **现 20 行**（v1.15.96 补 `derivedIndex`，见 `adr/0095` 的 T17-B 补记；v1.15.91 补 `lossDisclosure`，见 `adr/0092`）。
 
 ① **`episodes` 关不掉** —— ✅ **已在 `v1.15.64` 修复**（`adr/0084`），本条留档说明**修前**的形态：
    `showInIndex: 0` 被 `core/writer-core.ts` 的 `|| 8` 吞掉 ⇒
@@ -639,5 +640,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.95`**（**跟进三处「未核实」，并扫出一处数据丢失级缺陷**：同一类「把读失败当成文件不存在」还剩**第四处**，在 `_meta.json` 的读侧 —— 它会让「坏件不写回」的闸门失效、把空快照整体写回，**全工作区元数据清零却报成功**（已修并加锁）。同轮另确认两处派生化判据**没有误扩宽**、修掉一处空路径误判、把观测层的两种「空」拆开说明）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.15.96`**（**派生索引一期落地（T17-B）**：读侧不再逐个读 + 解析 9.5k 个记忆文件 —— 新边界 `CandidateProvider` 换掉「物化载体」，`fs` provider 与今天逐字等价、`sqlite` provider 从 `<ws>/.shadow/index.sqlite` 取候选；`IndexEngine` 与派生/打分/渲染**一律未改**。**默认仍是 `fs`**（改默认归 T17-C 的验证矩阵）。同轮把一条 FTS5 的旧前提与一条成本口径**更正**、并据实登记一处已知边界）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

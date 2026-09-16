@@ -41,6 +41,14 @@ export declare const component: (abs: string, ws: string) => string;
  * 而 ③ 仍会因内层 `ENOENT` 命中 ⇒ 写失败被读成「不存在」。实测当前**没有**这样的包装层
  * （探针表 1「写失败**被前缀包裹**」行 = `true`，而真实宿主经 `ctx.fs` 直出，无前缀）。
  */
+/**
+ * `FsDirEntry` 是不是目录（**判据收一处**；T17-B）。
+ *
+ * 为什么要有它：`shadowSourcesFingerprint`（投影缓存指纹）与 `candidate-sqlite`（派生索引的目录粗信号）
+ * 都要按它筛 `.shadow/` 下的日期目录；各写一遍 `e.type === "directory"` 就是同一条判据在两个生产模块
+ * 被表达两次（`tools/audit-drift.ts` 的 B 段抓的就是这个）。纯谓词、无副作用。
+ */
+export declare const isDirEntry: (e: any) => boolean;
 export declare const isNotFound: (e: unknown) => boolean;
 export declare const topicsInText: (text: string, fallback?: string) => string[];
 export declare const ageDaysOf: (rel: string) => number;

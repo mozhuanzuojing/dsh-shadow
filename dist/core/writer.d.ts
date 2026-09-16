@@ -28,6 +28,14 @@ export interface ShadowCollector {
     /** 懒构建索引：读侧（read_shadow 无参）在确实要读索引时才构建/落盘 _index.md。
      *  `session` 由读侧入口透传，用于解析**该会话自己的**沙箱策略（ADR-0074）。 */
     ensureIndex: (ws: string, session?: any) => Promise<void>;
+    /**
+     * **派生索引的写侧精确信号**（T17-B D6 门③）：取某工作区下「已知变更」的 rel 列表。
+     * 由 `flush`（新落盘）与 `patchSummary`（**原地改写**）标脏；读侧 provider 对这些 rel 做单条 upsert，
+     * 并在**成功之后**经 `clearDerivedDirty` 消费。
+     */
+    derivedDirtyFor: (ws: string) => string[];
+    /** 消费一批 dirty（键 `ws|rel` 精确删）。**只有成功并入索引之后才允许调**。 */
+    clearDerivedDirty: (ws: string, rels: Iterable<string>) => void;
     /** 事件 handler（index.ts 用 context.on 绑定）。 */
     onFsObserved: (target: any, observation: any, actor: any) => undefined;
     onToolsResult: (exec: any) => undefined;

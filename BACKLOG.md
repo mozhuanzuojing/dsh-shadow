@@ -961,7 +961,7 @@
 
 ---
 
-### T17. **派生索引层一期**（`.shadow` 权威 + SQLite 派生索引）—— 边界已冻结（2026-09-16），**未开工**
+### T17. **派生索引层一期**（`.shadow` 权威 + SQLite 派生索引）—— 边界已冻结 · T17-A 已跑 · **T17-B 已实现（`v1.15.96`，默认仍是 `fs`）** · **T17-C 待跑**
 
 - **内容**：按 **`adr/0095-derived-index-layer-sqlite.md`** 做**一期** —— 用 Node 内置 `node:sqlite` 承载
   **元数据 + 关系 + 证据链 + FTS5**，把读侧的「扫目录 → 解析 → 打分」换成索引查询，**读侧输出逐字不变**。
@@ -993,6 +993,21 @@
   `IndexEngine` → 现有 `read_shadow` → 现有 ranking / evidence / temporal / projection」。
 - **OpenClaw 只借 30%**：借 `Markdown=canonical` / `SQLite=derived index` / `FTS5=lexical` / `vector=optional` /
   `rebuild=mandatory` / `fallback=filesystem`；**不搬它的整套 memory semantics**（会破坏本仓已冻结的 Evidence/Temporal/Scope/Authority/Projection/Identity/Verification）。
+- **T17-B 终态（2026-09-16，`v1.15.96`）**：落点是 T17-A 的 **(c1)「换物化载体」**，不是给 `IndexEngine` 加 provider ——
+  新边界 `core/candidate-provider.ts`（`CandidateSet` 四态：`ok` 含合法 0 行 / `unavailable` / `corrupt` / `query-error`），
+  `query/materialize.ts` 是唯一物化收敛点（`fs` provider 与今天逐字等价）；`core/candidate-sqlite.ts` 落
+  `<ws>/.shadow/index.sqlite`（`index_meta` / `source` / `atom`）。`IndexEngine` / `deriveShadowNodes` /
+  `validateAtomProjection` / 打分 / 渲染**一律未改**（由验收门逐文件断言）。
+  - 新鲜度 = **目录令牌粗信号（~5 ms，一次 `listDir(.shadow)`）+ 变化目录细比对（逐条 upsert）+ 写侧精确信号**
+    （`WriterCore.derivedDirty`，覆盖 `patchSummary` 的**原地改写** —— 目录令牌看不见那一类）。
+  - **不建 `atom_fts`**：FTS5 `MATCH`（整 token）与生产 `matchShadowNodes`（任意子串 AND）语义不等价，实测漏召回
+    10,649 条（命中密集集 16.9%）⇒ 取回全部 atom 再交生产判据过滤（「不造没有消费者的表」，§十的教训）。
+  - **默认仍是 `fs`** —— 改默认归 T17-C。决策/新事实/一条更正见 **`adr/0095` 末尾「补记（T17-B 实现轮）」**；
+    证据与可重放见 `../.docs/fix/2026-09-16/t17b/`（`DESIGN.md` · `fs-cost-findings.md` · `fts5-recall-equivalence.md` ·
+    `probe-parent-verify.mts` · `gate-t17b.ps1` · `INDEX.md` §6）。
+- **T17-C 的入口（未做）**：§七那份 9 项验证矩阵（`fs` / `sqlite` / unavailable / corrupt / schema mismatch /
+  source changed / rebuild / 8.8k cold build / incremental）**全过之后**才考虑把 `sqlite` 设为默认；
+  并发/多进程同读同写、跨平台（WSL/容器）锁与 WAL 也归这一期。
 
 ---
 

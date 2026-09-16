@@ -5,3 +5,9 @@ node_modules/
 docs/*.visual-check.*
 # 本地草稿目录（v1.15.86 立）：不进版本控制 ⇒ 也**不进审计语料**（见 tools/audit-wiring.ts 与 tools/audit-drift.ts 的 SKIP_DIRS）
 _research/
+# 派生索引（ADR-0095 · T17-B）：**派生件，可删可重建，不入版本控制**。
+# 落点是「工作区」的 `.shadow/index.sqlite`；写进本仓 .gitignore 是为了「本仓自己当工作区」时也不会误提交。
+.shadow/index.sqlite
+.shadow/index.sqlite.tmp-*
+.shadow/index.sqlite-wal
+.shadow/index.sqlite-shm

@@ -76,7 +76,16 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const retired = retiredApiMessage(args);
   if (retired) return scrubFinal(RECALL_PREFIX + retired + flushWarn);
   // 候选 1 深 seam：把「读概念」路由到 query/reads.ts 的 ReadQuery 模块（先接 shadow_query，其余同类继续迁）。
-  const viaRead = await dispatchReadQuery(deps, args, exec, { fs, ws, flushWarn, agent });
+  // T17-B（D6 门③/D13）：物化还要知道「本会话可写吗」与「写侧已知变更的 rel」——
+  //   · `writable`：只读会话 ⇒ 派生索引不落盘、直接回退 fs（唯一那处绕过围栏的写必须由策略把关）；
+  //   · `dirtyRels`：`patchSummary` 这类**原地改写**目录令牌看不见 ⇒ 只能靠写侧标脏兜住；
+  //   · `clearDirty`：**只有成功并入索引后才允许消费**（回退路径保留 ⇒ 变更不丢）。
+  const viaRead = await dispatchReadQuery(deps, args, exec, {
+    fs, ws, flushWarn, agent,
+    writable: deps.derivedIndexWritable !== false,
+    dirtyRels: deps.derivedIndexDirty?.(ws),
+    clearDirty: deps.derivedIndexClearDirty ? (rels: Iterable<string>) => deps.derivedIndexClearDirty!(ws, rels) : undefined,
+  });
   if (viaRead !== undefined) return viaRead;
   // v0.24–v0.27 observer-kernel（reflection/identity-advance/temporal/offline）与 v0.28 validation
   // （evidence/validate/timeline）已迁入 query/observer-kernel.ts / query/validation.ts。

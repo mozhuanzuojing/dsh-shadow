@@ -18,7 +18,7 @@ import { buildIndexText, consolidateText } from "./writer-render.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
-import { routeFor, noteDegrade } from "./writer-core.js";
+import { routeFor, noteDegrade, markDerivedDirty } from "./writer-core.js";
 import { invalidateProjection, shadowSourcesFingerprint } from "./projection-store.js";
 import type { WriterCore } from "./writer-core.js";
 import type { WriterHooks } from "./writer-capture.js";
@@ -262,6 +262,10 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       if (patched !== existing) {
         await fs.writeText(t, patched);
         core.indexDirty.add(ws); // 摘要回填 → 索引懒标记，待读时再重建。
+        // T17-B（D6 门③）：**这就是目录级粗信号必然漏报的那一类写** —— `patchSummary` 原地改写
+        // **已存在**的同一个文件（路径不变、目录令牌不变，实测 `fs-cost-findings.md` Q5）。
+        // 不标脏 ⇒ 派生索引永远陈旧，而且没有任何信号。故这里必须留一条写侧精确信号。
+        markDerivedDirty(core, ws, rel);
       }
     } catch (e: any) {
       console.log("[dsh-shadow] summarize patch failed:", e && e.message);
@@ -317,6 +321,9 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
       cacheFor(ws).set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
       core.indexDirty.add(ws); // 索引懒构建：不在此处重建，待 read_shadow 读索引时再 ensureIndex。
+      // T17-B（D6 门③）：刚落盘的这条 rel 也必须标脏 —— 供派生索引做**单条 upsert**。
+      // 注意它**不依赖** `projectionStore.enabled`（那是另一件事：`nodes.jsonl` 投影缓存）。
+      markDerivedDirty(core, ws, rel);
       // 记忆文件与索引缓存已写入；**元数据登记失败必须留痕**（否则这条记忆在索引里活跃、
       // 而 `_meta.json` 里没有它 ⇒ hits 永远不计、生命周期恒 NEW、遗忘判据落回默认值）。
       if (!(await registerMeta(fs, ws, rel, id, onByDefault(core.retentionCfg.enabled)))) {
@@ -365,6 +372,11 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     core.indexDirty.delete(ws);
     // v1.15.12：索引重建 = **记忆集已变** → 投影缓存必须一并失效，
     // 否则 shadow_query 会读陈旧投影（此前 invalidate 零调用点，只能手动删 nodes.jsonl）。
+    //
+    // T17-B（D6）：**派生索引（`index.sqlite`）的失效/增量与这一行无关** —— 它的新鲜度由
+    //   门① 目录令牌（~5 ms）、门② 变化目录细比对、门③ 写侧 dirty（`markDerivedDirty`，见 flush/patchSummary）
+    //   三者共同决定，**不依赖 `projectionStore.enabled`**。这里保持原条件只是在管 `nodes.jsonl` 投影缓存：
+    //   解耦的含义是「别把新能力挂在这个 `if` 里面」。§ 既有缺口（`adr/0095` §三⑵ 的原文）即指此。
     if (core.config.projectionStore?.enabled === true) await invalidateProjection(fsI, ws);
   };
 

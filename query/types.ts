@@ -37,4 +37,22 @@ export interface ShadowQueryDeps {
    * 缺该服务 → 安装一律 fail closed，只输出命令，不代装。
    */
   get approval(): any;
+  /**
+   * **本会话可写吗**（T17-B D13 守卫②）：取会话策略的 mode，只有「只读档」才判不可写；
+   * 策略取不到（无 session / 宿主没提供 `sandboxPolicy`）⇒ 按可写处理（此时 `scopedFs` 本就是恒等变换）。
+   *
+   * 为什么读侧需要它：派生索引要走 `fs.processPath` + `node:fs` 落盘（那是**绕过策略围栏**的唯一一处写），
+   * 所以必须由**策略本身**来决定要不要写 —— 只读会话一律不写、直接回退 `fs`。
+   *
+   * **可选**（与同文件的 `noteDegrade?` 同一取向）：本仓有意让读模块能在**没有写侧**时独立构造
+   * （测试 / 工具）；消费方按 `!== false` 判。唯一的生产提供方是 `index.ts` 的 `makeQueryDeps`。
+   */
+  derivedIndexWritable?: boolean;
+  /** 写侧已知变更的 rel（键 `ws|rel`，D6 门③）；按 ws 取。缺它时无 dirty 信号（只靠粗信号）。 */
+  derivedIndexDirty?: (ws: string) => Iterable<string>;
+  /**
+   * 上面那批 rel **成功并入索引之后**才调用（按 ws；回退路径**绝不许**调 —— 否则原地改写会永久丢失）。
+   * 与 `derivedIndexDirty` 成对：一个取、一个消费（键 `ws|rel` 精确删）。
+   */
+  derivedIndexClearDirty?: (ws: string, rels: Iterable<string>) => void;
 }

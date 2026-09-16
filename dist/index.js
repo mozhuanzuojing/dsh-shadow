@@ -153,6 +153,14 @@ export function apply(ctx, rawConfig = {}) {
             recallSelect: collector.recallSelect,
             knowledgeNavigate: collector.knowledgeNavigate,
             ensureIndex: (ws) => collector.ensureIndex(ws, exec?.agent?.session),
+            // T17-B（D13 守卫②）：派生索引要走 `fs.processPath` + `node:fs` 落盘，是本仓唯一一处**绕过策略围栏**
+            // 的写 ⇒ 由**策略本身**决定要不要写：只读会话一律不写（provider 直接 `unavailable`、回退 fs）。
+            // 策略取不到时按可写处理（此时 `scopedFs` 本就是恒等变换，没有围栏可绕）。
+            derivedIndexWritable: policy ? policy.mode !== "read-only" : true,
+            // T17-B（D6 门③）：写侧「已知变更的 rel」台账 —— 由 `WriterCore.derivedDirty` 持有（键 `ws|rel`、
+            // 随插件实例销毁），`flush` / `patchSummary` 写入后标脏；读侧取走、**成功 upsert 后**才消费。
+            derivedIndexDirty: (ws) => collector.derivedDirtyFor(ws),
+            derivedIndexClearDirty: (ws, rels) => collector.clearDerivedDirty(ws, rels),
             // 懒取审批服务（与 fs 同法：apply() 时可能尚未就绪；缺它时安装 fail closed，不代装）。
             get approval() { return context.get("approval"); },
         };

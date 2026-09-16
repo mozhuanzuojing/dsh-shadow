@@ -32,6 +32,36 @@ export const noteDegrade = (core: WriterCore, capability: string, reason: string
   core.degrade.set(capability, { at: Date.now(), capability, reason, effect });
 };
 
+/**
+ * **派生索引的写侧精确信号**（T17-B D6 门③）：记下「这个 rel 的内容变了」。
+ *
+ * 为什么必须有它（`fs-cost-findings.md` Q5 实测）：目录级令牌对**已存在文件的原地改内容**必然漏报
+ * （长度变与不变都漏），而 `core/writer-materialize.ts` 的 `patchSummary` **就是**原地改写同一个文件
+ * ⇒ 纯粗信号会把这次变更**永远漏掉**（静默陈旧，没有任何信号）。写侧是本进程内唯一知道这件事的地方。
+ *
+ * 键是 `ws|rel`：同一份记忆在不同工作区是两件事；**随实例销毁**（不做模块级单例，同 `degrade` 台账的纪律）。
+ */
+export const markDerivedDirty = (core: WriterCore, ws: string, rel: string): void => {
+  if (!ws || !rel) return;
+  core.derivedDirty.add(`${ws}|${rel}`);
+};
+
+/** 取某工作区下**已知变更**的 rel 列表（读侧用；顺序按插入序，调用方不应依赖顺序）。 */
+export const dirtyRelsFor = (core: WriterCore, ws: string): string[] => {
+  const prefix = `${ws}|`;
+  const out: string[] = [];
+  for (const k of core.derivedDirty) if (k.startsWith(prefix)) out.push(k.slice(prefix.length));
+  return out;
+};
+
+/**
+ * 消费一批 dirty（**只有成功并入索引之后才允许调**，见 `WriterCore.derivedDirty` 的注释）。
+ * 按 `ws|rel` **精确删**：不能整表清空 —— 那会连带丢掉别的 rel 尚未并入的变更。
+ */
+export const clearDerivedDirty = (core: WriterCore, ws: string, rels: Iterable<string>): void => {
+  for (const rel of rels) core.derivedDirty.delete(`${ws}|${rel}`);
+};
+
 export interface WriterCore {
   context: any;
   config: ShadowConfig;
@@ -60,6 +90,16 @@ export interface WriterCore {
    * ⇒ 新鲜度必须问**源**，不能只问进程。
    */
   indexFingerprint: Map<string, string>;
+  /**
+   * **派生索引的写侧精确信号**（T17-B D6 门③）：键 `ws|rel`，值是「这个 rel 的内容变了」。
+   *
+   * 为什么标脏而不是直接改索引：本进程只负责**说清哪个文件变了**；把变更并入索引是读侧 provider 的事
+   * （索引是派生件，写侧不许直接写它 —— `adr/0095` Decision 3「模型不得直接写 SQL」同源）。
+   * **随实例销毁**（不做模块级单例：多会话/多实例会互相污染，同 `degrade` 台账的纪律）。
+   * 消费语义：**只有成功 upsert 之后才删**（`clearDerivedDirty`）—— 回退路径必须原样保留，
+   * 否则 `patchSummary` 的原地改写会永久丢失（粗信号看不见它）。
+   */
+  derivedDirty: Set<string>;
   // 配置派生
   MAX_PENDING: number;
   /**
@@ -110,6 +150,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     indexCacheWarm: new Set(),
     indexDirty: new Set(),
     indexFingerprint: new Map(),
+    derivedDirty: new Set(),
     degrade: new Map(),
     MAX_PENDING: 60,
     forgetCfg: config.forget ?? {},

@@ -79,6 +79,22 @@ export interface ShadowConfig {
     indexEngine?: {
         provider?: "fs" | "zg" | "semble";
     };
+    /**
+     * T17-B 派生索引（`adr/0095` 一期）：**候选来源**provider（见 `core/candidate-provider.ts`）。
+     *
+     * · `provider`：`"fs"`（**默认**）| `"sqlite"`。
+     *   **默认是 `fs`**，且 T17-B **不改默认**（D8）—— 改默认是 T17-C 的事：
+     *   `adr/0095` §七写明「验证矩阵全部通过之后，才考虑把 `sqlite` 设为默认」。
+     *   `"sqlite"` 的载体是 `<ws>/.shadow/index.sqlite`（**派生件**：删掉它必须能仅凭 `.shadow/*.md` 重建）。
+     * · `verifySources`：新鲜度的**逃生口**。`"coarse"`（默认）= 用一次 `listDir(.shadow)` 的目录令牌做
+     *   ~5 ms 的负判据（令牌变了才细比对那个目录）；`"full"` = 每次都做**文件级**全量比对（sound，
+     *   但要付 3.3–3.6 s，等于放弃本层收益）。为什么必须有 `full`：**外部进程**对一个**已存在**的记忆文件
+     *   **原地改内容**时，目录令牌看不见（`fs-cost-findings.md` Q5 实测）—— `full` 是那种情况下的恢复句柄。
+     */
+    derivedIndex?: {
+        provider?: "fs" | "sqlite";
+        verifySources?: "coarse" | "full";
+    };
     /** Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束）。
      *
      *  ⚠ **`enabled` 不是闸门（v1.15.34，D8 实测校正）**：本字段**生产零读取** ——
@@ -118,6 +134,43 @@ export interface ShadowConfig {
     evidenceProvider?: string;
     /** 额外注入的证据 Provider（测试/扩展用）：name -> EvidenceProvider。与内置 fs 合并。 */
     evidenceProviders?: Record<string, EvidenceProvider>;
+}
+/** 与 `listMemories` 同形的记忆来源条目（`time` 由文件名反解，唯一来源见 `persistence/files.ts` 的 `timeFromName`）。 */
+export interface MemorySource {
+    date: string;
+    name: string;
+    rel: string;
+    time: string;
+}
+/**
+ * 候选来源的四态（D5）：`ok` **包含「合法 0 行」**；另外三态都必须让调用方回退 `fs`。
+ *
+ * 为什么必须可判别（`error ≠ empty`，`adr/0095` 第一原则）：
+ * 把 `unavailable` 当空 = 静默少结果；把空当错误 = 每次白跑降级；
+ * 把 `corrupt`（该重建）与 `query-error`（只回退本次）合并 = 索引永远修不好。
+ */
+export type CandidateState = "ok" | "unavailable" | "corrupt" | "query-error";
+export interface CandidateSet {
+    provider: "fs" | "sqlite";
+    state: CandidateState;
+    /** = `state !== "ok"` 的语法糖，调用方据此回退 `fs`。**绝不**把任一态与「空」合并。 */
+    unavailable?: boolean;
+    /** 真实原因（与 Evidence Gateway 的 `provenance.reason` 同口径），会原样进降级横幅。 */
+    reason?: string;
+    sources: MemorySource[];
+    /** `parseMemory` 的返回形状（逐字段）；派生仍由生产 `deriveShadowNodes` 完成，本层不重写任何判据。 */
+    atoms: any[];
+}
+export interface CandidateProvider {
+    readonly id: "fs" | "sqlite";
+    /**
+     * `keep` 由调用方给（遗忘/收口判据**只有一份实现**，见 `query/materialize.ts`）；
+     * `opts.writable` = 本会话可写吗（D13）；`opts.dirtyRels` = 写侧已知变更的 rel 集合（D6 门③）。
+     */
+    provide(fs: any, ws: string, cfg: any, keep: (rel: string) => boolean, opts?: {
+        writable?: boolean;
+        dirtyRels?: Iterable<string>;
+    }): Promise<CandidateSet>;
 }
 export interface GatewayEvidenceRef {
     path: string;

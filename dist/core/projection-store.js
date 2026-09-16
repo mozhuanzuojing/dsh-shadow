@@ -4,6 +4,7 @@
 // 接口先行（save/load/invalidate/rebuild），首版 JsonlProjectionStore；将来可换 SQLite / EmbeddedGraph（不改调用方）。
 // 触发（ADR-0046）：只在「Node 稳定 + query 稳定 + rebuild 成本明显」时才启用；默认关（config.projectionStore.enabled）。
 import { SHADOW_ROOT } from "./paths.js";
+import { isDirEntry } from "./util.js";
 import { buildManifest, writeManifest } from "./manifest.js";
 export const projectionIndexRel = () => `${SHADOW_ROOT}/shadow-index/nodes.jsonl`;
 /** JsonlProjectionStore：把 ShadowNode 投影持久化到 `.shadow/shadow-index/nodes.jsonl`（逐行 JSON，可重建）。 */
@@ -124,8 +125,18 @@ export const invalidateProjection = async (fs, ws) => {
 };
 /** 源指纹落盘位置（与缓存同目录，同属可重建派生）。 */
 export const fingerprintRel = () => `${SHADOW_ROOT}/shadow-index/sources.fingerprint`;
-/** 记忆日期目录（`.shadow/<YYYY-MM-DD>/`）。 */
-const DATE_DIR = /^\d{4}-\d{2}-\d{2}$/;
+/** 记忆日期目录名（`.shadow/<YYYY-MM-DD>/`）—— **名字判据的唯一一份**。 */
+export const DATE_DIR_NAME = /^\d{4}-\d{2}-\d{2}$/;
+/** 资源卡目录名（`.shadow/resources/`）。 */
+export const RESOURCES_DIR_NAME = "resources";
+/**
+ * 一个 `.shadow/` 下的 `FsDirEntry` 是不是**权威源目录**（`<date>/` 或 `resources/`）。
+ *
+ * **判据收一处**（T17-B）：`shadowSourcesFingerprint`（投影缓存指纹）与 `candidate-sqlite`（派生索引的
+ * 目录粗信号）判断的是**同一件事**，必须同判 —— 两处若分叉，就会出现「指纹说源没变、索引说变了」
+ * 这类无从发现的漂移（`tools/audit-drift.ts` 的 B 段正是抓这种「同一 `字段=字面量` 出现在多个模块」）。
+ */
+export const isSourceDirEntry = (e) => isDirEntry(e) && (DATE_DIR_NAME.test(String(e.name || "")) || e.name === RESOURCES_DIR_NAME);
 /**
  * 计算投影**权威源**的指纹：`.shadow/<date>/*.md`（记忆原子）+ `.shadow/resources/*.md`（资源卡）。
  *
@@ -146,9 +157,7 @@ export const shadowSourcesFingerprint = async (fs, ws) => {
         const entries = (await fs.listDir(root)) || [];
         const parts = [];
         for (const e of entries) {
-            const isDate = e.type === "directory" && DATE_DIR.test(e.name);
-            const isResources = e.type === "directory" && e.name === "resources";
-            if (!isDate && !isResources)
+            if (!isSourceDirEntry(e))
                 continue;
             const sub = (await fs.listDir(e.target)) || [];
             for (const f of sub) {

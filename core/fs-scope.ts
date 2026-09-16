@@ -94,6 +94,12 @@ export function scopedFs(rawFs: any, policy: any): any {
       rawFs.writeText(target, content, expected, signal, sp ?? policy),
   };
   if (typeof rawFs.stat === "function") f.stat = (...a: any[]) => rawFs.stat(...a);
+  // T17-B（D13）：派生索引（`node:sqlite`）需要**真实文件路径**才落盘，而插件手里的 fs 只能写文本
+  // （`writeText(target, string)`，没有二进制写）⇒ 官方桥就是 `processPath`。
+  // **它不受本门面的策略围栏保护**（围栏只挂在 `writeText` / `editText` 上）—— 调用方必须自带守卫
+  // （见 `core/candidate-sqlite.ts` 开头的守卫①②③）。这里只做**转发**，且只在真实存在时补
+  // （沿用本文件「只转发插件真正使用的方法 + 只补真实存在的方法」的纪律）。
+  if (typeof rawFs.processPath === "function") f.processPath = (...a: any[]) => rawFs.processPath(...a);
   // `editText` 是**另一个**受围栏的操作。插件今天不调它，但门面若只补写不补改，
   // 就是「同一处机制只修了一半」——正是本仓反复挖到的那类断线。故一并补上。
   if (typeof rawFs.editText === "function") {

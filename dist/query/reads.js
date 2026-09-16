@@ -19,12 +19,24 @@ import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
 import { today, stamp, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
+/**
+ * 7 个 `materializeAtoms` 调用点共用的第 4 参（T17-B）：
+ *   · `note`  —— D7 降级留痕（`deps.noteDegrade`，写进同一个能力降级台账 ⇒ 由 `getFlushWarn()` 渲染成横幅）；
+ *   · `writable` / `dirtyRels` / `clearDirty` —— D13 可写吗 + D6 门③ 写侧精确信号。
+ * 收敛成一处，免得同一件事在 7 个调用点各写一遍（本仓「判据收一处」）。
+ */
+const matOpts = (deps, ctx) => ({
+    note: deps.noteDegrade,
+    writable: ctx.writable,
+    dirtyRels: ctx.dirtyRels,
+    clearDirty: ctx.clearDirty,
+});
 // ── episode / decision：连续任务关系层 + 决策血统 ──
 const episodeDecision = {
     modes: ["episode", "decision"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
+        const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
         if (String(args?.mode) === "episode") {
             // T8-B（v1.15.64）：此处原先自己算了一遍 `Math.max(0, Number(...) || 60)` —— 与
             // `core/writer-core.ts` 和 `core/episode.ts` 三处口径分叉，且都吞显式 0。
@@ -41,7 +53,7 @@ const task = {
     modes: ["task"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
+        const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
         const tasks = deriveTasks(parsed);
         return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
     },
@@ -51,7 +63,7 @@ const context = {
     modes: ["context"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
+        const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
         const mappings = (deps.config.context && deps.config.context.mappings) || [];
         const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
         return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
@@ -65,7 +77,7 @@ const recovery = {
     modes: ["recovery"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
-        const { parsed } = await materializeAtoms(fs, ws, deps.config);
+        const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
         const tasks = deriveTasks(parsed);
         const mappings = (deps.config.context && deps.config.context.mappings) || [];
         const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
@@ -93,7 +105,7 @@ const shadowQuery = {
         // 命中投影缓存时不会多付一次物化/解析代价（那是投影缓存存在的意义）。
         let parsedAtoms;
         const { nodes, cached } = await loadOrBuildProjection(fs, ws, deps.config, async () => {
-            const { parsed } = await materializeAtoms(fs, ws, deps.config);
+            const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
             parsedAtoms = parsed;
             // 记忆原子投影 + 资源卡投影（.shadow/resources/，无证据的卡片不上投影）
             const cards = await listResourceCards(fs, ws);
@@ -143,7 +155,7 @@ const knowledge = {
     modes: ["knowledge"],
     run: async (deps, args, _exec, ctx) => {
         const { fs, ws, flushWarn } = ctx;
-        const parsedK = (await materializeAtoms(fs, ws, deps.config)).parsed;
+        const parsedK = (await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx))).parsed;
         // v1.15.34（D8）：**无条件**建树 —— 这里**没有** `knowledgeEngine.enabled` 闸门
         //（该键生产零读取；`createKnowledgeEngine` 也不再收 config —— 它从来没用过）。
         // 本 mode 的唯一闸门是 `llmNavigate`（`core/writer.ts:79`，默认关）。
@@ -234,7 +246,7 @@ const shadowReport = {
         const agg = await summarizeQueryLog(fs, ws);
         let parsedForReport = [];
         if (agg.total > 0)
-            parsedForReport = (await materializeAtoms(fs, ws, deps.config)).parsed;
+            parsedForReport = (await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx))).parsed;
         const report = buildFitnessReport(agg, parsedForReport);
         const text = renderFitnessReport(report);
         await writeShadowReport(fs, ws, scrubFinal(text));

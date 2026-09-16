@@ -44,6 +44,18 @@ export declare const getProjectionStore: (fs: any, ws: string) => ShadowProjecti
 export declare const invalidateProjection: (fs: any, ws: string) => Promise<void>;
 /** 源指纹落盘位置（与缓存同目录，同属可重建派生）。 */
 export declare const fingerprintRel: () => string;
+/** 记忆日期目录名（`.shadow/<YYYY-MM-DD>/`）—— **名字判据的唯一一份**。 */
+export declare const DATE_DIR_NAME: RegExp;
+/** 资源卡目录名（`.shadow/resources/`）。 */
+export declare const RESOURCES_DIR_NAME = "resources";
+/**
+ * 一个 `.shadow/` 下的 `FsDirEntry` 是不是**权威源目录**（`<date>/` 或 `resources/`）。
+ *
+ * **判据收一处**（T17-B）：`shadowSourcesFingerprint`（投影缓存指纹）与 `candidate-sqlite`（派生索引的
+ * 目录粗信号）判断的是**同一件事**，必须同判 —— 两处若分叉，就会出现「指纹说源没变、索引说变了」
+ * 这类无从发现的漂移（`tools/audit-drift.ts` 的 B 段正是抓这种「同一 `字段=字面量` 出现在多个模块」）。
+ */
+export declare const isSourceDirEntry: (e: any) => boolean;
 /**
  * 计算投影**权威源**的指纹：`.shadow/<date>/*.md`（记忆原子）+ `.shadow/resources/*.md`（资源卡）。
  *

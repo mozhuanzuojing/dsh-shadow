@@ -3,6 +3,56 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.96] T17-B 派生索引一期落地 —— **换物化载体**（`CandidateProvider`）：读侧不再逐个读 + 解析 9.5k 个记忆文件
+
+`adr/0095` 一期实现轮（规格 `DESIGN.md` D1–D14 在 `../.docs/fix/2026-09-16/t17b/`）。**默认不变**（`derivedIndex.provider`
+仍是 `fs`）—— 本版交付「**可开**的加速器 + 等价性证据」，**改默认归 T17-C**（§七的 9 项验证矩阵全过之后才考虑）。
+
+**落点 = (c1)「换物化载体」，不是给 `IndexEngine` 加 provider**（T17-A 结论）
+- 新边界 `core/candidate-provider.ts`：`CandidateSet` **四态可判别**（`ok` **含合法 0 行** / `unavailable` / `corrupt` / `query-error`）
+  + `CandidateProvider.provide(fs, ws, cfg, keep, opts)`；`keep`（遗忘/收口判据）由调用方给 ⇒ **判据只有一份实现**。
+- `core/candidate-sqlite.ts`：`<ws>/.shadow/index.sqlite`（`index_meta` / `source` / `atom`；**不建** `atom_fts`、**不建** `resource_card`）。
+  索引存的是 `parseMemory` 的**派生输入**（逐字段），所以派生仍走生产 `deriveShadowNodes` —— 「只改性能、不改语义」的根在这里。
+- `query/materialize.ts` 是**唯一**物化收敛点 ⇒ 换载体只动这一处（+ `query/reads.ts` 7 个调用点传降级与写侧信号）。
+- `IndexEngine` / `deriveShadowNodes` / `validateAtomProjection` / 打分 / 渲染**逐字未改**（由 `gate-t17b.ps1` 逐文件断言）。
+
+**新鲜度三门**（实测依据 `t17b/fs-cost-findings.md`）
+- `listDir` 是**急取的**（逐子项 `realpath` + `stat`）⇒ 没有「便宜的 listDir」；但 `listDir(.shadow)` 的目录条目自带
+  `version`（`dev:ino:size:mtimeNs:ctimeNs`）⇒ 一次 **4.7–5.7 ms** 拿到全部目录令牌，对照文件级全量指纹 **3.3–3.6 s**（**660–720×**）。
+- **时序纪律**：先取目录版本、再 `listDir` 该目录，**落库的是先取到的那个版本**（「版本比内容旧」只多扫一次；反过来会永久漏）。
+- **写侧精确信号**：`WriterCore.derivedDirty`（键 `ws|rel`）—— `flush` 与 `patchSummary` 标脏，读侧**成功 upsert 之后**才消费
+  （`patchSummary` 是**原地改写**，目录令牌看不见它）。
+- ⚠ **据实登记的已知边界**：**外部进程**对**已存在**的记忆文件**原地改内容**时索引会陈旧，直到该目录发生增/删/改名。
+  恢复句柄：`derivedIndex.verifySources: "full"` / 删索引 / 切回 `fs`。
+
+**唯一一处绕过会话沙箱围栏的写（用户 2026-09-16 裁决）**
+- 事实：插件手里的 `fs` 服务**只能写文本**（`writeText(target, string)`），没有二进制写；而 SQLite 要真实文件路径。
+  官方桥是 `processPath(target)`，但 `dsh-fs-sandbox` 的策略围栏**只挂在 `writeText`/`editText`** 上。
+- 处置：保持 SQLite 载体，配**三道守卫**（拿不到宿主路径 / 会话 `read-only` / 只写由 `resolve`+`processPath` 产出的路径），
+  写入走 `tmp → renameSync` **原子发布**；`core/fs-scope.ts` 只补一行 `processPath` 转发。非本地后端 ⇒ 按设计 `unavailable` 回退 `fs`。
+
+**取证更正（防后来者照错的源）**
+- T17-A 的「**FTS5 对 CJK 是按字的**」**不成立**（合成测试串造成的假象：真语料里 `用户消息` 是**一个** token）。
+  ⇒ FTS5 `MATCH`（整 token/前缀）与生产 `matchShadowNodes`（任意子串 AND）**语义不等价**：实测漏召回 **10,649** 条
+  （命中密集集 **16.9%**，19/60 条 query 有漏）、**OR 也不是安全超集**（13 条反例）⇒ **不建 `atom_fts`**，取回全部 atom 再交生产判据过滤。
+- 「`listMemories` 1.2–1.5 s vs 指纹 2–7 s = 2–5×」**不成立**：那是测量落在 `realpath` 退化曲线的不同位置；
+  同语料同时刻对照的真实比值 **1.01×**，长驻进程两侧都按 **3.3–3.6 s** 计。
+
+**验证**（证据在 `../.docs/fix/2026-09-16/t17b/`）
+- **父代理独立验收** `probe-parent-verify.mts`（真实宿主 fs 后端 + `git archive HEAD dist` 取**改前基线** + 两份内容相同的冻结副本）：
+  **9,503 条 `parsed` 逐字段深相等**（fs 改前 vs 改后 / sqlite vs fs）；外部新增**可见**、外部删除不留幽灵；
+  原地改 + 写侧 dirty 读到改后内容；`corrupt` 回退后与同副本 fs 路等价且**下次能重建**；只读会话**不落盘**；
+  **合法 0 行 = 空集且不报降级**（`error ≠ empty`）。⇒ `PARENT-VERIFY: ALL PASS ✅`。
+- 新增 `test/derived-index.test.ts`（严格桩）：等价性 + 探针自证（人为少一条/改字段/改 rel 各自变红）、四态全覆盖、
+  健康路径零留痕（`flushWarn` 逐字节为空）、**端到端逐字节相同**（`mode:"episode"` 两路输出）、新鲜度五条、时序计数（稳态 1 次 `listDir`）。
+- `audit:docs` / `audit:layers` exit 0；**`audit:ratchet` 起初报红**（新模块把 `listMemories` 的记忆文件判据与
+  `projection-store` 的目录判据各写了一遍 ⇒ drift 线索 9→11 键）⇒ 按「判据收一处」真正收口：
+  `persistence/files.ts` 导出唯一一份 `isMemoryFileName`、`core/projection-store.ts` 导出 `isSourceDirEntry`（连带
+  `DATE_DIR_NAME`/`RESOURCES_DIR_NAME`），`listMemories` 与新 provider 共用。**未抬基线**。
+- 取证轮（资格跑，**带负载**、非最终基准，口径见产物）：fs 路 **10,476 ms** vs sqlite 路（索引已存在）**171 ms**；
+  **查询期 `readText=1` / `listDir=1`**（只剩 `_meta.json` + 资源卡）⇒ 漏斗判据「`files read` 要往 **0** 走」实测 **9,504 → 1**。
+  （8 组反向实验 / canonical 对照 / 三基准的完整产物见该目录。）
+
 ## [v1.15.95] 跟进三处「未核实」—— 扫出并修掉一处**数据丢失级**缺陷（`_meta.json` 读失败 ⇒ 全工作区元数据清零且报成功）
 
 用户 2026-09-16 续指令「继续」的第 2 件：把 `v1.15.94` 条目里登记的三条「未修 / 未核实」逐条从**不确定**变成**确定**。

@@ -1,6 +1,6 @@
 import { tokenize } from "./util.js";
 import { streamText, textMessage } from "./writer-llm.js";
-import { createWriterCore, routeFor, noteDegrade } from "./writer-core.js";
+import { createWriterCore, routeFor, noteDegrade, dirtyRelsFor, clearDerivedDirty } from "./writer-core.js";
 import { makeCapture } from "./writer-capture.js";
 import { makeMaterialize } from "./writer-materialize.js";
 export function createShadowCollector(opts) {
@@ -110,6 +110,10 @@ export function createShadowCollector(opts) {
         recallSelect,
         knowledgeNavigate,
         ensureIndex: materialize.ensureIndex,
+        // T17-B（D6 门③）：派生索引的写侧精确信号 —— 读侧取走（`ShadowQueryDeps.derivedIndexDirty`），
+        // **成功 upsert 后**才经 `clearDerivedDirty` 消费（回退路径保留 ⇒ `patchSummary` 的原地改写不会丢）。
+        derivedDirtyFor: (ws) => dirtyRelsFor(core, ws),
+        clearDerivedDirty: (ws, rels) => clearDerivedDirty(core, ws, rels),
         onFsObserved: capture.onFsObserved,
         onToolsResult: capture.onToolsResult,
         onGoalChanged: capture.onGoalChanged,

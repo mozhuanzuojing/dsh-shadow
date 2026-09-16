@@ -482,3 +482,107 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
 > ⇒ **对不变量定义本身的一个后果**：`canonical(memory) = { id, scope, type, validity, status }` 里的
 > **`validity` 与 `deleted/superseded` 语义今天在生产里根本不存在** ⇒ 拿它们做等价性对照，**比的是常量**。
 > T17-B 要么先给这两列**找到真实来源**，要么**把它们从等价判据里暂时移除**（并写明理由）。
+
+---
+
+## 补记（2026-09-16 · **T17-B 实现轮**）—— 正文不动，这里只记「实现后的终态 + 三条新事实 + 一条更正」
+
+> 正文（上面 484 行）是**冻结时**的边界与判断，**不改**。本补记记的是实现轮里**被实测改写的那几件事**，
+> 以及 T17-B 交付的终态。规格全文见 `../.docs/fix/2026-09-16/t17b/DESIGN.md`（D1–D14），证据与可重放见同目录。
+
+### 一、T17-B 落地成了什么（一句话）
+**(c1)「换物化载体」落地为一条新边界 `CandidateProvider` / `CandidateSet`（`core/candidate-provider.ts`），
+`fs` provider 与今天逐字等价，`sqlite` provider 从 `<ws>/.shadow/index.sqlite` 取候选；
+`IndexEngine` 一字未改（仍是诊断/展示面，`adr/0095` §十、T17-A §3.4）。**
+换的只是「字段从哪来」（文件 → 索引列）：`parseMemory` 的逐字段**派生输入**落库，
+`deriveShadowNodes` / `validateAtomProjection` / 打分 / 渲染**全部原样**（等价性的根就在这里）。
+`query/materialize.ts` 是唯一物化收敛点 ⇒ 换载体只动这一处（+ 7 个调用点传降级/写侧信号）。
+
+### 二、三条新事实（都是实测，且**有两件事与本 ADR 前面的写法相反**）
+
+**(1) 插件手里的 `fs` 服务只能写文本 ⇒ SQLite 的落盘必须另走一路（用户 2026-09-16 裁决）**
+- 事实：`FileSystem.writeText(target, string)` 是**唯一**的写方法（`@deepseek-ai/dsh-fs` 契约），没有二进制写；
+  而 `node:sqlite` 要一个真实文件路径。官方桥是 **`processPath(target)`**（同一契约的抽象方法）。
+- 代价（必须写清）：`dsh-fs-sandbox` 的策略围栏**只挂在 `writeText` / `editText` 上**，所以
+  `processPath` + `node:fs` 是**全仓唯一一处绕过会话沙箱围栏的写**（`read-only` 也拦不住）。
+- 用户裁决：**保持 SQLite 载体**（不换成文本派生文件），接受这一处绕过，并配三道守卫写进实现：
+  ① `processPath` 不可用 / 返回非绝对路径 ⇒ `unavailable` 回退 `fs`（**非本地后端该能力不可用**）；
+  ② 会话策略 `read-only` ⇒ **不写**、直接 `unavailable`（由 `index.ts` 的 `makeQueryDeps` 传 `derivedIndexWritable`）；
+  ③ 只写「由 `resolve` 得到、由 `processPath` 产出」的路径，**不做字符串拼接**；写入用 `tmp → renameSync` 原子发布。
+- `core/fs-scope.ts` 只补**一行** `processPath` 转发（且只在真实存在时补，沿用该文件既有纪律）。
+
+**(2) 「复用源指纹」这条要用**另一个**东西 —— 目录级令牌，因为 `listDir` 是急取的**
+- 事实（`../.docs/fix/2026-09-16/t17b/fs-cost-findings.md`）：`listDir` **逐子项 `realpath` + `stat`**
+  （`dsh-fs-local/lib/index.js:291-302`、`:159`、`:220-229`），属性访问本身只值 0.02% ⇒ **没有「便宜的 listDir」**。
+- 但**有**便宜的目录级令牌：`fs.stat(dir).version = dev:ino:size:mtimeNs:ctimeNs`，而且
+  **`listDir(.shadow)` 条目上的 `version` 与 `stat(该目录)` 逐字相同** ⇒ **一次 `listDir(.shadow)`（13 项）就拿到全部目录令牌**，
+  实测 **4.7–5.7 ms**；对照组「文件级全量指纹」= **3.3–3.6 s** ⇒ **660–720×**。
+- ⇒ 新鲜度由**三道门**组成（实现位置：`core/candidate-sqlite.ts`）：
+  **门① 粗信号**（根 `listDir` 的目录令牌，未变即直接用索引）→ **门② 变化目录细比对**
+  （只对被令牌改变的目录做一次 `listDir` + 逐文件 `name:size:version` 比对 ⇒ 逐条 upsert/删）→
+  **门③ 写侧精确信号**（`WriterCore.derivedDirty`，键 `ws|rel`；`flush` 与 `patchSummary` 标脏，
+  读侧**成功 upsert 之后**才消费）。
+- **时序纪律（错了就是静默漏召回）**：**先取目录版本、再 `listDir` 该目录**，并把**先取到的那个版本**落库。
+  判据：存下来的版本 == 现在读到的版本 ⇒ 该目录此后一定没有增/删/改名。反过来会存下「比内容新」的版本 ⇒
+  新增文件**永远进不了索引**。这与 `persistence/meta.ts:40-43`「先 stat 取版本、再 readText」是同一条纪律。
+- ⚠ **登记一条剩余漏洞（不许写成「复用即可」）**：**外部进程**（另一会话 / 子代理 / 手工编辑器）对一个
+  **已存在**的记忆文件**原地改内容**时，目录令牌看不见（长度变与不变都看不见，实测）、写侧 dirty 也不知道 ⇒
+  索引会陈旧，直到该目录发生增/删/改名。恢复句柄：`derivedIndex.verifySources: "full"`（每次文件级全量比对，
+  sound 但付 3.3–3.6 s）、删 `.shadow/index.sqlite`、或把 provider 设回 `fs`。
+  （本条与既有 `projectionStore` 的已知降级同型：缓存不是真相 + 给恢复句柄；但本层是**物化载体**，故必须显式登记。）
+
+**(3) `@types/node`（本仓 20.19.43）**没有** `sqlite.d.ts` ⇒ 取模块必须是「动态 import + 计算型说明符」**
+- 静态 `import { DatabaseSync } from "node:sqlite"` 会让 `tsc` 报 TS2307；**更严重**的是宿主 Node < 22.5 时
+  静态 import 会让**整个插件模块加载失败**（而不是「这一项不可用」）⇒ 加速层把插件搞挂，直接违法第一原则。
+- ⇒ 实现用 `const SQLITE_SPEC = "node:sqlite"; await import(SQLITE_SPEC).catch(() => undefined)`，
+  且**公开签名里不出现 `DatabaseSync` 类型**（一律 `any` 持有句柄）。
+
+### 三、一条更正（T17-A 记错的前提，防后来者照错的源）
+- T17-A 的 `T17A-FINDINGS.md` 写「**FTS5 对 CJK 是按字的**，`MATCH '召回'` 命中」—— **不成立**：
+  那是**合成测试串**（`read_shadow 召回 冷却 台账`，CJK 段恰好被空格切成与查询相同的整 token）造成的假象。
+  真语料 `fts5vocab`：`用户消息` 是**一个** token，`消息` / `消` / `息` 都不存在；最长 token 46 字；
+  `MATCH '召回 冷却'` = **0 命中**。（已在 `T17A-FINDINGS.md` 就地加**标注式更正**，原始读数保留。）
+- 由此定下 **D11（FTS5 判据 = 丙）**：`MATCH` = **整 token 相等/前缀**，生产 `matchShadowNodes` = **任意子串 AND**
+  （`core/node.ts:89`/`:93`/`:94`），语义层面就不等价 ⇒ 实测 `Σ|S1\S2| = 10,649` 条漏召回（命中密集集 **16.9%**，
+  19/60 条 query 有漏；`q="消息"` 生产 8 条 → FTS **0 条**）、**OR 也不是安全超集**（13 条反例）。
+  ⇒ **本期不建 `atom_fts`**，sqlite 路**取回全部 atom** 再交生产 `matchShadowNodes` 过滤（不造没有消费者的表 —— §十的教训）。
+- 另一处更正：T17-A 的「`listMemories` 1.2–1.5 s vs 指纹 2–7 s = 2–5×」是**测量落在 `realpath` 退化曲线的不同位置**
+  造成的假象；同语料同时刻对照的**真实比值 = 1.01×**，长驻进程两侧都应按 **3.3–3.6 s** 计。
+  ⇒ 本 ADR §十二(1) 里那句「指纹 ~7 s」的量级仍成立（都是秒级、方差大），但「比值 2–5×」不要再引用。
+
+### 四、D9 的落定：`validity` 移出等价判据（正文那个悬而未决的问题的答案）
+- 生产里**没有** `validity` / `valid_until`（全仓 0 命中）⇒ 拿它对照**比的是常量**（正文自己已指出）。
+  T17-B 的处置：**canonical 等价判据收窄为 `{ id, type, status }`**（`status` 取自权威 `_meta.json`，
+  无记录 ⇒ `unregistered`）；**`validity` 移出判据**，等价性改由**结构**承担 ——
+  两路在 `materializeAtoms` 之后跑**同一份** `keep`（`isForgettable` / `isCompacted`）⇒ 「被遗忘/被收口」的差集恒等。
+- `deleted` / `superseded`：**有真实来源**（`_meta.json` 的 `status`，`core/forget.ts` 读它），故保留在 `status` 列里；
+  但本工作区 `pinned`/`archived`/`compacted` **全 0、从未触发** ⇒ 这两态只能用**夹具**测，
+  探针输出必须标注「夹具证据 ≠ 真实语料证据」。
+
+### 五、默认值：**不改**（T17-B 只交付「可开」的加速器 + 等价性证据）
+- `derivedIndex.provider` 默认仍是 **`"fs"`**：§七的 T17-C 验证矩阵（`fs` / `sqlite` / unavailable / corrupt /
+  schema mismatch / source changed / rebuild / 8.8k cold build / incremental）**全部通过之后**才考虑改默认。
+- 四态（`ok` / `unavailable` / `corrupt` / `query-error`）在实现里**可判别**：`ok` **包含合法 0 行**（是结果不是错误）；
+  `unavailable` 不删任何东西、不重建；`corrupt` 把坏索引**挪走**（`index.sqlite.corrupt-<ts>`）⇒ 下一次调用整体重建；
+  `query-error` 只回退本次。**三态不得合并**（第一原则 + `v1.15.95` 的 `error ≠ empty` 教训）。
+
+### 六、证据与可重放（本轮产物）
+| 用途 | 位置 / 命令 |
+|---|---|
+| 规格（D1–D14，权威） | `../.docs/fix/2026-09-16/t17b/DESIGN.md` |
+| 成本结构实测（粗信号 / 目录令牌 / 剩余漏洞的前提） | 同目录 `fs-cost-findings.md`（8 个可重放 `.mts`） |
+| FTS5 召回等价性（判据 = 丙） | 同目录 `fts5-recall-equivalence.md`（5 个可重放 `.mts`） |
+| 8 组反向实验 / canonical diff / 漏斗 / 三基准 | 同目录 `EVIDENCE-TASK.md` 指定的产物（`t17b-*`） |
+| 父代理独立验收（改前基线 + 冻结副本 + 四态） | `node ../.docs/fix/2026-09-16/t17b/probe-parent-verify.mts` |
+| 一键验收门（含「§二不改的东西」的断言） | `pwsh -NoProfile -File ../.docs/fix/2026-09-16/t17b/gate-t17b.ps1` |
+
+### 七、T17-B 仍未核实（**下一棒别当已验**）
+- **真实流量的漏召回率未测**：本工作区 `query-log` 只有 2 条真实 query 且 AND 命中都是 0 ⇒
+  「FTS5 会漏」测的是**机制必然漏 + 给定形态漏多少**，不是「真实流量漏多少」。
+- **并发 / 多进程**同时读+写同一份索引（busy / 锁 / WAL）**未测**；跨平台（WSL / 容器）锁行为**未测**。
+- **外部进程原地改内容**的**实际发生频率**未测（只知道机制上会陈旧）。
+- **`scopedFs` 之后 `version` 可用**已实测（`fs-cost-findings.md` A5：逐条 size/version 与 raw 全等）；
+  但**非本地后端**（远程 / 隔离）下 `processPath` 是否可用**未实测** —— 该情形按设计走 `unavailable` 回退 `fs`。
+- 既有 read 侧 swallow 带来的**两路差异**（`readRel` 读失败当空 ⇒ `fs` 路静默跳过那条；sqlite 路会返回索引里
+  上一次读到的内容）**未改**、只登记：方向是 sqlite 返回**更多**，不是漏（`../.docs/fix/2026-09-16/INDEX.md` §3.5 的同类清单）。
+
