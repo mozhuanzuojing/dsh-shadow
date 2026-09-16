@@ -446,3 +446,39 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
 且那 1 条是 **`sr-openclaw`（资源卡）** —— 根因是**原型索引没有把 `.shadow/resources/*.md` 建进去**，
 属**原型缺口**、不是语义不可达 ⇒ 补上卡片即可期望等价。
 查询路径 **2,753 ms（fs）vs 68 ms（sqlite）**（冻结副本上）；**startup（已有索引 → ready）= 3 ms**（索引 21.5 MB）。
+
+### 十三、T17-A 终态结论（2026-09-16，报告 `t17a/T17A-FINDINGS.md`）
+
+**(1) 正面结果（都跑在语料冻结副本上：9,144 个记忆文件）**
+- **canonical diff = 0**：宇宙 `fs 8,204` vs `sqlite 8,204`，**14/14 query 差集 0**；干净基线下两路**连顺序都逐位相同**。
+- **反向实验 8/8 全红**，含两类 silent recall loss：⑴ 删 1 条 atom（`onlyFs=1`）、⑴变体② **refs 漏 1 个文件 ⇒ 下游没读**、
+  ⑴c 删资源卡、⑵a 改 `kind`（门判拒收）、⑵b 改 decision 输入（`scope` 成对报出）、⑶ 改 `valid_until`、⑷ 改排序、⑸ 新文件未重建。
+- **漏斗表**：`source 9,144`｜`candidate 8,204 / 8,204`｜**`files read 9,147 → 0`**｜**`files parsed 9,144 → 0`**｜
+  `derive nodes 8,204 / 8,204`｜单次查询 `7,357–10,210`（热 `2,602–4,605`）/ **`68 ms`**。
+  ⇒ 按用户判据「降到 ~200 才算清楚」：**不是 8,500，是 0**。
+- 基准：cold rebuild **8,795 ms**（最冷）/ 含负载 11,276 / 热 14,770–21,224；incremental = 指纹检测 6,984 ms + 单条 upsert **4 ms**；
+  **startup 中位 4 ms**。
+
+**(2) 收窄落点：结论是 (c1) —— 不塞进今天的 `IndexEngine`**
+- **(b) derive 之后**：**省 ≈ 0**（`msMaterializeAndDerive` 5,983–8,731 ms 里读+解析已付，只剩毫秒级过滤）。
+- **(a) `listMemories` 之前**：省 I/O，但 **`IndexEngine.refs` 的域不对** —— 它是 `{type:"file", locator, fragment.start}`
+  （`dist/core/index-engine.js:4`），semble 还固定 `--content code`（`dist/core/semble.js:104`）⇒ **表达不了「记忆原子候选」**；
+  且**漏 1 个 ref = 静默少结果**（⑴变体② 已证）。
+- **(c1) 换物化载体**：**`dist/query/materialize.js:9-25` 是唯一一处「读全部 → `parseMemory`」的收敛点**
+  ⇒ 把「`listMemories` + `readRel` + `parseMemory`」换成「查 `source` + 查 `atom`」，
+  **`deriveShadowNodes` / `validateAtomProjection` / 打分 / 渲染全不动**。
+  顺手核实：`query/query.ts:145-150` 的**无参** `read_shadow()` 走 `_index.md`（2.25 MB）、**不走 `listMemories`**
+  ⇒ 受影响的只是**带 topic 的召回**。
+- **T17-A 倾向「先抽 `CandidateProvider` / `CandidateSet` 边界，`IndexEngine` 保持原样（诊断面）」** ——
+  这正是用户 2026-09-16 明确允许的**第三种结论**。
+
+**(3) ⚠ 探针「测不出」的 10 条（**下一棒务必别当已验**）**
+`deleted` / `superseded` 的**真实生产语义**（本工作区 `pinned`/`archived`/`compacted` **全 0**，`droppedForgettable=0`、
+`droppedCompacted=0`，**从未触发**）· **`validity` 的生产语义（全仓 0 命中！⑶ 红的是探针自装的过期判据）** ·
+`scope` 若指 workspace scope 则该列无证明力（**二义性需先裁决**）· `asOf` · `deprioritize` / `cooldown` · 并发 ·
+**FTS5 `MATCH` 取代 `matchShadowNodes` 的召回等价性（完全未测 —— T17-B 最该先补的一条）** ·
+`sqlite-vec` / 向量 · 跨平台锁 / WAL · `scopedFs` 之后是否仍给 `version`。
+
+> ⇒ **对不变量定义本身的一个后果**：`canonical(memory) = { id, scope, type, validity, status }` 里的
+> **`validity` 与 `deleted/superseded` 语义今天在生产里根本不存在** ⇒ 拿它们做等价性对照，**比的是常量**。
+> T17-B 要么先给这两列**找到真实来源**，要么**把它们从等价判据里暂时移除**（并写明理由）。
