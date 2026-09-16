@@ -527,8 +527,12 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
   新增文件**永远进不了索引**。这与 `persistence/meta.ts:40-43`「先 stat 取版本、再 readText」是同一条纪律。
 - ⚠ **登记一条剩余漏洞（不许写成「复用即可」）**：**外部进程**（另一会话 / 子代理 / 手工编辑器）对一个
   **已存在**的记忆文件**原地改内容**时，目录令牌看不见（长度变与不变都看不见，实测）、写侧 dirty 也不知道 ⇒
-  索引会陈旧，直到该目录发生增/删/改名。恢复句柄：`derivedIndex.verifySources: "full"`（每次文件级全量比对，
-  sound 但付 3.3–3.6 s）、删 `.shadow/index.sqlite`、或把 provider 设回 `fs`。
+  索引会陈旧，直到该目录发生增/删/改名。恢复句柄：`derivedIndex.verifySources: "full"`（**逐目录**做文件级比对 ——
+  实测代价 = **9 次 `listDir`**（8 个日期目录 + `resources`）、**`readText` 仅 0–1 次**、约 **4.1 s**；
+  ⚠ 它**不是**「重读全部 9.5k 个文件」，别按那个口径估成本）、删 `.shadow/index.sqlite`（约 12.1 s 重建）、
+  或把 provider 设回 `fs`（约 10.8 s 全量）。
+  2026-09-16 取证轮已用**输出层**判据复现该陈旧：外部原地改 `> 决策：` 行后，索引里的 `content` 仍是旧值
+  （`outputStale=true`），而 canonical `{id,type,status}` 差集为 0 ⇒ **陈旧只能用输出层判据报，canonical 判据看不见它**。
   （本条与既有 `projectionStore` 的已知降级同型：缓存不是真相 + 给恢复句柄；但本层是**物化载体**，故必须显式登记。）
 
 **(3) `@types/node`（本仓 20.19.43）**没有** `sqlite.d.ts` ⇒ 取模块必须是「动态 import + 计算型说明符」**
