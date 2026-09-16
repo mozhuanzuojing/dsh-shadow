@@ -346,3 +346,47 @@ Temporal / Agency / Long Horizon 才有一个共同地基 —— **这比现在�
 
 ⇒ **T17-A 的第一件事因此改为「先定收窄落点」**，再谈等价性 —— 否则 diff 比的是「真实路径」与「一条没有消费者的旁路」，
 证明不了任何东西。且**落点选 (a) 时，「漏召回」必须成为反向实验里的第一组**。
+
+### 十一、T17-A 要额外证明的两件事 + 一个被明确允许的第三种结论（用户 2026-09-16 追加）
+
+**(1) 最危险的失败不是「查错一条」，而是「少给一条」= silent recall loss**
+
+```
+SQLite 少给一个候选 → derive 正常 → ranking 正常 → evidence 正常 → 答案正常生成 → 用户根本不知道少了一条
+```
+
+⇒ 若落点选 **(a)**，**「漏召回」必须是反向实验的第一组**；探针要在「**只少一条候选**」时就变红。
+反例如要覆盖两种漏法：① sqlite 少返回一条本就该进候选的记忆；② sqlite 返回了、但下游按 refs 读文件时**该文件没被读**。
+
+**(2) 报告必须带「漏斗表」（`FS` vs `SQLite` 并排），尤其 `files read` / `files parsed`**
+
+| 指标 | FS | SQLite |
+|---|---|---|
+| source files | 8,800 | 8,800 |
+| candidate N | | |
+| **files read** | | |
+| **files parsed** | | |
+| derive nodes | | |
+| ranking input | | |
+| final context | | |
+
+**判据**：若 `files read` 只从 8,800 降到 ~8,500 ⇒ **基本没解决核心问题**；
+若能降到 ~200 ⇒ 架构收益清清楚楚。**数字必须实测并写清怎么数的（在读文件那一层计数），不许估。**
+
+**(3) 被明确允许的第三种结论：抽象本身要改，就改抽象（不许为完成 T17-B 硬塞）**
+
+若探针证明**现有 `IndexEngine` 抽象不适合承载这个优化**（它现在是展示面、`refs` 无消费者），
+那么正确结论是「**先抽一个 `CandidateProvider` / `CandidateSet` 边界**」，而**不是**把优化硬塞进现在的接口。
+用户 2026-09-16 原话：「**如果探针得出第三种结果，也不要为了完成 T17-B 强行塞进现在的 `IndexEngine`。**」
+
+目标契约形状（用户画的）：
+
+```
+FS provider ──▶ candidates ──▶ same canonical candidate universe
+                                        │
+                                        ▼
+                      deriveShadowNodes → validateAtomProjection → ranking
+```
+
+> 名称校正：生产里的校验函数是 **`validateAtomProjection`**（`core/resource.ts` 等引用它）；
+> 口头称 "validateAgentProjection" 时以代码为准。**在 ADR/契约里写错符号名 = 给后来者埋一个假引用。**
