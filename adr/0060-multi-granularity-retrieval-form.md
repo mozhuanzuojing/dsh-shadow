@@ -1,6 +1,7 @@
 # ADR-0060: 多粒度检索层的形态（**路由已存在**；不做无阈值全量扇出；多粒度用「单索引+层级表示」）
 
 - 状态：**已接受（技术判据部分）· 待用户裁决（产品方向部分）**
+- **补记（2026-09-16）**：用户当日裁决**产品方向** —— 载体走「`.shadow`（文件）为权威 + SQLite 作**派生**的 Index / State / 检索缓存」⇒ 本 ADR 悬置的那部分**由 `adr/0095-derived-index-layer-sqlite.md` 承接**（本文件正文不改；0060 定的**形式**「单索引 + 层级 + 路由」不变）。实现待办见 `BACKLOG.md` 的 **T17**。
 - 决定日期：2026-09-11
 - 关联 ADR：**ADR-0001**（投影文件树而非向量库；其 **Notes 留了口**：「若日后召回不足，可在 `_index.md` 之上叠一层向量检索作为增强，而不推倒文件树」）、**ADR-0054**（Semble 作为 Index Engine 第三候选 provider，**检索层非裁决层**——本 ADR 是其延伸）、ADR-0043（Shadow Contract：Atom/Projection/Evidence/Mutation）、ADR-0049（缺件不静默）
 - 关联术语：`../CONTEXT.md`（Index Engine / 候选生成 / provider）
