@@ -64,7 +64,7 @@
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
 
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16）；
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16–§17）；
 > 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
 > **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
 > （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
@@ -710,6 +710,99 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   **未读 `.agents/` 与 `custodian-skills/` 的内容** —— 只从 root tree 读到目录名（它把 agent 工作约定
   `AGENTS.md` / `CLAUDE.md` 与给 agent 用的技能**一起纳入仓库版本控制**，与本工作区 `~/.agents` + skills 同形
   但**随仓库走**；**内容未读，故不评价**）；389,802 ⭐ 只是**单一读数快照**，**不构成生态评价**。
+
+## 落地核实（2026-09-16 第 2 轮 —— 用户「遗留 1 2 3」的 1：真落地 + 把 §16 的「未核实」读掉）
+
+> 用户 2026-09-16 续指令「遗留 的 1 2 3」= ① 真落地（克隆 + 读掉 §16 未核实的文档）② 写记忆侧资源卡 ③（上一轮已完成）；
+> **中途追加裁剪指令「不用跑起来 openclaw 只要代码」** ⇒ 只克隆源码，**不安装、不构建、不运行**。
+> **口径**：本节**不改 §16 正文**（承本文一贯口径：重复指定不重写旧段，只在新日期段里补核实或刷新读数）。
+> **可重放**（都在 `..\.docs\fix\2026-09-16\`，入口 = 同目录 `INDEX.md`）：`probe-openclaw-clone.ts`（克隆面读数，产物
+> `clone-openclaw.txt`），三份只读专家报告 `expert-security-runtime.md` / `expert-memory-context.md` / `expert-agent-engineering.md`。
+
+### 17.1 落地读数（本地克隆面；枚举命令与口径见 `INDEX.md`，枚举时刻 2026-09-16 11:11 +08:00）
+
+| 项 | 读数 |
+|---|---|
+| 落点 | `vendor/_src/openclaw`（与其余外来材料同根） |
+| 克隆方式 | `git clone --depth 1` —— **浅克隆**，本副本 `git rev-list --count HEAD` = **1** |
+| HEAD | `c1c870a41755af2675f66766451931f9edade07a`（2026-09-15 20:01:43 -0700，标题 `fix(plugins): use vendor logos…`），分支 `main`，工作区干净 |
+| 规模 | **43,322** 文件 / **561.6 MB**（**不含** `.git`；口径 = 递归文件计数 + 字节和） |
+| 顶层分布 | `src` 19,209 · `extensions` 10,578 · `ui` 4,015 · `apps` 2,657 · `test` 1,574 · `scripts` 1,399 · `docs` 1,398 · `packages` 1,169 · `.agents` 222 · `CHANGELOG/` 135 · `skills` 77 · `custodian-skills` 4 |
+| 语言面 | `.ts` **35,104** · `.md` 1,922 · `.json` 771 · `.yaml` 605 · `.mjs` 458 |
+| 依赖 | **`node_modules` 不存在**（按「只要代码」策略，未 install） |
+| `package.json` | `engines = {"node":">=24.16.0 <25 || >=26.1.0"}`（**比 §16 记的 README 口径更精确**）；`packageManager = pnpm@12.3.4+sha512…`；`license = MIT` |
+
+> **一处读数分层（又一次）**：§16 记的「≈4.65 GB」是 **GitHub API 的 `size`**（含全部历史），本地实测**工作树 561.6 MB**
+> （`.git` 另计，浅克隆后合计 ≈712 MB）。**两个数都对，只是量的不是同一个东西** ⇒ 按本仓口径，
+> **体积类数字必须带「谁量的 + 量的是什么」**。
+
+### 17.2 §16 的「未核实」逐条收敛
+
+| §16 当时写的 | 本轮结果 | 依据 |
+|---|---|---|
+| 未读文档全文（security / exposure-runbook / sandboxing / telemetry） | **已读**（另加 `network-exposure` / `sandbox-vs-tool-policy-vs-elevated` / `what-gets-sandboxed` / `opentelemetry`） | `expert-security-runtime.md`（7 篇逐行引用） |
+| （§16 未列）记忆面文档 | **已读 9 篇**（`memory` / `memory-architecture` / `memory-provenance` / `memory-search` / `active-memory` / `context-engine` / `compaction` / `dreaming` / `soul`） | `expert-memory-context.md` |
+| 未读根目录 `.agents/` 与 `custodian-skills/` 的内容 | **结构已读 + 抽样读内容**：`.agents` 222 文件（220 在 `.agents/skills`，约 50 个 skill，多为维护者向）；`custodian-skills` 4 个（`add-model-provider` / `cloud-image-bake` / `configure-channel` / `diagnose-gateway`）；装载形态 = `.agents/skills/<id>/SKILL.md`，frontmatter 只有 `name` + `description`，**未声明宿主** | `expert-agent-engineering.md` |
+| 未核「曾用名」 | **仍未核，且更明确地不能核**：浅克隆只有 1 个提交 ⇒ **本副本结构上无法核历史**；`topics` 的 `molty` / `crustacean` 与贡献者名 `moltbot886` **仍然只是现象，不是证据** | §17.1 的 `rev-list --count` = 1 |
+| 未拆解 4.65 GB 的体积构成 | **已拆**（见 §17.1） | `probe-openclaw-clone.ts` |
+| 「它也提供 skills/plugins/插件 SDK，但不提供 DSH 宿主形态」（§16 的相似点之一） | **证实，且给了证据**：全仓**无 `cordis.yml`、无 `agent-presets` 目录**，`package.json` 无 `dsh` / `cordis` 字样（父代理独立复核：0 / 0 / 0 命中） | `expert-agent-engineering.md` + 父代理复核 |
+| 「389,802 ⭐」只是单一读数快照 | **未变**（本轮只读码，**未联网再抓**） | — |
+
+### 17.3 读码后的对照结论（**本节主要产出**）
+
+- **三条正面冲突（形态层面不可移植）**：
+  1. **向量库**：它默认用 `OpenAI embeddings`（`docs/concepts/memory-search.md:16`），召回走「向量 + BM25 + 文件名」混合
+     （`:82`），`provider:"none"` 才是纯全文检索（`:129`）—— 与本仓 **ADR-0001「不引向量库」**正面冲突。
+  2. **常驻服务**：它自管 `llama-server` 托管服务（`memory-search.md:40`、`:222`）与 **cron 定时任务**
+     （`dreaming.md:168`「auto-manages one cron job」）—— 与 ADR-0001「不常驻服务」正面冲突。
+  3. **让 LLM 判关系**：dreaming 用一次「无工具 completion」**选择 additions / merges / supersessions**
+     （`dreaming.md:68`）—— 与本仓「**LLM 不能制造关系**」（ADR-0042 / 0043 / 0051）冲突。
+     ⚠ 同一份文档里**自相矛盾**：`:93` 说模型「returns operation decisions, not replacement memory prose」，
+     而 `memory-architecture.md:176` 说它「produces a revised file」；专家报告**采信前者**，**未在源码层裁决**。
+- **两条同族（可作外部正例）**：
+  1. **来源不可判定就降级，绝不默认成可信**：`memory-architecture.md:82`「content whose provenance cannot be determined
+     is treated as `untrusted`…**It is never defaulted to `owner`**」；且标签**存在 SQLite 列、由分类代码写**，
+     **不从记忆正文里解析**（`:376`）。
+  2. **缺件不静默，且不降级到宿主**：`memory-search.md:134` 把 embedding 失败的**脱敏原因**写进
+     `debug.embeddingBootstrap`（**即使没有命中**）；`docs/gateway/sandboxing/what-gets-sandboxed.md:22`
+     「it is absent, and OpenClaw **does not fall back to reading the host filesystem**」。
+- **一条同族但边界更窄（最容易照抄错的一条）**：它的证据门**只挡「自动注入」，不挡「显式工具调用」** ——
+  `memory-architecture.md:215` 说分类不合格/缺失的记忆「omitted from automatic context」，而 `:217` 明写**显式工具调用
+  仍会返回**。⇒ 「无证据不返回」在它那里是**注入那条路**的规则，不是**读那条路**的规则；照抄成「一律不返回」就错了。
+- **另有一条 agent 工程面的强判据**：`live-proof-routing.md:52`「**Source inspection is not runtime proof.**」与
+  `autoreview/SKILL.md:225-226`「Absence means no outcome was published, **never a clean review**.」——
+  与本仓 `MATERIALS.md` §6 的五级链（工件存在 ≠ 已安装 ≠ 已装载 ≠ 在跑 ≠ 可用 ≠ 已验证）与 ADR-0049 是同一判据；
+  `evidence-ledger.md:44` 的「never round up」则与 ADR-0072「标签不得强于事实」同向。
+
+### 17.4 对 §16 那条「披露口径正例」补一刀边界（**本轮最值钱的一条**）
+
+§16 记的是它的正例：默认只做每日版本检查、匿名统计 opt-in、`update.checkOnStart: false` 把两者一起关掉，并有一页遥测文档。
+**读码后要补的边界是：那个总开关并不覆盖全部外发** ——
+
+- `DO_NOT_TRACK=1` **只关匿名统计，不关每日更新检查**（`telemetry.md:209-212`）；
+- 即使关掉统计或设了 `DO_NOT_TRACK`，服务端**仍记录近似地理**（国/区码/市/时区，`:88-89`）；
+- 关闭请求**不抹除已有记录**（`:92-93`），记录保留 3 个月。
+
+⇒ 对**本仓「省略披露开关」（v1.15.91 / `adr/0092`）**，这是一条**反面提醒**：**「默认安静」不能只给一个总开关** ——
+披露要**按每一条外发路径逐条列**，并写明**哪个开关覆盖哪几条**。
+
+### 17.5 执行边界（据实记录，含一次已回滚的误装）
+
+- 用户中途指令「**不用跑起来 openclaw 只要代码**」⇒ 本轮**未安装、未构建、未运行**任何 openclaw 能力；
+  §16 里「未安装」「未运行」这两条**仍然成立**（变的只有「未克隆」）。
+- 该指令到达前，一轮 `npm install -g openclaw@latest --allow-scripts=openclaw` 已经启动 —— 已**中止并回滚**：
+  `npm uninstall -g openclaw` 移除 **311** 个包，复核全局 `node_modules` 与本机 PATH **均无 openclaw 残留**。
+  （**记这一条的理由**：回滚本身也是要能被复核的事实，不能只写「没装」。）
+- 记忆侧资源卡按用户「遗留 2」写在 `.shadow/resources/openclaw.md`（**源层卡片**，ADR-0051），并用**真实读侧**验证：
+  `shadow_query(scope:["resource"])` 能召回该卡（含投影分段与 `source` 证据）。
+
+### 17.6 未核实（本轮新增 / 延续）
+
+- **openclaw 的实现代码一行未读**：`src/`（19,209 文件）与 `extensions/`（10,578 文件）⇒ 本文所有默认值均
+  **取自它自己的文档声明，未核 schema、未对源码**。
+- `.agents/skills/` 只抽样读了 3 个 skill（`auto-qa` / `autoreview` / `diagnose-gateway`）与
+  `technical-documentation/references/principles.md`，**其余 50+ 未读**；`docs/` 1,398 文件里只读了上文点到的 16 篇。
+- **未安装、未运行** ⇒ 「按文档声明能不能真跑起来」**未验证**（用户已明确不要跑，此项不是遗漏而是边界）。
 
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
