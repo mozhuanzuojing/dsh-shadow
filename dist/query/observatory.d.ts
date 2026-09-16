@@ -83,7 +83,7 @@ export interface QueryObservationOutcome {
  * 前者是调用环境问题（调用点本来就有 fs 守卫），后者是用户**显式**关闭，都不是「坏了」。
  */
 export declare const recordQueryObservation: (fs: any, ws: string, cfg: any, obs: QueryObservation) => Promise<QueryObservationOutcome>;
-/** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
+/** 汇总所有 query-log（跨日期），供 `read_shadow({mode:"query-log"})` 展示。 */
 export declare const summarizeQueryLog: (fs: any, ws: string) => Promise<any>;
 export declare const renderQueryLogSummary: (s: any, topic: string) => string;
 /** Evidence Density 健康阈值：dsh-shadow 坚持「宁可少回答，不要无证据上下文」。 */

@@ -69,6 +69,45 @@ import assert from "node:assert/strict";
   assert.equal(ok2, true, "正常路径必须仍然成功");
   assert.ok(String(fs2.files.get(META)).includes("hits"), "正常路径必须真的落盘");
   console.log("✔ ② `_meta.json` 坏件：拒绝写回空快照、明确标记 corrupt；正常路径不受影响");
+
+  // **②b v1.15.95：读失败 ≠ 空件**（同一后果的**第二个入口**，项②扫桩扫出来的同类缺陷）。
+  // 上面那个桩是**宽松桩**：`readText` 对缺失返回 `""`、且**永不抛读错** ⇒ 它表达不出
+  // 「文件存在但读不出」这个状态 —— 而真实宿主会抛（EACCES / 只读挂载 / I/O / 后端报错）。
+  // ⇒ 本条用**严格桩**把两侧都表达出来：缺失抛 `FS_NOT_FOUND`、读失败抛 `EACCES`。
+  {
+    const mkStrictFs = () => {
+      const files = new Map<string, string>();
+      const fail = new Set<string>(); // 这些路径：存在但读不出
+      return {
+        files,
+        fail,
+        async resolve(path: string) { return { targetKey: path, displayPath: path }; },
+        async stat(t: any) { return files.has(t.displayPath) ? { version: 1, type: "file" as const, size: (files.get(t.displayPath) || "").length } : undefined; },
+        async readText(t: any) {
+          const k = t.displayPath;
+          if (fail.has(k)) throw Object.assign(new Error(`cannot read "${k}": permission denied`), { code: "FS_PERMISSION_DENIED" });
+          if (!files.has(k)) throw Object.assign(new Error(`cannot read "${k}": not found`), { code: "FS_NOT_FOUND" });
+          return files.get(k)!;
+        },
+        async writeText(t: any, c: string) { files.set(t.displayPath, c); return { operation: "update", version: 2 }; },
+        async listDir() { return []; },
+      };
+    };
+    // (i) 正对照：**真的还没有** ⇒ 空件是正常的，正常写入
+    const fresh = mkStrictFs();
+    assert.equal((await readMetaVersioned(fresh as any, WS)).corrupt, false, "宿主形状的「不存在」⇒ 不是坏件（不得把全新工作区判坏）");
+    assert.equal(await mutateMeta(fresh as any, WS, (m: any) => { m["a.md"] = { hits: 1 }; }), true, "全新工作区必须真的能首写");
+    // (ii) **负对照（本条要锁的缺陷）**：`_meta.json` 存在但**读失败** ⇒ 绝不写回空快照
+    const denied = mkStrictFs();
+    denied.files.set(META, JSON.stringify({ "a.md": { hits: 5, pinned: true } }));
+    denied.fail.add(META);
+    const snap = await readMetaVersioned(denied as any, WS);
+    assert.equal(snap.corrupt, true, "★ 读失败必须标 corrupt（旧版 `catch { txt = \"\" }` ⇒ false ⇒ 「坏件不写回」闸门不生效）");
+    const mutated = await mutateMeta(denied as any, WS, (m: any) => { m["b.md"] = { hits: 1 }; });
+    assert.equal(mutated, false, "★ 读失败时事务必须报**未落盘**（旧版返回 true = 谎报成功）");
+    assert.ok(String(denied.files.get(META)).includes("a.md"), "★★ `a.md` 的 hits/pinned **必须原样保留** —— 旧版会把它整体覆盖成 {\"b.md\":…}（全工作区元数据清零，不可恢复）");
+    console.log("✔ ②b `_meta.json` 读失败（≠ 不存在）：不写回空快照、报未落盘、既有 pinned/hits 原样保留（旧版此处清零且报成功）");
+  }
 }
 
 // ── ③ validation timeline 坏件：**拒绝覆盖**（append-only 历史不得被销毁） ──
@@ -245,6 +284,89 @@ import assert from "node:assert/strict";
   assert.equal(bad.total, 1, "统计只用能解析的行");
   assert.ok(String(bad.badLinesNote).includes("无法解析"), "★ 而且必须**说清楚**统计基于被削样本");
   console.log("✔ ⑦ query-log 坏行计数 + 披露（覆盖率/drift 不再无声地基于残缺样本）");
+}
+
+// ── ⑧ v1.15.95：`isNotFound` 的**边界锁**（项①反例）+ `summarizeQueryLog` 的**读失败可见**（项③） ──
+//
+// 项①：`evidence/filesystem.ts` / `federation/reality.ts` 改用共享判据后**行为扩宽**。
+//   逐条造反例后确认：**该扩宽的扩了（宿主真读缺失），不该扩的一个都没扩**。
+//   本组把两类形状分别锁死，并带**正对照**（真缺失必须仍判 true）—— 缺了正对照，
+//   「一律 return false」也能让负例全绿。
+// 项③：`summarizeQueryLog` 旧版把「目录还没有」与「读失败」并进同一个 `catch {}`，
+//   两者都渲染成「尚无 shadow_query 记录」⇒ 事故被一句「多查几次」掩盖（ADR-0049）。
+{
+  const { isNotFound } = await import("../dist/core/util.js");
+  const { fsExists } = await import("../dist/evidence/filesystem.js");
+  const { referenceEvidence } = await import("../dist/federation/reality.js");
+
+  // (a) **正对照：宿主真读缺失** ⇒ 必须 true（形状抄自 `dsh-fs-local/lib/index.js:339`/`:249`）
+  assert.equal(isNotFound(Object.assign(new Error('cannot read "D:/ws/x.json": not found'), { code: "FS_NOT_FOUND" })), true);
+  assert.equal(isNotFound(Object.assign(new Error('cannot list "D:/ws/dir": not found'), { code: "FS_NOT_FOUND" })), true);
+  assert.equal(isNotFound(Object.assign(new Error("ENOENT: no such file or directory, open 'x'"), { code: "ENOENT" })), true);
+  assert.equal(isNotFound(new Error("FS_NOT_FOUND")), true, "测试桩裸抛宿主码仍要认");
+
+  // (b) **写侧形状必须 false**（宿主写失败同码 `FS_NOT_FOUND`，内层 cause 含 ENOENT ⇒ 最毒的一个）
+  assert.equal(
+    isNotFound(Object.assign(new Error("write failed (ENOENT: no such file or directory, open 'x') and temp close failed (ENOENT)"), { code: "FS_NOT_FOUND" })),
+    false,
+    "★ 写失败（含内层 ENOENT）绝不能被读成「不存在」——否则「先读后写」会用空内容覆盖已有文件",
+  );
+  assert.equal(isNotFound(Object.assign(new Error('cannot write "D:/ws/x": ENOENT: no such file or directory, open \'x\''), { code: "FS_IO_ERROR" })), false);
+
+  // (c) 权限 / 坏件 / 目录 / 二进制：判不了就是判不了（不得伪装成「确认不存在」）
+  assert.equal(isNotFound(Object.assign(new Error("EACCES: permission denied, open 'D:/x/y'"), { code: "EACCES" })), false, "EACCES 不是「不存在」");
+  assert.equal(isNotFound(Object.assign(new Error('cannot list "D:/x/y": permission denied'), { code: "FS_PERMISSION_DENIED" })), false);
+  assert.equal(isNotFound(Object.assign(new Error('cannot read "D:/ws/dir": not a regular file'), { code: "FS_NOT_REGULAR_FILE" })), false, "目录不是「不存在」（`fsExists` 另有 `listDir` 兜底判 exists）");
+  assert.equal(isNotFound(Object.assign(new Error('cannot read "D:/ws/bin": binary file'), { code: "FS_NOT_TEXT" })), false);
+  assert.equal(new Error("backend exploded") instanceof Error && isNotFound(new Error("backend exploded")), false, "无码的普通后端异常 = 判不了");
+
+  // (d) **v1.15.95 修的误扩宽**：空路径是**调用方传坏参数**，不是「目标不存在」
+  //     （宿主形状：`dsh-fs-local/lib/index.js:154`/`:772`，码也是 `FS_NOT_FOUND`）
+  assert.equal(isNotFound(Object.assign(new Error("file_path must be a non-empty string"), { code: "FS_NOT_FOUND" })), false, "★ 空路径不得被判成「确认不存在」（旧版 true ⇒ 调用点 bug 被静默成「还没有数据」）");
+
+  // (e) 两个调用点：**严格桩**（缺失 ⇒ 抛宿主形状）+ 各类错误 → 三态分类
+  const notFoundErr = Object.assign(new Error('cannot read "D:/ws/x": not found'), { code: "FS_NOT_FOUND" });
+  const strict = (behavior: () => any) => ({
+    resolve: async (p: string) => ({ targetKey: p, displayPath: p }),
+    readText: async () => behavior(),
+    listDir: async () => behavior(),
+    writeText: async () => behavior(),
+  });
+  const boom = (e: any) => () => { throw e; };
+  assert.equal(await fsExists(strict(boom(notFoundErr)) as any, "D:/ws", "rel/x"), "missing", "宿主真缺失 ⇒ missing");
+  assert.equal(await fsExists(strict(boom(Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }))) as any, "D:/ws", "rel/x"), "undecidable", "EACCES ⇒ undecidable（不得判 missing ⇒ 假漂移）");
+  assert.equal(await fsExists(strict(boom(Object.assign(new Error("write failed (ENOENT: x) and temp close failed (x)"), { code: "FS_NOT_FOUND" }))) as any, "D:/ws", "rel/x"), "undecidable", "★ 写失败 ⇒ undecidable（不是 missing）");
+  assert.equal((await referenceEvidence(strict(boom(notFoundErr)) as any, "D:/ws", "re-1", "obs-1")).reason, "not_found", "宿主真缺失 ⇒ not_found（修复前旧判据只看 message ⇒ 误报 unreadable「存在但读不出」）");
+  assert.equal((await referenceEvidence(strict(boom(Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }))) as any, "D:/ws", "re-1", "obs-1")).reason, "unreadable", "EACCES ⇒ unreadable（不是 not_found）");
+  assert.equal((await referenceEvidence(strict(boom(Object.assign(new Error("write failed (ENOENT: x) and temp close failed (x)"), { code: "FS_NOT_FOUND" }))) as any, "D:/ws", "re-1", "obs-1")).reason, "unreadable", "★ 写失败 ⇒ unreadable");
+
+  // (f) 项③：**「还没有采集」静默 / 「读失败」可见**（正反对照）
+  const { summarizeQueryLog, renderQueryLogSummary, renderFitnessReport, buildFitnessReport } = await import("../dist/query/observatory.js");
+  const mk = (listDir: () => Promise<any>, readText: (t: any) => Promise<any>) => ({
+    resolve: async (p: string) => ({ targetKey: p, displayPath: p }),
+    listDir, readText,
+  });
+  const notCollected = await summarizeQueryLog(mk(boom(notFoundErr), boom(notFoundErr)) as any, "D:/ws");
+  assert.equal(notCollected.total, 0);
+  assert.equal(notCollected.readFailureNote, undefined, "「还没有采集」是正常的 ⇒ 不得报错（否则每次全新工作区都吓人）");
+  assert.match(renderQueryLogSummary(notCollected, ""), /尚无 shadow_query 记录/, "「还没有采集」照旧提示去查几次");
+
+  const denied = await summarizeQueryLog(mk(boom(Object.assign(new Error('cannot list "D:/ws/.shadow/query-log": permission denied'), { code: "FS_PERMISSION_DENIED" })), boom(notFoundErr)) as any, "D:/ws");
+  assert.equal(denied.total, 0);
+  assert.ok(String(denied.readFailureNote || "").includes("读取 .shadow/query-log 失败"), "★ 读失败必须留痕（旧版与「还没采集」不可区分）；实际 " + JSON.stringify(denied.readFailureNote));
+  const deniedText = renderQueryLogSummary(denied, "");
+  assert.ok(deniedText.includes("读不到 query-log") && !deniedText.includes("尚无 shadow_query 记录"), "★ 渲染必须说真话，不能把读失败说成「尚无记录」；实际：\n" + deniedText);
+  assert.match(renderFitnessReport(buildFitnessReport(denied, [])), /读不到查询样本/, "★ `mode:\"shadow-report\"` 是同一个静默口的第二出口，也必须说真话");
+
+  // **单个文件读失败不得丢弃已累计样本**（旧版落在外层 catch ⇒ 整体归零且与「目录为空」不可区分）
+  const mixed = await summarizeQueryLog(mk(async () => [{ name: "a.jsonl" }, { name: "b.jsonl" }], async (t: any) => {
+    if (String(t.displayPath).includes("b.jsonl")) throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    return '{"type":"recall","latencyMs":10}';
+  }) as any, "D:/ws");
+  assert.equal(mixed.total, 1, "★ 一个文件读失败不得把另一个文件读到的样本丢掉");
+  assert.ok(String(mixed.readFailureNote || "").includes("b.jsonl"), "★ 且必须点名是哪个文件读失败");
+  assert.ok(renderQueryLogSummary(mixed, "").includes("b.jsonl"), "★ 有样本时披露也要落到正文（旧版 `badLinesNote` 只挂在对象上、渲染时丢掉）");
+  console.log("✔ ⑧ isNotFound 边界锁：宿主真缺失=是、写失败/EACCES/目录/空路径=否；query-log「还没有采集」静默、「读失败」可见");
 }
 
 console.log("");

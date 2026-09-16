@@ -34,6 +34,12 @@ export declare const component: (abs: string, ws: string) => string;
  * ① 因此先排除写侧形状，② 再认宿主的读侧形状（`: not found`），③ 最后认
  * Node 的 `ENOENT` 与测试桩直接抛的 `FS_NOT_FOUND` / `no such file` 文本。
  * EACCES / 后端异常 / 其它 I/O 错误一律 `false` ⇒ 调用方走「不可读」分支（ADR-0049 的「缺件不静默」侧）。
+ * **①b（v1.15.95）**：宿主对**空路径**也用 `FS_NOT_FOUND` ⇒ 「输入校验失败」也在排除之列
+ * （同上一条的反例探针表 1「空字符串路径」行：不排除就会被判成「确认不存在」）。
+ * ⚠ **本判据的 `^` 锚点是它唯一的软处**：写侧两条排除都要求消息**以**该形状开头，
+ * 若将来某层给 fs 错误统一加前缀（如 `[shadow] write failed (…)`），排除会失效、
+ * 而 ③ 仍会因内层 `ENOENT` 命中 ⇒ 写失败被读成「不存在」。实测当前**没有**这样的包装层
+ * （探针表 1「写失败**被前缀包裹**」行 = `true`，而真实宿主经 `ctx.fs` 直出，无前缀）。
  */
 export declare const isNotFound: (e: unknown) => boolean;
 export declare const topicsInText: (text: string, fallback?: string) => string[];

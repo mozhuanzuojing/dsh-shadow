@@ -3,6 +3,69 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.95] 跟进三处「未核实」—— 扫出并修掉一处**数据丢失级**缺陷（`_meta.json` 读失败 ⇒ 全工作区元数据清零且报成功）
+
+用户 2026-09-16 续指令「继续」的第 2 件：把 `v1.15.94` 条目里登记的三条「未修 / 未核实」逐条从**不确定**变成**确定**。
+结果：**两条确认无风险、一条扫出真缺陷**。
+
+**① 判据「扩宽」有没有误扩宽？—— 没有；而且发现那处「扩宽」其实是修 bug**
+
+- 探针 `probe-a-widening.ts` **实例化真实宿主后端**（`@deepseek-ai/dsh-fs-local`）造 8 类真实错误，
+  逐条喂给 `isNotFound` 与**旧版两份正则**做对照（产物 `widening-contrast.txt`）。
+- 写侧形状（`write failed (ENOENT…)` + 码 `FS_NOT_FOUND`）⇒ 仍 `false` / `undecidable` / `unreadable`
+  ⇒ **没有扩宽**（相对旧 `fs` 版是**收窄**，即修）。
+- `EACCES`、`FS_PERMISSION_DENIED`、目录（真实抛 `FS_NOT_REGULAR_FILE`）⇒ 全 `false`。
+- `evidence/filesystem.ts` **零扩宽**（判据：凡 `new=true` 的行，`old(fs)` 也都 `=true`）。
+- `federation/reality.ts` 的「扩宽」实为**修 bug**：旧判据只看 `message`，而宿主缺失文本
+  `cannot read "…": not found` **不含** `FS_NOT_FOUND` ⇒ 旧版把**真缺失**报成「存在但读不出」。
+- **唯一误扩宽（已修）**：空路径抛 `file_path must be a non-empty string` + 码 `FS_NOT_FOUND`（`:154`/`:772`）
+  ⇒ 被判成「确认不存在」，会把**调用点 bug 静默成「还没有数据」**。`isNotFound` 增 ①b 排除。
+- 残留（据实登记，未改）：写侧两条排除靠 `^` 锚点；若将来某层给 fs 错误统一加前缀，排除失效而 ③ 仍命中内层 `ENOENT`。
+  实测当前**没有**包装层（真实宿主经 `ctx.fs` 直出）。
+
+**② 宽松 fs 桩普查 —— 52 处 / 高危 31 处（19 个文件），并由此扫出**一处真缺陷**
+
+- 口径：50 个测试文件、27 个含 fs 桩；对「不存在 / 读失败」返回空串 · 空数组 · 恒真的桩点 **52 处**
+  （高危 31 / 中危 2 / 无害 19，另 13 处严格桩对照）。
+- **真缺陷（本轮最重）**：`persistence/meta.ts` 的读侧是无差别 `catch { txt = "" }` ⇒ **读失败 ≡ 不存在**
+  ⇒ `corrupt` 恒 `false` ⇒ `mutateMeta` 那道「**坏件不写回**」的闸门**不生效** ⇒ 空快照被整体写回
+  ⇒ **全工作区 `pinned` / `archived` / `compacted` / `hits` 清零，而且报成功**。
+  这与 `:73-79` 早就拦住的「解析坏件」后果**逐字相同**，只是入口不同 —— 判据必须同一条。
+- 它是「判据收一处」漏掉的**第四处**（前三处 = `evidence/filesystem.ts` / `federation/reality.ts` / `validation/history.ts`）。
+- 独立复现 `probe-meta-read-failure.ts`：修前 `corrupt=false`、`mutateMeta=true`、落盘只剩 `{"b.md":…}`、
+  `a.md` 的 `hits=5` 与 `pinned` **丢失**；修后 `corrupt=true`、`mutateMeta=false`、**`a.md` 原样保留**。
+- 修法：读侧改用同一条判据（与其余四处一致）；加严格桩断言锁住，含「**读失败时事务必须报未落盘**」。
+
+**③ `summarizeQueryLog` 该不该修？—— 该修，已修；顺着它又发现两处同类静默**
+
+- `total:0` 有两个来源：「还没有采集」（正常，静默）与「读失败」（事故，必须可见）。旧版并入同一个 `catch {}`
+  ⇒ 渲染成同一句「尚无 shadow_query 记录」，**把事故说成「多查几次」**。
+- 判据：这不属于「正当静默」—— `writeShadowReport` 的静默正当是因为**正文已随返回值原样交付、落盘只是副本**；
+  而这里失败的是**正文本身的来源**，没有替代通道 ⇒ 命中 ADR-0049。
+- 附带同类（一并修）：`badLinesNote` 自 `v1.15.56` 起**只挂在返回对象上、渲染时被丢掉**
+  ⇒ 「坏行已披露」只对直接读对象的测试成立，**读工具输出的人看不到**；
+  `renderFitnessReport`（`mode:"shadow-report"`）是同一静默口的**第二个出口**。三处一并落到正文。
+
+**验证**（本机语料根 `D:\project\dsh1`）
+
+- **反向实验 3 组各自造红**（只拆 ①b / 只拆 ③ 的披露 / 只拆 `meta.ts` 读侧分支）⇒ 断言非恒真。
+- `npm run build` → `npm run verify` ⇒ 末行 `[run-tests] ALL PASS ✅`（**60 个检查 60 通过**），exit 0。
+- `npm run audit:docs` ⇒ ①–⑤ 全绿（① 三方版本一致 = **1.15.95**）。
+- **父代理独立复核**（亲手跑 `probe-meta-read-failure.ts`）：① 行确认 `corrupt=true` / `mutateMeta=false` / `a.md` **保留**。
+- 证据入口：`vendor/.docs/fix/2026-09-16/INDEX.md` §3.3–§3.5（含可重放命令与正/反例表）。
+
+**未修 / 未核实（如实列出）**
+
+- 写侧 `^` 锚点的前缀脆弱性（当前无包装层，记**防御项**，未改）。
+- **未改**的同类线索（**生产代码**、非桩）：`persistence/files.ts:9-11`、`core/resource.ts:145/:149`、
+  `persistence/snapshots.ts:35/43/60`、`core/manifest.ts:30`、`core/projection-store.ts:89`、
+  `continuation/persist.ts:28-34` —— `readRel` 的 11 个调用点经查**全在读侧**（失败 ⇒ 内容当空），
+  **未见数据丢失** ⇒ 未判定（不是「已确认安全」）。
+- `resource-node.test.ts:129`、`t8-silent-degradation.test.ts:211` 判中危但**未造反例**。
+- A 组 19 个文件是否都真走到 `mutateMeta` **未逐个插桩**（仅 `hit-accumulation` 确认）
+  ⇒ 高危应读成「**1 个问题 / 31 处缺口**」。
+- 未端到端实测真机 `EACCES` / 只读挂载的出现频率。
+
 ## [v1.15.94] 修三条「能力降级」横幅 —— 同一根因：把「文件不存在」当成「读失败」；外加一处连带发现
 
 用户 2026-09-16 指令「跟一轮」本会话反复出现的三条降级横幅。**两条是真缺陷、一条是半缺陷**，前两条**同一根因**。

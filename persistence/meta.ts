@@ -1,4 +1,5 @@
 import { SHADOW_ROOT } from "../core/paths.js";
+import { isNotFound } from "../core/util.js";
 
 // dsh-shadow —— persistence/meta.ts：_meta.json 派生状态读写（Derived Artifact）。
 // 派生约定（ADR-0003 §3-7）：Memory 文件（.shadow/<date>/<time>-<entry>.md）是 source of truth；
@@ -58,13 +59,27 @@ export const readMetaVersioned = async (fs: any, ws: string): Promise<MetaSnapsh
     /* 目标不存在 / 后端不支持：版本保持 undefined */
   }
   let txt = "";
+  let corrupt = false;
   try {
     txt = await fs.readText(target);
-  } catch {
-    txt = "";
+  } catch (e: any) {
+    // **「还没有这个文件」与「读失败」必须分开**（v1.15.95 —— 本文件是「判据收一处」漏掉的**第四处**）。
+    // 旧版无条件 `txt = ""`：全新工作区（读不到 = 目标不存在）与**读失败**
+    // （EACCES / 只读挂载 / I/O 故障 / 后端报错）走同一分支 ⇒ `corrupt` 仍是 `false`
+    // ⇒ `:129` 那道「坏件不写回」的闸门**不生效** ⇒ `mutateMeta` 拿一份空快照整体写回
+    // ⇒ 全工作区 pinned / archived / compacted / **hits 清零**，而且**报成功**。
+    // 后果与 `:73-79` 拦住的「解析坏件」**逐字相同**，只是入口不同 ⇒ 判据必须同一条
+    // （`core/util.ts` 的 `isNotFound`，与 `validation/history.ts` / `federation/reality.ts` /
+    // `evidence/filesystem.ts` / `retrieval/ledger.ts` 一致）。
+    // 复现：`../.docs/fix/2026-09-16/probe-meta-read-failure.ts`（① = 修复前的毁灭路径）。
+    if (isNotFound(e)) {
+      txt = ""; // 真的还没有这个文件 ⇒ 全新工作区的正常情形，空件是对的
+    } else {
+      corrupt = true; // 读不出来 ≠ 空件 ⇒ 让上层拒绝把空快照写回（ADR-0049）
+      console.log("[dsh-shadow] _meta.json **读失败**（不是「不存在」）：已拒绝把空快照写回 —— 请人工修复", target, (e && e.message) || e);
+    }
   }
   let meta: any = {};
-  let corrupt = false;
   try {
     if (txt) {
       meta = JSON.parse(txt) || {};

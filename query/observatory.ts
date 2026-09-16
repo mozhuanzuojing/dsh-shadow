@@ -139,17 +139,30 @@ export const recordQueryObservation = async (fs: any, ws: string, cfg: any, obs:
   }
 };
 
-/** 汇总所有 query-log（跨日期），供 read_shadow({mode:"query-log"}) 展示。 */
+/** 汇总所有 query-log（跨日期），供 `read_shadow({mode:"query-log"})` 展示。 */
 export const summarizeQueryLog = async (fs: any, ws: string): Promise<any> => {
   const obs: any[] = [];
   let badLines = 0; // 无法解析的行数（**必须披露**，见下）
+  // **「还没有采集」与「读失败」必须分开**（v1.15.95，项③；ADR-0049）。
+  // 前者（目录/文件还不存在）是正常的新工作区 ⇒ 静默；后者必须**可见**。
+  // 旧版把两者并入同一个 `catch { }`，于是「EACCES / 后端故障 / 只读挂载」读出来
+  // 与「从没查过」**逐字不可区分**（都渲染成「尚无 shadow_query 记录」）——
+  // 一句把人引向「多查几次」的话，掩盖了真正要人处理的事故。
+  let readFailure: string | undefined;
   try {
     const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/query-log`, { cwd: ws });
-    const files = await fs.listDir(root);
+    let files: any[] = [];
+    // 目录不存在 ⇒ `isNotFound` ⇒ 尚未采集（正常）；其余 ⇒ 披露。
+    try { files = (await fs.listDir(root)) || []; }
+    catch (e: any) { if (!isNotFound(e)) readFailure = `列举 .shadow/query-log 失败：${errText(e)}`; }
     for (const f of files) {
       if (!f?.name || !String(f.name).endsWith(".jsonl")) continue;
       const target = await fs.resolve(`${ws}/${SHADOW_ROOT}/query-log/${f.name}`, { cwd: ws });
-      const text = (await fs.readText(target)) || "";
+      // 单个文件读失败**不得**丢弃已累计的样本（旧版落在外层 `catch` 里 ⇒ 整体吞掉、
+      // 且与「目录为空」不可区分 ⇒ 静默削样本，与 v1.15.56 修坏行是同一类）。
+      let text = "";
+      try { text = (await fs.readText(target)) || ""; }
+      catch (e: any) { if (!isNotFound(e)) readFailure = readFailure ?? `读取 ${f.name} 失败：${errText(e)}`; continue; }
       for (const line of String(text).split("\n")) {
         const t = line.trim();
         if (!t) continue;
@@ -158,9 +171,15 @@ export const summarizeQueryLog = async (fs: any, ws: string): Promise<any> => {
         try { obs.push(JSON.parse(t)); } catch { badLines += 1; }
       }
     }
-  } catch { /* query-log 目录不存在（尚未采集） */ }
+  } catch (e: any) { if (!isNotFound(e)) readFailure = readFailure ?? `定位 .shadow/query-log 失败：${errText(e)}`; }
   const agg = aggregateObservations(obs);
-  return badLines > 0 ? { ...agg, badLines, badLinesNote: `⚠ query-log 有 ${badLines} 行**无法解析**（已从统计中剔除）：下面的 total/覆盖率/drift 基于**被削过的样本**，不代表全部采集。` } : agg;
+  const withBad = badLines > 0 ? { ...agg, badLines, badLinesNote: `⚠ query-log 有 ${badLines} 行**无法解析**（已从统计中剔除）：下面的 total/覆盖率/drift 基于**被削过的样本**，不代表全部采集。` } : agg;
+  if (!readFailure) return withBad;
+  return {
+    ...withBad,
+    readFailure,
+    readFailureNote: `⚠ **读取 .shadow/query-log 失败**（这不是「还没有采集」）：${readFailure} —— 下面的数字只基于**读到的部分**，可能不完整。`,
+  };
 };
 
 const aggregateObservations = (obs: any[]) => {
@@ -234,7 +253,13 @@ const renderDim = (label: string, m: Record<string, { total: number; ev: number 
 };
 
 export const renderQueryLogSummary = (s: any, topic: string): string => {
-  if (!s || !s.total) return `（Query Observatory：尚无 shadow_query 记录。调用几次 shadow_query 后这里会给出命中/证据/关系/类型分布与 Node 稳定性。${topic ? ` topic=${topic}` : ""}）`;
+  const suffix = topic ? ` topic=${topic}` : "";
+  if (!s || !s.total) {
+    // **读失败必须可见**（v1.15.95）：`total:0` 有两个来源 —— 「还没有采集」（正常，照旧提示去查几次）
+    // 与「读失败」（要人管）。旧版一律渲染成「尚无记录」⇒ 把后者的信号抹掉（ADR-0049）。
+    if (s?.readFailureNote) return `（Query Observatory：**total=0 但不代表「从没查过」—— 读不到 query-log**。${suffix}）\n\n> ${s.readFailureNote}`;
+    return `（Query Observatory：尚无 shadow_query 记录。调用几次 shadow_query 后这里会给出命中/证据/关系/类型分布与 Node 稳定性。${suffix}）`;
+  }
   const lines: string[] = [`# Shadow Query Observatory · ${topic || "全部"}`, ""];
   lines.push(`总查询 ${s.total} · 平均候选节点 ${s.avgCandidate} → 返回 ${s.avgReturned} · 平均证据 ${s.avgEvidence} · 平均关系 ${s.avgRelation} · 平均延迟 ${s.avgLatency}ms`);
   lines.push(`- evidence 完整率：${s.evidenceCoverage}%（返回节点中带证据比例）`);
@@ -248,6 +273,10 @@ export const renderQueryLogSummary = (s: any, topic: string): string => {
     for (const d of s.drift) lines.push(`- "${d.query}" 见过 ${d.seen} 次 · 不同的结果集 ${d.distinctResultSets} 个`);
   }
   lines.push("");
+  // **两条披露都必须落到正文上**（v1.15.95）：`badLinesNote` 自 v1.15.56 起就只挂在返回对象上、
+  // 渲染时被丢掉 ⇒ 「坏行已披露」只对**直接读返回对象**的测试成立，**读工具输出的人看不到**。
+  if (s.badLinesNote) lines.push(`> ${s.badLinesNote}`);
+  if (s.readFailureNote) lines.push(`> ${s.readFailureNote}`);
   lines.push("> Query Observatory 为系统派生记录（.shadow/query-log/），rm -rf 不影响任何 Atom；仅观察，不改 nodes 结构。");
   return lines.join("\n");
 };
@@ -311,7 +340,12 @@ export const buildFitnessReport = (agg: any, parsed: ParsedMemory[]) => {
 
 export const renderFitnessReport = (r: any): string => {
   if (!r.agg || !r.agg.total) {
-    return `# Shadow Fitness Report\n\n> 生成：${r.date} · 依据：.shadow/query-log/*.jsonl（系统派生，rm -rf 可重建）\n\n**无查询样本**：尚无 shadow_query 记录。先跑一轮真实工程任务，再回来生成报告。\n\n> 只诊断、不增强；判定为启发式观察，非结论。`;
+    // 与 `renderQueryLogSummary` 同款（v1.15.95）：`total:0` 不等于「还没采集」——
+    // 读失败必须在这里也说真话，否则 `mode:"shadow-report"` 是同一个静默口的第二个出口。
+    const why = r.agg?.readFailureNote
+      ? `**读不到查询样本**（不是「还没采集」）：${r.agg.readFailure}`
+      : `**无查询样本**：尚无 shadow_query 记录。先跑一轮真实工程任务，再回来生成报告。`;
+    return `# Shadow Fitness Report\n\n> 生成：${r.date} · 依据：.shadow/query-log/*.jsonl（系统派生，rm -rf 可重建）\n\n${why}\n\n> 只诊断、不增强；判定为启发式观察，非结论。`;
   }
   const a = r.agg;
   const lines: string[] = [
@@ -347,6 +381,9 @@ export const renderFitnessReport = (r: any): string => {
     ``,
     `> 只诊断、不增强；判定为启发式观察，非结论。`,
   ];
+  // 有样本也可能**只读到一部分**（v1.15.95）：坏行与读失败都要落到正文上。
+  if (a.badLinesNote) lines.push(`> ${a.badLinesNote}`);
+  if (a.readFailureNote) lines.push(`> ${a.readFailureNote}`);
   return lines.join("\n");
 };
 
