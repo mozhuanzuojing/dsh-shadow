@@ -197,69 +197,23 @@
   config:
     # Experimental Agent Teams (0.1.5-rc.1). The host composition mounts
     # @deepseek-ai/dsh-experimental-agent-team, which publishes `agentTeams`;
-    # this row only adds the nine scoped tools, registered on each Team member
+    # this row adds the nine scoped tools, registered on each Team member
     # Agent's own ctx (`agents`/`tools`/`systemPrompt` are host registries it
     # consumes, so it needs no isolate realm). Every ordinary runtime root is an
     # implicit Team Lead, so the session agent gets: spawn_teammate, send_message,
     # list_agents, wait_agent, interrupt_agent, team_task_create/list/get/update.
     #
-    # NAME COLLISION (deliberate, documented upstream): `send_message`,
-    # `list_agents` and `interrupt_agent` are also the legacy continuable-subagent
-    # controls mounted just below. The Team variants are SCOPED to Team member
-    # Agents and SHADOW the globals for them; non-Team subagents keep the legacy
-    # catalog. So the Lead steers teammates, while plain `subagent` /
-    # `subagent_fork` children are no longer reachable by `send_message`.
-    # Upstream says a composition wanting both "must disable the legacy
-    # definitions"; we keep them on purpose so non-Team children retain controls.
-    # UNVERIFIED: whether keeping both mounts cleanly on 0.1.5-rc.1 — the Team row
-    # cannot activate in a live process that has not yet provided `agentTeams`.
+    # **Agent Team is the ONLY delegation mechanism in this preset** —— 用户 2026-09-16 定调
+    # 「如非必要，不得轻易开子代理」，故本预设的 `tool-subagent*` 全部工具行已删除，
+    # 只留这一行。因此这里**没有** legacy 同名冲突：`send_message` / `list_agents` /
+    # `interrupt_agent` 只由 Team 提供（scoped 到 Team member 的 ctx）。
+    # 副产品：宿主未提供 `agentTeams` 时这个预设的 agent **没有任何委派工具**（那就自己做）。
+    # 要恢复旧路径：从 git 历史取回被删的行（见 CHANGELOG / 本目录 README）。
     - id: tool-agent-team
       name: '@deepseek-ai/dsh-experimental-tool-agent-team'
       config:
         freshProvider: spawn
         forkProvider: fork
-
-    - id: tool-subagent-control
-      name: '@deepseek-ai/dsh-tool-subagent-control'
-
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
-    - id: tool-subagent
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent
-        backgroundMode: continuable
-
-    - id: tool-subagent-fork
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: fork
-        toolName: subagent_fork
-        backgroundMode: continuable
-
-    # Production dsh does not install these optional providers. Install the
-    # matching Bundle in this Profile and restart the Host, then copy this
-    # preset and remove `disabled` from the matching tool row. Host availability
-    # alone grants no tool.
-    - id: tool-subagent-codex
-      name: '@deepseek-ai/dsh-tool-subagent'
-      disabled: true
-      config:
-        provider: codex
-        toolName: subagent_codex
-        backgroundMode: one-shot
-        maxDepth: provider-managed
-
-    - id: tool-subagent-claude-code
-      name: '@deepseek-ai/dsh-tool-subagent'
-      disabled: true
-      config:
-        provider: claude-code
-        toolName: subagent_claude_code
-        backgroundMode: one-shot
-        maxDepth: provider-managed
 
     - id: workflow-worker-thread
       name: '@deepseek-ai/dsh-workflow-worker-thread'

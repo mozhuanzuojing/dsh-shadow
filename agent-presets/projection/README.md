@@ -27,12 +27,23 @@ auto-persisted into the shadow memory tree by the `dsh-shadow` plugin, and it
 should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
 a host bundle and is always on; this preset only steers how the agent uses it.
 
+> **Change note — v1.15.96+: Agent Team only, and「默认不派」.** 用户 2026-09-16 定调
+> 「子代理特别耗时、消耗 token；如非必要，不得轻易开子代理」⇒ this preset **removed every
+> `tool-subagent*` row** (`subagent`, `subagent_fork`, `subagent_codex`, `subagent_claude_code`,
+> `tool-subagent-control`, `tool-subagent-list-agents`). The composition's **only** delegation
+> mechanism is the Agent Team row (`@deepseek-ai/dsh-experimental-tool-agent-team`), and the
+> persona says **默认不派人**（够不上门槛就自己做）. Older paragraphs below that mention
+> "subagent experts", one-shot `subagent` / `subagent_fork` fallbacks, or the legacy name
+> collision describe the **pre-v1.15.96** wiring and are kept as history.
+> ⚠ Consequence: if the host does not provide `agentTeams`, this preset's agent has **no
+> delegation tool at all** (it does the work itself) — see「Prerequisite, and it fails silently」.
+
 The persona also carries the **delegation discipline** (v1.12.9, boundary tightened in
-v1.13.2): the agent acts as an orchestrator rather than doing every kind of work itself
-— split the task by type (implement / debug / review / research / docs / test / config),
-activate the matching subagent expert with a self-contained prompt, and dispatch
-independent work in one batch. Two reviewers with different lenses (correctness vs.
-contract/docs) are required for review work.
+v1.13.2; mechanism changed in v1.15.96): the agent acts as an orchestrator rather than doing every
+kind of work itself — split the task by type (implement / debug / review / research / docs / test /
+config), dispatch to a **teammate** with a self-contained prompt, and dispatch independent work in
+one batch. When review work is dispatched at all, two different lenses (correctness vs.
+contract/docs) are worth the extra member.
 
 **v1.13.2 draws the boundary between the orchestrator and its experts**, so neither side
 redoes the other's work:
@@ -105,7 +116,8 @@ loss when the member is used once**. The corrected rule is:
 > Decide by **how many times the member will be reused** — not by which mechanism feels more modern.
 
 **Judgement:** use a teammate only when it will serve **≥ 2 dispatches** (or the shared task board is
-genuinely needed); for a single one-shot use `subagent` / `subagent_fork`.
+genuinely needed); **for a single one-shot, do it yourself** — since v1.15.96 this preset mounts
+**no** `subagent` / `subagent_fork` row at all (see the change note at the top of this file).
 
 **The budget is a per-session lifetime cap, not a concurrency limit.** This is read off upstream
 code (`dsh-experimental-agent-team/lib/index.js`), not documentation:
@@ -122,9 +134,10 @@ preset's own largest explicit demand — two reviewers with different lenses (�
 one researcher — and beyond that the Lead should do the work itself or serialize it.
 **Residual risk:** 4 leaves no headroom for failed spawns; raise to 6 if that proves too tight.
 
-**Exhausting the budget is not a dead end.** `workflow`, `workflow-worker-thread` and `subagent`
+**Exhausting the budget is not a dead end.** `workflow`, `workflow-worker-thread` and `ralph`
 contain **zero** references to `agentTeams`, so they do **not** consume slots: the Lead can always
-fall back to doing it itself, to one-shot `subagent`, or to `workflow` fan-out.
+fall back to doing it itself, or to `workflow` fan-out. (After v1.15.96 there is no one-shot
+`subagent` fallback left — those rows were removed.)
 
 **Round-trip discipline** (the compounding half — there is no hard gate for this one): every peer
 message **permanently appends to the target's history** and is re-sent on every later request. So:
@@ -133,9 +146,12 @@ one dispatch = **one** message (task / constraints / acceptance / output format 
 prefer waking a `running` / `idle` member over an `inactive` one, because **cold-resume replays the
 whole persisted conversation**.
 
-> **Cost note, stated honestly:** this discipline costs **+235 characters** of always-on persona
-> (2394 → 2629, YAML-parsed length — what actually enters the prompt). That is a real, permanent cost paid to prevent unbounded delegation spend —
+> **Cost note, stated honestly:** the v1.15.11 discipline added **+235 characters** of always-on
+> persona (2394 → 2629, YAML-parsed length — what actually enters the prompt). That is a real, permanent cost paid to prevent unbounded delegation spend —
 > the trade is only worth it because the failure mode it guards against is a compounding one.
+> ⚠ **Current length (measured 2026-09-16, after the Team-only rewrite): `2915` characters.**
+> Re-measure with a YAML parse of `persona.config.prefix` whenever this persona changes — do not
+> carry the old number forward.
 
 What this preset adds in the composition, and what it requires:
 
@@ -146,7 +162,8 @@ What this preset adds in the composition, and what it requires:
 
 The nine tools are `spawn_teammate`, `send_message`, `list_agents`, `wait_agent`,
 `interrupt_agent`, `team_task_create`, `team_task_list`, `team_task_get`, `team_task_update`
-(`freshProvider: spawn` / `forkProvider: fork` mirror the preset's existing subagent providers).
+(`freshProvider: spawn` / `forkProvider: fork` mirror the delegation providers, which after
+v1.15.96 exist **only** here — the preset's own `tool-subagent*` rows were removed).
 
 **Prerequisite, and it fails silently.** The Team package injects `agentTeams`, so with no host row
 the row never activates — but `standingKeyFor` still reports a successful mount, and the nine tools
@@ -154,14 +171,13 @@ simply never appear. That contradicts this repository's ADR-0049「缺件不静�
 **no** visible degradation path. Install the host row (durable session storage is already in the
 base profile) before expecting the tools.
 
-**Name collision (deliberate, documented upstream).** `send_message`, `list_agents` and
-`interrupt_agent` are also the legacy continuable-subagent controls from
-`@deepseek-ai/dsh-tool-subagent-control` (+ its `/list-agents` entry), which this preset still
-mounts. The Team registrations are scoped to Team member Agents and **shadow the globals for
-them**; non-Team subagents keep the legacy catalog. Consequence: the Lead steers *teammates*, and
-its plain `subagent` / `subagent_fork` children are no longer reachable through `send_message`.
-Upstream says a composition wanting both "must disable the legacy definitions"; this preset keeps
-them on purpose so non-Team children retain their controls.
+**Name collision — no longer applicable (v1.15.96).** Upstream documents a deliberate collision
+between the Team tools and the legacy continuable-subagent controls
+(`@deepseek-ai/dsh-tool-subagent-control` + its `/list-agents` entry) for `send_message`,
+`list_agents` and `interrupt_agent`. That collision **cannot arise here any more**, because this
+preset removed every `tool-subagent*` row: in this composition those three names are provided by
+the Team row alone. Historical note: before v1.15.96 the preset mounted both on purpose so that
+non-Team children kept their controls.
 
 **Mount only once per process.** Mounting `tool-agent-team` a second time in the same process
 fails with `prompt section "team:policy" is already registered in this scope`. The package
