@@ -292,7 +292,18 @@ console.log(`✔ ⑥ 索引预算：${im![2]} 字 → 返回 ${im![3]} 字 + 按
   // 正控：那些**本来就短**的记忆 ⇒ 不得被说成「被省略」（否则披露本身在撒谎）
   const rShort = await host.read({ topic: "alpha", limit: 10, max_tokens: 4096 });
   assert.ok(!rShort.includes("> 分层省略："), `本来就短 ⇒ 不添一句话：\n${rShort.slice(-300)}`);
+
+  // 开关（v1.15.91 / `adr/0092`）：默认为**开**（判据走 `onByDefault`）；显式 `false` 只关「披露」，
+  // **不改「给了什么」** —— 这条正是开关的边界，必须钉住（否则「关掉省 token」会悄悄变成「关掉就多给内容」）。
+  // 条目渲染形如 `[.shadow/<日期>/<文件>.md]`（`mm.rel` 是**工作区相对**路径）
+  const rels = (s: string) => [...s.matchAll(/\[\.shadow\/[^\]]+\]/g)].map((m) => m[0]).join("|");
+  const offHost = makeHost({ summary: { enabled: false }, recall: { lossDisclosure: false } }, longSeeds);
+  const rOff = await offHost.read({ topic: "alpha", limit: 12, max_tokens: 256 });
+  assert.ok(!rOff.includes("> 分层省略："), `显式关掉后不得出现省略披露：\n${rOff.slice(-300)}`);
+  assert.ok(rels(rLoss).length > 0, "（前置）开着时确实返回了条目");
+  assert.equal(rels(rOff), rels(rLoss), "开关只许改「说了什么」，不许改「给了什么」（返回条目标识必须逐字相同）");
+  assert.ok(rOff.length < rLoss.length, `关掉应更短（少两行披露）：on=${rLoss.length} off=${rOff.length}`);
 }
-console.log("✔ ⑦ 分层省略：给条数 + 逐条句柄（可复取）；本来就短的记忆不被说成省略");
+console.log("✔ ⑦ 分层省略：给条数 + 逐条句柄（可复取）；本来就短的不被说成省略；开关（默认开）只改披露、不改内容");
 
 console.log("ALL PASS ✅");

@@ -465,7 +465,9 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   }
   const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
   // v1.15.89：分层省略披露（**条内**损失）必须在信封（**条级**损失）之前，两者分开说。
-  const lossNote = tierLossNote({ withheld, returned: parts.length });
+  // v1.15.91（adr/0092）：这条披露**可关**（`recall.lossDisclosure`，默认为开 —— 判据走 `onByDefault`）。
+  //   关掉只影响「说了什么」，**不影响给了什么**（降档与丢条目的判据与开关无关）。
+  const lossNote = onByDefault(recallCfg.lossDisclosure) ? tierLossNote({ withheld, returned: parts.length }) : "";
   const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
   await recordObservationTrace(fs, ws, {
     observerId: obsCtx.observerId,

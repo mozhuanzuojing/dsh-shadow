@@ -13,7 +13,7 @@ export interface ShadowConfig {
   /** v1.0.1 observer 层全局根：Global Observer Continuity Shadow 根（默认 ~/.dsh-observer）。 */
   observerGlobalRoot?: string;
   summary?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number };
-  recall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number; cooldownTurns?: number; debug?: boolean; /** v1.12.6 只降权不移除：命中的路径/入口含这些子串时打分乘 0.4（仍可搜到，只排名靠后）。默认空=不降权。 */ deprioritize?: string[] };
+  recall?: { enabled?: boolean; provider?: string; model?: string; maxTokens?: number; timeoutMs?: number; cooldownTurns?: number; debug?: boolean; /** v1.12.6 只降权不移除：命中的路径/入口含这些子串时打分乘 0.4（仍可搜到，只排名靠后）。默认空=不降权。 */ deprioritize?: string[]; /** v1.15.91（adr/0092）：**分层省略披露**（默认为**开**，只有显式 `false` 才关，判据走 `onByDefault`）。关掉后**给的条目一字不变**，只是不再声明「这几条本该有片段却被省略」⇒ 读侧**无法区分**「本来就短」与「被省略」（`adr/0090` 甲-1 的那条判据由你显式放弃）。见 `retrieval/loss.ts` 的 `tierLossNote`。 */ lossDisclosure?: boolean };
   /** 记忆保留（老化 hotness + `_meta.json` 建档）。**默认开**（v1.15.85「默认全开」）；`enabled: false` 关。 */
   retention?: { enabled?: boolean; halfLifeDays?: number; staleDays?: number };
   /** Episode/Decision Lineage（派生关系层）：控制聚合时间间隔；纯派生不改写侧采集。 */
