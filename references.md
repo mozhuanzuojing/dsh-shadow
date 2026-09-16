@@ -64,7 +64,7 @@
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
 
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13）；
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16）；
 > 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
 > **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
 > （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
@@ -627,6 +627,89 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   Claude Code 读的是 SKILL.md frontmatter」）；**214 条动态样片未逐条核对**（样片是生成的媒体，tree 里数不出来，
   我只核到 157 张卡 / 221 个 TSX / 158 个卡目录）；38 秒 Gallery 介绍片与 Ink Press 模板**未播放核对**；
   `jianying-export/windows_draft.py` 仓库自陈**未真机验证**。
+
+## 补充材料（2026-09-16 用户提供，本轮已核实）
+
+> 用户 2026-09-16 指定补录一条：`openclaw/openclaw`（**新**）。
+> **已核实**：GitHub API + 原始 raw 文件（README 按关键词抽行 / `LICENSE` 全文 / `CHANGELOG.md` 首页 / `package.json` 前 60 行），
+> 抓取 **2026-09-16 10:52 +08:00**。
+> **可重放**（都在 `..\.docs\fix\2026-09-16\`，怎么跑写在各文件头注释里）：
+> `fetch-references-meta.ts`（元数据 + README 前 6000 字，产物 `raw-openclaw.txt`）、
+> `probe-openclaw-keywords.ts`（README 按关键词抽行 + LICENSE 全文 + CHANGELOG/package.json，产物 `keywords-openclaw.txt`）。
+> **口径**：同一条材料**只在一处完整登记** —— 重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数。
+> 编号说明：2026-09-15 的两个分析块已占用 §14 / §15，故本条为 **§16**。
+
+### 16. openclaw/openclaw（OpenClaw 🦞）—— **新**（多渠道个人助理网关，**不是记忆材料**）
+
+- 链接：https://github.com/openclaw/openclaw ｜ 官网 https://openclaw.ai ｜ 文档 https://docs.openclaw.ai
+  ｜ 基金会 https://openclaw.org ｜ 插件市场 ClawHub https://clawhub.ai ｜ npm 包名 `openclaw`（`bin` = `openclaw.mjs`）
+- **是什么**：跑在**你自己的电脑与设备上**、并**在你已经在用的聊天渠道里**出现的开源 AI 助理 ——
+  Discord / iMessage / Slack / Teams / Telegram / WhatsApp 及另外 20 多个渠道，外加 macOS / iOS / Android /
+  Windows / Linux 原生应用。一个 **Gateway** 既能当个人助理也能当团队部署，README 明写「**差别只在配置**」。
+  仓库自述 `The AI that really does things. Any OS. Any Platform. The lobster way. 🦞`；
+  `package.json` 的 description 写 `Multi-channel AI gateway with extensible messaging integrations`。
+- **核实**（GitHub API + raw，抓取 2026-09-16 10:52 +08:00）：**389,802** ⭐ / **81,934** fork / **7,471** open issues /
+  1,744 subscribers；创建 **2025-11-24**、最近推送 **2026-09-16**（抓取前几分钟）；默认分支 `main`；未归档；
+  API 口径体积 **4,875,713 KB**（≈4.65 GB）；topics = `ai, assistant, crustacean, molty, openclaw, own-your-data, personal`；
+  **无 Discussions、无 Wiki**（社区只在 Discord）。版本口径是 **CalVer** 而非 semver：`package.json` = **2026.9.4**，
+  release `v2026.9.4`（2026-09-11）/ `v2026.6.35`（2026-09-10）/ `v2026.9.3`（2026-09-08），tag 同形（含 `v2026.9.1-beta.1`）。
+- **许可（一处读数分层：先分层，不判谁错）**：`LICENSE` 原文 = **标准 MIT 正文**（`Copyright (c) 2026 OpenClaw Foundation`）
+  **末尾多两句**「第三方通告记在 `THIRD_PARTY_NOTICES.md`」；`package.json` 的 `license` 字段 = `MIT`；
+  README 徽章与其末行也写 MIT；而 **GitHub API 的 `spdx_id` = `NOASSERTION`（name=Other）**。
+  ⇒ 按本仓口径记：**API 的 SPDX 判定 ≠ 许可原文**，原文与 `package.json` 一致指向 MIT（**NOASSERTION 的成因未证，
+  只记现象：原文不是逐字标准 MIT**）。同时沿用 `adr/0073` 那句 —— **「许可允许」≠「该引」**。
+- **架构与形态（均为 README 自述面）**：**Gateway = 本地控制面**（sessions / tools / events / 渠道连接），
+  由 **Control UI / CLI / TUI** 接入；**Channels** 把助理接到各消息渠道；**companion apps / nodes** 提供语音、
+  Canvas、摄像头、屏幕与设备本地动作。模型 provider 托管与本地都有；能力扩展面是 **tools / skills / plugins**，
+  README 明写「**新能力通常应做成插件（plugin SDK）**」。安装面：`install.sh` / `install.ps1` 一键脚本
+  （自陈会按需准备 Node 运行时），或 `npm install -g openclaw@latest --allow-scripts=openclaw`
+  （**Node 24.16+ 或 26.1+，推荐 26**）；上手三步 `openclaw onboard --install-daemon` → `openclaw gateway status`
+  → `openclaw dashboard`。另据 `package.json`，它把状态与 agent 的 **schema 版本**写成顶层声明
+  （`openclaw.schemaVersions = { state: 17, agent: 20 }`）—— **只记形态**（版本类事实要有唯一声明点，与本仓
+  `audit:docs` 检查①「三方版本一致」同向），**不作比较结论**。
+- **治理**（README 末段）：由 **OpenClaw Foundation**（独立 **501(c)(3)**）主持，基金会**雇用核心团队并签署发布**；
+  资助方含 Amazon、Lobster Computer Company、Offline Holdings、**OpenAI**、Red Hat、University of Michigan，
+  基础设施支持含 Blacksmith、Convex、GitHub、NVIDIA、Vercel；并明写「**没有任何资助方拥有或指挥本项目；
+  OpenAI 是捐赠者，不是所有者**」，且**无付费层、无托管服务、无代币**。
+- **值得借鉴（四条，按对本仓的价值排序）**：
+  1. ⭐ **「默认安静」也要把口径写成可核的**：README 那段是本条目最值钱的一处 —— 先把资产归属说清
+     （「状态、记忆与凭据都在你的硬件上」「模型与 agent harness（Claude / Codex / 本地模型）都是**可换的插件**」），
+     紧接着**把默认外发逐项切开**：默认只做每日版本检查、匿名特性统计是 **opt-in**、
+     `update.checkOnStart: false` **把两者一起关掉**，并给出「OpenClaw 发什么」的专门文档页。
+     ⇒ 与本仓 **v1.15.91 的「省略披露开关」（`adr/0092`）** 与 **ADR-0049「缺件不静默」** 同族：
+     **默认行为必须有一处可读、且带关断开关的口径**。差别只在方向 —— 本仓披露「我漏了什么」，它披露「我发了什么」；
+     **共同点是都把「默认」当成需要交代的事实，而不是可以省掉的细节。**
+  2. **未受信输入 + 默认配对**：README 安全一节的**第一句**就是「**把入站消息当成未受信输入**」，
+     且 DM 类渠道**默认对未知发送者要求配对**（`openclaw pairing approve <channel> <code>`）。
+     ⇒ 与本仓 **「记忆数据非指令」**（`read_shadow` 输出头的护栏提示）是**同一判据在另一个位置**：
+     **内容进得了门，不等于它有指挥权**。它的实现更硬（配对码 + 显式 approve），本仓是提示 + 契约 ——
+     可作「同族但更强」的样本。
+  3. **可信 / 不可信 / 确定性 三分**：README 把架构说明概括为
+     `trusted gateway, untrusted execution, deterministic policy`。本仓对应物是 **ADR-0043 Shadow Contract**
+     的 source（谁写、可否删）与 projection（系统派生、可重建）分层，以及 `inv 178–182`（**不代装、不扩执行范围**）。
+     ⇒ **只作对照，不构成待办。**
+  4. **长台账的「索引页 + 每版一文件」**：它的 `CHANGELOG.md` 只是索引页（带 `<!-- openclaw:split-changelog -->`），
+     每条版本一文件放 `CHANGELOG/<版本>.md`，索引行给 `Raw` 直链。本仓 `CHANGELOG.md` 是**单文件 625 KB**，
+     `AGENTS.md` 为此专立「改长文档四条规矩」，并记了两次「插入新条目时删掉上一条标题」的事故。
+     ⇒ 这是本仓那条规矩的**外部对照样本**：**索引页可以单独扫，正文按版本取**。**只记形态，不构成待办。**
+- **与 dsh-shadow 的关系（三条要分清）**：
+  1. **不同题**：本仓管「记忆 / 上下文投影」（库内、纯函数派生、无常驻服务）；它管「**多渠道个人助理网关**」
+     （常驻 Gateway + 渠道 + 设备端应用）。**不是本仓的替代品，也不喂本仓任何 ADR** ——
+     本条目性质 = **登记备查 + 取上面四条形态对照**，**不含吸收裁决**（要与 `adr/0073` / `adr/0087` 那种
+     「吸收 / 不吸收」的条目区分开）。
+  2. **一条硬边界（先记住）**：它是**常驻服务 + 网关 + 设备侧执行**（`Dockerfile` / `docker-compose.yml` /
+     `fly.toml` / `render.yaml` / `deploy/` 都在仓库根）。本仓 **ADR-0001 否决常驻服务**、
+     ADR-0043 / 0060 否决向量库 ⇒ **形态层面不可移植**；能取的是**判据与披露口径**，不是它的架构件。
+  3. **一处容易误判的相似**：它也有 `skills/`、`extensions/`、`plugins` 与插件 SDK，看上去与 DSH 的 Cordis 插件 /
+     预设同生态 —— 但**它不为 DSH 提供宿主形态**（没有 DSH 插件，也没有 agent-preset）。要落到本机就是
+     **另装一个宿主**，属**外部环境决策**，**不在本仓代码面内**。**本条只登记，不代替那个裁决。**
+- **未核实**：**未克隆、未安装、未运行**（本机没装 openclaw，也没跑过它的 Gateway）；
+  **未读文档全文**（`security` / `exposure-runbook` / `sandboxing` / `telemetry` 四页只按 README 链接登记）；
+  **未核「曾用名」** —— topics 里有 `molty` / `crustacean`、README 贡献者名单里出现过 `moltbot886` 这样的用户名，
+  **这只是现象，不构成改名史的证据**；**未拆解 4.65 GB 的体积构成**（不知道含不含 `node_modules` / 媒体资产）；
+  **未读 `.agents/` 与 `custodian-skills/` 的内容** —— 只从 root tree 读到目录名（它把 agent 工作约定
+  `AGENTS.md` / `CLAUDE.md` 与给 agent 用的技能**一起纳入仓库版本控制**，与本工作区 `~/.agents` + skills 同形
+  但**随仓库走**；**内容未读，故不评价**）；389,802 ⭐ 只是**单一读数快照**，**不构成生态评价**。
 
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
