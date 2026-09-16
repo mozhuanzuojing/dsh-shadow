@@ -3,6 +3,83 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.94] 修三条「能力降级」横幅 —— 同一根因：把「文件不存在」当成「读失败」；外加一处连带发现
+
+用户 2026-09-16 指令「跟一轮」本会话反复出现的三条降级横幅。**两条是真缺陷、一条是半缺陷**，前两条**同一根因**。
+
+**根因（一句话）**：插件假定「读不到文件 ⇒ 读到空」，而**宿主对不存在的路径 `readText` 是抛错的**
+（`dsh-fs-local/lib/index.js:339`：`cannot read "…": not found`，错误码 `FS_NOT_FOUND`）。
+本仓其它测试早就写明这条语义（`test/evidence-absolute-path.test.ts:22`「严格 fs：不存在的路径 readText 抛」），
+**但这两条路径的测试用的是宽松桩**（缺失 ⇒ `""`）⇒ 缺陷正好藏在「桩语义 vs 真实语义」的缝里。
+
+**① `queryLog`：观测层从未落盘过（真缺陷 · 永久性）**
+
+- 写入是「**先读旧内容、再追加**」；全新工作区上读必然抛错 ⇒ `catch` 直接返回失败 ⇒ **从未走到写**
+  ⇒ `.shadow/query-log/` **永远建不出来**（宿主 `writeText` 本来会 `mkdir -p`，`:497`）。
+  于是**默认开启**的观测层 100% 失效。
+- 横幅把原因写成「`.shadow/query-log/` 不可写」—— **猜错了**（真因是「读不存在的文件抛错」），把排障引向错误方向。
+- 修：拆开「读不到」与「读失败」；**只有「不存在」回落空串**；**非「不存在」的读失败直接失败、且绝不继续写**
+  （否则 append 会用截断内容**覆盖**已有日志 = 数据丢失）；写失败带真实原因。
+
+**② `_recall_log.json`：永久误报（真缺陷）**
+
+- `retrieval/ledger.ts` 里那条「文件为空 / 不存在 = 真的还没有台账」的分支，在真实 fs 下是**死代码**
+  （读缺失文件先抛错，走不到）⇒ 落 `catch` ⇒ `unreadable` ⇒ 每条**有命中**的召回都报一次。
+- 而读**无条件**发生、写被 `cooldownTurns > 0` 门住（默认 0）⇒ **该文件永不产生，横幅永久**。
+- 修：只有「不存在」才算「真的还没有台账」；`cooldownTurns === 0` 时**不读**台账（写入本就在同一个门里）。
+
+**③ `summary`：有信号但不可诊断（半缺陷）**
+
+- `core/writer-llm.ts` 取 `chunk.reason?.message`，而 aborted 的 reason **只有 `failure`**
+  （`dsh-llm/lib/types/types.d.ts:117`）⇒ **detail 恒空**；且这条 aborted **可能就是插件自己的 8 秒超时**
+  （`summary.timeoutMs` 缺省 8000）⇒ 与外部中断**不可区分**。
+- 修：改取 `reason.failure.{code,message}`，并标出「本插件超时（Nms）主动中止」。
+
+**④ 连带发现（比上面三条更值钱）：`validation` 时间线在全新工作区永远建不起来**
+
+- `validation/history.ts` 自己写了一份正则，**漏了 `FS_NOT_FOUND`**；而宿主消息 `cannot read "…": not found`
+  **不含** `ENOENT` / `no such file` / `not exist` 中的任何一个 ⇒「还没有时间线」被判成 **`corrupt`**
+  ⇒ 调用方对坏件的策略是**拒绝覆盖**（`validation/history.ts` 的 `appendValidationEvent`）
+  ⇒ 首次写**永远被拒**。
+- 根因同族：判据**各写一份且互不相同**（`evidence/filesystem.ts` 认得 `FS_NOT_FOUND`、`federation/reality.ts` 认得、
+  `validation/history.ts` **不认得**）⇒ 同一种「文件不存在」在三条链路上得到三种分类。
+- 修：三份正则**合并到一处** `core/util.ts` 的 `isNotFound(e)`。
+
+**⑤ 一处「修错了会更糟」的陷阱（留档）**
+
+宿主的**写失败也用同一个错误码** `FS_NOT_FOUND`（`dsh-fs-local/lib/index.js:461` 与 `:554`：
+`write failed (…) and temp close failed (…)`，其内层 cause 的文本常含 `ENOENT`）。
+⇒ 判据若只按错误码判，就会把**写失败**读成「文件不存在」，让「先读后写」的调用方以为「读到空、继续写」
+—— **写失败被静默吞掉**（违反 ADR-0049），比它原本要修的缺陷更糟。
+⇒ `isNotFound` **显式先排除写侧形状**，并由断言锁住（`test/t8-silent-degradation.test.ts` 的 ④a2 与 ④b 的 write-shaped 用例）。
+
+**验证**（本机语料根 `D:\project\dsh1`）
+
+- **复现探针**（同一份，修复前 / 后对照；`vendor/.docs/fix/2026-09-16/probe-shadow-degrade-repro.ts`）：
+  - 修复前（`degrade-repro.txt`）：严格桩下首写 `false` 且文件不存在；台账 strict = `unreadable`
+  - 修复后（`degrade-repro-after.txt`）：首写 `{"ok":true}` 且**文件落盘**；台账 strict = `undefined`；
+    **负对照**：写失败 `{"ok":false,"reason":"…write failed (EACCES…)"}` ⇒ **没被吞**
+  - 附带教训：契约由 `boolean` 收紧为 `{ok, reason?}` 后，**旧探针会给出假红** ⇒ 探针与被测契约是耦合的，已同步改
+- `npm run build` → `npm run verify`（带 `SHADOW_EVAL_ROOT`）⇒ 末行 `[run-tests] ALL PASS ✅`（**60 个检查 60 通过**），exit 0。
+- **反向实验**（每一处都真造过红，跑完均还原 + 重新 build）：整体回退 9 个源文件 ⇒ t8 两处红
+  （`aborted 的 detail 不得为空`，实得 `[""]`；`review-fixes` 断言 `0 !== 1`）；只回退 `query/observatory.ts` + `query/reads.ts`
+  ⇒ `写成功必须 ok:true` 红；只回退 `retrieval/ledger.ts` ⇒「文件不存在 ≠ 读不到」红；只回退 `query/query.ts` 的门
+  ⇒ 横幅复现；只把「读不存在 ⇒ 空串」改回整体失败 ⇒「观测首写必须落盘」红。
+- `npm run audit:docs` ⇒ ①–⑤ 全绿（① 三方版本一致 = **1.15.94**）。
+- ⚠ **端到端边界（未实测）**：横幅要从**真实输出**里消失，需**重启宿主**（运行中的宿主仍持有旧 `dist`）——
+  本轮未重启，故这一条留待重启后复核。
+- 重放：`vendor/.docs/fix/2026-09-16/INDEX.md`（3 个探针 + 4 份专家报告，含本轮排障报告 `expert-shadow-degrade.md`）。
+
+**未修 / 未核实（如实列出）**
+
+- `query/observatory.ts` 的 `summarizeQueryLog` 仍把「目录不存在」与「读失败」并成 `total: 0`
+  （**只读、无数据丢失**，故本轮不动）。
+- `evidence/filesystem.ts` 与 `federation/reality.ts` 改用共享判据后**行为扩宽**
+  （原先认不出的场合现在算「不存在」）⇒ 只跑了 `verify` 全绿，**未逐场景造反例**。
+- 其它测试里的宽松桩**未逐个改造**（只在 `test/t8-silent-degradation.test.ts` 加了 `strict` 开关）⇒ 同类缺陷可能仍藏在别处。
+- 一条方法论：这个「类」是按**语义**（把「不存在」当「读失败」）定义的，**不是按字符串**定义的 ——
+  用 `readText(...) || ""` 这种文本模式去扫，会漏掉 `validation/history.ts` 那种 `try{…}catch{ missing = … }` 的拼法。
+
 ## [v1.15.93] 结清 `v1.15.92`（`adr/0094`）留下的「下一步」—— 三块维护者面被标成可跳 · 术语表的「投影」改成有向
 
 用户 2026-09-16「**都处理**」= 把上一轮末尾列的两条欠账一起结掉。两件都是**文档说了与实际不符的话**，不是功能变更。

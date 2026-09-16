@@ -2,7 +2,7 @@
 // 智慧不是"永远正确"而是"能记住自己什么时候错过"——ValidationEvent[] 支撑 Decision Style / Anti Pattern / Wisdom。
 import { SHADOW_ROOT } from "../core/paths.js";
 import type { ValidationOutcome } from "./types.js";
-import { today } from "../core/util.js";
+import { today, isNotFound } from "../core/util.js";
 
 export interface ValidationEvent {
   time: string;
@@ -46,9 +46,9 @@ export const readTimelineDetailed = async (fs: any, ws: string, hypothesisId: st
     const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/validation/${hypothesisId}.timeline.json`, { cwd: ws });
     txt = await fs.readText(t);
   } catch (e: any) {
-    const code = e?.code ?? "";
-    const missing = code === "ENOENT" || /ENOENT|no such file|not exist/i.test(String(e?.message ?? e));
-    return { timeline: empty, corrupt: !missing }; // 不存在 ⇒ 正常的新时间线；读失败 ⇒ 坏件
+    // v1.15.94：判据收一处到 `core/util.ts` 的 `isNotFound`（原先本文件自己写了一份正则，
+    // 与 `evidence/filesystem.ts` / `federation/reality.ts` 的两份**互不相同**）。
+    return { timeline: empty, corrupt: !isNotFound(e) }; // 不存在 ⇒ 正常的新时间线；读失败 ⇒ 坏件
   }
   if (!String(txt ?? "").trim()) return { timeline: empty, corrupt: false }; // 空文件 = 尚无事件
   try {

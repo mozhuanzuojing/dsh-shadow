@@ -21,6 +21,8 @@ export interface StreamOpts {
      * 有了它，调用方才能把「为什么没有结果」记进降级台账、渲染到读者眼前。
      *
      * **无论 `label` 是否为空都会被调用** —— 这正是它与 `label` 的分工差别。
+     * `detail` 必须**可诊断**（v1.15.94）：`aborted` 的失败事实在 `reason.failure` 上而不是
+     * `reason.message` 上，取错了就恒为空（见 `finishDetailOf` 的注释）。
      */
     onSkip?: (reason: string, detail?: string) => void;
 }

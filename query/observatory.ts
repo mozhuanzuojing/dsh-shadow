@@ -3,13 +3,17 @@
 // 契约：
 //   - 观测是「系统派生记录」：写 .shadow/query-log/<date>.jsonl，rm -rf query-log 不影响任何 Atom；
 //   - 只在 shadow_query（mode:"query"）入口打点，不进 derive 真相路径；
-//   - 写失败**不再静默**（v1.15.65 / T8 第 4 条）：`recordQueryObservation` 返回 `boolean`，
-//     调用方据此经 `deps.noteDegrade` 留痕 ⇒ 读侧横幅可见。它**仍然不改变 query 的返回值**
+//   - 写失败**不再静默**（v1.15.65 / T8 第 4 条）：`recordQueryObservation` 返回
+//     `{ ok, reason? }`（v1.15.94 由 `boolean` 收紧 —— `false` 说不清**为什么**），
+//     调用方据此经 `deps.noteDegrade` 留痕 ⇒ 读侧横幅可见**真实原因**。它**仍然不改变 query 的返回值**
 //     （这是本条契约里唯一没变的部分）—— 但「不冒泡」与「不可见」是两件事，
 //     旧注释把后者也一并声明了，而那正是 T8 要修的缺陷。
+//   - **「还没有这个文件」不是失败**（v1.15.94）：追加式写入要先读回已有内容，而首写时文件不存在
+//     —— 真实 fs 对不存在的路径 `readText` 抛错，旧版把这个抛错归进失败 ⇒ 首写永远失败、
+//     `.shadow/query-log/` 从未被创建过（默认开启的观测层因此**一次都没落盘**）。
 //   - query/title 做轻量 scrub（密钥打码 + 剔除控制/双向字符），防敏感检索词与注入残留回显。
 import { SHADOW_ROOT } from "../core/paths.js";
-import { today } from "../core/util.js";
+import { today, isNotFound } from "../core/util.js";
 import { nodeTypeOf } from "../core/node.js";
 import type { ParsedMemory } from "../core/episode.js";
 import { sanitizeText, scrubUnsafe } from "../security/scrub.js";
@@ -66,34 +70,72 @@ export const evidenceBreakdownOf = (nodes: any[]): { byType: Record<string, { to
 
 const logRel = (date: string) => `${SHADOW_ROOT}/query-log/${date}.jsonl`;
 
+/** 异常 → 一句**能给读者看**的原因（不臆造，只搬真实异常信息）。 */
+const errText = (e: any): string => String((e && e.message) || e || "原因未知").replace(/\s+/g, " ").slice(0, 200);
+
 /**
- * 记录一次查询观测。返回**是否真的写入成功**（T8-A / ADR-0049，v1.15.65）。
+ * 一次观测写入的**结果**（v1.15.94 从 `boolean` 收紧为对象）。
+ *
+ * 为什么不是 `boolean`：`false` 只说得清「没写成」，说不清**为什么** —— 而调用点必须把原因写进
+ * 横幅（ADR-0049 的「可见」要能指向处置）。旧契约逼得横幅**猜**原因：
+ * `query/reads.ts` 写死「`.shadow/query-log/` 不可写」，而真实首写失败的原因常常是
+ * 「读既有文件时不存在」那一步（见 `recordQueryObservation`），把排障引向错误方向。
+ */
+export interface QueryObservationOutcome {
+  ok: boolean;
+  /** **仅在真失败时**给：真实的异常信息（含失败发生在哪一步）。`ok:false` 且无 `reason` = 未启用/无 fs。 */
+  reason?: string;
+}
+
+/**
+ * 记录一次查询观测。返回**是否真的写入成功 + 失败原因**（T8-A / ADR-0049，v1.15.65；原因 v1.15.94）。
  *
  * 旧契约是 `Promise<void>` + `catch { /* best-effort *\/ }` —— 写失败时调用方**无从知道**，
  * 于是 `.shadow/query-log/` 丢的记录与「从没查过」不可区分（读侧只会显示「尚无记录」）。
  * 这条是**默认开启**的能力，所以它的静默在 T8 的 7 条里优先级最高。
  *
- * 现在返回 `false` 时，唯一的租户（`query/reads.ts` 的观测写入点）会经 `deps.noteDegrade`
- * 记一条降级留痕 ⇒ 读者在横幅上看到「queryLog 写失败」。
+ * 现在返回 `{ ok:false, reason }` 时，唯一的租户（`query/reads.ts` 的观测写入点）会经
+ * `deps.noteDegrade` 记一条**带真实原因**的降级留痕 ⇒ 读者在横幅上看到「queryLog 写失败（为什么）」。
  *
- * `fs`/`ws` 缺失与 `enabled === false` 仍返回 `false`，但**不算降级** —— 前者是调用环境问题
- * （调用点本来就有 fs 守卫），后者是用户**显式**关闭，都不是「坏了」。
+ * **v1.15.94 修首写永久失败（缺陷 A）**：这是「先读后写」的追加式写入，而旧版把
+ * `readText` 那一步也当成**必成功** —— 真实 fs 对**不存在的路径**是**抛错**的
+ * ⇒ 全新工作区（`query-log/` 目录都还不存在）上读必然抛 ⇒ `catch` ⇒ `false`
+ * ⇒ **首写永远失败、目录永远建不出来、默认开启的观测层从未落盘过**。
+ * 现在「读不到（不存在）」当空串处理（照 `persistence/meta.ts#readMetaVersioned` 的写法，
+ * 判据复用 `core/util.ts` 的 `isNotFound`），**写失败仍然返回失败**。
+ * 目录由宿主 `writeText` 的 `mkdir -p` 建出来（`dsh-fs-local`），本函数不必自己建。
+ *
+ * `fs`/`ws` 缺失与 `enabled === false` 仍返回 `{ ok:false }`（**不带 reason**）——
+ * 前者是调用环境问题（调用点本来就有 fs 守卫），后者是用户**显式**关闭，都不是「坏了」。
  */
-export const recordQueryObservation = async (fs: any, ws: string, cfg: any, obs: QueryObservation): Promise<boolean> => {
+export const recordQueryObservation = async (fs: any, ws: string, cfg: any, obs: QueryObservation): Promise<QueryObservationOutcome> => {
   // 默认开启（本阶段就是要观察真实查询）；显式 queryLog.enabled=false 才关。
-  if (!fs || !ws) return false;
-  if (cfg?.queryLog && cfg.queryLog.enabled === false) return false;
+  if (!fs || !ws) return { ok: false };
+  if (cfg?.queryLog && cfg.queryLog.enabled === false) return { ok: false };
+  let target: any;
   try {
     const rel = logRel(obs.date);
-    const target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
-    const prev = (await fs.readText(target)) || "";
+    target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
+  } catch (e: any) {
+    return { ok: false, reason: `定位观测文件失败：${errText(e)}` };
+  }
+  // 追加式写入要读回**已有内容**，但「还没有这个文件」是**正常**的（第一次写）——
+  // 与「读失败」必须分开：旧版在这里把两者归成一个 `catch`，于是首写永远失败。
+  let prev = "";
+  try {
+    prev = (await fs.readText(target)) || "";
+  } catch (e: any) {
+    if (!isNotFound(e)) return { ok: false, reason: `读取既有观测失败：${errText(e)}` };
+    prev = ""; // 不存在 ⇒ 当空串（首写）
+  }
+  try {
     const line = JSON.stringify({ ...obs, query: scrubQuery(obs.query), nodeTitles: (obs.nodeTitles || []).map(tidy) });
     await fs.writeText(target, prev.endsWith("\n") || !prev.length ? prev + line + "\n" : prev + "\n" + line + "\n");
-    return true;
-  } catch {
+    return { ok: true };
+  } catch (e: any) {
     // **不再静默**：失败由返回值上抛给调用方去留痕。这里连 log 都不打是**有意的** ——
     // `console.log` 不算 ADR-0049 的可见信号，打了反而会让人以为「已经有信号了」。
-    return false;
+    return { ok: false, reason: `写入观测文件失败：${errText(e)}` };
   }
 };
 

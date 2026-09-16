@@ -214,13 +214,13 @@ npm run verify
 | 能力 | 默认 | 成熟度 | 降级行为（关闭 / 缺件时退到哪） | 晋级 / 启用标准 | 开着会怎样 · 怎么开 |
 |------|------|--------|--------------------------------|------------------|----------------------|
 | 采集与落盘 | **开**（无总开关） | **无开放未验证项**（ADR-0074 已于 `v1.15.40` 第 4 轮真机复核，**B3 闭环**） | 写失败 → `lastFlushError` + `console.error` → **读侧顶部横幅**（可见） | 仓库未定义 | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」（注②） |
-| 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ✅**可见**（T8 第 2 条，v1.15.65：降级台账 → 横幅，含原因与后果） | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
-| 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 → 观测丢弃，读侧显示「尚无记录」✅**可见**（T8 第 4 条，v1.15.65：`recordQueryObservation` 改返回 `boolean` → 调用点留痕） | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
+| 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ✅**可见**（T8 第 2 条，v1.15.65：降级台账 → 横幅，含原因与后果；`v1.15.94`：横幅改取 `reason.failure` 的 code/message —— 原先取 `reason.message` 而 aborted 的 reason **只有 `failure`** ⇒ detail **恒空**、无法判断是「本插件超时」还是外部中断） | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
+| 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 → 观测丢弃，读侧横幅**带真实原因** ✅**可见**（T8 第 4 条，v1.15.65；`v1.15.94`：`recordQueryObservation` 的返回值由 `boolean` 进一步收紧为 `{ok, reason?}` —— 原来只有真假、说不出「为什么」，横幅只能**猜**原因，一度把「读不到」写成「不可写」把排障引向错方向） | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
 | Episode 回溯 `episodes` | **开**（`showInIndex: 0` 关，注①） | 无开放未验证项 | derive 抛错 → 索引不列 Episodes 段（与「暂无连续任务片段」**渲染成同一句**）✅**可见**（T8 第 7 条，v1.15.65）；写 `_index.md` 失败 → `lastIndexError` → 读侧横幅（`v1.15.55`） | 仓库未定义 | `_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
 | 语义召回 B 档 `recall` | 关 | 无开放未验证项 | `expandTerms → []` → 只用原词跑 A 档 ✅**可见**（T8 第 3 条，v1.15.65） | 仓库未定义 | 开需 `recall = { enabled: true, provider, model }` |
-| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账读不到 / 坏件 / 写失败 → 各自留痕 ⇒ 冷却失效**可见**（T8 第 5 条，v1.15.65。注：v1.15.55 留的 `corrupt` 标记**此前没有任何消费者** = 等价于没留） | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
+| 冷热淘汰 `recall.cooldownTurns` | 关（0） | 无开放未验证项 | 台账**读不到（真 I/O 错误）/ 坏件 / 写失败** → 各自留痕 ⇒ 冷却失效**可见**（T8 第 5 条，v1.15.65。注：v1.15.55 留的 `corrupt` 标记**此前没有任何消费者** = 等价于没留。`v1.15.94`：**「还没有台账」不算降级** —— 首次运行不再报；且 `cooldownTurns=0` 时**不读台账**，因为写入本就在同一个门里） | 仓库未定义 | 设 `cooldownTurns: 5`：N 回合内不重复返回同一段 |
 | 召回 trace `recall.debug` | 关 | 无开放未验证项 | 无降级（仅不输出 diag，答案路径不变） | 仓库未定义 | 开需 `{ debug: true }` 或 `recall.debug: true` |
-| 召回降权 `recall.deprioritize` | 空（不降权） | 无开放未验证项 | 无降级（空配置不降权）。注：**启用后**降权只在 debug 输出可见 | 仓库未定义 | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**）；如 `["references-agents", "_reports"]` |
+| 召回降权 `recall.deprioritize` | 空（不降权） | 无开放未验证项 | 无降级（空配置不降权）。注：**启用后**降权只在 debug 输出可见 | 仓库未定义 | 路径/入口含这些子串的命中打分 ×0.4（**只降权不移除**）；如 `["references-agents", "_reports"]` |
 | 分层省略披露 `recall.lossDisclosure` | **开**（v1.15.91；`recall: { lossDisclosure: false }` 关） | 无开放未验证项 | **显式关掉** → 返回的条目**一字不变**，只是不再声明「这几条本该有片段却被省略」⇒ 读侧**无法区分**「本来就短」与「被省略」（`adr/0090` 甲-1 的那条判据被**显式放弃**；按 `adr/0085` 的裁定「用户显式关掉不留痕」） | 仓库未定义 | 关掉省约 150–250 字/次；开着才有 `> 分层省略：` + 逐条**句柄** —— **条内**损失与信封的**条级**损失分开说 |
 | 记忆遗忘 `retention` | **开**（v1.15.85；`retention: { enabled: false }` 关） | 有开放未验证项（ADR-0067 / ADR-0068 真机待验） | **显式关掉** → 不做 hotness 加权、`registerMeta` 直接 return ⇒ `_meta.json` 不建档；差异**不可见** ⚠️**静默**（v1.15.85 起这是**用户的选择** ⇒ 按 `adr/0085` 不再是候选缺陷，见上注） | 仓库未定义 | 默认即 hotness 加权（注③：`stale` **不是**排除项，它喂生命周期标签）；`retention = { halfLifeDays: 7 }` 调半衰期 |
 | GC / 归档 `forget` | **开**（v1.15.85；`forget: { enabled: false }` 关） | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | **显式关掉** → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | 默认即把低价值 / 过期记忆移出活跃召回集（**文件保留，Forget≠Delete ⇒ 不减磁盘占用**）；`staleDays` / `minHits` / `maxActive` 可调 |
@@ -382,7 +382,7 @@ node ../.docs/fix/2026-09-12/t15-module-ownership.ts   # 输出 27 行（**批�
 - **冷热淘汰（默认关，显式开启）**：`rawConfig.recall.cooldownTurns = 5` 时，`.shadow/_recall_log.json` 记录「带内容」发过的路径，N 回合内不重复返回；纯 URI 不带内容则不冷却。写失败降级为「不去重」，且**读侧横幅披露**（T8 第 5 条，v1.15.65：台账读不到 / 坏件 / 写失败各自留痕）。
 - **语义召回（B 档，默认关）**：`read_shadow(topic)` 默认走加权关键词召回（A 档，无外部依赖）。要更接近语义，配置 `rawConfig.recall = { enabled, provider, model, maxTokens, timeoutMs }`——`enabled: true` 且给了 `provider/model` 时，先用 `llm.stream` 扩展几个相关检索词，再打分召回；失败/未配置时退回 A 档并**在读侧横幅披露**（T8 第 3 条，v1.15.65；修前是**静默**的 —— 这条此前由本文档自己承认）。
 - **Memory Debugger**：`read_shadow(topic, { debug: true })`（或 `recall.debug: true`，默认关）返回召回管线 trace——`候选 → 命中(打分>0) → 冷却 → 预算 → 返回` 计数 + 每条召回「为什么命中（入口/主题/路径/正文打分拆解）/为什么被降权(cooldown/deprioritize)/状态」。默认路径不变。
-- **召回信封（截断不静默）**：借 PageIndex「成功/失败都返回带下一步的信封」——预算/`limit`/冷却砍掉的命中会在结果末尾**自报家门**（`未返回的命中：N 条（命中 M · 本次返回 K）· 原因分解 · 示例入口 · 下一步`，**N 恒等于 M − K**，冷却也计入），空命中不再是一句死路，而是给「换词/看索引/`shadow_query`/`recall_shadow`」四条可执行下一步 + **近似候选（显式标「未验证」）**；命中全在冷却时给的是「冷却中的命中（是命中，不是近似）」+ 冷却专属下一步。全部返回时不加任何多余文字。**已知边界**：信封本身不计入 `max_tokens` 预算，所以带信封的输出会比 `max_tokens` 多出这几行（换取「不静默丢」）。
+- **召回信封（截断不静默）**：借 PageIndex「成功/失败都返回带下一步的信封」——预算/`limit`/冷却砍掉的命中会在结果末尾**自报家门**（`未返回的命中：N 条（命中 M · 本次返回 K）· 原因分解 · 示例入口 · 下一步`，**N 恒等于 M − K**，冷却也计入），空命中不再是一句死路，而是给「换词/看索引/`shadow_query`/`recall_shadow`」四条可执行下一步 + **近似候选（显式标「未验证」）**；命中全在冷却时给的是「冷却中的命中（是命中，不是近似）」+ 冷却专属下一步。全部返回时不加任何多余文字。**已知边界**：信封本身不计入 `max_tokens` 预算，所以带信封的输出会比 `max_tokens` 多出这几行（换取「不静默丢」）。
 - **分层省略披露（可关，默认为开）**：预算/档位把某条降到「只给摘要」时，结果里会多两行 —— `> 分层省略：本次返回 N 条里有 M 条**只给了摘要**（片段/正文被档位或预算省略）—— 这与「该条本来就没有更多内容」不同` + `> 可复取：<句柄>`（句柄 = `.shadow/<日期>/<文件>.md#<入口>`：本仓**权威源就是文件** ⇒ 零新增存储）。**关掉**：`rawConfig.recall.lossDisclosure = false`（只省那两行，**返回的条目一字不变**）。判据与口径见 `adr/0090` 甲-1 与 `adr/0092`。
 - **读侧输出保留换行（v1.12.7 根因修复）**：`scrubFinal` 原先整篇套 `scrubUnsafe`（剔 `\u0000-\u001f`，连 `\t\n\r` 一起剔）→ 所有读侧 Markdown 被压成一行；现改用 `scrubUnsafeDoc`（保留 `\t\n\r`，仍剔其余控制符/双向覆盖符）。注入短语与 HTML 标签仍被剥离，「数据非指令」前缀不变。
 
@@ -390,7 +390,7 @@ node ../.docs/fix/2026-09-12/t15-module-ownership.ts   # 输出 27 行（**批�
 
 - **目的**：先跑真实查询数据，**不急着定型 nodes 结构**。在 `shadow_query`（`mode:"query"`）**旁路记录观测**——写 `.shadow/query-log/<date>.jsonl`，每条含 `date/ts/query/scope/limit/candidateNodes/returnedNodes/evidenceCount/evidenceNodes/relationCount/relationNodes/nodeTypes/nodeTitles/latencyMs`（query/title 轻量 scrub：密钥打码 + 剔控制/双向字符）。
 - **只读汇总**：`read_shadow({ mode: "query-log" })` 给出命中/证据/关系/类型/scope 分布 + **重复查询的 Node 稳定性**（同一查询 nodeTitles 是否一致，答"Node 是否稳定"；漂移则列出该查询的不同结果集数）。
-- **边界（Shadow Contract）**：观测是**系统派生记录**（`rm -rf .shadow/query-log` 不影响任何 Atom）；只在 `shadow_query` 入口打点，**不进 derive 真相路径**；**写失败静默**，绝不改变 query 返回值；**默认开启**（`config.queryLog.enabled=false` 才关）。
+- **边界（Shadow Contract）**：观测是**系统派生记录**（`rm -rf .shadow/query-log` 不影响任何 Atom）；只在 `shadow_query` 入口打点，**不进 derive 真相路径**；**写失败不改变 query 返回值**，但**不再静默**（留痕 → 读侧横幅，带真实原因；`v1.15.94` 起 `{ok, reason?}`）；**默认开启**（`config.queryLog.enabled=false` 才关）。
 - **核心问题（供真实数据回答）**：①Node 每次派生是否稳定；②`memory/code/document/decision/concept/resource` 是否够（真实查询冒出的 `task/constraint` 再补）；③`relations`（references/objective/belongs_to）是否够（真实需要 `implements/depends_on/contradicts/supersedes` 再加，**不提前设计 Graph**）。
 
 ### Shadow Fitness Report（Phase 1A.6）
@@ -639,5 +639,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.93`**（**两处文档收敛**，都不是功能变更：① README 给三块**维护者面**（受保护契约面 / 模块归属表 / 工具集台账）各加一行 `维护者面 · 可跳` 标注（含**守着它的门**与**什么时候才需要看**），并在 `## 它做什么` 章首补导读 —— 只说清「哪块可以不读」，**不重写**那三块；② `CONTEXT.md` 术语表的「**投影**」由「三样并列」改为**有向**（灵魂 → 思维 → 笔记，回流只推进 `identity`、**不自动改 `soul.json`**），与首屏「思维是灵魂的投影」口径对齐）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.15.94`**（**修三条「能力降级」横幅 + 一处连带发现**：前两条同一根因 —— 插件假定「读不到文件 ⇒ 读到空」，而宿主对不存在的路径是**抛错**，于是**默认开启**的查询观测层**首写必失败、从未落盘**，冷却台账则**每条有命中的召回都误报一次**；第三条（摘要横幅）**有信号但 detail 恒空**、分不清「本插件超时」与外部中断。连带发现：`validation` 时间线在新工作区**永远建不起来**（它自己那份正则漏了宿主的 `FS_NOT_FOUND`，被判成坏件 → 按「拒绝覆盖」策略不落盘）。判据已**收一处**到 `core/util.ts` 的 `isNotFound`，并**显式排除**「宿主写失败用同一错误码」这个陷阱 —— 只看码会把写失败静默吞掉）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

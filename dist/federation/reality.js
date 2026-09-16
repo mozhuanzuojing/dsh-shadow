@@ -1,6 +1,6 @@
 // dsh-shadow —— federation/reality.ts：G2 Reality Evidence Registry（弱事实，append-only，Observer 只能引用不能拥有）。
 import { SHADOW_ROOT } from "../core/paths.js";
-import { today } from "../core/util.js";
+import { today, isNotFound } from "../core/util.js";
 export const registerRealityEvidence = async (fs, ws, ev) => {
     const full = {
         id: `re-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -36,8 +36,9 @@ export const referenceEvidence = async (fs, ws, id, observerId) => {
         txt = await fs.readText(t);
     }
     catch (e) {
-        const msg = String(e?.message ?? e ?? "");
-        return { evidence: null, reason: /ENOENT|FS_NOT_FOUND|not exist/i.test(msg) ? "not_found" : "unreadable" };
+        // v1.15.94：判据收一处到 `core/util.ts` 的 `isNotFound`（原先本文件只看 message、
+        // 且正则里没有 `no such file`，与 `evidence/filesystem.ts` 的那份**不同**）。
+        return { evidence: null, reason: isNotFound(e) ? "not_found" : "unreadable" };
     }
     try {
         const ev = JSON.parse(txt);

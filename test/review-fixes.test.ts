@@ -104,6 +104,41 @@ import assert from "node:assert/strict";
   const tl = await appendValidationEvent(fs2 as any, WS, "h2", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
   assert.equal(tl.events.length, 1, "全新时间线正常追加");
   assert.ok(String(fs2.files.get(`${WS}/.shadow/validation/h2.timeline.json`)).includes("e1"), "必须真的落盘");
+
+  // **宿主契约的严格桩（v1.15.94）**：`dsh-fs-local` 对不存在的路径抛
+  // `FsError('cannot read "…": not found', "FS_NOT_FOUND")` —— 这条消息**不含**
+  // `ENOENT` / `no such file` / `not exist` 任何一个，码也是 `FS_NOT_FOUND` 而不是 `ENOENT`。
+  // 上面那个桩抛的是 `ENOENT`，**恰好**落在旧判据里 ⇒ 长期掩盖了这条缺陷（真实后端上必现）：
+  // 旧判据 `code === "ENOENT" || /ENOENT|no such file|not exist/i` 认不出宿主形状 ⇒
+  // `missing=false` ⇒ `corrupt: true` ⇒ `appendValidationEvent` **拒绝覆盖**（见本文件上方 ③ 的策略）
+  // ⇒ **validation timeline 在全新工作区永远建不起来**（每次都判坏件、每次都不落盘）。
+  const mkHostFs = (denyRead: (p: string) => boolean = () => false) => {
+    const files = new Map<string, string>();
+    return {
+      files,
+      async resolve(path: string) { return { targetKey: path, displayPath: path }; },
+      async readText(t: any) {
+        const k = t.displayPath;
+        if (denyRead(k)) throw Object.assign(new Error(`cannot read "${k}": permission denied`), { code: "FS_PERMISSION_DENIED" });
+        if (!files.has(k)) throw Object.assign(new Error(`cannot read "${k}": not found`), { code: "FS_NOT_FOUND" });
+        return files.get(k)!;
+      },
+      async writeText(t: any, c: string) { files.set(t.displayPath, c); return { operation: "create", version: 1 }; },
+      async listDir() { return []; },
+    };
+  };
+  const host = mkHostFs();
+  const hPath = `${WS}/.shadow/validation/h3.timeline.json`;
+  const tlHost = await appendValidationEvent(host as any, WS, "h3", { evidenceIds: ["e9"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  assert.equal(tlHost.events.length, 1, "宿主形状的「不存在」必须被当成**还没有时间线**（而不是坏件）");
+  assert.ok(String(host.files.get(hPath)).includes("e9"), "★ 全新工作区必须真的把时间线写出来（修复前：误判 corrupt ⇒ 拒绝覆盖 ⇒ 永远建不起来）");
+
+  // **负对照**：真读失败（权限）仍必须算坏件、仍**拒绝覆盖**（修的是误判，不是把「坏件不落盘」这道闸门拆掉）
+  const hostDenied = mkHostFs((p) => p.includes("h4.timeline.json"));
+  hostDenied.files.set(`${WS}/.shadow/validation/h4.timeline.json`, '{"hypothesisId":"h4","events":[]}');
+  await appendValidationEvent(hostDenied as any, WS, "h4", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  assert.equal(hostDenied.files.get(`${WS}/.shadow/validation/h4.timeline.json`), '{"hypothesisId":"h4","events":[]}', "**负对照**：读失败（非「不存在」）仍算坏件 ⇒ 原样保留、不落盘");
+  console.log("✔ ③b 宿主形状（FS_NOT_FOUND / `cannot read …: not found`）的「不存在」不再被误判成坏件 ⇒ 全新工作区的时间线能建起来；真读失败仍拒绝覆盖");
   console.log("✔ ③ validation timeline 坏件：拒绝覆盖（历史保留），全新时间线正常追加");
 }
 
@@ -128,6 +163,10 @@ import assert from "node:assert/strict";
 
   const fresh = await readLedger(mkFs(undefined) as any, "D:/ws");
   assert.equal(fresh.corrupt, undefined, "文件不存在 ⇒ 是「真的还没有」，不是坏件");
+  // v1.15.94 补：这个严格桩（缺失 ⇒ 抛 `ENOENT`）此前**只断言了 `corrupt`**，
+  // 而「不存在被当成读不到（`unreadable`）」正是本轮那个假横幅的形态 ——
+  // 少断言一个字段，缺陷就在这条测试眼皮底下活了很久。
+  assert.equal(fresh.unreadable, undefined, "文件不存在 ⇒ 也不是「读不到」（与「真的还没有」必须同解）");
 
   const broken = await readLedger(mkFs("{ 半截") as any, "D:/ws");
   assert.equal(broken.corrupt, true, "★ 坏件必须显式标记，否则与「第一次运行」不可区分");

@@ -380,15 +380,36 @@ export async function runReadShadow(deps, args, exec) {
     if (!scored.length)
         return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)) }) + (debugMode ? "\n\n" + diag.join("\n") : "");
     const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
-    const ledger = await readLedger(fs, ws);
+    // v1.15.94：**没有冷却就别读台账**。
+    //
+    // 判据：台账的唯一用途是冷却 —— 读它的 `served` 做冷却判定（下面的 `:351`）、读它的 `turn`
+    // 供写台账时递进（下面的 `writeLedger`）。而**写**那一步本来就被 `cooldownTurns > 0` 门住
+    // （下面的 `if (cooldownTurns > 0 && servedDetail.length)`）；`recall.cooldownTurns` 默认**未设 = 0**
+    // ⇒ 默认配置下台账**永远不会被写**，却**每回合被读一次**：在真实 fs 上这一次读必然抛
+    // （文件不存在）⇒ 每回合一条假的「读不到」横幅（修完 `retrieval/ledger.ts` 后这条误报消失，
+    // 但「不用的东西不必读」这笔 I/O 仍应省掉，否则读失败在 0 冷却下会被误当成降级）。
+    //
+    // `turn` 在 `cooldownTurns === 0` 时的**全部**消费者核实过（grep `\bturn\b` 本文件）：
+    //   · `:351` 冷却判定 —— 自带 `cooldownTurns > 0 &&` 前缀，门内；
+    //   · `:424`/`:434` 写台账 —— 门内；
+    //   · `:457` `rec.lastSeen = turn` —— **门外的唯一一处**。它写进 `_meta.json`，而该字段
+    //     **全仓只写不读**（`grep lastSeen`：`core/memory.ts:82` 初始化、本处写；无任何读方），
+    //     且 0 冷却下没有任何写方会产生台账文件 ⇒ 该值在本改动前后**同为 1**。
+    //   ⇒ 0 冷却时 `turn` 取 0，与今天实践中读到的值一致。
+    const ledger = cooldownTurns > 0
+        ? await readLedger(fs, ws)
+        : { turn: 0, served: {} };
     // T8-A（v1.15.65，T8 第 5 条）：台账坏件/不可读**必须**可见 —— 两者都会把 `turn` 从 0 重算，
     // 于是冷却窗口整体作废、**已经冷却过的记忆被重新返回**（这正是 T8 列的后果）。
     // 上一版留了 `corrupt` 标记却**没有消费者**，等价于没留（标记没人看 = 静默）。
-    if (ledger.corrupt) {
-        deps.noteDegrade?.("recallLedger", "_recall_log.json **坏件**（无法解析或结构不对）", "本次按空台账处理 ⇒ **冷却状态可能失效**：已经冷却过的记忆会被重新返回，`recall.cooldownTurns` 事实上没生效。**另注**：本回合若走到写台账那一步，会把这份坏件**覆盖**掉（其内容已无法解析，但手工抢救的机会同时消失）");
-    }
-    else if (ledger.unreadable) {
-        deps.noteDegrade?.("recallLedger", `_recall_log.json **读不到**（${ledger.error || "原因未知"}）`, "本次按空台账处理且 `turn` 从 0 重算 ⇒ 冷却窗口整体作废，与「第一次运行」不可区分");
+    // 这两条横幅只在**真的会用到台账**时（`cooldownTurns > 0`）才有意义 —— 0 冷却时台账不参与任何判定。
+    if (cooldownTurns > 0) {
+        if (ledger.corrupt) {
+            deps.noteDegrade?.("recallLedger", "_recall_log.json **坏件**（无法解析或结构不对）", "本次按空台账处理 ⇒ **冷却状态可能失效**：已经冷却过的记忆会被重新返回，`recall.cooldownTurns` 事实上没生效。**另注**：本回合若走到写台账那一步，会把这份坏件**覆盖**掉（其内容已无法解析，但手工抢救的机会同时消失）");
+        }
+        else if (ledger.unreadable) {
+            deps.noteDegrade?.("recallLedger", `_recall_log.json **读不到**（${ledger.error || "原因未知"}）`, "本次按空台账处理且 `turn` 从 0 重算 ⇒ 冷却窗口整体作废，与「第一次运行」不可区分");
+        }
     }
     const turn = (ledger.turn || 0) + 1;
     const available = [];

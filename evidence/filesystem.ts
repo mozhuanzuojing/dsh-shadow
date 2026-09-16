@@ -1,5 +1,6 @@
 // dsh-shadow —— evidence/filesystem.ts：FsExistenceProvider（只答"还在不在"）。从 index.ts 迁出。
 import type { EvidenceMatch, EvidenceProvider, GatewayEvidenceRef, EvidenceResult } from "../core/types.js";
+import { isNotFound } from "../core/util.js";
 import { isAbsoluteLocator } from "./paths.js";
 
 /**
@@ -48,10 +49,10 @@ export const fsExists = async (fs: any, ws: string, rel: string): Promise<"exist
   // 判据要认**宿主契约自己的**标记：本仓的 fs 后端（`dsh-fs-local`）对不存在的路径抛
   // `FS_NOT_FOUND`（不是 `ENOENT`）—— 只看 ENOENT 会把「确认不存在」误判成「判不了」。
   // 见 `test/recall-attribution.test.ts:1363` 对宿主契约的忠实模拟说明。
-  const code = String(firstErr?.code ?? "");
-  const msg = String(firstErr?.message ?? firstErr ?? "");
-  const definitelyMissing = /FS_NOT_FOUND|ENOENT|no such file|not exist/i.test(`${code} ${msg}`);
-  return definitelyMissing ? "missing" : "undecidable";
+  //
+  // v1.15.94：这段判据**收一处**到 `core/util.ts` 的 `isNotFound` —— 它原先在本文件、
+  // `validation/history.ts`、`federation/reality.ts` 各写一份且三份正则不同（判据收一处）。
+  return isNotFound(firstErr) ? "missing" : "undecidable";
 };
 
 export const fsEvidenceProvider: EvidenceProvider = {
