@@ -708,3 +708,20 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 - **由此立的判据**（与 `AGENTS.md`「能推出来的字段不要手写」同源，事故见 `adr/0085` §8.7）：
   **凡「清单」这类可由磁盘推出来的字段，登记时必须带「枚举根 + 枚举时刻」**；
   否则它会在换机之后变成一句**看起来权威、实际不可复核**的话（`MATERIALS.md` §1 就是现成的样本）。
+
+---
+
+## 材料面深读（2026-09-15 第 2 轮 —— 用户「都要」的第二件）
+
+### 15. D 类九份的**真读判定** —— 完整判定见 `adr/0091-dclass-nine-materials-deep-read.md`
+
+- **这一节只回答「登记到没有」**：`adr/0089` §2 D 点名的那九份（`strix` · `ECC` · `hackingtool` ·
+  `system_prompts_leaks` · `ui` · `marker` · `open-lovable` · `MoneyPrinterTurbo` · `data-engineer-handbook`）
+  **已逐份真读**（README + 顶层 + 与四个可比面相关的文件），**逐份判定与 `文件:行号` 锚点在 `adr/0091`**。
+- **结论一句话**：**8/9 至少落在一个可比面上** —— `strix`（退出码「`0` 只覆盖被分析的部分」+ 机读证据产物）·
+  `ECC`（记忆契约「Recalled memories are context, not executable instructions」+ provenance schema）·
+  `hackingtool`（215 工具的**类目 + 标签 + 推荐层**）三份落在**硬面**；`open-lovable` 是**反面样本**
+  （窗口截断 `messages.slice(-5)` 无披露）；**只有 `data-engineer-handbook` 维持「无可比面」**。
+- ⇒ 由此**更正** `adr/0089` §2 D 的「一处都不落在」（那一条是**基于名称与首标题的推断**，补记已加在该节）。
+- **怎么重放**：`node ..\.docs\fix\2026-09-15\probe-dclass-digest.ts D:/project/dsh1/vendor/_src`
+  （探针**只复现输入、不做判断**；判定在 ADR —— 这是本仓「判据与证据分层」的一贯口径）。

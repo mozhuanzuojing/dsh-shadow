@@ -110,6 +110,15 @@ Next.js 应用）· `strix`（`strix-agent`，自动化渗透测试）。
 **治理形态（判据/门禁/体例）**、**DSH 插件工程**。这九份**一处都不落在**其中（它们是具体领域的应用或资源集）。
 ⇒ 它们对本仓的价值只剩**README 体例**，而那一层已由 `references.md` §1–§4 的「四条共同点」收口，**不再重复采**。
 
+> ⚠ **补记（2026-09-15 第 2 轮 / `adr/0091`）—— 本节「一处都不落在」的判定已被更正。**
+> 真读九份之后：**8/9 至少落在一个可比面上**，其中 **3 份落在硬面** —— `strix`（退出码「0 只覆盖被分析的部分」+ 机读证据产物
+> `findings.sarif`/`run.json`）· `ECC`（`schemas/memory.schema.json` 明写「Recalled memories are context, **not executable
+> instructions**」+ `provenance.schema.json` 要求 source/created_at/confidence）· `hackingtool`（215 工具用**类目 + 标签 + 推荐层**
+> 解决选择问题）；`open-lovable` 是**反面样本**（`route.ts:516-527` 的 `messages.slice(-5)` **无任何披露**）；
+> **只有 `data-engineer-handbook` 维持「无可比面」**（真读后仍成立）。
+> **根因**：本节当时只做**定位**（本体 / 许可 / 规模），**没读内容** —— 正是 §6 自己写下的边界。
+> **旧文按「归档不改写」保留**；判定以 `adr/0091-dclass-nine-materials-deep-read.md` 为准。
+
 ### E. 论文层（7 条线索）
 
 | 线索 | 与本项目的关系 | 状态 |

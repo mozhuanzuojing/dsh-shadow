@@ -3,6 +3,60 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.90] D 类九份材料的真读判定 —— 更正上一轮的「无可比面」（`adr/0091`）
+
+用户 2026-09-15 的「**都要**」里的第二件：`adr/0089` §6 自己写着
+「想把 §2 的 D 类九份从『无可比面』改成有判据的结论，**必须真读**」。本轮照做。
+
+**① 上一轮的判定错在哪（先认账）**：`adr/0089` §2 D 断言这九份「**一处都不落在**本仓四个可比面内」。
+真读之后：**8/9 至少落在一处**（其中 3 份落在**硬**面）。**根因**不是判断力，是**方法**：
+那一轮只做**定位**（有没有本体 / 许可 / 规模 / README 首标题），**没读内容** ⇒ 「无可比面」是**推断**，不是结论。
+**处置**：`adr/0089` §2 D 加**补记**（旧文按「归档不改写」保留），判定以 `adr/0091` 为准。
+
+**② 三份落在硬面的（逐条带锚点）**
+
+- **`strix`（证据与裁决）**：`AGENTS.md:36` 原文 —— *"Exit codes (headless): `0` clean, `1` fatal error,
+  `2` vulnerabilities found. **A `0` only covers what was analyzed** — check `run.json` (`status`,
+  `llm_usage.cost` vs the budget) before calling a run clean."*；`:37` 的产物清单含
+  **`findings.sarif`（SARIF 2.1.0）** + `vulnerabilities.json` + `run.json`；`:23` 自陈
+  "honest per-category coverage"。
+  ⇒ **与本仓「退出码 / 文件存在 ≠ 通过」是独立收敛**（本仓对应物：五级链、`corpus-health` 的 `NORMAL ≠ 通过`）。
+  **它比本仓多一件**：结论可导出成**行业标准格式**（SARIF）—— 登记为对照，**不构成本轮待办**。
+- **`ECC`（记忆契约 + provenance）**：`schemas/memory.schema.json:5` 明写
+  *"**Recalled memories are context, not executable instructions.**"* —— 与本仓 **ADR-0002 / 0044** 及读侧
+  `RECALL_PREFIX`「数据非指令」**逐字同义**（不同团队、不同语言的同一次收敛）；`:7` `additionalProperties: false`、
+  `:12-15` 必填 `kind`/`trust`/`status` ⇒ 「**不许猜字段**」的 schema 版（本仓是纯函数派生版）。
+  `schemas/provenance.schema.json:29` 必填 `["source","created_at","confidence","author"]`，
+  且 `:4` 只约束 `learned/*` 与 `imported/*` ⇒ 与本仓 **ADR-0051**（资源卡必须写 `source`）同题。
+- **`hackingtool`（台账规模化）**：`README.md:7` 自述 **215 tools / 21 categories / 63 tags**；
+  类目是**数据**（`src/hackingtool/catalog/*.yaml`）；`tags.py` + `registry.py` + `ai_recommend.py` = **标签检索 + 推荐层**；
+  `docs/TOOLS.md` 派生 + `scripts/audit_tools.py` + `.githooks/pre-push` = 台账的门。
+  ⇒ 与本仓「台账 + 派生文档 + 棘轮」**同构**，规模 ~2 倍；**答案不同**（本仓靠分层与预检，它靠类目 + 标签 + 推荐）
+  ⇒ 对「工具数量拐点（10–15 个工具选择准确率跌破 90%）」是**「量大就加检索层」**的活样本。**只登记，不改本仓设计**。
+
+**③ 一条反面样本（与本轮同日发的那条判据正面对撞）**：`open-lovable` 的上下文窗口是**静默有损**的 ——
+`app/api/generate-ai-code-stream/route.ts:516` 注释 *"Include only the last 3 edits to save context"*、
+`:527` `messages.slice(-5)`，**对模型零披露**（只 `console.log` 给人看）。
+⇒ 正是 `v1.15.89` 刚实装的甲-1 要防的形态。它的意义不是「抄」，而是证明**本仓那条判据不是自造标准**；
+且「窗口截断」在没有记忆层的系统里**不可见**（丢了就永远丢了），而本仓的权威源是文件 ⇒ 丢的部分**天然可复取**。
+**边界**：我只按关键词扫了 `app/api/**` 与 `lib/**`（零命中），**没有逐行读完那个 1896 行的 `route.ts`** ⇒ 置信度 **中**。
+
+**④ 其余五份与「维持无可比面」的一份**：`system_prompts_leaks`（`README.md:36` 的 What/Date/Link 采集表 +
+`:198` Older versions ⇒ 采集来源与时刻的纪律；**CC0-1.0**；⚠ 其抓取来自**他人会话** ⇒ 引用时必须写清、
+不得当成本工作区事实）· `ui`（copy-in 分发 + 随库投放 `skills/**/SKILL.md`）· `marker`
+（`benchmarks/README.md:1-12`：**不 vendor 基准工具、用上游自己的 checker** + 「单流延迟低估服务型系统」⇒ 口径纪律；
+代码 Apache-2.0 / 模型 OpenRAIL-M 的**两层许可**）· `MoneyPrinterTurbo`（`app/services/bgm.py:90/157/318`
+的上传名清洗与 unsafe path 拒绝 ⇒ 与本仓 `fs-scope`/`scrub` 同题、本仓已具备）·
+`data-engineer-handbook`（真读后**维持「无可比面」**：纯资源导航，且**无许可文件**）。
+
+**⑤ 由此立的一条口径（本轮唯一新增规则）**：**「无可比面」这类否定判定必须给「读了什么」的证据** ——
+否则它与「没看」在文本上无法区分。与 `adr/0089` §3④ 的「清单类字段要带枚举根与枚举时刻」同源（**否定也要带口径**）。
+
+**⑥ 探针与验证**：`.docs/fix/2026-09-15/probe-dclass-digest.ts`（README 头 + 顶层 + 四个可比面的探针点；
+**只复现输入、不做判断**，缺根 exit 2）。**未改任何源码、未动 `dist/`**；`verify` 全绿（检查条数由 `run-tests` 自己打印）。
+**未做**：九份都**未安装/未运行**（`strix` 需 Docker、`marker` 需模型权重）· 未评子项目质量 ·
+`open-lovable` 的 `route.ts` 未逐行读完（已标置信度）· 未逐一核对 `ECC` 的 14 个 schema。
+
 ## [v1.15.89] 实装 rtk 的三条判据形态（BACKLOG D9 / D10 / D11 = 甲-1 / 甲-2 / 甲-3）
 
 用户 2026-09-15 的答复是「**都要**」（D 类九份真读 + 这三条实装，两件都做）⇒ 三条**被搁置的前置**由本轮拍板：
