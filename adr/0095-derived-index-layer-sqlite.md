@@ -1,5 +1,14 @@
 # ADR-0095: 派生索引层 —— `.shadow` 是权威，SQLite 只做「索引 + 状态」（分三期；本 ADR 只冻结边界）
 
+> ## ⛔ 第一原则（2026-09-16 用户定调，**放在最顶部**）
+>
+> **`index acceleration MUST NEVER become a new source of truth or a new data-loss path.`**
+>
+> 由来：就在本 ADR 定稿的同一天，仓里查出一处**数据丢失级**缺陷（`v1.15.95`）——
+> `persistence/meta.ts` 把**读失败**当成**文件不存在** ⇒ `corrupt` 恒 false ⇒「坏件不写回」的闸门失效 ⇒
+> 空快照整体写回 ⇒ **全工作区 `pinned` / `hits` 清零且报成功**。**加速层若重犯这一类，后果比慢得多严重。**
+> ⇒ 索引层的**第一验收目标不是性能，而是「不新增真相、不新增丢数据的路径」**。
+
 - 状态：**已接受（方向）· 一期未实现**（2026-09-16，用户裁决；本 ADR 只冻结边界与分期，**不写实现**）
 - 决定日期：2026-09-16
 - 关联 ADR：**ADR-0001**（投影文件树而非向量库 —— 其 Notes 已留口「若日后召回不足，可在 `_index.md` 之上叠一层向量检索作为增强，而不推倒文件树」）· **ADR-0060**（多粒度检索的**形式** = 单索引 + 层级 + 路由；其「产品方向」部分**由本 ADR 承接**）· **ADR-0003**（派生件不是 source）· **ADR-0043**（Shadow Contract）· **ADR-0049 / 0085**（缺件不静默 / 降级台账）· **ADR-0051**（资源卡：源层与派生分离的同款手法）· **ADR-0042**（知识图边界：本 ADR 只做「可查询的关系表」，不碰认知层）
@@ -209,3 +218,109 @@
 2. 加 `provider:"sqlite"` + 指纹带 `INDEX_SCHEMA_VERSION` + 写侧失效信号解耦 + **默认开**。
 3. 先写**真实语料对照探针**并**证明它能测出差异**，再写 provider（否则「等价」无从谈起）。
 4. 用真实语料标定**重建成本**（8.8k 文件建表要多久）—— 这是「默认开」是否可接受的唯一判据。
+
+> ⚠ 本节（前置三问的答案）保留原文以便追溯；它上面的「开工清单」已被下面 **T17-A/B/C** 细化并取代。
+
+## T17 的边界、不变量与分期（用户 2026-09-16 定调）
+
+### 一、硬边界：**一期只做两件事**
+
+```
+IndexEngine
+    ├── fs      （default，行为不变）
+    ├── zg
+    ├── semble
+    └── sqlite  ← T17 只加这一个
+```
+
+一期 = `fs provider` + **`sqlite provider`**，而 SQLite **只做「加速候选生成」**。**明确不做**（写在这里，防止顺手扩大）：
+`sqlite-vec` · `embedding` · `hybrid ranking` · 新 retrieval 算法 · memory schema 重构 · `.md → sqlite` **迁移** · 新 Memory API。
+
+⇒ 也**不是**「把 SQLite 当存储迁移项目」——它是 `IndexEngine` 的**一个新 provider**。
+
+### 二、数据流必须保持（否则无法证明「只改性能、不改语义」）
+
+```
+.shadow/*.md ──(source of truth)──▶ SQLite Index ──(candidate generation)──▶ IndexEngine
+                                                                                │
+                                                                                ▼
+                                                            现有 read_shadow ──▶ 现有 ranking /
+                                                                            evidence / temporal /
+                                                                            projection
+```
+
+**反例（明令禁止）**：`.shadow → SQLite → 新的 retrieval → 新的 ranking`。走成那样，就再也说不清「语义没变」。
+
+### 三、不变量（**直接写进 ADR**）
+
+> **For identical `.shadow` state and identical query parameters, the `sqlite` and `fs` providers MUST produce
+> semantically equivalent candidate sets.**
+
+`Equivalent(A, B)` 的定义（**不要求 byte-for-byte** —— SQLite 的排序实现可能不同）：
+
+```
+canonical(memory) = { id, scope, type, validity, status }
+
+canonical(fsCandidates) == canonical(sqliteCandidates)
+```
+
+- 比较对象 = **`IndexEngine` 的候选生成结果**，**不要一上来比较最终 LLM context**。
+- **排序若属于上层 ranking，就不在 provider 层比较**（那是 `query/query.ts` 的职责）。
+- 需要覆盖的对照面：`memory id` · `scope` · `type` · `validity` · `deleted/superseded` ·
+  `ordering`（在 provider 层有定义时）· `limit` · 空结果 · `not found` · 坏文件 · 新文件 · 改过的文件 · 删掉的文件。
+
+### 四、失败模型：**继承 `failure ≠ absence`（`v1.15.95` 的教训）**
+
+四种状态**必须完全不同**，任何两种都不得合并：
+
+| 状态 | 行为 |
+|---|---|
+| `SQLite unavailable` | → **回退 `fs`**（慢但正确），并留可见的 `unavailable` + reason |
+| `SQLite corrupt` | → 回退 `fs` / **重建** |
+| `SQLite query error` | → **回退 `fs`** |
+| `SQLite **合法地**返回 0 行` | → **空**（这是结果，不是错误） |
+
+⚠ 这正是 `v1.15.95` 修掉的那类缺陷的索引版：**error ≠ empty**。第一原则（本文件顶部）在此落地。
+
+### 五、索引健康元数据（**`INDEX_SCHEMA_VERSION` 必须做**）
+
+- **必须**：`schema_version` —— 否则索引器升级后会读到旧索引（现有 `nodes.jsonl` 就缺这个令牌，属继承缺口）。
+- 可选（**metadata 而已，别搞成新系统**）：`generation` · `source_count` · `last_rebuild_at` · `last_source_scan`。
+
+### 六、基准：三个数字（真实语料 ≈ **8.8k** 文件）
+
+| # | 场景 | 为什么 |
+|---|---|---|
+| 1 | **cold rebuild**：8.8k `.md` → SQLite | 「默认开」是否可接受的唯一判据 |
+| 2 | **incremental update**：1 个 `.md` 变更 → SQLite | 决定「指纹变了就整体重建」够不够用 |
+| 3 | **startup**：SQLite 已存在 → ready | **最关键** —— 插件最怕「启动 DSH ⇒ 扫 8,800 文件 ⇒ 等 2/5/10 秒」；已有索引时应当只是 `open → check schema → ready` |
+
+### 七、分期 **T17-A / T17-B / T17-C**
+
+- **T17-A（只做 probe / benchmark / canonical diff —— ⚠ 不改生产代码）**
+  1. **真实语料对照探针**：同一批 query 走 `fs` 与 `sqlite` 两路 ⇒ **canonical diff**。
+     目标**不是**证明「SQLite 更快」，而是证明「**在相同语义约束下能产生等价候选集**」。
+  2. **反向实验（先造红，再相信探针）**：人为删除 sqlite 一条记录 ⇒ 必须红；改 `scope` ⇒ 红；改 `valid_until` ⇒ 红；
+     改排序 ⇒ 红；**遗漏新文件** ⇒ 红。
+     > **如果这些都造不出红，这个探针就没资格作为 T17 的验收依据。**（比 schema 本身更重要。）
+  3. 三个基准数字（上表）。
+- **T17-B**：实现 `SQLiteIndexProvider`，**只接 `IndexEngine`**（不动 ranking / evidence / temporal / projection）。
+- **T17-C**：验证矩阵 —— `fs` · `sqlite` · `sqlite unavailable` · `sqlite corrupt` · `schema mismatch` ·
+  `source changed` · `rebuild` · `8.8k cold build` · `incremental update`。
+  **全部通过之后，才考虑把 `sqlite` 设为默认。**
+
+### 八、OpenClaw：**只抄 30%**
+
+- **值得借**：`Markdown = canonical memory` · `SQLite = derived index` · `FTS5 = lexical retrieval` ·
+  `vector = optional` · `index rebuild = mandatory` · `fallback = filesystem`。
+- **不要借**：它的**整套 memory semantics**。本仓已有自己的 `Evidence` / `Temporal` / `Scope` / `Authority` /
+  `Projection` / `Identity` / `Verification` —— 整套搬过来**会破坏已经冻结的语义**。
+
+### 九、本阶段的取向：**不扩大 Cognitive Layer，先把底层夯实**
+
+```
+v1.15.95 ──▶ ADR-0095 ──▶ T17 ──▶ IndexEngine ──▶ fs / sqlite
+```
+
+一旦候选生成层做到「**便宜、确定、可重建、可降级**」，上面的 Experience / Reflection / Identity / Evidence /
+Temporal / Agency / Long Horizon 才有一个共同地基 —— **这比现在再加十个 `read_shadow(mode=…)` 值得。**

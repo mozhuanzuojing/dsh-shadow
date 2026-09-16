@@ -980,6 +980,19 @@
   `INDEX_SCHEMA_VERSION`（现有源指纹只由 `name:size:version` 拼成、**无版本令牌** ⇒ 索引器升级后会读旧索引；该缺口在现有
   `nodes.jsonl` 上**已经存在**，属继承来的）；⑶ 用真实语料标定**重建成本**（8.8k 文件建表要多久 —— 这是「一期默认开」是否可接受的唯一判据）。
 - ⚠ **不在本条内**：向量（二期，触发条件见 `adr/0060`）、状态层（三期）、写侧「Memory Value Gate」（另一个 ADR）。
+- **分期（用户 2026-09-16 定调，见 `adr/0095` 的「T17 的边界、不变量与分期」）**：
+  **T17-A** = 只做 **probe / benchmark / canonical diff**，**⚠ 不改生产代码**（真实语料 `fs` vs `sqlite` 的候选集 canonical diff +
+  **反向实验先造红**：删一条记录／改 `scope`／改 `valid_until`／改排序／遗漏新文件都必须红 + 三个基准数）；
+  **T17-B** = 实现 `SQLiteIndexProvider`，**只接 `IndexEngine`**（不动 ranking/evidence/temporal/projection）；
+  **T17-C** = 验证矩阵（`fs` / `sqlite` / unavailable / corrupt / schema mismatch / source changed / rebuild /
+  8.8k cold build / incremental），**全过之后才考虑 `sqlite default`**。
+- ⛔ **第一原则（写在 `adr/0095` 最顶部）**：**`index acceleration MUST NEVER become a new source of truth or a new data-loss path.`**
+  由此继承 `v1.15.95` 的教训 —— **error ≠ empty**：`unavailable` / `corrupt` / `query error` / **合法 0 行** 四种状态必须完全不同。
+- **硬边界**：一期**只加 `sqlite` 一个 provider**；**不做** `sqlite-vec` / `embedding` / `hybrid ranking` / 新 retrieval 算法 /
+  memory schema 重构 / `.md → sqlite` 迁移 / 新 Memory API。数据流必须保持「`.shadow` 权威 → SQLite **只做候选生成** →
+  `IndexEngine` → 现有 `read_shadow` → 现有 ranking / evidence / temporal / projection」。
+- **OpenClaw 只借 30%**：借 `Markdown=canonical` / `SQLite=derived index` / `FTS5=lexical` / `vector=optional` /
+  `rebuild=mandatory` / `fallback=filesystem`；**不搬它的整套 memory semantics**（会破坏本仓已冻结的 Evidence/Temporal/Scope/Authority/Projection/Identity/Verification）。
 
 ---
 
