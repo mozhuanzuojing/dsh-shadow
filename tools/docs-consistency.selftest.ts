@@ -34,9 +34,8 @@ interface Fixture {
   tableRows?: number;              // 默认开关表的**实际**数据行数（默认 2）
   declaredRows?: number | null;    // 表注声明的行数；null ⇒ 不写声明（测结构缺失）
   crlf?: boolean;                  // 用 CRLF 写全部文件（本仓工作副本就是 CRLF）
-  rowText?: string;                // README 版本历史表里**当前版本那一行**的正文（检查④）
+  rowText?: string;                // README **当前版本行**的正文（检查④；锚点在 v1.15.92 由「表里那一行」换成这一行）
   entryBody?: string;              // CHANGELOG 同名条目的正文（检查④）
-  omitRow?: boolean;               // 不写当前版本那一行（测检查④的结构缺失）
   changelogOlder?: string[];       // CHANGELOG 里**更旧**的版本号（检查⑤）；默认 ["0.0.1"]
   tags?: string[];                 // 造出的 tag 名（检查⑤），写进 `.git/refs/tags/`
   packedTags?: boolean;            // 把 tags 写进 `.git/packed-refs` 而不是松散 ref（测第二个来源）
@@ -62,16 +61,14 @@ const run = (f: Fixture) => {
       (declared === null ? "" : `**表注** ⓪ **行数**：原表 1 行 ⇒ **现 ${declared} 行**。\n`);
 
     const decoy = f.decoyAbove ? `> 说明：本仓的「当前版本：\`v0.0.1\`」是举例，不是真的。\n\n` : "";
-    const verLine = f.readmeVersion === undefined ? "" : `**当前版本：\`v${f.readmeVersion}\`** —— 最新几版摘要：\n`;
-    // **检查④的前置**：版本历史表里要有**当前版本那一行**，否则 ④ 会以结构缺失(2)退出，
-    // 把别的组的断言短路（第一版加 ④ 时就踩在这里 —— 见 ⑰）。
-    const pkgVer = f.pkg ?? "1.2.3";
-    const curRow = f.omitRow ? "" : `| v${pkgVer} | ${f.rowText ?? "摘要"} |\n`;
-    let readme = `# x\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n${curRow}| v0.0.1 | 旧行（归档层，**不该**参与判据） |\n`;
+    // **检查④的前置**（v1.15.92 起）：当前版本行本身 —— 旧前置是「版本历史表里那一行」，
+    // 而那张表已按用户指令从 README 删除（`adr/0094`）⇒ 锚点随之挪到这一行。
+    const verLine = f.readmeVersion === undefined ? "" : `**当前版本：\`v${f.readmeVersion}\`** —— ${f.rowText ?? "最新几版摘要"}：\n`;
+    let readme = `# x\n\n${table}\n${decoy}${verLine}`;
     if (f.readmeGateBlock !== null) {
       const block = f.readmeGateBlock ?? verify.split(" && ").map((s) => (s.startsWith("npm run ") ? `+ ${s}` : `+ npx ${s}`)).join("\n");
-      // ⚠ 这一支**也要带版本历史表**（检查④的前置），否则 ④ 报结构缺失(2) 会短路别的组。
-      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}\n| 版本 | 主题 |\n|---|---|\n${curRow}`;
+      // ⚠ 这一支**也要带当前版本行**（检查④的前置），否则 ④ 报结构缺失(2) 会短路别的组。
+      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}`;
     }
 
     const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n${f.entryBody ?? "正文"}\n`;
@@ -256,7 +253,7 @@ const run = (f: Fixture) => {
   const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", rowText: dup, entryBody: dup });
   assert.equal(r.code, 1, `README 版本行整段复制 CHANGELOG ⇒ 必须红（1）；实际 ${r.code}：${r.out}`);
   assert.match(r.out, /整段重复/, `报文应说清是逐字重复：${r.out.slice(0, 300)}`);
-  assert.match(r.out, /第 4 次出现/, "报文应带上复发次数（这是本缺陷的由来）");
+  assert.match(r.out, /已复发 5 次/, "报文应带上复发次数（这是本缺陷的由来）");
   console.log("✔ ⑮ 负对照：README 版本行与 CHANGELOG 条目 ≥40 字逐字重复 ⇒ 1");
 }
 {
@@ -267,12 +264,14 @@ const run = (f: Fixture) => {
   console.log("✔ ⑯ 正对照：只重合短片段（含同一条指向语）⇒ 0（阈值 40 生效）");
 }
 {
-  // ⑰ 结构缺失：版本历史表里**没有当前版本那一行** ⇒ 2（不是「一致」）。
-  //    本组同时是**加检查④时踩到的坑**的留档：fixture 的前置不齐会让 ④ 以 2 退出、短路别的组。
-  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", omitRow: true });
+  // ⑰ 结构缺失：README **没有当前版本行** ⇒ 2（不是「一致」）。
+  //    v1.15.92 起 ④ 的锚点**就是**这一行（旧锚点随版本历史表一起删除，见 `adr/0094`）。
+  //    **如实标注**：这一行同时是检查① 的对象 ⇒ 本 fixture 下会先由 ① 报结构缺失；
+  //    两条都以 2 退出、报文都点名「当前版本」，故此处只断言「点名 + 退出码」。
+  const r = run({ pkg: "1.2.3", changelogVersion: "1.2.3" });
   assert.equal(r.code, 2, `缺「当前版本」那一行应报结构缺失（2）；实际 ${r.code}`);
-  assert.match(r.out, /找不到当前版本那一行/);
-  console.log("✔ ⑰ 负对照：README 版本历史表缺当前版本那一行 ⇒ 2（结构缺失 ≠ 重复）");
+  assert.match(r.out, /当前版本/, `报文应点名「当前版本」：${r.out.slice(0, 200)}`);
+  console.log("✔ ⑰ 负对照：README 缺当前版本行 ⇒ 2（结构缺失 ≠ 重复；该行同时是检查① 的对象，已标注）");
 }
 
 // ── 检查 5：已经过去的版本必须都打过 tag ──

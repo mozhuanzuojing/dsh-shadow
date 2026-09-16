@@ -259,9 +259,16 @@ export const checkDeclaredTableRows = (root: string): { ok: boolean; code: numbe
 
 // ── 检查 4：README「当前版本」那一行**不得与 CHANGELOG 同名条目逐字重复** ─────
 /**
- * 判据（v1.15.75 补，**因为同一个缺陷出现了三次**）：
- * `README.md` 版本历史表里**当前版本**那一行，与 `CHANGELOG.md` 的同名条目之间，
+ * 判据（v1.15.75 补，**因为同一个缺陷出现了三次**；**v1.15.92 换锚点**）：
+ * `README.md` 的**当前版本行**（行首 `**当前版本：`），与 `CHANGELOG.md` 的同名条目之间，
  * **不得有 ≥ 40 字的连续逐字重复** —— 那一行应该是**摘要 + 指向**，不是第二份条目。
+ *
+ * ⚠ **锚点为什么从「版本历史表那一行」换成「当前版本行」**（v1.15.92 / `adr/0094`）：
+ *   用户 2026-09-15 决定**删除 README 的版本历史表**（历史归 `CHANGELOG` —— 本仓「同一件事只写一处」）。
+ *   表一删，旧锚点就**永久消失**：这条检查只会报「结构缺失」，不再回答任何问题。
+ *   ⇒ 换到**每次发版都会更新**的当前版本行上：**用途一字未改**（挡住「把 CHANGELOG 条目整段抄进 README」），
+ *   锚点换成不会消失的那一个。**这不是「改门掩盖失败」** —— 判据本身没动，且负对照 ⑮ 仍会响。
+ *   （副作用：该分支通常已被检查① 覆盖 —— ① 也要求这一行存在；这里保留它作**兜底**，并在标定 ⑰ 里如实标注。）
  *
  * 由来（三次同病，每一次我都「当成个例修掉了事」）：
  *   v1.15.66 §5 整表复制 `adr/0085` §8.6 → v1.15.72 的 README 版本行整段复制 CHANGELOG
@@ -290,12 +297,12 @@ export const checkReadmeRowNotDuplicate = (root: string): { ok: boolean; code: n
   try { ver = String(JSON.parse(readText(root, "package.json")).version ?? ""); } catch { /* 下面按缺失处理 */ }
   if (!ver) return { ok: false, code: 2, lines: ["❌ ④ **结构缺失**：`package.json` 里读不到 `version`。"] };
 
-  const rowIdx = readme.findIndex((l) => l.startsWith(`| v${ver} |`));
+  const rowIdx = readme.findIndex((l) => l.startsWith("**当前版本："));
   if (rowIdx < 0) {
     return {
       ok: false, code: 2,
-      lines: [`❌ ④ **结构缺失**：README 版本历史表里找不到当前版本那一行（\`| v${ver} |\`）。`,
-              "  怎么修：发版时在 README 的版本历史表里加一行 —— 本检查就是冲着「那一行」来的。"],
+      lines: [`❌ ④ **结构缺失**：README 里找不到当前版本行（行首 \`**当前版本：\`）。`,
+              "  怎么修：这一行是发版仪式的三处之一（见检查①），补上它 —— 本检查就是冲着「那一行」来的。"],
     };
   }
 
@@ -316,14 +323,14 @@ export const checkReadmeRowNotDuplicate = (root: string): { ok: boolean; code: n
   }
 
   if (!worst) {
-    return { ok: true, code: 0, lines: [`✔ ④ README 的 v${ver} 行与 CHANGELOG 同名条目**无 ≥${WIN} 字逐字重复**（该行 ${row.length} 字）`] };
+    return { ok: true, code: 0, lines: [`✔ ④ README 的当前版本行与 CHANGELOG 的 v${ver} 条目**无 ≥${WIN} 字逐字重复**（该行 ${row.length} 字）`] };
   }
   return {
     ok: false, code: 1,
     lines: [
-      `❌ ④ **README 的 v${ver} 版本行与 CHANGELOG 条目整段重复**：发现 ≥${WIN} 字的连续逐字片段 ——`,
+      `❌ ④ **README 的当前版本行与 CHANGELOG 的 v${ver} 条目整段重复**：发现 ≥${WIN} 字的连续逐字片段 ——`,
       `  「${worst.slice(0, 60)}…」`,
-      `  （该行 **${row.length} 字**。这是本缺陷第 4 次出现：v1.15.66 §5 / v1.15.72 / v1.15.74 / 本次。）`,
+      `  （该行 **${row.length} 字**。本缺陷已复发 5 次：v1.15.66 §5 / v1.15.72 / v1.15.74 / v1.15.90 / 本次。）`,
       "  怎么修：README 那一行**只留摘要 + 指向 `CHANGELOG`**；详细论证只写 `CHANGELOG` 与 `adr/` 下的 ADR。",
     ],
   };
