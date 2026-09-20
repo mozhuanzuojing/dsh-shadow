@@ -3,6 +3,84 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.16.0] Decision 原语层（`adr/0096` / T1）+ 模块归属表生成器回归本仓 + 清三处文档腐烂
+
+用户 2026-09-20 提出：**不要把那个决策推理服务（「jev」）当外部模型服务塞进本仓**，
+而要把它的**决策语义**吸收成一等原语 ——「LLM 负责想，Jev-like 负责判，Shadow 负责记住为什么判」。
+本版交付**协议与其实现（T1）**，以及为实现过程让开路的几处仓库卫生。
+
+### ① 先实测：提案里的五个原语，Jev 里只有一个真的存在
+
+只读核对 `vendor/_src/jev-ultrafast/jev_ultrafast/model.py`：`choice` **存在**（`model.py:81,91-106`，且是**唯一**题型）；
+`boolean` / `rank` / `threshold` 在 `model.py` 里 `grep` **0 命中**（`"Ranked by Jev"` 只是 inspector UI 文案，`static/app.js:107`）。
+值得吸收的是**两件**：`validate_choice`（`model.py:30-45`）那份**确定性校验契约**（键恰好等于候选集 / 每个 0–1 / 和 ≈ 1 / argmax == choice），
+以及 `request` 与 `raw_answers` 的**逐字留存**（`model.py:143,147`）—— 引擎的原始声明被当**证据**保留。
+后者是本层成立的关键：**记录引擎的声明**是「捕获」，不是 `adr/0037` 禁止的「生成」。
+
+### ② 两个对象：`captured` 与 `produced`（本版最重要的边界）
+
+- `captured` = **已经发生的**决定（source = 原文）⇒ 仍归 `core/episode.ts` 的 `DecisionEvent`，**一动未动**。
+- `produced` = 引擎**在决策那一刻声明的**选择 ⇒ 新增 `decision/` 层。
+
+`adr/0037` 正文**已冻结** ⇒ **只在其末尾加一节补记**指向 `adr/0096`（`git diff --numstat` = `27 0`，纯追加，6 个原标题全在）。
+补记把「❌ LLM 自动补 Reason」「❌ Confidence」两条**范围澄清**为：禁的仍是 **shadow 事后替已发生的决定编理由 / 编信心**；
+**不**禁「**逐字记录**引擎当时声明的输出」。
+
+### ③ 实现：一个原语 + 一个视图（**不是五个**）
+
+`decision/` **六个**文件 —— 相对提案删掉 `score.ts` / `boolean.ts` / `rank.ts` / `policy.ts`：
+
+- `types.ts` —— 稳定协议（**纯模块**：零 import ⇒ 进 `PURE_MODULES`，加 import 会被结构门判红）；
+- `guard.ts` —— 判据唯一实现 `declarationViolations`（判据收一处，choice 不再自判一遍）；
+- `choice.ts` —— **唯一原语** `choose` + **视图** `orderByReported`；
+- `engine.ts` —— 可插拔**后端表**（T1 只有 `heuristic-v1`；未知引擎名**显式** `unavailable`，**绝不静默 fallback**）；
+- `heuristic.ts` —— 确定性规则引擎（明示偏好 → 唯一逐字提及 → **都不命中就不可用**，**不猜**）；
+- `lineage.ts` —— 投影到**既有** `AtomLineage`（§8：接线不重建；`AtomEvidenceRef` 是**指针**抽象，
+  内联文本不硬塞进某个 `type` ⇒ locator 由调用方给**真实**位置，本文件**绝不生成证据**）。
+
+两条**刻意如此**（后来者别顺手改回去）：
+
+1. **`reportedDistribution` 可为显式 `null`**（该引擎不产出分布），但**不可为 `undefined`**（= 忘了填）。
+   T1 的规则引擎就报 `null` —— 规则引擎没有概率，**逼它编一组数就等于让 shadow 自己打分**
+   （踩 `planning/guard.ts:11` 的 `score → optimization → preference → value → identity` 链）。
+2. **不要求 `argmax === selected`** —— 与 jev 的 `validate_choice` **不同，是有意的**：一旦要求，
+   **选择就由那组数字决定**，那组数字于是成了 shadow 的优化目标。本层要的是两条**独立**事实。
+
+### ④ 代价与门禁（**都实测，不是估计**）
+
+- **主动增加接线债**（本层零生产消费者，是 `adr/0096` §7 的决定）：棘轮 `a1 23 → 31（+8）` ·
+  `a2b 0 → 0` · `a_total 38 → 46（+8）`；drift 侧**不变**（9 键 / 23 处）。两个 `--update-ratchet` 都跑了，基线**显式**重定。
+  ⚠ **教训**：先前用临时桩**预估**，桩给的是 `a1 +7 / a2b +1` —— **总量对得上、分桶对不上** ⇒ **分桶数只能实测**。
+- **门当场抓到了我一次**（值得记下来）：模块归属表生成器初版把 `=== "(root)"` **内联散在 5 处**
+  （`a` / `b` / `l` / `t` / `to`），`npm run verify` 在 `audit:ratchet` 处判红 **`b_keys 95 → 100（+5）`**；
+  收成一处 `isRoot()` 之后回到 **95**、绿。⇒ 「**判据收一处 / 修一类而不是修一条**」这条纪律
+  **有执行形态**（棘轮桶真的会数同一比较点散了几处），不是散文。
+- `audit:layers` **0 违规**，且在**新增 3 条方向禁令之后**仍绿：`decision` 现受
+  `core↛decision` / `decision↛query` / `decision↛tools` 约束（本层此前不受任何方向规则约束 —— 想要约束**必须改表**）。
+- `tsconfig.json` 的 `include` 加了 `decision/**/*.ts`：**不加就既不类型检查、也不产出 `dist/`**，
+  而测试 import 的是 `dist/` ⇒ 报错会指向「文件不存在」而不是类型错（会把人往错方向带）。
+- **不进受保护契约面**：不新增工具名、不新增 `mode`（**保持 62**）、不新增配置键（`adr/0096` §7）。
+- 新测试 `test/decision-primitive.test.ts` **十块全绿**：六条判据各有**反例**、边界正例（容差真的生效）、
+  「显式 `null` 合法 / `undefined` 非法」分得开、未知引擎不落回默认，外加一条**静态**断言
+  （`types.ts` 零 import + **字段名**里禁词 0 处）。
+
+### ⑤ 顺带清掉三处同类文档腐烂（都是实测发现的）
+
+| # | 腐烂 | 处置 |
+|---|---|---|
+| a | 守 `mode` 总数 **62** 的那道门被引成 `test/recall-envelope.test.ts:96` —— 而 `:96` 是一行 `readdirSync`，真断言在 **`:104`**（覆盖断言在 **`:111`**，此前还被引成 `:103` / `:112`） | 修 **8 处当前态**（`AGENTS.md` · `CONTEXT.md`×2 · `README.md` · `adr/0086`×4）；`CHANGELOG` 归档层按规矩**不动** |
+| b | 模块归属表「是**生成**的、**别在别处手写**」，而生成器指向 `../.docs/fix/2026-09-12/` —— **该目录已不在本机**（现存 09-14/15/16，全 `.docs` 下无任何 `t15*`）⇒ 两条**同时落空** | 按 `AGENTS.md` 的「**能复现的放 `tools/`**」，**重建为 `tools/module-ownership.ts`**（**28** 行 = 27 个目录 + `index.ts`；行数由工具打印） |
+| c | 受保护契约面**条数**三处不一（实测 **9** / `README` 写「8」/ `adr/0086` 写「七」），分组还**漏了 `tool-output-v1`**，而**没有门守这个数** | 统一为「**不写数、以 `README` 表 A/表 B 的 `id` 为准**」，并补上漏项 |
+
+**验证**：`SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` → **exit 0**，末行 `[run-tests] ALL PASS ✅`
+（**62 个检查全通过**：含 `audit:layers` 0 违规 / 纯模块 6 个 / 方向禁令 7 条、`audit:scripts` 0 违规、
+`audit:docs` 五条全 ✔、棘轮**两段**都「与基线逐桶相等」、插件面类型门、以及全部测试）。
+`adr/0096` §11 的自检项**逐条已实测**。
+
+**决策与判据**（权威）：`adr/0096-decision-primitive.md`（含 §11 自检，逐条已实测）。
+**未做**：§7「让 Shadow 成为 Agent 控制层」的**定位变更** —— 那是**另一个决定**，单独立项。
+
+
 ## [v1.15.99] T12 覆盖性 sweep（612 次运行全绿）+ 把探针**固化**成 `npm run sweep:timebomb`
 
 v1.15.98 修完 6 个炸弹后留了一条边界：「只取了一个假日期（2030-01-01），不是逐日 sweep」。本版把这条边界结掉，

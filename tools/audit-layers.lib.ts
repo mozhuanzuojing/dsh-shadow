@@ -12,8 +12,8 @@
 //     ① **文件级依赖图无环**（实测当前 0 个强连通分量）；
 //     ② **纯模块白名单零副作用**（`core/paths.ts` / `core/types.ts` / `core/util.ts` / `security/scrub.ts`
 //        当前 import 数为 0）+ **白名单腐化自检**（路径不存在即违规）；
-//     ③ **方向禁令**（当前实测 0 违规：core↛query / core↛tools / 任何层↛index.ts / 任何层↛agent-presets /
-//        persistence↛query / persistence↛index.ts）。
+//     ③ **方向禁令**（当前实测 0 违规；**条数与内容以 `DIRECTION_RULES` 表为准，这一行不抄** ——
+//        抄一遍就会在下次加规则时腐烂，本仓已有多起同族代价）。
 //   **明确不判**：层间环。实测**存在**一个 `{core, evidence, persistence}` 层间环（成因见上，非文件级环）
 //   ⇒ 若把它写成禁令，门**当场就是红的**，那就是**假闸门**（T13「不要造跑不起来的门」）。
 //
@@ -44,6 +44,7 @@ export const PURE_MODULES = [
   "core/types.ts",
   "core/util.ts",
   "core/polarity.ts",
+  "decision/types.ts",
   "security/scrub.ts",
 ];
 
@@ -54,6 +55,9 @@ export const PURE_MODULES = [
 export const DIRECTION_RULES = [
   { from: "core", to: "query", why: "读路径不得被 core 依赖（ADR-0003：派生件不是 source）" },
   { from: "core", to: "tools", why: "CLI 是外层" },
+  { from: "core", to: "decision", why: "决策原语是**派生层**，不得被 core 依赖（ADR-0096 §7；同 core↛query 的 ADR-0003 理由）" },
+  { from: "decision", to: "query", why: "原语不得依赖读路径（ADR-0096 §7：读侧消费原语，反向不许）" },
+  { from: "decision", to: "tools", why: "CLI 是外层" },
   { from: "persistence", to: "query", why: "写侧不得依赖读侧" },
   { from: "query", to: "tools", why: "CLI 是外层" },
 ];

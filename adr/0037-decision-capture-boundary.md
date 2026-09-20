@@ -98,3 +98,30 @@ Replay = Verification / Inspection
 - [x] `node test/episode-lineage.test.ts` ALL PASS（含 Decision Capture 场景）
 - [x] `node test/recall-attribution.test.ts` ALL PASS（invariant 1–240 回归）
 - [x] 真实 OpenAPI-Gateway `.shadow` 回放：聚合生效（286→3），旧数据 1 条误报决策（v1.1.1 只对未来生效）
+
+## 补记（2026-09-20，ADR-0096）—— 正文冻结不动
+
+> 本 ADR 正文是 **v1.1.0 / v1.1.1 冻结时**的边界，**一行不改**。下面只记「后来多了什么」，
+> 以及本 ADR 的哪几条在**哪个范围内**继续有效。
+
+`adr/0096`（Decision Primitive）在本 ADR 旁边新增了**另一个对象**：
+
+- 本 ADR 管的是 **`captured`（捕获的决策）** —— **已经发生的**决定，source = 原文。
+- `adr/0096` 新增的是 **`produced`（引擎产出的选择）** —— 引擎**在决策那一刻声明的**选择，
+  source = 引擎名 + **逐字原始输出**。
+
+**对账结论**（逐条见 `adr/0096` §6）：本 ADR 的「明确不做」**全部继续有效**，
+其中两条对 `produced` 补了**范围澄清**、**不是**废止：
+
+1. 「❌ LLM 自动补 Reason / LLM 抽取 Decision」—— 禁的仍是
+   **shadow 事后替一个已发生的决定编理由**；**不**禁「**逐字记录**引擎在决策时声明的输出」
+   （那是**捕获**一个确实发生过的声明，不是生成）。
+2. 「❌ Confidence（决策置信度）」—— 仍然**不引入**「shadow 对决策的信心」；
+   引擎自报的数按 `adr/0096` §4 归位命名（`reportedDistribution`），**不叫 confidence**。
+
+「❌ Decision Score / Quality」「❌ 自动判断『正确决策』」「❌ Preference/Value/Learning」
+「❌ DecisionStore/DB/Repository」**无任何澄清，原样继续有效**。
+
+⇒ 一条不变量因此**加强**，而非放松：
+**有 Decision ≠ 一定有 Outcome，有 Outcome ≠ 证明该 Decision 正确**
+（与本 ADR「有 Decision ≠ 一定有 Reason」同族）。

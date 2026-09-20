@@ -805,7 +805,8 @@
 > 「没有生产消费者」这句只说**登记册本身**没人读，**别读成「里面的面没人用」**（v1.15.72 就是这么读错的，见 `adr/0086` §8.7）。
 >
 > **模块归属表（本节下文那条「用户要求」）—— 补做方式：生成，不手写**：
-> `node ../.docs/fix/2026-09-12/t15-module-ownership.ts`（**27 行 = 26 个目录 + `index.ts`**；数目以**探针打印**为准）。
+> `node tools/module-ownership.ts`（**28 行 = 27 个目录 + `index.ts`**；数目以**工具打印**为准 ——
+> v1.16.0 起生成器在 `tools/` 里；旧路径 `../.docs/fix/2026-09-12/` 本机**已不存在**）。
 > 五列里**只有 `Reads` 与 `Must not own` 能从代码机械推出**（后者直接来自 `tools/audit-layers.lib.ts` 的
 > `DIRECTION_RULES` / `FORBIDDEN_TARGETS_EVERYWHERE`，**不写第二份禁向表**）；
 > **`Owns`（语义）与 `Writes`（副作用）不可机械推** ⇒ `Owns` 只对 ADR 定过的层给结论、其余**标未核**；

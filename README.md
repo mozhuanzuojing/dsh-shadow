@@ -311,7 +311,7 @@ npm run verify
 |---|---|---|---|---|---|
 | `tool-name-v1` | 新增工具（加名是加法） | 改名 / 删除（除非走下面的弃用流程） | `index.ts` 三处 `name:` | **有**：`test/host-probe.test.ts:104` 断言三个都在注册表里 | **无桶覆盖** —— 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** |
 | `tool-schema-v1` | 新增**可选**参数；新增枚举值 | 改名 / 删除参数；让未知枚举值落回默认 | `index.ts` 各工具的 `parameters.properties` 第一层键 | **有**：`tools/contract-surface.selftest.ts`（**冻结参数名清单**：缺名即红并点名、新增只报告；含差集判据与抽取判据的标定）+ `test/recall-envelope.test.ts:79-84`（`mode` 描述的长度 / 指针 / 关键字）。⚠ **只守「名字还在不在」** —— 参数的类型 / 枚举值 / 默认语义仍无人守 | 无桶覆盖 |
-| `read-mode-v1` | 新增 mode | 删除 / 改名旧 mode；**未知 mode 静默落回默认召回** | `query/reads.ts` 的 `modes: […]` + 各模块 `MODES` / `if` | **强**：`test/recall-envelope.test.ts:96`（断言恰为 **62**）+ `:103`（`CONTEXT.md` 的表必须覆盖全部 62） | **`:103` 本身就是棘轮**：新增 mode 不写进 `CONTEXT.md` 就红 |
+| `read-mode-v1` | 新增 mode | 删除 / 改名旧 mode；**未知 mode 静默落回默认召回** | `query/reads.ts` 的 `modes: […]` + 各模块 `MODES` / `if` | **强**：`test/recall-envelope.test.ts:104`（断言恰为 **62**）+ `:103`（`CONTEXT.md` 的表必须覆盖全部 62） | **`:103` 本身就是棘轮**：新增 mode 不写进 `CONTEXT.md` 就红 |
 | `retired-mapping-v1` | 追加映射 | 移除映射；让旧名 / 旧参数静默落空 | `query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage` | **强**：`test/recall-envelope.test.ts:201-223`（含参数级 `verify:true` / `args.recall`，且带**正控**：正名不得被拒） | 无桶覆盖，但**每条废止配一个断言** —— 等价于逐条棘轮 |
 | `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **有**：`tools/contract-surface.selftest.ts`（**冻结 `ShadowConfig` 顶层键清单**：缺键即红并点名、新增只报告；键由 `core/types.ts` 按**大括号深度**抽，避开嵌套键）+ 各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用** | 无桶覆盖 |
 | `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
@@ -332,22 +332,29 @@ npm run verify
 
 | 设防状态 | 契约 | 含义 |
 |---|---|---|
-| **有强门** | `tool-name-v1` · `read-mode-v1` · `retired-mapping-v1` · `memory-file-v1` · `derived-file-v1` · `prompt-segment-v1` | 有具体断言在守，改了会红（多条还带**正控**） |
+| **有强门** | `tool-name-v1` · `read-mode-v1` · `retired-mapping-v1` · `memory-file-v1` · `derived-file-v1` · `prompt-segment-v1` · `tool-output-v1` | 有具体断言在守，改了会红（多条还带**正控**） |
 | **有门（只守名字面，v1.15.83 补）** | `tool-schema-v1` · `config-keys-v1` | `tools/contract-surface.selftest.ts` 冻结**清单**：缺名即红并**点名**、新增只报告。⚠ **覆盖面就这么大** —— `tool-schema-v1` 只守参数**名**（类型 / 枚举值 / 默认语义不守）；`config-keys-v1` 只守**顶层键名**（子键不守，已生效键的默认语义归 `adr/0084`） |
-| **8 条全无棘轮桶** | —— | 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** ⇒ 契约面的守卫方式是 `verification`，不是 `ratchet`。**这是两类工具的分工，不是缺口** —— 不要为凑字段而新造桶（本仓已因「为凑形状而造东西」清理过一批） |
+| **无棘轮桶（全部契约）** | —— | 棘轮桶按**缺陷类**分（接线 / 漂移），**不按契约面分** ⇒ 契约面的守卫方式是 `verification`，不是 `ratchet`。**这是两类工具的分工，不是缺口** —— 不要为凑字段而新造桶（本仓已因「为凑形状而造东西」清理过一批）。⚠ **本行原先写「8 条」，而实测已是 9 个 `*-v1` id，且上面那条「有强门」当时漏了 `tool-output-v1`**（v1.16.0 一并修）⇒ **条数一律以本页表 A/表 B 的 `id` 为准，本行不写数** |
 
 ### 模块归属表（`| Module | Owns | Reads | Writes | Must not own |`）
 > **维护者面 · 可跳** —— 它回答「**一处改动该落在哪个模块**」。
 > 守着它的门：`npm run audit:layers`（方向禁令 / 无环 / 纯模块白名单），逐条判据见 `tools/audit-layers.lib.ts` 与 `adr/0086`。
 > **什么时候需要看**：要新加一层、或把某段逻辑搬家之前。
 
-**这张表是「生成」的，不是手写的。** 一级模块 **27** 个（= 26 个目录 + `index.ts`）× 5 列 = **135** 个格子，**手写必然腐烂**，
+**这张表是「生成」的，不是手写的**（v1.16.0 起**生成器就在本仓里**）。一级模块 **28** 个
+（= 27 个目录 + `index.ts`）× 5 列 = **140** 个格子，**手写必然腐烂**，
 而它的用途是「**暴露「谁开始越权」**」—— 本仓的「越权」**已有一份可执行判据**：
-`tools/audit-layers.lib.ts` 的 `DIRECTION_RULES`（4 条禁向）· `FORBIDDEN_TARGETS_EVERYWHERE`（2 个）· `PURE_MODULES`（5 个文件）。
+`tools/audit-layers.lib.ts` 的 `DIRECTION_RULES` · `FORBIDDEN_TARGETS_EVERYWHERE` · `PURE_MODULES`
+（**条数以表为准，本行不抄** —— 抄一遍就会在下次加规则时腐烂）。
 
 ```powershell
-node ../.docs/fix/2026-09-12/t15-module-ownership.ts   # 输出 27 行（**批数也由它打印**，别在别处手写）
+node tools/module-ownership.ts   # 打印整张表 + **行数**（别在别处手写这个数）
 ```
+
+> **为什么生成器回到了本仓**（v1.16.0）：它原先指向 `../.docs/fix/2026-09-12/t15-module-ownership.ts`，
+> 而那个日期目录**已不在本机**（`.docs/fix/` 现存 `2026-09-14` / `-15` / `-16`），整个 `.docs` 下
+> **没有任何 `t15*`** —— 于是「表是生成的」与「别在别处手写」**两条同时落空**。
+> 按 `AGENTS.md` 自己的结论「**能复现的东西放 `tools/`**」，重建在 `tools/module-ownership.ts`。
 
 **五个字段里只有两个能从代码机械推出，这里如实分开**：
 
@@ -640,5 +647,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.99`**（**T12 覆盖性 sweep + 探针固化**：12 个假日期 × 51 个测试 = **612 次运行全绿**（1.8 分钟），日期集压在 7 / 14 / 90 天这些默认阈值两侧；这次的口径同时固化成 `npm run sweep:timebomb`（`tools/timebomb-sweep.ts`），并写进 `AGENTS.md` 作为默认值变更的固定动作 —— 不再靠记性）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.16.0`**（新增 **Decision 原语层**（判据与理由见 `adr/0096`）：把「引擎在决策那一刻声明的选择」立成一等原语，并与 `adr/0037` 那条「已发生的人事决策」**分成两个对象**、永不混同；后台可插拔，但 T1 只有确定性规则引擎 —— **不引入任何外部模型服务**；同一版把模块归属表的生成器重建进本仓、并清掉三处同类文档腐烂）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 
