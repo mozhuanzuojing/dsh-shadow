@@ -64,7 +64,7 @@
 - https://github.com/VectifyAI/PageIndex
 - https://github.com/zvec-ai/zvec-grep
 
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16–§17）；
+> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16–§18）；
 > 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
 > **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
 > （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
@@ -803,6 +803,87 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 - `.agents/skills/` 只抽样读了 3 个 skill（`auto-qa` / `autoreview` / `diagnose-gateway`）与
   `technical-documentation/references/principles.md`，**其余 50+ 未读**；`docs/` 1,398 文件里只读了上文点到的 16 篇。
 - **未安装、未运行** ⇒ 「按文档声明能不能真跑起来」**未验证**（用户已明确不要跑，此项不是遗漏而是边界）。
+
+## 补充材料（2026-09-20 用户提供，本轮已核实）
+
+> 用户 2026-09-20 指令「顺便添加材料 https://github.com/browser-use/jev-ultrafast」。
+> **口径**：本节与 §16 同形 —— **联网核实读数 + 对照结论**，**未克隆、未安装、未运行**。
+> 抓取时刻：**2026-09-20 09:5x +08:00**，通道 = GitHub HTML 页面 + `raw.githubusercontent.com` 的
+> `README.md` / `pyproject.toml` / `LICENSE` + `git ls-remote` + `commits/main.atom`。
+
+### 18. browser-use/jev-ultrafast（Jev Ultrafast ⚡）—— **新**（浏览器 agent，动态索引动作空间；**不是记忆材料**）
+
+**它是什么**（据 README 自述与 raw 元数据，逐条可核）
+
+- 一句话（README 副标题原文）：**"A browser agent with a dynamic, indexed action space."** —— 给一个目标，
+  [TypeSafe 的 Jev](https://docs.typesafe.ai/introduction) 选出「操作 + 元素」，**只有操作是 `TYPE_TEXT` 时**
+  才让小 LLM 生成文本。`pyproject.toml` 的描述是另一句：**"A browser agent that chooses instead of generating."**
+- **GitHub About 的 description 只有三个词：`i. am. speed.`**；website = `https://browser-use.com`；**topics 为空**。
+- 语言 / 构建：**Python**（`requires-python = ">=3.12"`，`uv sync` 驱动）；**运行依赖只有两条** ——
+  `browser-harness==0.1.13` + `httpx[http2]>=0.28,<1`；`pyproject.toml.version = 0.1.0`；`license = "MIT"`。
+- 读数（**2026-09-20 抓取时刻，页面读数**）：**8,553★ / 540 fork / 20 watcher**；`license = MIT`
+  （页面 `spdxId = MIT`；`LICENSE` 正文首行 = `MIT License` / `Copyright (c) 2026 Browser Use`）；
+  `createdAt = 2026-09-16T21:30:12Z`；`defaultBranch = main`；**tag 数 = 0**。
+- **提交面（读 `commits/main.atom`）**：`main` HEAD = **`1231850a`**（2026-09-18T16:28:35Z，
+  「docs: announce the Cloud waitlist below the README title (#30)」）；往前两条 = `452c1ad2`
+  （2026-09-17T02:20:01Z，「Reduce browser round trips and record a 7-second Flights demo」）与
+  `68c077bf`（2026-09-17T01:44:17Z，「Build Jev Ultrafast browser agent and real-web demo」）。
+  ⇒ **atom 只返回 3 条**（新仓 + 大颗粒提交），**不代表全史只有 3 笔**。
+- **分支面（`git ls-remote --heads`，全量）**：共 **7** 个 ref = `main` + **6 个 `codex/*`**
+  （`bu-bench-eval` / `bu-bench-eval-v2` / `cloud-waitlist-announcement` / `planner-loop` /
+  `planner-state-final` / `state-action-hillclimb`）⇒ **只记形态**：像「用 Codex 跑实验分支」的开发方式，
+  **不作因果结论**。
+
+**值得借鉴（按价值排序）**
+
+① ⭐ **「选择」与「生成」分开**：主策略只**选**（操作 + 元素），文本生成被收窄到 `TYPE_TEXT` 一个分支、
+   且交给**小模型** ⇒ 大模型不参与每次决策。本仓的对照物是既有的层级分工 ——
+   同族判据：**把昂贵的那一步收窄到真正需要它的分支**（本仓 `read_shadow` 的分层召回、`deriveShadowNodes` 收一处同款）。
+
+② ⭐ **模型输出永不成为可执行物**（README 原话可核）：executed target 一律从**观察到的节点**解析，
+   执行器**复查页面新鲜度与点击遮挡**；模型输出**不得**变成 selector / 坐标 / shell 命令 / 可执行 JS；
+   text-helper 的输出必须能解析成**小 JSON 对象**才允许输入。
+   ⇒ 与本仓「**记忆数据非指令**」（ADR-0043 + 读侧护栏横幅）**同判据、不同面**：它防「输出变执行」，
+   本仓防「数据变指令」；两者都把**信任边界写在数据形状上**，而不是靠提示词祈祷。
+
+③ ⭐ **有损要自报 + 边界要写明**：README 的 "Evidence and limits" 一段同时给好消息与限制 ——
+   一次 Google Flights 实跑 **7,073 ms**；六次交替运行**两版各 3/3**；中位任务时间 **9.450 s → 7.092 s（−25%）**；
+   浏览器协议调用 **1,092 → 101**；并**当场自我设限**：「这是同一任务的 3 次重复，**不是通用可靠性基准**」。
+   ⇒ 与本仓「数字要带范围与时刻」+「不夸大」同款。它另有一句可直接借用的判据：
+   **`DONE` 仍需要独立的结果验证**（模型说完成 ≠ 完成）。
+
+④ **实现层面的四条（如实抄下来，供以后对照，本轮未读源码）**：默认 agent 循环**不用截图**
+   （消费结构化状态，inspector 才 opt-in 截图 + 视频用单独连续录屏）；**一次浏览器调用**完成原子快照
+   （可见控件、name/value/text 一次读全，并保留真实 DOM 节点引用）；等有用状态（combobox 输入后等可见建议，
+   **上限 200 ms**；其它交互最多两帧或 50 ms）；**只发送可见文本**（离屏正文/页脚不占模型上下文）；
+   **复用被中断的文本请求**（仅当 text-helper 输入**逐字未变**时才复用陈旧重试的生成值）。
+
+**边界（它自己写明不在 MVP 内）**
+
+- shadow roots / frames / canvas / uploads / 弹窗 tab / 嵌套滚动 / 任意键盘控件 —— **均未覆盖**；
+  DOM reader 只处理常见 HTML 与 ARIA 控件，**不是完整 accessible-name 规范**。
+- 那份跑分是**同一 task、同一浏览器 profile、3 次重复** ⇒ **不可当可靠性基准**；
+  `DONE` 需外部独立验证；自有 tab 共用既有 Chrome profile。
+
+**对 dsh-shadow 的关系**
+
+- **不同题**：它管「浏览器里的动作选择」，本仓管「记忆/上下文投影」⇒ 本条性质 = **登记备查 + 形态对照**，
+  **不含吸收裁决**（与 §16 对 openclaw 的处理一致）。
+- **一条硬边界**：它是**浏览器侧执行器**（需 Chrome + Browser Harness + 两个付费 key：`TYPESAFE_API_KEY` /
+  `TEXT_MODEL_API_KEY`），本仓是**宿主内插件、零常驻服务**（ADR-0001）⇒ 形态层面不可移植。
+- **一处易误判的相似**：它也有 inspector（本地 `http://127.0.0.1:8766`），与本仓 `shadow_query` /
+  `mode:"toolset"` 的人读面看起来同类 —— 但它是**实时运行可视化**，本仓是**派生投影**，别把两者的「面板」当同一物。
+
+**未核实（据实标注，不写成已核）**
+
+- **未克隆、未安装、未运行**（用户本次只要求「添加材料」）：以上全部取自 **README / `pyproject.toml` /
+  `LICENSE` / GitHub 页面读数 / `git ls-remote` / atom feed**；**`jev_ultrafast/*.py` 源码一行未读**。
+- **`docs/performance.md` 未读**（它把跑分、失败、源码哈希与测量边界放在那里）⇒ 上文第 ③ 条的读数
+  **引自 README 的转述**，未回原表核对；`docs/banner.svg`、`docs/demo.gif|mp4` 也未看。
+- 8,553★ 是**页面读数**（HTML 内嵌 JSON 的 `stargazerCount`），**不是 API 读数**：本次 `api.github.com`
+  取数**撞限流**（403 `API rate limit exceeded`）⇒ 星/fork/创建时间均以页面 + raw 复核为准。
+- 未核「它与同组织的 `browser-use/browser-use` 是否共用运行时」（README 只提到 Browser Harness）；
+  提交面只读了 atom 给出的 3 条 ⇒ **历史深度未核**。
 
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
