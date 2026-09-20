@@ -3,6 +3,50 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.17.1] 材料入账：`jev-ultrafast` 补进 `MATERIALS.md` + 记下**吸收结果**；实测出台账的 **18 项缺口**
+
+用户 2026-09-20 指令「添加资料 https://github.com/browser-use/jev-ultrafast」。
+这份材料**早已在档**（`references.md` §18 联网核实 + §19 真拉取与读码），**本轮补的是最后一段：吸收结果**；
+顺手实测出**台账本身**的一处大缺口。
+
+### ① `references.md`：追加 §20「吸收落地」（**不改** §18 / §19 正文）
+
+承该文一贯口径（**重复指定不重写旧段，只在新日期段里补核实**），新增 `## 吸收落地（2026-09-20 · v1.17.0）`：
+
+- **20.1 吸收了什么**：`choice` 原语（`decision/choice.ts`）· `validate_choice` 的**校验口径**（`decision/guard.ts`）·
+  「记录引擎声明 = **捕获**，不是生成」（支点：它把 `request` + `raw_answers` 逐字留存，`model.py:143,147`）·
+  Typed Decision 的形状（`decision/types.ts` **恰好四个字段**）。
+- **20.2 刻意没吸收什么**：它的**概率分布** —— 即 `adr/0037` 的「❌ Confidence（决策置信度）」。
+  用户把口径纠正为「**吸收**」而不是「**接入**」之后，`v1.17.0` 删字段收口 ⇒ 禁令**结构性成立、与后端无关**。
+  ⚠ 并写明这是「**设计改了**」而不是「**风险被证伪**」。
+- **20.3 仍未吸收 / 未核**：未装、未跑、未调付费 API（要 Chrome + 两个付费 key）；`snapshot.js` 未逐行；
+  `docs/design.md` 与 4 份 measurement JSON 未读；浅克隆 ⇒ 历史深度不可核。
+  外加一条边界：`rawOutput` 里的数字**会渲染给模型看**，那一段**不在本层管辖内**（`adr/0096` §12.5）。
+
+### ② `MATERIALS.md`：补 §2.9（它原先**一条都没有**）
+
+复核：`Select-String MATERIALS.md -Pattern 'jev'` = **0 命中**。新增 §2.9，数字**现枚举**（不抄 §18 的联网读数）：
+
+- `vendor/_src/jev-ultrafast`（**浅克隆**）· **MIT** · HEAD **`1231850`**（2026-09-18）·
+  **不含 `.git`：40 文件 / 2,500.2 KB** · `.py` **15** 个。
+- 状态面四行：**已吸收** / **刻意未吸收**（概率分布）/ **未读未核** / **下一步＝无**（要真跑需 Chrome + 两个付费 key，**要花钱，须先问**）。
+
+### ③ 由 ② 实测出台账的**大缺口**（本节最要紧的一条）
+
+`MATERIALS.md` 自称是「本地全部材料的**单一来源**」，但实测：现枚举根 `vendor/_src` 的 **24** 个目录里，
+**连名字都搜不到的就有 18 个** —— `browser-harness` · `openclaw` · `rtk` · `strix` · `marker` · `OpenSpec` ·
+`PageIndex` · `MoneyPrinterTurbo` · `web-access` · `zvec-grep` · `agent-skills` · `ECC` · `hackingtool` ·
+`superpowers` · `taste-skill` · `system_prompts_leaks` · `data-engineer-handbook` · `open-lovable`
+（其中多份在 `references.md` §15 / `adr/0091` 有**题材内**记录 —— 缺的是**台账的行**，不是「没人看过」）。
+
+⇒ §2.9 里**写明这个数与复核命令**（而不写「可能还有」）。**本轮不代填那 18 行** —— 按 §5 纪律，
+改数必须重跑枚举命令；而且该表**自称「由磁盘枚举生成」却在本仓没有生成器**
+（`tools/` 下 `name ~ material|reference|catalog|ledger` **为空**）⇒ 那是**另一个决定**，
+已按「要么写进清单」的纪律**开为 `BACKLOG` 的 T20**（含二选一的完成判据）。
+
+**验证**：`SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` → exit 0，末行 `[run-tests] ALL PASS ✅`。
+
+
 ## [v1.17.0] **吸收**而不是**接入**：把「置信度」从原语里请出去（删字段 + 删视图 + 删三条判据）
 
 用户 2026-09-20 纠正了一处**口径**，而它不是措辞问题：

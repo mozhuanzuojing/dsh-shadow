@@ -155,6 +155,45 @@ the configured root is the fallback for agentless calls and sessions without a c
 **其它已入账的动作项**（见 `BACKLOG.md` T16）：`isolate` 行级语义（技能散文不精确）/ 平台已有而下游可能在重造的四项
 （`ctx.sessionProjections` / `ctx.storageDomain` / `ctx.invariants` / `ctx.jobs`）/ `export default` 自查**已通过**（本仓无 `export default`，`unwrapExports` 那条静默缺陷**不适用**）。
 
+### 2.9 `jev-ultrafast`（**2026-09-20 新入 · 已吸收**，浏览器 agent）
+
+> **为什么单开一节**：本表 §1 名册是「**换盘前**」的快照（旧枚举根 `G:\project\dsh1` 已不存在），
+> 而 `jev-ultrafast` **本表原先一条都没有**（复核：`Select-String MATERIALS.md -Pattern 'jev'` = **0 命中**）。
+> 本节按**现枚举根**重跑，数字**现测**；**题材内的核实与吸收记录在 `references.md` §18 / §19 / §20** ——
+> 两处**不重复登记同一事实**（本表只放**台账面**）。
+
+| 面 | 读数（**枚举口径**：`Get-ChildItem -Recurse -File -Force`） |
+|---|---|
+| 目录 | `vendor/_src/jev-ultrafast`（`git clone --depth 1`，**浅克隆** ⇒ 历史深度不可核） |
+| 远端 / 许可 | `browser-use/jev-ultrafast` · **MIT**（`LICENSE` 首行 = `MIT License` / `Copyright (c) 2026 Browser Use`） |
+| HEAD | `1231850`（2026-09-18，「docs: announce the Cloud waitlist below the README title (#30)」）—— 与 `references.md` §19.1 的联网读数**一致** |
+| 规模 | 含 `.git`：**69** 文件 / **4.67 MB**；**不含** `.git`：**40** 文件 / **2,500.2 KB**；`.py` **15** 个 |
+| 身份 | 浏览器 agent，**动态索引动作空间**（README 副标题原文）；`pyproject.toml` 自述「chooses instead of generating」 |
+
+| 状态面 | 结论 |
+|---|---|
+| **已吸收** | `choice` 原语 + `validate_choice` 的校验口径 + 「记录引擎声明 = 捕获」+ Typed Decision 的形状 ⇒ 落 `decision/`（判据与理由见 `adr/0096`） |
+| **刻意未吸收** | 它的**概率分布**（= `adr/0037` 的「❌ Confidence」）⇒ `v1.17.0` **删字段收口**，禁令**结构性成立** |
+| **未读 / 未核** | 同 `references.md` §19.5 + §20.3：未装、未跑、未调付费 API；`snapshot.js` 未逐行；`docs/design.md` 与 4 份 measurement JSON 未读；浅克隆 |
+| **下一步** | 本切片目标已达成，**无待办**；若要看它**怎么跑**，需 Chrome + `TYPESAFE_API_KEY` + `TEXT_MODEL_API_KEY` —— **要花钱，须先问** |
+
+> ⚠ **口径边界（不许据此推断全表）**：本节**只补本轮请求的这一份**。
+> **实测的缺口**（2026-09-20）：现枚举根 `vendor/_src` 下**共 24 个目录**
+> （含 `langextract--snapshot-v1.6.0` 这类**版本快照**），而**本表里连名字都搜不到的就有 18 个** ——
+> `browser-harness` · `openclaw` · `rtk` · `strix` · `marker` · `OpenSpec` · `PageIndex` ·
+> `MoneyPrinterTurbo` · `web-access` · `zvec-grep` · `agent-skills` · `ECC` · `hackingtool` ·
+> `superpowers` · `taste-skill` · `system_prompts_leaks` · `data-engineer-handbook` · `open-lovable`。
+> （其中多份在 `references.md` §15 / `adr/0091` 有**题材内**记录 —— 缺的是**本台账的行**，不是「没人看过」。）
+> ⇒ **本表其余行本轮未重测**；**要改那些数，必须按 §5 重跑枚举命令**，不得照抄本节。
+>
+> **复核命令**（口径：目录名是否在**本文件**里出现过至少一次）：
+>
+> ```powershell
+> $m = Get-Content MATERIALS.md -Raw
+> Get-ChildItem D:\project\dsh1\vendor\_src -Directory |
+>   Where-Object { $m -notmatch [regex]::Escape($_.Name) } | Select-Object -ExpandProperty Name
+> ```
+
 ---
 
 ## 3. 论文层（`arXiv` / 期刊）
