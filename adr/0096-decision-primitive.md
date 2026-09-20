@@ -223,7 +223,7 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 | 落点 | 位置 | 有门吗 |
 |---|---|---|
-| 工具名 + 参数 | `index.ts`（`README.md:312` 称「三处 `name:`」） | 部分 |
+| 工具名 + 参数 | `index.ts`（`README.md:312` 称「三处 `name:`」） | **有**（`tool-name-v1` 在 `README.md:335` 的**有强门**行 —— `test/host-probe.test.ts:104` 断言三个名字都在注册表里。⚠ **但那个断言把三个名字写死了** ⇒ **新增**工具名**不会**被它覆盖，得手动把新名加进那一行；`tool-schema-v1` 则**只守参数名**。本行早先写作「部分」—— 那**低估**了门，自审时改正） |
 | 冻结清单 | `tools/contract-surface.selftest.ts:24`（`TOOLS`）· `:50`（`TOOL_PARAM_FROZEN`） | **有**（`missing` 红；清单可由 `:223-224` 的打印重新生成） |
 | 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `README.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见 `README.md:333-337`；⚠ **该分组本身已腐烂**：9 个 id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而 `:337` 又写「8 条全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
 | 若加配置键 | `:190`（`CONFIG_KEY_FROZEN`）+ README 默认开关表 | 表计数**有**（`audit:docs` ③） |
@@ -250,8 +250,13 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
   有 Outcome ≠ 证明该 Decision 正确**。
 - **T3 的对象是接线** `core/decision-outcome.ts`（`OutcomeObservation` / `Attribution` /
   `OutcomeReadout`），**不是重写**（它已实现、已有门，只差生产消费者）。
-- `reflection/engine.ts:20` 的**完整性闸门**（*decision + outcome 齐备* 才进 Reflection；
-  规则陈述见 `reflection/types.ts:22`）：决策只在两者都存在时进入 Pattern 统计 —— 这条不变。
+- **完整性闸门**的真判据在 `reflection/types.ts:35` 的 `completenessOf`
+  （`reflectionEligible: hasDecision && hasOutcome`），使用点在 `reflection/engine.ts:22`
+  （`traces.filter((t) => completenessOf(t).reflectionEligible)`）：
+  决策只在两者都存在时进入 Pattern 统计 —— 这条不变。
+  ⚠ **本行在自审时被修正过**：原先引的是 `reflection/types.ts:22`，第一次「修」成 `reflection/engine.ts:20`
+  —— **那两行都是注释，不是闸门**。同一个错（拿注释当判据）在本 ADR 里犯了**两遍**，
+  而本 ADR 的 §11 恰恰把「引符号名、别引会腐烂的行号」列为纪律 ⇒ **写下来，别只改掉**。
 
 ## 9. T1 的范围、文件集与门禁
 
@@ -260,7 +265,7 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 ```text
 decision/
 ├── types.ts       稳定协议（候选集 / selected / reportedDistribution / rawOutput / evidence）
-├── guard.ts       边界守卫（§4 六条判据；镜像 action/ · planning/ 的 guard 形态）
+├── guard.ts       边界守卫（§4 的 **7 条**判据；镜像 action/ · planning/ 的 guard 形态）
 ├── choice.ts      choice 原语 + orderByReported 视图（§3）
 ├── engine.ts      DecisionEngine 接口 + 查找 + unavailable 语义（§7：无网络、无 LLM、无 jev）
 ├── heuristic.ts   HeuristicDecisionEngine（确定性规则表；T1 唯一后端）
@@ -335,8 +340,12 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
       键多 / 键少 / 越界（含 `NaN`）/ 和偏离 1 / `selected` 不在候选集 / `candidates` 空 /
       `rawOutput` 空白 / `engine` 空；外加**边界正例**（恰好落在容差内的和应当通过 —— 证明容差真的生效）
 - [x] `orderByReported` **无**任何偏好 / 选择路径消费 —— 全仓仅测试消费它（本层零生产消费者，§7 的决定）
-- [x] 本层**字段名**里禁词 **0 处**（口径见 §4：作用域是**字段名**，不是全文）—— 由第 ⑨ 块**静态断言**守着，
-      同一块还断言 `types.ts` **零 import**（`PURE_MODULES` 的承诺，与结构门双保险）
+- [x] **全层 6 个文件**的**字段名**里禁词 **0 处**（口径见 §4：作用域是**字段名**，不是全文）——
+  由第 ⑨ 块**静态断言**守着，同一块还断言 `types.ts` **零 import**（`PURE_MODULES` 的承诺，与结构门双保险），
+  并把**文件集本身**钉进断言（文件集一变就红）。
+  ⚠ **自审修正**：第 ⑨ 块原先**只扫 `types.ts`**，而本行的措辞是「本层」⇒ **声称比证明宽**。
+  实测其余 5 个文件当时也干净（**结论没错**），但**证据面已补齐**；
+  同时 ⑨ 的说明改为「全层 6 个文件」，两处口径对齐。
 - [x] `tsconfig.json` 的 `include` 已含 `decision/**/*.ts` ⇒ `dist/decision/` 下 6 个 `.js` + 6 个 `.d.ts` 已产出。
       ⚠ **未**做「故意删一次 include 看是否报错」的破坏性验证 —— 留作可选
 - [x] `npm run audit:layers` **0 违规**，且在**新增 3 条方向禁令之后**仍绿（`decision` 现受
@@ -350,3 +359,22 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
       **28 行 = 27 个目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
       ⚠ 过程中 `audit:ratchet` **判红过一次**（`b_keys 95 → 100（+5）`）—— 因为初版把 `=== "(root)"`
       内联散在 5 处；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
+
+## 12. 本 ADR **最弱的一环**（自审后如实写下，不许粉饰）
+
+`reportedDistribution` 与 `adr/0037` 的「❌ Confidence（决策置信度）」之间，
+**不是「换个名字」就能划开的**：一个候选集上的概率分布，**在语义上就是**「哪个更好的置信度」。
+§1.4 / §4 用「命名站在不确定性一侧」来辩护 —— **那是本 ADR 最弱的论据**
+（有「让文档比事实强」之嫌，与 D8 同族）。自审时**保留它但降级为辅助**，真正承重的是另外四条：
+
+1. **谁算的** —— 数字由**引擎**算，shadow **从不计算**（0037 禁的是 shadow 生成 / 推断）；
+2. **怎么留的** —— `rawOutput` 与分布**逐字留存**，它是**证据**，不是 shadow 的断言；
+3. **谁消费** —— 全仓**无人**把它当权威（不设阈值、不做优化；`orderByReported` 是只读视图，且**无生产消费者**，
+   已由 `test/decision-primitive.test.ts` 与「本层零生产消费者」两处共同保证）；
+4. **生产里根本不存在** —— **T1 的唯一引擎报 `null`**（§4「刻意如此」第 1 条）。
+
+⚠ **第 4 条意味着：T1 的一部分安全性来自「还没有概率后端」这个事实本身，而不是来自本 ADR 的论证。**
+⇒ **真实概率后端（LLM / jev）落地的那一版，必须把这道门重新审一遍并另立 ADR**，
+**不得**以「本 ADR §6 已经做过范围澄清」为由**继承结论**。届时须正面回答 `adr/0037` 那一段理由
+摆出的问题（抽取结果是不是事实？source 指原文还是模型？同一段话不同模型是否得到不同 Decision？
+如何验证无 hallucination？失败怎么办？）。**本 ADR 不做这个判断** —— 那是下一个切片的事。

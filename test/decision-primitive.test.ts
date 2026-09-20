@@ -2,14 +2,15 @@
 // dsh-shadow —— test/decision-primitive.test.ts：**Decision 原语**的闸（ADR-0096 / T1）。
 //
 // 这道闸守四件事：
-//   ① **声明必须自洽** —— 分布与候选集逐字对齐、值域 [0,1]、和 ≈ 1、selected ∈ candidates（六条判据各有反例）；
+//   ① **声明必须自洽** —— 分布与候选集逐字对齐、值域 [0,1]、和 ≈ 1、selected ∈ candidates（**七条**判据各有反例）；
 //   ② **缺件不静默** —— 「无分布」必须**显式写 `null`**；`undefined`（忘了填）**判非法**，两者不是一回事；
 //   ③ **不猜** —— 规则没命中 / 偏好解析不到唯一候选 / 未知引擎名，一律**显式 `unavailable`**，绝不落回默认；
 //   ④ **协议里没有禁词** —— 字段名不得出现 confidence/score/…（本仓的线：认知不确定性可、成功信念禁）。
 //
 // 另有一条**静态**判据（⑨）：`decision/types.ts` 必须**零 import**（它在 PURE_MODULES 里，是承诺不是装饰）。
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   declarationViolations,
@@ -51,7 +52,7 @@ const input = (over: Record<string, unknown> = {}) => ({
   const text = renderDeclaration(D());
   assert.ok(text.includes("[Decision Declaration]"));
   assert.ok(text.includes("逐字留存"), "渲染必须说明 rawOutput 是证据");
-  console.log("✔ ① 合法声明通过六条判据；renderDeclaration 只读");
+  console.log("✔ ① 合法声明通过**七条**判据（引擎名 / 候选非空 / selected / rawOutput / 分布三判据）；renderDeclaration 只读");
 }
 
 // ② 分布三判据：**键**多一个/少一个、值越界、非有限数、和偏离 1 —— 各有反例
@@ -194,26 +195,41 @@ const input = (over: Record<string, unknown> = {}) => ({
   console.log("✔ ⑧ 视图与「候选为空」分得开；argmax ≠ selected **合法**（刻意不判）");
 }
 
-// ⑨ **静态**判据：types.ts 零 import（PURE_MODULES 的承诺）+ 字段名无禁词
+// ⑨ **静态**判据：`types.ts` 零 import（PURE_MODULES 的承诺）+ **全层六个文件**的字段名无禁词
 {
-  const src = readFileSync(fileURLToPath(new URL("../decision/types.ts", import.meta.url)), "utf8");
+  const dir = fileURLToPath(new URL("../decision/", import.meta.url));
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith(".ts"))
+    .sort();
+  assert.deepEqual(
+    files,
+    ["choice.ts", "engine.ts", "guard.ts", "heuristic.ts", "lineage.ts", "types.ts"],
+    "文件集变了 ⇒ 这条判据覆盖的对象也变了，先确认再放行",
+  );
 
-  const importLines = src.split("\n").filter((l) => /^\s*import\b/.test(l) || /\brequire\s*\(/.test(l));
+  const typesSrc = readFileSync(join(dir, "types.ts"), "utf8");
+  const importLines = typesSrc.split("\n").filter((l) => /^\s*import\b/.test(l) || /\brequire\s*\(/.test(l));
   assert.deepEqual(importLines, [], "types.ts 必须**零 import** —— 它列在 PURE_MODULES 里，加 import 会让结构门变红");
 
   // 禁词只针对**字段名**：guard.ts 在**禁令理由**里点名它们是允许的（先例：planning/guard.ts 同样点名 score/optimal）。
   const FORBIDDEN = ["confidence", "score", "best", "optimal", "correct", "expectedSuccess", "precision", "winner", "ranking"];
   const FIELD_RE = /^\s*(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\??\s*:/;
-  const fieldNames = src
-    .split("\n")
-    .map((l) => FIELD_RE.exec(l))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .map((m) => m[1]);
-  assert.ok(fieldNames.length > 0, "抽取器必须真的抽到字段名（否则这条判据是空的、会假绿）");
-  const hits = fieldNames.filter((n) => FORBIDDEN.includes(n));
-  assert.deepEqual(hits, [], `协议字段名不得出现禁词（本仓的线：认知不确定性可、成功信念禁），实得 ${hits.join(",")}`);
-  assert.ok(fieldNames.includes("reportedDistribution"), "抽取器口径自检：必须能看到 reportedDistribution");
-  console.log(`✔ ⑨ types.ts 零 import；${fieldNames.length} 个字段名里禁词 0 处`);
+  const fieldNamesOf = (file: string): string[] =>
+    readFileSync(join(dir, file), "utf8")
+      .split("\n")
+      .map((l) => FIELD_RE.exec(l))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => m[1]);
+
+  const all = files.flatMap((f) => fieldNamesOf(f).map((n) => `${f}:${n}`));
+  assert.ok(all.length > 0, "抽取器必须真的抽到字段名（否则这条判据是空的、会假绿）");
+  assert.ok(
+    all.some((x) => x.endsWith(":reportedDistribution")),
+    "抽取器口径自检：必须能看到 reportedDistribution",
+  );
+  const hits = all.filter((x) => FORBIDDEN.includes(x.split(":")[1]));
+  assert.deepEqual(hits, [], `**全层**字段名不得出现禁词（本仓的线：认知不确定性可、成功信念禁），实得 ${hits.join(",")}`);
+  console.log(`✔ ⑨ types.ts 零 import；**全层 6 个文件**共 ${all.length} 个字段名里禁词 0 处`);
 }
 
 // ⑩ lineage：可追溯才投影；不可追溯**显式** unavailable（而不是产出会被下游静默拒掉的坏 lineage）

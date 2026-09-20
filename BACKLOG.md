@@ -1043,6 +1043,35 @@
   source changed / rebuild / 8.8k cold build / incremental）**全过之后**才考虑把 `sqlite` 设为默认；
   并发/多进程同读同写、跨平台（WSL/容器）锁与 WAL 也归这一期。
 
+### T18. `decision/` 层**接进读路径与 outcome**（`adr/0096` 里的 T3）
+
+- **内容**：把 Decision 原语接上生产 —— ① 让 `decision/` 的产出真的进入某个读路径或工具
+  （届时按 `adr/0096` §7.1 那张表**逐项登记受保护契约面**）；② 接线**既有** `core/decision-outcome.ts`
+  （`OutcomeObservation` / `Attribution` / `OutcomeReadout`；`ATTRIBUTION_RULE = "same-key-window/v1"`）。
+- **依据**：`adr/0096` §8（outcome 只作**后续独立捕获的事实**，**不自动因果回链**）· `adr/0081` §8.4
+  （`core/decision-outcome.ts` **已完整实现、有门、生产消费者为零** ⇒ 这是**接线**对象，不是重写对象）·
+  `adr/0096` §7（T1 决定不暴露）。
+- **为什么现在没做**：T1 的边界就是「零生产消费者」（`adr/0096` §7）；接线会同时牵动**受保护契约面**
+  与**两处棘轮基线**，属另一个切片。
+- **完成判据**：① `core/decision-outcome.ts` 有**生产调用点**（`audit:wiring` 的 A1 相应下降）；
+  ② 若新增工具名 / `mode` / 配置键，`README` 的受保护契约面**逐项补齐 10 字段**，且 `mode` 面的 **62**
+  在 `test/recall-envelope.test.ts:104` **同步改**（**受门保护的数：改它必须同时改门并说明门为什么错**）；
+  ③ `npm run verify` 全绿。
+
+### T19. **概率型后端（LLM / jev）落地前，必须重审 `adr/0037` 那道门**
+
+- **内容**：`adr/0096` §12 已自陈：`reportedDistribution` 与 `adr/0037` 的「❌ Confidence（决策置信度）」
+  之间的界限，**「换个名字」划不开**；T1 之所以安全，**有一部分是因为唯一引擎报 `null`（生产里根本没有分布）**。
+  ⇒ 引入真实概率后端时，**另立 ADR**，正面回答 `adr/0037` 理由段那串问题（抽取结果是不是事实？
+  source 指原文还是模型？同一段话不同模型是否得到不同 Decision？如何验证无 hallucination？失败怎么办？）。
+- **依据**：`adr/0096` §12（四条承重理由）· `adr/0037` §「明确不做」的理由段 ·
+  `planning/guard.ts:11` 的 `score → optimization → preference → value → identity` 链 ·
+  `action/guard.ts:5`（禁 `confidence`）。**不得**以「`adr/0096` §6 已做过范围澄清」为由**继承结论**。
+- **为什么现在没做**：`adr/0096` §10 把它明列为**另一个决定**；T1 零外部依赖是刻意的
+  （jev 的决策本身就是 `jev_ultrafast/model.py:119` 的硬编码远程服务）。
+- **完成判据**：一份新 ADR，**显式**承接或推翻 `adr/0096` §12 的四条承重理由；且新后端只体现为
+  `decision/engine.ts` 的 `ENGINES` **多一项**（上层不知道后端是谁）。
+
 ---
 
 ## 三、决策（D1–D3 待拍板；D4–D6 已按推荐决策）
