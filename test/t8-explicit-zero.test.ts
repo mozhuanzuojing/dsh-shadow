@@ -140,7 +140,9 @@ const indexWith = async (cfg: any): Promise<string> => {
   seed(store, "2026-09-07/2026-09-07--090000-pkg-z.md", "pkg-z", "pkg-z/z.js");
   const { agent, ctx } = mkCtx(store);
   const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {}, ...cfg });
+  // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, ...cfg });
   const rs = toolRegistry.get("read_shadow");
   assert.ok(rs, "read_shadow 应已注册");
   const out = await rs.execute({}, { agent: agent("T7") });
@@ -172,7 +174,7 @@ const indexWith = async (cfg: any): Promise<string> => {
   const store = new Map<string, string>();
   seed(store, "2026-09-07/2026-09-07--090000-pkg-a.md", "pkg-a", "pkg-a/x.js");
   const { agent, ctx } = mkCtx(store);
-  apply(ctx, { summary: { enabled: false }, recall: {}, abstracts: { showInIndex: 0 } });
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, abstracts: { showInIndex: 0 } });
   await toolRegistry.get("read_shadow").execute({}, { agent: agent("T7") });
   const sidecars = [...store.keys()].filter((k) => k.endsWith("_abstract.md") || k.includes("abstract"));
   assert.ok(sidecars.length > 0, `showInIndex:0 只抑制**索引里的列示**，sidecar 文件仍必须生成（否则「不列」被误改成「不生成」）。实际键：${[...store.keys()].join(", ")}`);

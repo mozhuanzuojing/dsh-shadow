@@ -65,7 +65,9 @@ const seed = (store: Map<string, string>, rel: string, entry: string, decision: 
 const store = new Map<string, string>();
 const { m, agent, ctx } = mkCtx(store);
 const P = { name, inject, apply };
-P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: true, gapMinutes: 60 } });
+// ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: true, gapMinutes: 60 }, forget: { enabled: false } });
 seed(store, "2026-09-07/2026-09-07--090000-pkg-a.md", "pkg-a", "采用 bundle 模式", "pkg-a/x.js");
 seed(store, "2026-09-07/2026-09-07--120000-pkg-a.md", "pkg-a", "改为 lazy 模式", "pkg-a/x2.js");
 seed(store, "2026-09-07/2026-09-07--180000-pkg-z.md", "pkg-z", "收尾无关任务", "pkg-z/z.js");

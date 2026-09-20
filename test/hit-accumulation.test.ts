@@ -62,7 +62,9 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
   const store = new Map<string, string>();
   const { m, agent, ctx } = mkCtx(store);
   const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T1");
   m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100000-pkg-a.md`, L0_BODY);
 
@@ -87,7 +89,7 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
   const store = new Map<string, string>();
   const { m, agent, ctx } = mkCtx(store);
   const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T2");
   const L2_BODY = "# pkg-b\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [pkg-b] 改/读 pkg-b/z.js\n\n我分析了为什么这样改，注意边界。\n";
   assert.equal(tierFor(L2_BODY), "L2", "对照前提：含思维词 ⇒ L2");
@@ -106,7 +108,7 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
   const store = new Map<string, string>();
   const { m, agent, ctx } = mkCtx(store);
   const P = { name, inject, apply };
-  P.apply(ctx, { summary: { enabled: false }, recall: {} });
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T3");
   m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100000-hit.md`, "# hit\n\n> 完整线索\n\n- [10:00:00] [hit] 调用 build\n");
   m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100001-miss.md`, "# miss\n\n> 完整线索\n\n- [10:00:01] [miss] 调用 deploy\n");

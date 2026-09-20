@@ -116,7 +116,9 @@ import * as mod from "../dist/index.js";
   const fs = { resolve: async (p: string) => p, writeText: async (p: string, t: string) => { files.set(p, t); }, readText: async (p: string) => files.get(p) || "" };
   const mk = (config: any) => createShadowCollector({
     context: { get: (k: string) => (k === "fs" ? fs : undefined) },
-    config: { summary: { enabled: false }, writeConsent: false, forget: {}, compact: {}, retention: { enabled: false }, ...config },
+    config: { summary: { enabled: false }, writeConsent: false, // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...config },
     getAgentById: (id: string | undefined) => ({ id }),
   });
 
@@ -162,7 +164,7 @@ import * as mod from "../dist/index.js";
       summary: { enabled: true },
       recall: { enabled: true },
       llmRecall: { enabled: true },
-      writeConsent: false, forget: {}, compact: {}, retention: { enabled: false },
+      writeConsent: false, forget: { enabled: false }, compact: {}, retention: { enabled: false },
     },
     getAgentById: (id: string | undefined) => ({ id }),
   });
@@ -193,7 +195,7 @@ import * as mod from "../dist/index.js";
   // **负对照 2**：把三者都显式关掉 ⇒ 不许留痕（「用户关掉」不是降级）
   const off = createShadowCollector({
     context: { get: (k: string) => (k === "fs" ? fs : undefined) },
-    config: { summary: { enabled: false }, recall: { enabled: false }, llmRecall: { enabled: false }, writeConsent: false, forget: {}, compact: {}, retention: { enabled: false } },
+    config: { summary: { enabled: false }, recall: { enabled: false }, llmRecall: { enabled: false }, writeConsent: false, forget: { enabled: false }, compact: {}, retention: { enabled: false } },
     getAgentById: (id: string | undefined) => ({ id }),
   });
   off.push("a2", { kind: "action", text: "改/读 spec/y.md", comp: "spec/y.md", source: "fs" });
@@ -365,7 +367,7 @@ import * as mod from "../dist/index.js";
     if (seedLedger !== undefined) store.set(`${WS}/.shadow/_recall_log.json`, seedLedger);
     const { agent, ctx } = mkCtx(store, deny);
     const { apply, name, inject } = mod;
-    apply(ctx, { summary: { enabled: false }, recall: {}, ...extraCfg });
+    apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, ...extraCfg });
     const rs = toolRegistry.get("read_shadow");
     assert.ok(rs, "read_shadow 应已注册");
     // `mode` 为空时**不传该键** —— 默认召回路径与 `mode:"query"` 是**两条不同的读路径**

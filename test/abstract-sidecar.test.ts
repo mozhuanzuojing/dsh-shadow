@@ -169,7 +169,9 @@ const face = (name: string, time: string, entry: string, topics: string[] = []):
     on: (e: string, fn: Function) => { listeners.set(e, fn); return () => listeners.delete(e); },
     inject: (_d: string[], cb: Function) => cb({ get: (k: string) => services[k] }),
   };
-  mod.apply(ctx, { summary: { enabled: false }, recall: {} });
+  // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+mod.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   store.set("D:/ws/.shadow/2026-09-08/2026-09-08--100000-alpha.md",
     "# alpha\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
   const rs = toolRegistry.get("read_shadow");

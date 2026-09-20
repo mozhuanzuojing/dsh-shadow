@@ -3,6 +3,53 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.98] T12 重判（按新默认重跑）—— 又抓出 **6 个**到期会炸的 fixture，修法改用「显式关掉无关判据」
+
+v1.15.97 记下「T12 的闭环结论被 v1.15.85『默认全开』推翻、其余文件未按新默认重判」；本版**补上这次重判并修完**。
+
+**重判方法（可复现）**
+
+- **行为探针**：把 `Date` 钉到假日期后**逐文件子进程**跑（`node --import <shim> test/<f>.test.ts`，shim 只改 `Date` 构造与 `Date.now`），
+  假日期取 **2030-01-01**；基线 = 当前日期下 `verify` **61/61 全绿** ⇒ 假日期下红 = 存在日期耦合。
+- **口径**：`test/` 下 **51** 个 `*.test.ts` 全跑；探针与修复脚本放工作区 `_tmp/`（跑完即删）。
+
+**结果：6 个文件红（不是 21 个，也不是 0 个）**
+
+| 文件 | fixture 日期 | 失败断言 | 引爆日（`forget.staleDays` 14） |
+|---|---|---|---|
+| `hit-accumulation.test.ts` | 2026-09-07 | 前置条件：召回应返回该记忆 | **2026-09-21** |
+| `memory-time-single-source.test.ts` | 2026-09-07 | 应生成 2 个 consolidated 文件，实际 0 | **2026-09-21** |
+| `abstract-sidecar.test.ts` | 2026-09-08 | 索引重建应产出目录级 sidecar | 2026-09-22 |
+| `fs-sandbox-scope.test.ts` | 2026-09-11 | 索引内容应含已存在的记忆 | 2026-09-25 |
+| `t8-silent-degradation.test.ts` | 2026-09-12 / 13 | T8 第 5 条（台账坏件 ⇒ 冷却窗口作废）必须可见 | 2026-09-26 |
+| `t8-explicit-zero.test.ts` | 2026-09-06 / 07 | 未传时 目录摘要段必须在（正对照） | 2026-09-20 |
+
+- **同一个根因**：fixture 写死旧日期 + `forget` **缺省=开**（`staleDays` 14）⇒ `isForgettable(rel)` 为真 ⇒
+  记忆被移出活跃集 ⇒ 召回空 / 索引无内容 / consolidated 不生成。
+  `t8-explicit-zero` 那条也是它：两条**不同日期**的记忆（09-06 / 09-07）一并被滤掉 ⇒ 目录数 = 0 ⇒ 「目录摘要」段不生成。
+- **判据对照（实测，不是推断）**：`retention` / `compact` 同样默认开，但**没有引爆** —— `retention` 的排除按 `_meta.json` 建档生效
+  （`query.ts` 的 retention 分支读 meta），而这些 mock 没有 meta ⇒ 本次唯一触发者是 `forget`（按**路径日期**算 age，不看 meta）。
+
+**修法：显式声明「本场景与遗忘无关」（不是改 fixture 日期）**
+
+- 这 6 个场景测的都不是遗忘（hits 累积 / consolidated / sidecar / 沙箱作用域 / 降级可见性 / 显式 0 开关）。
+- 按本仓**既有模式**（`recall-attribution.test.ts` 显式关 `retention`；`t8-silent-degradation.test.ts` 早已显式关 `retention`）
+  在 config 里加 `forget: { enabled: false }` + 一行注释说明。
+- **为什么不改日期**：改日期只让它在 `staleDays` 窗口内有效（仍随阈值默认值漂移）；**显式关掉无关判据才是把前提钉住** ——
+  这正是 v1.15.85 那次「默认值变更」能悄悄推翻 T12 结论的原因：**前提没有被显式声明**。
+- 影响面：**6 个文件 / 8 条规则 / 15 处 config**，+28/−16；改动全是纯声明（含 `forget: {}` → `forget: { enabled: false }`）。
+- **脚本纪律**：批量替换走一次性脚本，**每处打印匹配数，不符或为 0 即拒绝写盘**（`AGENTS.md` 规矩 2）——
+  本轮真挡下一次：`t8-silent-degradation.test.ts` 我按 grep 估「2 处」、实为 **3 处** ⇒ 脚本拒写、修正后重跑。
+
+**验证**（本机语料根 `D:\project\dsh1`）
+
+- `npm run build` → `npm run verify` ⇒ **61 个检查 61 通过** · `ALL PASS ✅` · `VERIFY_EXIT=0`。
+- **修复前/后对照（同一探针、同一假日期）**：2030-01-01 下 **6 红 → 0 红**（51 个文件全绿）。
+- 6 个文件单独复跑 ⇒ 全部 `ALL PASS ✅`。
+- `npm run audit:docs` ①–⑤ 全绿（① 三方版本一致 = 1.15.98）。
+- ⚠ **仍未做**：探针只取了**一个**假日期（2030-01-01），不是逐日 sweep ⇒「已无引爆点」只对**已跑的日期**成立；
+  `forget` / `retention` 的**默认值将来再变**时，需按同一口径重跑（探针口径已写进 `BACKLOG.md` T12，便于重放）。
+
 ## [v1.15.97] 投影预设收敛为「只留 Agent Team」+ `adr/0095` 两处补记 + 修一颗**到期引爆的时间炸弹 fixture**
 
 用户 2026-09-16 的三条提交全是**文档与组合面**（一行源码都没动）；发版时 `npm run verify` 又当场抓到一处**既有失败** ——

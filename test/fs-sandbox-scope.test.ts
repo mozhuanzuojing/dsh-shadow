@@ -104,7 +104,9 @@ const flushOf = async (listeners: Map<string, Function>, T: any) =>
 {
   const store = new Map<string, string>();
   const { m, agent, listeners, ctx } = mkCtx(store, mkSandboxPolicy(() => "workspace-write"));
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
+//   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
+apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T1");
 
   // 采集一条动作，触发 flush
@@ -122,7 +124,7 @@ const flushOf = async (listeners: Map<string, Function>, T: any) =>
 {
   const store = new Map<string, string>();
   const { m, agent, listeners, ctx, services } = mkCtx(store, mkSandboxPolicy(() => "workspace-write"));
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T2");
   listeners.get("tools/result")!({ agent: T, name: "build" });
   await flushOf(listeners, T);
@@ -140,7 +142,7 @@ const flushOf = async (listeners: Map<string, Function>, T: any) =>
 {
   const store = new Map<string, string>();
   const { m, agent, listeners, ctx, services } = mkCtx(store, mkSandboxPolicy(() => "read-only"));
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T3");
   listeners.get("tools/result")!({ agent: T, name: "build" });
   await flushOf(listeners, T);
@@ -159,7 +161,7 @@ const flushOf = async (listeners: Map<string, Function>, T: any) =>
 {
   const store = new Map<string, string>();
   const { m, agent, listeners, ctx } = mkCtx(store, mkSandboxPolicy(() => "danger-full-access"));
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T4");
   listeners.get("tools/result")!({ agent: T, name: "build" });
   await flushOf(listeners, T);
@@ -172,7 +174,7 @@ const flushOf = async (listeners: Map<string, Function>, T: any) =>
 {
   const store = new Map<string, string>();
   const { m, agent, listeners, ctx } = mkCtx(store, mkSandboxPolicy(() => "workspace-write"));
-  apply(ctx, { summary: { enabled: false }, recall: {} });
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T5");
   m.set(`${WS}/.shadow/2026-09-11/2026-09-11--100000-alpha.md`,
     "# alpha\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：proj\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
