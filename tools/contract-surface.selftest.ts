@@ -203,6 +203,7 @@ const CONFIG_KEY_FROZEN: string[] = [
   "queryLog",
   "projectionStore",
   "indexEngine",
+  "derivedIndex",
   "knowledgeEngine",
   "abstracts",
   "evidenceProvider",

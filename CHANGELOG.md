@@ -3,6 +3,56 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.16.2] 把「仍未证明」的四项逐条做掉（两个可逆实验 + 端到端门 + T19 绊线）+ 查出**一处既有缺陷**
+
+v1.16.1 收尾时留了一张「仍未证明」清单。本版把它逐条做掉 —— **没有一项是靠推测补上的**：
+每一条要么是可重放的**实验**，要么是可执行的**断言**；两处不成立的判断按实测**推翻重写**。
+
+### ① 实验：`tsconfig.include` 的真实失败形态（此前只是间接判断）
+
+把 `decision/**/*.ts` 从 `include` 去掉再跑：`npm run build` → **`exit 0`、零报错**（**静默不检查**）、
+`dist/decision` **不重建**、测试死在
+`ERR_MODULE_NOT_FOUND: Cannot find module '…\dist\decision\guard.js'`。
+⇒ `adr/0096` §9.2 第 3 步那句「报错指向**文件不存在**而不是类型错」**逐字成立**。已还原，`git status` 干净。
+
+### ② 实验：推翻 `adr/0096` §7.1 关于配置键的那一格（**两个方向都错**）
+
+- **只加键**：往 `ShadowConfig` 加一个键 ⇒ `contract-surface` selftest 明说
+  「**新增顶层键 N 个（allowed，只报告）**」且 `exit 0`；`audit:docs` ③ **完全不受影响**（仍 `20 = 20`）。
+- **只改声明数**：把 README 的「现 20 行」改成 21（表里仍 20 行）⇒ ③ **红，`exit 1`**。
+
+⇒ ③ 守的是 **README 表自洽**，**根本不看 `ShadowConfig`**。原来那句「若加配置键 → 表计数**有**（③）」
+**两半都错**，已按实测改写。**要害**：把新键登记进 README 那 10 个字段 —— **无门可守**；
+只有**删键 / 改名**才红。这反过来**加强**了 §7「T1 不进受保护契约面」的决定。
+
+### ③ 由 ② 顺手查出一处**既有**缺陷（**不是**本切片引入）：`derivedIndex` 不在冻结清单里
+
+`contract-surface` 的「新增（allowed）」名单里出现了 **`derivedIndex`** —— 它是 `core/types.ts:49` 的
+**顶层** `ShadowConfig` 键（v1.15.96 加），却没进 `CONFIG_KEY_FROZEN`（清单当时只有 **19** 个键）
+⇒ **改它的名或删它，当时没有任何门会红**，而那正是这道 freeze 存在的理由。
+**已按工具自己打印的清单**（`SHADOW_PRINT_SURFACE=1`，**不手写**）补上，并做了**正控**：
+现在把 `derivedIndex` 改名 ⇒ 红，报文为「config-keys-v1（契约表 forbidden = 删键）：ShadowConfig
+少了这些顶层键：`derivedIndex`」。（`lossDisclosure` 不在清单里是**对的** —— 它是 `recall` 的**嵌套**键，
+而抽取器刻意只取深度 0。）
+
+### ④ 补两个门：把「仍未证明」变成「有断言」
+
+- 第 **⑪** 块 **端到端**：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage-validator.ts`
+  投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则正例可能是恒真的假绿）。
+  在本层「零生产消费者」的前提下，这是它离**生产契约**最近的一次验证。
+- 第 **⑫** 块 **T19 绊线**：断言 `ENGINES` 里**没有任何后端报分布**。`adr/0096` §12 的实质问题
+  （模型自报的置信度 vs `adr/0037` 的 ❌Confidence）**仍只能靠另立 ADR 解决**，但从此**不能被静默引入**
+  —— 报错直接指向 §12 与 `BACKLOG` 的 T19，并写明**不许改断言让测试变绿**。
+
+### ⑤ `adr/0096` 两处引用精度（已读源码核实）
+
+- §7.1 的 `tool-name-v1` 一行：`test/host-probe.test.ts:104` 实为
+  `for (const t of [...]) assert.ok(tools.reg.has(t), …)` —— **纯名字存在性**断言，**不涉** schema / 参数。
+- §9.2 第 3 步补上 ① 的实测失败形态。
+
+**验证**：`SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` → exit 0，末行 `[run-tests] ALL PASS ✅`（62 个检查）。
+
+
 ## [v1.16.1] 对 v1.16.0 的**对抗性自审**与修正（遗漏 / 因果颠倒）+ 新开 T18 / T19
 
 v1.16.0 交付后按用户要求做了一轮**对抗性自审**。**查出 7 处，全部已修**。逐条写下来 ——

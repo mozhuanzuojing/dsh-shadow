@@ -8,6 +8,9 @@
 //   ④ **协议里没有禁词** —— 字段名不得出现 confidence/score/…（本仓的线：认知不确定性可、成功信念禁）。
 //
 // 另有一条**静态**判据（⑨）：`decision/types.ts` 必须**零 import**（它在 PURE_MODULES 里，是承诺不是装饰）。
+//
+// ⑪ 是**端到端**（过真实的 `core/lineage-validator.ts` 投影门 + 反证）；
+// ⑫ 是 **T19 闸门**（`adr/0096` §12）：本层**不允许**出现概率型后端 —— 要引入**必须先另立 ADR**（`BACKLOG.md` 的 T19）。
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,6 +27,7 @@ import { choose, orderByReported } from "../dist/decision/choice.js";
 import { resolveEngine, engineNames, ENGINES } from "../dist/decision/engine.js";
 import { heuristicEngine, HEURISTIC_ENGINE_NAME } from "../dist/decision/heuristic.js";
 import { producedToLineage, producedDecisionIsTraceable } from "../dist/decision/lineage.js";
+import { validateAtomProjection } from "../dist/core/lineage-validator.js";
 
 /** 一份**合法**声明的样板；各反例只改动其中一处。 */
 const D = (over: Record<string, unknown> = {}) => ({
@@ -258,11 +262,51 @@ const input = (over: Record<string, unknown> = {}) => ({
   console.log("✔ ⑩ lineage：只搬运不补写；不可追溯显式 unavailable");
 }
 
+// ⑪ **端到端**：`produced` → lineage 必须能过**真实**的 `core/lineage-validator.ts` 投影门
+//     （本层零生产消费者的前提下，这是它离「生产契约」最近的一次验证 —— 不再是只测自己）
+{
+  const traceable = {
+    declaration: D(),
+    source: "session/2026-09-20-abc",
+    createdAt: "2026-09-20 10:00:00",
+    evidence: [{ type: "file" as const, locator: "adr/0096-decision-primitive.md" }],
+  };
+  const lineage = producedToLineage(traceable);
+  assert.ok(!isUnavailable(lineage as never));
+  const verdict = validateAtomProjection({ type: "decision", lineage: lineage as never });
+  assert.equal(verdict.allowed, true, `produced 决策必须能进 context，实得：${verdict.reason}`);
+
+  // **反证**（否则上一条可能是恒真的假绿）：无 evidence 的 decision 必须被**下游**挡下
+  const naked = validateAtomProjection({
+    type: "decision",
+    lineage: { ...(lineage as object), evidence: [] } as never,
+  });
+  assert.equal(naked.allowed, false, "反证：无 evidence 的 decision 必须被下游挡下");
+  console.log("✔ ⑪ 端到端：过**真实**投影门（正例）+ 无证据被下游挡下（反证）");
+}
+
+// ⑫ **T19 闸门**：本层**不允许**出现概率型后端（`adr/0096` §12 / `BACKLOG` T19）
+//
+// ⚠ 若你正为此处的**变红**而改这一块：**先读 `adr/0096` §12 与 `BACKLOG.md` 的 T19**。
+//   那道门问的不是「代码能不能跑」，而是「把模型自报的置信度当决策依据，`adr/0037` 划的界还成不成立」。
+//   **不许为了让测试变绿而改断言** —— 那正是本仓说的「改门而不改事实」。
+{
+  const sample = input({ context: { prefer: "read_shadow" } });
+  for (const e of ENGINES) {
+    const r = e.decide(sample);
+    assert.ok(
+      isUnavailable(r as never) || (r as { reportedDistribution: unknown }).reportedDistribution === null,
+      `T19 闸门：引擎 ${e.name} 报了分布 —— 引入概率型后端前先另立 ADR（adr/0096 §12 / BACKLOG T19），并同步改本断言`,
+    );
+  }
+  console.log(`✔ ⑫ T19 闸门：${ENGINES.length} 个后端**都不报分布**（概率后端必须另立 ADR）`);
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · **没有生产消费者**：本层尚未被任何读路径 / 工具接线（ADR-0096 §7 的决定）⇒ 它目前只被本测试消费；");
-console.log("  · **没有落盘**：`producedToLineage` 只产出 `AtomLineage` 的**形状**，写原子仍由既有 persistence 负责（T1 不碰）；");
-console.log("  · **没有概率型后端**：`reportedDistribution` 的三条判据由本测试的样板声明覆盖，但 T1 的唯一引擎报 `null`");
-console.log("    ⇒ 真实概率生产者要等 llm / jev 后端（另一个切片，且必须只是 `ENGINES` 里多一项）；");
+console.log("  · **没有落盘**：⑪ 证明了产出的 `AtomLineage` 能过**真实**投影门，但**写原子**仍由既有 persistence 负责（T1 不碰）；");
+console.log("  · **没有概率型后端**：`reportedDistribution` 的三条判据由本测试的样板声明覆盖，而 T1 的唯一引擎报 `null`");
+console.log("    ⇒ 真实概率生产者要等 llm / jev 后端，且**必须先过 ⑫ 那道 T19 闸门**（另立 ADR）；");
 console.log("  · 未实测「引擎自报的概率是否校准」—— 本层**不**做校准、不做阈值（ADR-0096 §3/§4），故无处可测。");
 console.log("ALL PASS ✅");

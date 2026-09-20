@@ -223,10 +223,12 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 | 落点 | 位置 | 有门吗 |
 |---|---|---|
-| 工具名 + 参数 | `index.ts`（`README.md:312` 称「三处 `name:`」） | **有**（`tool-name-v1` 在 `README.md:335` 的**有强门**行 —— `test/host-probe.test.ts:104` 断言三个名字都在注册表里。⚠ **但那个断言把三个名字写死了** ⇒ **新增**工具名**不会**被它覆盖，得手动把新名加进那一行；`tool-schema-v1` 则**只守参数名**。本行早先写作「部分」—— 那**低估**了门，自审时改正） |
+| 工具名 + 参数 | `index.ts`（`README.md:312` 称「三处 `name:`」） | **有**（`tool-name-v1` 在 `README.md:335` 的**有强门**行 —— `test/host-probe.test.ts:104` 断言三个名字都在注册表里。⚠ **但那个断言把三个名字写死了** ⇒ **新增**工具名**不会**被它覆盖，得手动把新名加进那一行；`tool-schema-v1` 则**只守参数名**。本行早先写作「部分」—— 那**低估**了门，自审时改正。**已读源码核实**：`:104` 就是
+`for (const t of ["read_shadow", "recall_shadow", "shadow_query"]) assert.ok(tools.reg.has(t), …)` ——
+**纯名字存在性**断言，不涉 schema / 参数 / 默认值） |
 | 冻结清单 | `tools/contract-surface.selftest.ts:24`（`TOOLS`）· `:50`（`TOOL_PARAM_FROZEN`） | **有**（`missing` 红；清单可由 `:223-224` 的打印重新生成） |
 | 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `README.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见 `README.md:333-337`；⚠ **该分组本身已腐烂**：9 个 id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而 `:337` 又写「8 条全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
-| 若加配置键 | `:190`（`CONFIG_KEY_FROZEN`）+ README 默认开关表 | 表计数**有**（`audit:docs` ③） |
+| 若加配置键 | `tools/contract-surface.selftest.ts` 的 `CONFIG_KEY_FROZEN` + README 默认开关表 | ⚠ **加键本身没有任何门挡着**（**实测**：往 `ShadowConfig` 加一个键 ⇒ 该 selftest 明说「**新增顶层键 N 个（allowed，只报告）**」并 `exit 0`；`audit:docs` ③ **完全不受影响**，仍是 `20 = 20`）。③ 守的是 **README 表自洽**（**实测**：把声明数改成 21 而表里仍 20 行 ⇒ **红，`exit 1`**）⇒ **「新键要登记进 README 那 10 个字段」这件事无门可守**，只有**删键 / 改名**才红。※ 本 ADR 早先在此写「表计数**有**（`audit:docs` ③）」—— **错了**，自审时用正反两个实验改正 |
 | 若加 `mode` | `test/recall-envelope.test.ts:104`（62→63）+ `CONTEXT.md`「mode 参考」 | **有**（`:104` 计数断言 + `:111` 覆盖断言） |
 
 ⇒ 两条结论：
@@ -290,7 +292,11 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
    也不产出 `dist/`**（实测：`outDir: "dist"` + `rootDir: "."`，且**被显式 include 的无消费者文件都有产物**
    —— `dist/core/decision-outcome.js` · `dist/core/polarity.js` 均在）；而 `test:all` = **先 build 再测**、
    测试 import 的是 `dist/` ⇒ **不加 include，测试连 `import` 都失败，且报错指向「文件不存在」而不是「类型错」**
-   （会把人往错方向带）。加完必须提交重建的 `dist/`；
+   （会把人往错方向带）。加完必须提交重建的 `dist/`。
+   **失败形态已实测**（把 `decision/**/*.ts` 从 `include` 去掉再跑）：`npm run build` → **`exit 0`、零报错**
+   （**静默不检查**）、`dist/decision` **不重建**、测试死在
+   `ERR_MODULE_NOT_FOUND: Cannot find module '…\dist\decision\guard.js'` ——
+   **正是「文件不存在」而不是类型错**，与本行的判断逐字吻合；
 4. 接线**或**接受接线债；T1 **明确选后者**，故第 5 步必需；
 5. 显式重定棘轮基线，**两个命令都要跑**（各自只重写同一 JSON 的自己那一段）：
    `node tools/audit-wiring.ts . --update-ratchet`
@@ -359,6 +365,10 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
       **28 行 = 27 个目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
       ⚠ 过程中 `audit:ratchet` **判红过一次**（`b_keys 95 → 100（+5）`）—— 因为初版把 `=== "(root)"`
       内联散在 5 处；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
+- [x] **端到端**（第 ⑪ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage-validator.ts`
+      投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则上一条是恒真的假绿）
+- [x] **T19 有执行形态**（第 ⑫ 块）：断言 `ENGINES` 里**没有任何后端报分布**；
+      引入概率型后端会让它变红，报错直接指向 §12 与 `BACKLOG` 的 `T19`
 
 ## 12. 本 ADR **最弱的一环**（自审后如实写下，不许粉饰）
 
@@ -378,3 +388,8 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
 **不得**以「本 ADR §6 已经做过范围澄清」为由**继承结论**。届时须正面回答 `adr/0037` 那一段理由
 摆出的问题（抽取结果是不是事实？source 指原文还是模型？同一段话不同模型是否得到不同 Decision？
 如何验证无 hallucination？失败怎么办？）。**本 ADR 不做这个判断** —— 那是下一个切片的事。
+
+**这道门已经有执行形态**（v1.16.2 补）：`test/decision-primitive.test.ts` 的第 ⑫ 块断言
+「**`ENGINES` 里没有任何后端报分布**」。引入概率型后端会让它**变红**，且报错直接指向本节与
+`BACKLOG.md` 的 `T19`。⚠ 该块的注释里写明：**不许为了让测试变绿而改断言** ——
+那正是本仓说的「**改门而不改事实**」；要改它，先按上面那条另立 ADR。
