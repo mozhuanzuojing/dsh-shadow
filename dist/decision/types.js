@@ -7,9 +7,15 @@
 //   · captured —— **已经发生的**决定（source = 原文）⇒ 归 adr/0037 的 DecisionEvent，本层**不碰**。
 //   · produced —— 引擎在决策那一刻**声明的**选择（source = 引擎名 + 逐字原始输出）⇒ 本文件。
 //
-// 命名纪律（ADR-0096 §4）：本层的**字段名**里不得出现 confidence / score / best / optimal /
-// correct / expectedSuccess / precision / winner / ranking。本仓的线是
-// 「**认知不确定性 = 可** / **对成功与正确性的信念 = 禁**」——
-// 先例：action/guard.ts 允许 ActionCandidate 带 `uncertainty`，却禁它带 `confidence`。
-// 因此引擎自报的数一律叫 `reportedDistribution`：**引擎自报**，不是 shadow 的评分。
+// ## 吸收的是「Typed Decision 的形状」，**不是**引擎的置信度（ADR-0096 §12）
+//
+// 「吸收 Jev」= 把它那套 **判型化的决策**变成 shadow 自己的原语（候选集 / 选择 / 原始依据 / 血缘），
+// **不是**把某个推理服务接进来、更不是把它的**概率分布**搬进类型里。
+//
+// 因此本协议里**没有、也不会有**任何承载「置信度 / 概率 / 分数」的字段：
+//   · adr/0037 的「❌ Confidence（决策置信度）」**结构性成立** —— 不是「我们保证不用」，
+//     而是**这个类型里没有那个位置**，所以**任何后端都引入不了它**（与后端无关）；
+//   · 引擎原始输出里的数字**逐字留在 `rawOutput`**，归**引擎**、是**证据**（provenance），
+//     shadow **不解析、不建类型、不排序、不打分**。
+//   ⇒ 这条纪律的守门断言：`test/decision-primitive.test.ts` 的第 ⑫ 块（协议字段名静态判据）。
 export {};

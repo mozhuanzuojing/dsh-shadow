@@ -6,8 +6,9 @@
 //   ③ 都不命中 ⇒ **显式不可用**（`no_rule_matched`）—— **不猜**。
 //
 // 两条纪律，与整个 decision/ 层一致：
-//   · `reportedDistribution` **一律 `null`** —— 规则引擎没有概率；**逼它编一组数，
+//   · **不报「概率」**（v1.17.0 起连字段都没有了）—— 规则引擎本来就没有概率；**逼它编一组数，
 //     就等于让 shadow 自己打分**（踩 planning/guard.ts:11 的 `score → optimization → …` 链）。
+//     它若真有话要说，写进 `rawOutput`，**逐字、归引擎**（ADR-0096 §12「吸收形状、不吸收置信度」）。
 //   · 规则含糊（命中多个）一律**显式失败**，不靠「取第一个」蒙过去。
 import type { DecisionEngine, DecisionInput, EngineDeclaration, EngineUnavailable } from "./types.js";
 
@@ -34,8 +35,8 @@ export const heuristicEngine: DecisionEngine = {
       engine: HEURISTIC_ENGINE_NAME,
       candidates,
       selected,
-      // 规则引擎**没有**概率：显式 null。见 types.ts 的 reportedDistribution 与 ADR-0096 §4。
-      reportedDistribution: null,
+      // 规则引擎没有概率，协议里也没有承载它的字段（ADR-0096 §12）——
+      // 若它真有话要说，就写进 rawOutput，逐字，归引擎。
       rawOutput: JSON.stringify({
         engine: HEURISTIC_ENGINE_NAME,
         rule,

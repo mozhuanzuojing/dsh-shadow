@@ -74,7 +74,8 @@
 `action/guard.ts:21` 的 `renderCandidate` **允许** `uncertainty.toFixed(2)`，
 而 `action/guard.ts:5` **禁止**同一结构带 `confidence`。
 ⇒ 本仓的判据不是「数字一律不许」，而是 **「认知不确定性」可 / 「对成功或正确性的信念」禁**。
-§4 的命名与 §3 的删减都站在这条线的**允许侧**。
+§3 的删减站在**允许侧**；而 v1.17.0 更进一步：把「**命名**」这一步也取消了 ——
+本层**不再有任何需要命名的数字字段**（§4），于是这条线由「我们怎么给它起名」变成「**它根本装不进来**」。
 
 ## 2. 决定一：Decision 是**两个**对象，永不混同
 
@@ -92,14 +93,14 @@
 2. **不把 `captured` 的 statement 当 `produced` 的 `selected`** —— 前者是事实陈述，后者是候选 id。
 3. 同一回合两者都有时，**记两条，不合并**。
 
-## 3. 决定二：原语只留一个 + 两个视图（**与提案差异最大，请重点评审**）
+## 3. 决定二：原语只留一个，**没有视图**（与提案差异最大；v1.17.0 按「吸收」再收紧一档）
 
 | 提案 | 本 ADR | 理由 |
 |---|---|---|
 | `choice` | ✅ **保留**，唯一有 Jev 依据的原语 | `model.py:81,91-106` |
-| `score` | ❌ **不成原语** —— 只能是 `reportedDistribution`（声明里的**字段**；**可为显式 `null`** = 该引擎不产出分布） | shadow 一旦「计算分数」就正好踩 `planning/guard.ts:11` 的链 |
+| `score` | ❌ **不成原语，也不设字段** —— 引擎自报的数字**只作为 `rawOutput` 逐字留存**（provenance），shadow **不解析、不建类型** | 给它一个字段，就是给 `planning/guard.ts:11` 那条链留了**入口** |
 | `boolean` | ❌ **不成独立协议** —— 定义为 `choice` 的**二元退化**（候选集两元） | Jev 也没有；另造题型是发明协议 |
-| `rank` | △ **降为视图** `orderByReported()` | 它是对 `reportedDistribution` 的排序**读数**，不是新协议；且**不得**被任何偏好/选择路径消费 |
+| `rank` | ❌ **不提供**（v1.17.0 从「视图」再降一级） | 分布字段已删 ⇒ 要排就得**解析 `rawOutput`**，那正是把引擎的置信度**重新建模**成 shadow 的排序。v1.16.0 曾给过 `orderByReported()` 视图，按 §12 取消 |
 | `threshold` | ❌ **不提供** | 见下 |
 
 **为什么删除 `threshold` 是最重要的一条**：本仓对「阈值当权威」已有立场（ADR-0080/0081）。
@@ -111,38 +112,38 @@
 `score.ts` / `boolean.ts` / `rank.ts` / `policy.ts`（`policy` 概念留到真有第二个后端时再定，
 避免先造空抽象）。
 
-## 4. 决定三：命名与守卫必须站在**允许侧**
+## 4. 决定三：**协议里装不下置信度**（v1.17.0 由「命名」升级为「结构」）
 
 - **禁**（本层**字段名**里不得出现）：`confidence` · `score` · `best` · `optimal` · `correct` ·
-  `expectedSuccess` · `precision` · `winner` · `ranking`
+  `expectedSuccess` · `precision` · `winner` · `ranking` · `probabilities` · `reportedDistribution`
   ⚠ **作用域是「字段名」，不是「全文」** —— `guard.ts` 在**禁令理由**里点名它们是**允许**的；
   先例：`planning/guard.ts:11,13,16` 同样在 reason 里点名 `score`/`optimal`/`ranking`。
-  这条口径由 `test/decision-primitive.test.ts` 的第 ⑨ 块**静态断言**守着（并同时断言 `types.ts` **零 import**）。
-- **许**：`reportedDistribution`（强调「引擎**自报**」）。§1.4 的 `uncertainty` 是**先例**
-  （`ActionCandidate` 的字段），本层**不引入**同名字段。
 - 依据：§1.4（`action/guard.ts:5` 与 `:21` 的对照）· `planning/guard.ts:11,13,16`
 
 新层自带守卫 `decision/guard.ts`，与 `action/guard.ts`、`planning/guard.ts` **同形**
-（`xIsClean` + `assertX` + **非空 reason**）。判据以 `declarationViolations` 为**唯一实现**：
+（`xIsClean` + `assertX` + **非空 reason**）。判据以 `declarationViolations` 为**唯一实现**（**四条**）：
 
 1. `engine` 非空；`candidates` **非空**；
 2. `selected` **∈** `candidates`；
 3. `rawOutput` **非空**（没有原始声明就不叫「声明」）；
-4. `reportedDistribution` 的键**恰好等于**候选集（**多一个少一个都非法** —— 取自 `model.py:30-45` 的口径）；
-5. 每个值**有限**且 **0–1**；
-6. 和 **≈ 1**（容差 `DISTRIBUTION_SUM_TOLERANCE = 1e-6` **显式写出**，**不隐式归一化**）；
-7. 违例 ⇒ **逐条点名** + `invalid`，**不静默纠正、不落回默认**（ADR-0049）。
+4. 违例 ⇒ **逐条点名** + `invalid`，**不静默纠正、不落回默认**（ADR-0049）。
 
-**两条「刻意如此」**（实现时定死的，后来者别顺手改回去）：
+> v1.16.0 曾有第 4–6 条**分布判据**（键逐字对齐 / 值域 `[0,1]` / 和 ≈ 1，容差 `1e-6`）。
+> **它们随字段一起删除了 —— 不是被放松。** 没有字段，就没有可判的对象；保留「判空字段」的判据
+> 只会制造一门**看起来在守、其实无物可守**的假闸门。
 
-- **`reportedDistribution` 允许显式 `null`**（= 该引擎**不产出**分布，如纯规则引擎），
-  但**不允许 `undefined`**（= 忘了填）—— 两者**必须分得开**（缺件不静默，ADR-0049）。
-  T1 的 `HeuristicDecisionEngine` 就报 `null`：规则引擎没有概率，
-  **逼它编一组数，就等于让 shadow 自己打分**。
-- **不要求 `argmax(reportedDistribution) === selected`** —— 与 jev 的 `validate_choice` **不同，是有意的**：
-  一旦要求，**选择就由那组数字决定**，那组数字于是成了 shadow 的优化目标，正好落回
-  `planning/guard.ts:11` 的 `score → optimization → preference → value → identity` 链。
-  本层要的是「**选了什么**」与「**自报了什么分布**」是**两条独立事实**。
+**一条「刻意如此」**（v1.17.0 定死，后来者别顺手改回去）：
+
+- **协议里没有、也不会有承载「置信度 / 概率 / 分数」的字段。**
+  本层吸收的是 Jev 那套**判型化的决策形状**（候选集 / 选择 / 原始依据 / 血缘），
+  **不是**它的概率分布；而**分布恰恰是 `adr/0037` 明令禁止的「❌ Confidence（决策置信度）」**（详见 §12）。
+  引擎若在 `rawOutput` 里报了自己的数字，那些数字**原样待在那段文本里**，归引擎 ——
+  shadow **不提取、不排序、不打分**。
+  ⇒ 0037 的禁令因此**结构性成立**：不是「我们保证不用」，而是**类型里没有那个槽，任何后端都引入不了**。
+
+**这道结构由门守着**（不是靠自觉）：`test/decision-primitive.test.ts` 的第 ⑦ 块断言
+`EngineDeclaration` 的字段集**恰好**是 `{engine, candidates, selected, rawOutput}` ——
+加任何字段都会红，且**带标定**（往检测器喂合成样本，证明它真看得见非法字段，否则那条断言是恒真的假绿）。
 
 ## 5. 决定四：候选由**外部**给，引擎只选不造；原始输出**就是证据**
 
@@ -164,8 +165,8 @@
 |---|---|---|
 | ❌ DecisionStore / DB / Repository | **继续有效** | **继续有效**（仍无独立存储；Atom 是唯一事实源） |
 | ❌ LLM 自动补 Reason / LLM 抽取 Decision | **继续有效** | **范围澄清**：禁「事后替**已发生的**决定编理由」；**不**禁「记录引擎在决策时声明的输出」 |
-| ❌ Decision Score / Quality | **继续有效** | **继续有效**：shadow **不**给决策打质量分/正确分；`reportedDistribution` 是**引擎自报**，不是 shadow 的评分 |
-| ❌ Confidence（决策置信度） | **继续有效** | **范围澄清**：不引入「shadow 对决策的信心」；引擎自报的数按 §4 命名归位，**不叫 confidence** |
+| ❌ Decision Score / Quality | **继续有效** | **继续有效**：shadow **不**给决策打质量分/正确分（引擎自报的数字只作 `rawOutput` 里的证据） |
+| ❌ Confidence（决策置信度） | **继续有效** | **v1.17.0 起升级为「结构性」**：协议里**没有**承载置信度的字段（§4/§12）⇒ 不引入「shadow 对决策的信心」，**且任何后端都引入不了** |
 | ❌ Preference / Value / Learning / Reward | **继续有效** | **继续有效** |
 | ❌ 自动判断「正确决策」· ❌ 自动形成经验 · ❌ Decision → Goal | **继续有效** | **继续有效** |
 
@@ -266,9 +267,9 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 ```text
 decision/
-├── types.ts       稳定协议（候选集 / selected / reportedDistribution / rawOutput / evidence）
-├── guard.ts       边界守卫（§4 的 **7 条**判据；镜像 action/ · planning/ 的 guard 形态）
-├── choice.ts      choice 原语 + orderByReported 视图（§3）
+├── types.ts       稳定协议（`engine` / `candidates` / `selected` / `rawOutput` —— **恰好这四个字段**，§4）
+├── guard.ts       边界守卫（§4 的 **4 条**判据；镜像 action/ · planning/ 的 guard 形态）
+├── choice.ts      **唯一原语** `choose`（**无视图** —— `rank` 已在 §3 取消）
 ├── engine.ts      DecisionEngine 接口 + 查找 + unavailable 语义（§7：无网络、无 LLM、无 jev）
 ├── heuristic.ts   HeuristicDecisionEngine（确定性规则表；T1 唯一后端）
 └── lineage.ts     produced → 决策 Atom 的投影（evidence 非空，§5）
@@ -303,6 +304,8 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
    `node tools/audit-drift.ts . --update-ratchet`
    并在 `CHANGELOG` 写明「本次**主动**增加接线债 + 数量」——**数量就写 §7 实测的那组**
    （**定案值**：`a1 +8` · `a2b ±0` · `a_total +8`；drift 侧**不变**），**不要另写一个说法**（同一个数两处不一致 = 腐烂）。
+   ※ v1.17.0 删掉「视图 + 分布判据」后**下降**，基线已按工具提示**收紧**（`a1 31 → 30` · `a_total 46 → 45`）⇒
+   相对 T1 之前的净增量变为 **`a1 +7` · `a_total +7`**。
    三条边界（**已实测**，`tools/audit-ratchet.lib.ts`）：**变多**红（`:67`）· **新桶**红（`:56`）·
    **桶消失**也红（`:60`，「缺件不静默」）⇒ 基线只有**正好等于观测**才绿
    （`观测与基线都是空表` 也不算通过，`:47`）；且语料 EMPTY / PARTIAL 时工具**拒绝**
@@ -330,6 +333,7 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
 ## 10. 明确不做（T1）
 
 - ❌ shadow 自己**评分 / 阈值 / 排序**并据此形成偏好（§3）
+- ❌ **任何承载「置信度 / 概率 / 分数」的类型化字段** —— v1.17.0 起连**视图**也不给（§4 · §12）
 - ❌ `confidence` / 正确率 / 质量分（§4）
 - ❌ Preference / Value / Learning / Reward / RL（0037 #10 继续有效）
 - ❌ 自动 Decision → Goal · 自动判断「正确决策」
@@ -340,56 +344,81 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
 - ❌ **§7「让 Shadow 成为 Agent 控制层」的定位变更** —— 那是**另一个决定**，
   与 T1 不是一件事，**单独立项**，不写进本 ADR
 
-## 11. 自检（**T1 已落地，逐条实测**）
+## 11. 自检（**T1 已落地，逐条实测**；v1.17.0 按「吸收」重定后逐条复核）
 
-- [x] `decision/guard.ts` 的判据各有**反例测试** —— `test/decision-primitive.test.ts` 第 ②③④ 块：
-      键多 / 键少 / 越界（含 `NaN`）/ 和偏离 1 / `selected` 不在候选集 / `candidates` 空 /
-      `rawOutput` 空白 / `engine` 空；外加**边界正例**（恰好落在容差内的和应当通过 —— 证明容差真的生效）
-- [x] `orderByReported` **无**任何偏好 / 选择路径消费 —— 全仓仅测试消费它（本层零生产消费者，§7 的决定）
-- [x] **全层 6 个文件**的**字段名**里禁词 **0 处**（口径见 §4：作用域是**字段名**，不是全文）——
-  由第 ⑨ 块**静态断言**守着，同一块还断言 `types.ts` **零 import**（`PURE_MODULES` 的承诺，与结构门双保险），
-  并把**文件集本身**钉进断言（文件集一变就红）。
-  ⚠ **自审修正**：第 ⑨ 块原先**只扫 `types.ts`**，而本行的措辞是「本层」⇒ **声称比证明宽**。
-  实测其余 5 个文件当时也干净（**结论没错**），但**证据面已补齐**；
-  同时 ⑨ 的说明改为「全层 6 个文件」，两处口径对齐。
-- [x] `tsconfig.json` 的 `include` 已含 `decision/**/*.ts` ⇒ `dist/decision/` 下 6 个 `.js` + 6 个 `.d.ts` 已产出。
-      ⚠ **未**做「故意删一次 include 看是否报错」的破坏性验证 —— 留作可选
+- [x] `decision/guard.ts` 的判据各有**反例测试** —— `test/decision-primitive.test.ts` 第 ② 块：
+      `selected` 不在候选集 / `candidates` 空 / `rawOutput` 空白 / `engine` 空（**四条**，与实现一一对应）
+      ※ v1.16.0 的分布三条反例（键多 / 键少 / 越界 / 和偏离 / 容差边界）随字段删除而**一并撤除**
+- [x] 本层**没有视图** —— `rank` 已在 §3 取消（`orderByReported` 删除）；全仓**没有任何**偏好 / 排序消费者
+- [x] **全层 6 个文件**的**字段名**里禁词 **0 处**（含 `probabilities` / `reportedDistribution`）——
+  由第 ⑦ 块断言，同一块还断言 `types.ts` **零 import**（`PURE_MODULES` 的承诺）与**文件集本身**
+- [x] **结构判据**（第 ⑦ 块，**本层最重要的一条**）：`EngineDeclaration` 的字段集**恰好**
+      `{engine, candidates, selected, rawOutput}`；带**标定**（合成样本证明检测器看得见非法字段）
+- [x] `tsconfig.json` 的 `include` 含 `decision/**/*.ts` ⇒ `dist/decision/` 下 6 个 `.js` + 6 个 `.d.ts`。
+      **破坏性验证已做**（v1.16.2）：去掉 include ⇒ build `exit 0` 零报错、`dist/decision` 不重建、
+      测试死在 `ERR_MODULE_NOT_FOUND`（**文件不存在**，不是类型错）—— 见 §9.2 第 3 步
 - [x] `npm run audit:layers` **0 违规**，且在**新增 3 条方向禁令之后**仍绿（`decision` 现受
       `core↛decision` / `decision↛query` / `decision↛tools` 约束；`why` 非空由 selftest ⑦ 强制）
-- [x] 两处棘轮基线已**显式**重定（`--update-ratchet` 各跑一次，随后 `audit:ratchet` 报「与基线逐桶相等 ✅」）；
-      `CHANGELOG` 写明**同一组**数（§7 定案值）
+- [x] 两处棘轮基线已**显式**重定；v1.17.0 因删除导出而**下降**，已按工具提示**收紧**基线
+      （`a1 31 → 30` · `a_total 46 → 45`）并报「与基线逐桶相等 ✅」
 - [x] `adr/0037` **正文未动**（`git diff --numstat` = `27 0`，纯追加；6 个原标题全在，只多一个 `## 补记`）
 - [x] `SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` → **exit 0**，末行 `[run-tests] ALL PASS ✅`
-      （**62 个检查全通过**）
 - [x] 模块归属表：生成器已重建为 `tools/module-ownership.ts`（§9.2 第 6 步选 (a)）并由它打印
       **28 行 = 27 个目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
       ⚠ 过程中 `audit:ratchet` **判红过一次**（`b_keys 95 → 100（+5）`）—— 因为初版把 `=== "(root)"`
       内联散在 5 处；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
-- [x] **端到端**（第 ⑪ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage-validator.ts`
-      投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则上一条是恒真的假绿）
-- [x] **T19 有执行形态**（第 ⑫ 块）：断言 `ENGINES` 里**没有任何后端报分布**；
-      引入概率型后端会让它变红，报错直接指向 §12 与 `BACKLOG` 的 `T19`
+- [x] **端到端**（第 ⑥ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage-validator.ts`
+      投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则正例是恒真的假绿）
+- [x] **T19 结案**（见 §12）：0037 的「❌ Confidence」**结构性成立**（类型里没有那个槽）⇒
+      不再需要「概率后端落地前的那道门」
 
-## 12. 本 ADR **最弱的一环**（自审后如实写下，不许粉饰）
+## 12. 「**吸收**」而不是「**接入**」—— 以及 T19 为什么因此可以结案
 
-`reportedDistribution` 与 `adr/0037` 的「❌ Confidence（决策置信度）」之间，
-**不是「换个名字」就能划开的**：一个候选集上的概率分布，**在语义上就是**「哪个更好的置信度」。
-§1.4 / §4 用「命名站在不确定性一侧」来辩护 —— **那是本 ADR 最弱的论据**
-（有「让文档比事实强」之嫌，与 D8 同族）。自审时**保留它但降级为辅助**，真正承重的是另外四条：
+### 12.1 一个被用户纠正的口径错误（记下来，因为它改变了设计）
 
-1. **谁算的** —— 数字由**引擎**算，shadow **从不计算**（0037 禁的是 shadow 生成 / 推断）；
-2. **怎么留的** —— `rawOutput` 与分布**逐字留存**，它是**证据**，不是 shadow 的断言；
-3. **谁消费** —— 全仓**无人**把它当权威（不设阈值、不做优化；`orderByReported` 是只读视图，且**无生产消费者**，
-   已由 `test/decision-primitive.test.ts` 与「本层零生产消费者」两处共同保证）；
-4. **生产里根本不存在** —— **T1 的唯一引擎报 `null`**（§4「刻意如此」第 1 条）。
+v1.16.x 的本文与 `BACKLOG` 的 T19 把下一程写成「**概率型后端（LLM / jev）落地前**必须重审 `adr/0037`」——
+那是「**接入**」的语言：把一个外部服务接进来，再审它合不合规。用户 2026-09-20 纠正：
 
-⚠ **第 4 条意味着：T1 的一部分安全性来自「还没有概率后端」这个事实本身，而不是来自本 ADR 的论证。**
-⇒ **真实概率后端（LLM / jev）落地的那一版，必须把这道门重新审一遍并另立 ADR**，
-**不得**以「本 ADR §6 已经做过范围澄清」为由**继承结论**。届时须正面回答 `adr/0037` 那一段理由
-摆出的问题（抽取结果是不是事实？source 指原文还是模型？同一段话不同模型是否得到不同 Decision？
-如何验证无 hallucination？失败怎么办？）。**本 ADR 不做这个判断** —— 那是下一个切片的事。
+> **不是接入，而是吸收。**
 
-**这道门已经有执行形态**（v1.16.2 补）：`test/decision-primitive.test.ts` 的第 ⑫ 块断言
-「**`ENGINES` 里没有任何后端报分布**」。引入概率型后端会让它**变红**，且报错直接指向本节与
-`BACKLOG.md` 的 `T19`。⚠ 该块的注释里写明：**不许为了让测试变绿而改断言** ——
-那正是本仓说的「**改门而不改事实**」；要改它，先按上面那条另立 ADR。
+两者差别是实质的，不是措辞：
+
+| | **接入** | **吸收** |
+|---|---|---|
+| 对象 | 一个**外部服务** | Jev 那套 **Typed Decision 的思想** |
+| 原语的自洽靠什么 | **靠后端行为** ——「等它落地再判」 | **靠原语的形状本身** |
+| 0037 那道门 | 每换一个后端都要重审一次 | **一次定死、与后端无关** |
+
+### 12.2 症状：我把「生产里还没有分布」当成了承重理由
+
+v1.16.0 的四条承重理由里，第 4 条是「**生产里根本不存在分布**（唯一引擎报 `null`）」。
+那条其实是**吸收没做完的自白**：如果一个原语合不合 0037，要靠**某个后端当前的行为**来判断，
+那么被吸收的就只是**调用约定**，不是原语本身。
+
+### 12.3 修法：**吸收形状，不吸收置信度**（v1.17.0 已落地）
+
+| | 该不该吸收 | 与 `adr/0037` |
+|---|---|---|
+| Typed Decision 的**形状**：候选集 / `selected` / 原始依据 / 血缘 | **这才是要吸收的** | **无冲突** —— 里面没有置信度 |
+| Jev 的**概率分布** | **恰恰不该吸收** | **正是 0037 的「❌ Confidence（决策置信度）」** |
+
+⇒ v1.17.0 **删除了 `reportedDistribution` 字段与三条分布判据**，并**连「视图」一起取消**：
+`orderByReported` 要排序就得**解析 `rawOutput`**，那正是把引擎的置信度**重新建模**成 shadow 的排序。
+引擎自报的数字**只留在 `rawOutput` 里** —— 逐字、归引擎，作 **provenance / 证据**。
+
+### 12.4 结论：0037 的禁令**结构性成立**，`T19` **结案**
+
+- 现在不是「我们保证不用置信度」，而是 **`EngineDeclaration` 的字段集恰好是那四个**
+  —— **类型里没有那个槽**，所以**任何后端都引入不了它**，与谁做后端无关。
+- 由第 ⑦ 块**静态断言 + 标定**守着（加字段即红；检测器本身也用合成样本自证看得见非法字段，
+  否则那条断言是恒真的假绿）。
+- ⇒ **`BACKLOG` 的 T19 结案**。它原来的判据是「引入概率后端前另立 ADR」；
+  现在**不需要**那道门了，因为**没有可引入的路径**。
+  ⚠ **这是「设计改了」而不是「风险被证伪」** —— 两者的区别必须写清楚：
+  0037 的顾虑本身没有被推翻，只是**不再有承受它的结构**。
+
+### 12.5 残余边界（如实写下，不粉饰）
+
+`rawOutput` 里的数字会**渲染给模型看**。模型要不要据此行动，**不在本层管辖内** ——
+那是 agent 的推理，不是 shadow 的记录（0037 管的是**shadow 记什么**）。
+本层能保证的是：**shadow 侧不建型、不排序、不打分、不设阈值**。超出这个范围的，本 ADR 不声称。

@@ -116,8 +116,14 @@ Replay = Verification / Inspection
 1. 「❌ LLM 自动补 Reason / LLM 抽取 Decision」—— 禁的仍是
    **shadow 事后替一个已发生的决定编理由**；**不**禁「**逐字记录**引擎在决策时声明的输出」
    （那是**捕获**一个确实发生过的声明，不是生成）。
-2. 「❌ Confidence（决策置信度）」—— 仍然**不引入**「shadow 对决策的信心」；
-   引擎自报的数按 `adr/0096` §4 归位命名（`reportedDistribution`），**不叫 confidence**。
+2. 「❌ Confidence（决策置信度）」—— **v1.17.0 起这一条不但继续有效，而且升级为结构性的**：
+   `adr/0096` **删除了** `reportedDistribution` 字段、随附的三条分布判据**以及**唯一那个排序视图
+   ⇒ `EngineDeclaration` 里**没有、也不会有**承载「置信度 / 概率 / 分数」的槽位
+   ⇒ **任何后端都引入不了**（与谁做后端无关）。详见 `adr/0096` §12「**吸收**而不是**接入**」。
+   > ⚠ **更正留痕**：v1.16.0 时本补记这里写的是「引擎自报的数按 §4 归位命名为
+   > `reportedDistribution`，**不叫 confidence**」—— 那是拿**命名**当界，用户 2026-09-20 指出
+   > 应是「**吸收**」（把形状吸收成原语）而不是「**接入**」（把服务接进来再给它起个名字）。
+   > v1.17.0 按此**删字段**收口；本条保留，因为**改口径的理由本身值得留下**。
 
 「❌ Decision Score / Quality」「❌ 自动判断『正确决策』」「❌ Preference/Value/Learning」
 「❌ DecisionStore/DB/Repository」**无任何澄清，原样继续有效**。

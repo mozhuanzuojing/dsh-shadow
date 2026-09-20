@@ -18,8 +18,8 @@ export const heuristicEngine = {
             engine: HEURISTIC_ENGINE_NAME,
             candidates,
             selected,
-            // 规则引擎**没有**概率：显式 null。见 types.ts 的 reportedDistribution 与 ADR-0096 §4。
-            reportedDistribution: null,
+            // 规则引擎没有概率，协议里也没有承载它的字段（ADR-0096 §12）——
+            // 若它真有话要说，就写进 rawOutput，逐字，归引擎。
             rawOutput: JSON.stringify({
                 engine: HEURISTIC_ENGINE_NAME,
                 rule,

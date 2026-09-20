@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-// dsh-shadow —— test/decision-primitive.test.ts：**Decision 原语**的闸（ADR-0096 / T1）。
+// dsh-shadow —— test/decision-primitive.test.ts：**Decision 原语**的闸（ADR-0096 / T1；v1.17.0 按「吸收」重定）。
 //
 // 这道闸守四件事：
-//   ① **声明必须自洽** —— 分布与候选集逐字对齐、值域 [0,1]、和 ≈ 1、selected ∈ candidates（**七条**判据各有反例）；
-//   ② **缺件不静默** —— 「无分布」必须**显式写 `null`**；`undefined`（忘了填）**判非法**，两者不是一回事；
-//   ③ **不猜** —— 规则没命中 / 偏好解析不到唯一候选 / 未知引擎名，一律**显式 `unavailable`**，绝不落回默认；
-//   ④ **协议里没有禁词** —— 字段名不得出现 confidence/score/…（本仓的线：认知不确定性可、成功信念禁）。
+//   ① **声明必须自洽** —— 候选非空、selected ∈ candidates、rawOutput 非空、engine 非空（**四条**判据各有反例）；
+//   ② **不猜** —— 规则没命中 / 偏好解析不到唯一候选 / 未知引擎名 / 引擎抛错，一律**显式 `unavailable`**，绝不落回默认；
+//   ③ **端到端** —— 产出的 `AtomLineage` 要能过**真实**的 `core/lineage-validator.ts` 投影门（并带反证）；
+//   ④ **结构上装不下置信度** —— 见下。
 //
-// 另有一条**静态**判据（⑨）：`decision/types.ts` 必须**零 import**（它在 PURE_MODULES 里，是承诺不是装饰）。
-//
-// ⑪ 是**端到端**（过真实的 `core/lineage-validator.ts` 投影门 + 反证）；
-// ⑫ 是 **T19 闸门**（`adr/0096` §12）：本层**不允许**出现概率型后端 —— 要引入**必须先另立 ADR**（`BACKLOG.md` 的 T19）。
+// ⑦ 是**静态**判据，也是本层最重要的一条：协议里**没有、也不会有**承载「置信度 / 概率 / 分数」的位置
+//   —— `EngineDeclaration` 的字段集**恰好**是 `{engine, candidates, selected, rawOutput}`。
+//   这不是「我们保证不用」，而是**类型里没有那个槽**，所以**任何后端都引入不了**（与后端无关）
+//   ⇒ `adr/0037` 的「❌ Confidence」**结构性成立**，`BACKLOG` 的 T19 因此结案。
+//   ⚠ 该块带**标定**：往检测器喂一个合成样本，证明它真能看见非法字段（否则这条判据是恒真的假绿）。
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,9 +22,8 @@ import {
   assertDeclarationValid,
   renderDeclaration,
   isUnavailable,
-  DISTRIBUTION_SUM_TOLERANCE,
 } from "../dist/decision/guard.js";
-import { choose, orderByReported } from "../dist/decision/choice.js";
+import { choose } from "../dist/decision/choice.js";
 import { resolveEngine, engineNames, ENGINES } from "../dist/decision/engine.js";
 import { heuristicEngine, HEURISTIC_ENGINE_NAME } from "../dist/decision/heuristic.js";
 import { producedToLineage, producedDecisionIsTraceable } from "../dist/decision/lineage.js";
@@ -34,8 +34,7 @@ const D = (over: Record<string, unknown> = {}) => ({
   engine: "test-engine",
   candidates: ["a", "b", "c"],
   selected: "a",
-  reportedDistribution: { a: 0.5, b: 0.3, c: 0.2 },
-  rawOutput: "raw-output",
+  rawOutput: '{"rule":"demo","selected":"a"}',
   ...over,
 });
 
@@ -56,45 +55,11 @@ const input = (over: Record<string, unknown> = {}) => ({
   const text = renderDeclaration(D());
   assert.ok(text.includes("[Decision Declaration]"));
   assert.ok(text.includes("逐字留存"), "渲染必须说明 rawOutput 是证据");
-  console.log("✔ ① 合法声明通过**七条**判据（引擎名 / 候选非空 / selected / rawOutput / 分布三判据）；renderDeclaration 只读");
+  assert.ok(text.includes("不提取"), "渲染必须写明里面的数字归引擎、shadow 不提取");
+  console.log("✔ ① 合法声明通过**四条**判据（engine / candidates / selected / rawOutput）；renderDeclaration 只读");
 }
 
-// ② 分布三判据：**键**多一个/少一个、值越界、非有限数、和偏离 1 —— 各有反例
-{
-  const extra = declarationViolations(D({ reportedDistribution: { a: 0.4, b: 0.3, c: 0.2, d: 0.1 } }));
-  assert.ok(extra.some((v: string) => v.includes("逐字对齐")), "多一个键必须判非法");
-
-  const missing = declarationViolations(D({ reportedDistribution: { a: 0.6, b: 0.4 } }));
-  assert.ok(missing.some((v: string) => v.includes("逐字对齐")), "少一个键必须判非法");
-
-  const outside = declarationViolations(D({ reportedDistribution: { a: 1.5, b: -0.3, c: -0.2 } }));
-  assert.ok(outside.some((v: string) => v.includes("[0,1]")), "越界值必须判非法");
-
-  const notFinite = declarationViolations(D({ reportedDistribution: { a: Number.NaN, b: 0.5, c: 0.5 } }));
-  assert.ok(notFinite.some((v: string) => v.includes("[0,1]")), "NaN 必须判非法（有限性也要判）");
-
-  const badSum = declarationViolations(D({ reportedDistribution: { a: 0.5, b: 0.5, c: 0.5 } }));
-  assert.ok(badSum.some((v: string) => v.includes("求和")), "和 != 1 必须判非法");
-
-  // 边界：恰好落在容差上应当**通过**（容差是显式的，不是装饰）
-  const atTolerance = declarationViolations(
-    D({ reportedDistribution: { a: 0.5 + DISTRIBUTION_SUM_TOLERANCE / 2, b: 0.3, c: 0.2 - DISTRIBUTION_SUM_TOLERANCE / 2 } }),
-  );
-  assert.deepEqual(atTolerance, [], "容差内的和应当通过（显式容差必须真的生效）");
-  console.log("✔ ② 分布判据：键多/键少/越界/NaN/和偏离 各有反例；容差真的生效");
-}
-
-// ③ **缺件不静默**：`null` = 显式「本引擎不产出分布」（合法）；`undefined` = 忘了填（**非法**）
-{
-  const explicitNull = declarationViolations(D({ reportedDistribution: null }));
-  assert.deepEqual(explicitNull, [], "显式 null 必须合法 —— 规则引擎本来就没有概率");
-
-  const omitted = declarationViolations(D({ reportedDistribution: undefined }));
-  assert.ok(omitted.length > 0, "undefined（忘了填）必须判非法：这与「没有分布」不是一回事");
-  console.log("✔ ③ 显式 null 合法 / undefined 非法 —— 「不产出」与「忘了填」在类型上就分得开");
-}
-
-// ④ 其余判据的反例：selected / candidates / rawOutput / engine
+// ② 四条判据各有反例
 {
   assert.ok(
     declarationViolations(D({ selected: "zzz" })).some((v: string) => v.includes("不在 candidates")),
@@ -112,20 +77,18 @@ const input = (over: Record<string, unknown> = {}) => ({
     declarationViolations(D({ engine: "" })).some((v: string) => v.includes("engine")),
     "空引擎名必须判非法",
   );
-  console.log("✔ ④ selected / candidates / rawOutput / engine 四条反例齐备");
+  assert.equal(declarationViolations(D()).length, 0, "合法时违规数为 0");
+  console.log("✔ ② 四条判据反例齐备（selected / candidates / rawOutput / engine）");
 }
 
-// ⑤ choose：明示偏好、唯一提及、以及**含糊时显式失败**（规则 ③「不猜」）
+// ③ choose：明示偏好、唯一提及、以及**含糊时显式失败**（规则 ③「不猜」）
 {
-  // 规则 ①：调用方明示 prefer
   const byPrefer = choose(input({ context: { prefer: "run_test" } }), heuristicEngine);
   assert.equal(byPrefer.status, "ok");
   if (byPrefer.status !== "ok") throw new Error("unreachable");
   assert.equal(byPrefer.declaration.selected, "run_test");
-  assert.equal(byPrefer.declaration.reportedDistribution, null, "规则引擎必须显式报 null，不得自造分布");
   assert.ok(byPrefer.declaration.rawOutput.includes("explicit-prefer"), "rawOutput 必须留下规则轨迹");
 
-  // 规则 ②：唯一逐字提及（**与 context 键序无关**）
   const byMention = choose(input({ context: { note: "先 read_shadow 再动手" } }), heuristicEngine);
   assert.equal(byMention.status, "ok");
   if (byMention.status !== "ok") throw new Error("unreachable");
@@ -133,26 +96,23 @@ const input = (over: Record<string, unknown> = {}) => ({
   const reordered = choose(input({ context: { z: "先 read_shadow 再动手", a: "无关" } }), heuristicEngine);
   assert.equal(reordered.status === "ok" && reordered.declaration.selected, "read_shadow", "结论不得依赖键序");
 
-  // 规则 ③：**两个**候选都被提到 ⇒ 含糊 ⇒ **显式不可用**（不取第一个蒙过去）
+  // **两个**候选都被提到 ⇒ 含糊 ⇒ 显式不可用（不取第一个蒙过去）
   const ambiguous = choose(input({ context: { note: "read_shadow 或 run_test 都行" } }), heuristicEngine);
   assert.equal(ambiguous.status, "unavailable");
-  if (ambiguous.status !== "unavailable") throw new Error("unreachable");
-  assert.ok(ambiguous.reason.includes("no_rule_matched"), `含糊必须显式失败，实得 ${ambiguous.reason}`);
+  if (ambiguous.status === "unavailable") assert.ok(ambiguous.reason.includes("no_rule_matched"));
 
-  // 什么都没提到 ⇒ 不可用
   assert.equal(choose(input({ context: { note: "随便" } }), heuristicEngine).status, "unavailable");
 
-  // prefer 明示了却解析不到 / 解析到多个 ⇒ 显式失败（**不退回规则 ②**）
   const notACandidate = choose(input({ context: { prefer: "nope" } }), heuristicEngine);
   assert.equal(notACandidate.status, "unavailable");
   if (notACandidate.status === "unavailable") assert.ok(notACandidate.reason.includes("not_a_candidate"));
   const dupCandidates = choose(input({ candidates: ["x", "x"], context: { prefer: "x" } }), heuristicEngine);
   assert.equal(dupCandidates.status, "unavailable");
   if (dupCandidates.status === "unavailable") assert.ok(dupCandidates.reason.includes("ambiguous"));
-  console.log("✔ ⑤ choose：明示偏好 / 唯一提及 / 含糊与解析不到一律**显式失败**");
+  console.log("✔ ③ choose：明示偏好 / 唯一提及 / 含糊与解析不到一律**显式失败**");
 }
 
-// ⑥ choose 的失败面：引擎缺失 / 引擎抛错 / 引擎产出非法声明
+// ④ 失败面：引擎缺失 / 引擎抛错 / 引擎产出非法声明
 {
   const missing = choose(input(), undefined);
   assert.equal(missing.status, "unavailable");
@@ -167,10 +127,10 @@ const input = (over: Record<string, unknown> = {}) => ({
   const r2 = choose(input(), lying as never);
   assert.equal(r2.status, "unavailable");
   if (r2.status === "unavailable") assert.ok(r2.reason.includes("invalid_declaration"), "非法声明必须被挡在 ok 之外");
-  console.log("✔ ⑥ 引擎缺失 / 抛错 / 产出非法声明 —— 三条路径都是显式 unavailable");
+  console.log("✔ ④ 引擎缺失 / 抛错 / 产出非法声明 —— 三条路径都是显式 unavailable");
 }
 
-// ⑦ 未知引擎名**不得落回默认**（ADR-0049；同族先例：evidenceProvider 拼错曾静默退回 fs）
+// ⑤ 未知引擎名**不得落回默认**（ADR-0049；同族先例：evidenceProvider 拼错曾静默退回 fs）
 {
   const ok = resolveEngine(HEURISTIC_ENGINE_NAME);
   assert.ok(!isUnavailable(ok as never), "已知引擎名必须解析到引擎");
@@ -182,24 +142,38 @@ const input = (over: Record<string, unknown> = {}) => ({
 
   assert.deepEqual(engineNames(), [HEURISTIC_ENGINE_NAME]);
   assert.equal(ENGINES.length, 1, "T1 的后端表**只有** heuristic（无网络 / 无 LLM / 无 jev）");
-  console.log("✔ ⑦ 未知引擎名显式 unavailable，且后端表只有 heuristic（T1 边界）");
+  console.log("✔ ⑤ 未知引擎名显式 unavailable，且后端表只有 heuristic（T1 边界）");
 }
 
-// ⑧ orderByReported 是**视图**：null ≠ 候选为空；且 **argmax ≠ selected 是合法的**（刻意不判）
+// ⑥ **端到端**：`produced` → lineage 必须能过**真实**的 `core/lineage-validator.ts` 投影门
+//     （本层零生产消费者的前提下，这是它离「生产契约」最近的一次验证 —— 不再是只测自己）
 {
-  assert.equal(orderByReported(D({ reportedDistribution: null })), null, "无分布 ⇒ null");
-  assert.equal(orderByReported(D({ reportedDistribution: undefined })), null, "缺分布 ⇒ 同样 null（不猜）");
+  const traceable = {
+    declaration: D(),
+    source: "session/2026-09-20-abc",
+    createdAt: "2026-09-20 10:00:00",
+    evidence: [{ type: "file" as const, locator: "adr/0096-decision-primitive.md" }],
+  };
+  const lineage = producedToLineage(traceable);
+  assert.ok(!isUnavailable(lineage as never));
+  assert.equal(producedDecisionIsTraceable(traceable), true);
+  const verdict = validateAtomProjection({ type: "decision", lineage: lineage as never });
+  assert.equal(verdict.allowed, true, `produced 决策必须能进 context，实得：${verdict.reason}`);
 
-  const ordered = orderByReported(D({ reportedDistribution: { a: 0.2, b: 0.7, c: 0.1 } }));
-  assert.deepEqual(ordered, ["b", "a", "c"], "按引擎**自报**降序");
-
-  // 刻意不判 argmax == selected：选择与分布是**两条独立事实**。
-  const offArgmax = D({ selected: "a", reportedDistribution: { a: 0.1, b: 0.8, c: 0.1 } });
-  assert.equal(declarationIsClean(offArgmax), true, "selected 不必等于 argmax（要求它就等于让数字决定选择）");
-  console.log("✔ ⑧ 视图与「候选为空」分得开；argmax ≠ selected **合法**（刻意不判）");
+  // **反证**（否则上一条可能是恒真的假绿）：无 evidence 的 decision 必须被**下游**挡下
+  const naked = validateAtomProjection({
+    type: "decision",
+    lineage: { ...(lineage as object), evidence: [] } as never,
+  });
+  assert.equal(naked.allowed, false, "反证：无 evidence 的 decision 必须被下游挡下");
+  for (const bad of [{ ...traceable, evidence: [] }, { ...traceable, source: "  " }, { ...traceable, createdAt: "" }]) {
+    assert.equal(producedDecisionIsTraceable(bad), false);
+    assert.ok(isUnavailable(producedToLineage(bad) as never), "不可追溯必须显式 unavailable（ADR-0049）");
+  }
+  console.log("✔ ⑥ 端到端：过**真实**投影门（正例）+ 无证据被下游挡下（反证）+ 三类缺件显式 unavailable");
 }
 
-// ⑨ **静态**判据：`types.ts` 零 import（PURE_MODULES 的承诺）+ **全层六个文件**的字段名无禁词
+// ⑦ **结构判据**（本层最重要的一条）：协议里**没有**承载置信度/概率/分数的位置
 {
   const dir = fileURLToPath(new URL("../decision/", import.meta.url));
   const files = readdirSync(dir)
@@ -216,97 +190,47 @@ const input = (over: Record<string, unknown> = {}) => ({
   assert.deepEqual(importLines, [], "types.ts 必须**零 import** —— 它列在 PURE_MODULES 里，加 import 会让结构门变红");
 
   // 禁词只针对**字段名**：guard.ts 在**禁令理由**里点名它们是允许的（先例：planning/guard.ts 同样点名 score/optimal）。
-  const FORBIDDEN = ["confidence", "score", "best", "optimal", "correct", "expectedSuccess", "precision", "winner", "ranking"];
+  const FORBIDDEN = ["confidence", "score", "best", "optimal", "correct", "expectedSuccess", "precision", "winner", "ranking", "probabilities", "reportedDistribution"];
   const FIELD_RE = /^\s*(?:readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\??\s*:/;
-  const fieldNamesOf = (file: string): string[] =>
-    readFileSync(join(dir, file), "utf8")
+  const fieldNamesOf = (src: string): string[] =>
+    src
       .split("\n")
       .map((l) => FIELD_RE.exec(l))
       .filter((m): m is RegExpExecArray => m !== null)
       .map((m) => m[1]);
 
-  const all = files.flatMap((f) => fieldNamesOf(f).map((n) => `${f}:${n}`));
+  const all = files.flatMap((f) => fieldNamesOf(readFileSync(join(dir, f), "utf8")).map((n) => `${f}:${n}`));
   assert.ok(all.length > 0, "抽取器必须真的抽到字段名（否则这条判据是空的、会假绿）");
-  assert.ok(
-    all.some((x) => x.endsWith(":reportedDistribution")),
-    "抽取器口径自检：必须能看到 reportedDistribution",
-  );
   const hits = all.filter((x) => FORBIDDEN.includes(x.split(":")[1]));
-  assert.deepEqual(hits, [], `**全层**字段名不得出现禁词（本仓的线：认知不确定性可、成功信念禁），实得 ${hits.join(",")}`);
-  console.log(`✔ ⑨ types.ts 零 import；**全层 6 个文件**共 ${all.length} 个字段名里禁词 0 处`);
-}
+  assert.deepEqual(hits, [], `**全层**字段名不得出现禁词，实得 ${hits.join(",")}`);
 
-// ⑩ lineage：可追溯才投影；不可追溯**显式** unavailable（而不是产出会被下游静默拒掉的坏 lineage）
-{
-  const traceable = {
-    declaration: D(),
-    source: "session/2026-09-20-abc",
-    createdAt: "2026-09-20 10:00:00",
-    evidence: [{ type: "file" as const, locator: "adr/0096-decision-primitive.md" }],
+  // ⑦ 的**核心**：`EngineDeclaration` 的字段集**恰好**是那四个 —— 加任何字段都会红
+  const HEAD = "export interface EngineDeclaration {";
+  const declFields = (src: string): string[] => {
+    const at = src.indexOf(HEAD);
+    if (at < 0) return []; // 锚点消失 ⇒ 空 ⇒ 由下面的断言判红（缺件不静默）
+    const body = src.slice(at + HEAD.length);
+    const end = body.indexOf("\n}");
+    return fieldNamesOf(end >= 0 ? body.slice(0, end) : body);
   };
-  assert.equal(producedDecisionIsTraceable(traceable), true);
-  const lineage = producedToLineage(traceable);
-  assert.ok(!isUnavailable(lineage as never));
-  assert.equal((lineage as { createdBy: string }).createdBy, "tool", "createdBy 没有「引擎」档，T1 复用 tool");
-  assert.equal((lineage as { evidence: unknown[] }).evidence.length, 1, "evidence 原样带上，不补写");
-
-  for (const bad of [
-    { ...traceable, evidence: [] },
-    { ...traceable, source: "  " },
-    { ...traceable, createdAt: "" },
-  ]) {
-    assert.equal(producedDecisionIsTraceable(bad), false);
-    const r = producedToLineage(bad);
-    assert.ok(isUnavailable(r as never), "不可追溯必须显式 unavailable（ADR-0049：缺件不静默）");
-  }
-  console.log("✔ ⑩ lineage：只搬运不补写；不可追溯显式 unavailable");
-}
-
-// ⑪ **端到端**：`produced` → lineage 必须能过**真实**的 `core/lineage-validator.ts` 投影门
-//     （本层零生产消费者的前提下，这是它离「生产契约」最近的一次验证 —— 不再是只测自己）
-{
-  const traceable = {
-    declaration: D(),
-    source: "session/2026-09-20-abc",
-    createdAt: "2026-09-20 10:00:00",
-    evidence: [{ type: "file" as const, locator: "adr/0096-decision-primitive.md" }],
-  };
-  const lineage = producedToLineage(traceable);
-  assert.ok(!isUnavailable(lineage as never));
-  const verdict = validateAtomProjection({ type: "decision", lineage: lineage as never });
-  assert.equal(verdict.allowed, true, `produced 决策必须能进 context，实得：${verdict.reason}`);
-
-  // **反证**（否则上一条可能是恒真的假绿）：无 evidence 的 decision 必须被**下游**挡下
-  const naked = validateAtomProjection({
-    type: "decision",
-    lineage: { ...(lineage as object), evidence: [] } as never,
-  });
-  assert.equal(naked.allowed, false, "反证：无 evidence 的 decision 必须被下游挡下");
-  console.log("✔ ⑪ 端到端：过**真实**投影门（正例）+ 无证据被下游挡下（反证）");
-}
-
-// ⑫ **T19 闸门**：本层**不允许**出现概率型后端（`adr/0096` §12 / `BACKLOG` T19）
-//
-// ⚠ 若你正为此处的**变红**而改这一块：**先读 `adr/0096` §12 与 `BACKLOG.md` 的 T19**。
-//   那道门问的不是「代码能不能跑」，而是「把模型自报的置信度当决策依据，`adr/0037` 划的界还成不成立」。
-//   **不许为了让测试变绿而改断言** —— 那正是本仓说的「改门而不改事实」。
-{
-  const sample = input({ context: { prefer: "read_shadow" } });
-  for (const e of ENGINES) {
-    const r = e.decide(sample);
-    assert.ok(
-      isUnavailable(r as never) || (r as { reportedDistribution: unknown }).reportedDistribution === null,
-      `T19 闸门：引擎 ${e.name} 报了分布 —— 引入概率型后端前先另立 ADR（adr/0096 §12 / BACKLOG T19），并同步改本断言`,
-    );
-  }
-  console.log(`✔ ⑫ T19 闸门：${ENGINES.length} 个后端**都不报分布**（概率后端必须另立 ADR）`);
+  const real = declFields(typesSrc);
+  assert.deepEqual(
+    real,
+    ["engine", "candidates", "selected", "rawOutput"],
+    "EngineDeclaration 的字段集**必须恰好**是这四个 —— 加任何字段（尤其是置信度/概率/分数）都会红。" +
+      "这不是「我们保证不用」，而是**吸收的形状里没有那个槽**（ADR-0096 §12）。" +
+      "若你要加字段：先读 §12 与 adr/0037 的「❌ Confidence」，并说明为什么门错了 —— **不许改门而不改事实**",
+  );
+  // **标定**：证明这个检测器真能看见非法字段（否则上面那条是恒真的假绿）
+  const synthetic = HEAD + "\n  readonly engine: string;\n  readonly probabilities: Readonly<Record<string, number>>;\n}\n}";
+  assert.ok(declFields(synthetic).includes("probabilities"), "标定失败：检测器看不见非法字段 ⇒ 上一条判据无效");
+  console.log(`✔ ⑦ types.ts 零 import；全层 ${all.length} 个字段名禁词 0 处；EngineDeclaration 字段集恰为 4 个（含标定）`);
 }
 
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · **没有生产消费者**：本层尚未被任何读路径 / 工具接线（ADR-0096 §7 的决定）⇒ 它目前只被本测试消费；");
-console.log("  · **没有落盘**：⑪ 证明了产出的 `AtomLineage` 能过**真实**投影门，但**写原子**仍由既有 persistence 负责（T1 不碰）；");
-console.log("  · **没有概率型后端**：`reportedDistribution` 的三条判据由本测试的样板声明覆盖，而 T1 的唯一引擎报 `null`");
-console.log("    ⇒ 真实概率生产者要等 llm / jev 后端，且**必须先过 ⑫ 那道 T19 闸门**（另立 ADR）；");
-console.log("  · 未实测「引擎自报的概率是否校准」—— 本层**不**做校准、不做阈值（ADR-0096 §3/§4），故无处可测。");
+console.log("  · **没有落盘**：⑥ 证明了产出的 `AtomLineage` 能过**真实**投影门，但**写原子**仍由既有 persistence 负责（T1 不碰）；");
+console.log("  · **引擎原始输出里的数字无人建模**：⑦ 保证 shadow 侧**装不下**它；但把它**渲染给模型看**之后，");
+console.log("    模型要不要据此行动，**不在本层的管辖内**（那是 agent 的推理，不是 shadow 的记录）—— 这是本条残余的边界。");
 console.log("ALL PASS ✅");
