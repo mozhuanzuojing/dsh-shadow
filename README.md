@@ -640,5 +640,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.15.96`**（**派生索引一期落地（T17-B）**：读侧不再逐个读 + 解析 9.5k 个记忆文件 —— 新边界 `CandidateProvider` 换掉「物化载体」，`fs` provider 与今天逐字等价、`sqlite` provider 从 `<ws>/.shadow/index.sqlite` 取候选；`IndexEngine` 与派生/打分/渲染**一律未改**。**默认仍是 `fs`**（改默认归 T17-C 的验证矩阵）。同轮把一条 FTS5 的旧前提与一条成本口径**更正**、并据实登记一处已知边界）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.15.97`**（**委派面收敛为 Agent Team 单一路径**：投影预设删掉 6 行 `tool-subagent*` 工具行，persona 里的子代理说法一并清掉，并写明「宿主没给 `agentTeams` 就自己做」；同轮 `adr/0095` 更正 `verifySources:"full"` 的代价口径（9 次 `listDir` 的逐目录比对 ≈ 4.1 s，不是「重读 9.5k 个文件」）并记一条输出层判据。**另修一颗到期引爆的时间炸弹 fixture**：`recall-envelope` 的种子日期原先写死在 9 月初，跨过默认 14 天遗忘线后被整片滤掉 —— `v1.15.85` 改默认值后没重判，详见 `BACKLOG.md` 的 T12）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

@@ -3,6 +3,60 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.15.97] 投影预设收敛为「只留 Agent Team」+ `adr/0095` 两处补记 + 修一颗**到期引爆的时间炸弹 fixture**
+
+用户 2026-09-16 的三条提交全是**文档与组合面**（一行源码都没动）；发版时 `npm run verify` 又当场抓到一处**既有失败** ——
+它在 v1.15.96 发版当天还是绿的，属「到期才引爆」，故一并修掉（③）。
+
+**① 投影预设：委派只剩 Agent Team 一条路径（`ba683ff` + `b41535f` 两刀）**
+
+- 用户同日先定「子代理特别耗时、消耗 token；如非必要，不得轻易开子代理」，随后指令「审查投影预设里关于子代理的说法、
+  删除子代理描述、只保留 Agent Team」，并选定「**连工具行一起删**」。
+- `agent-presets/projection/agent.cordis.yml`（294 → 248 行）：删 6 行工具行 —— `tool-subagent-control` /
+  `tool-subagent-list-agents` / `tool-subagent` / `tool-subagent-fork` / `tool-subagent-codex` / `tool-subagent-claude-code`；
+  delegation 分组只剩 `tool-agent-team` / `workflow-worker-thread` / `tool-workflow` / `tool-ralph`。
+- persona 的「工作方式」①–⑤ 同步去子代理化：「派专家」统一改称 teammate；删掉「只用一次就用 `subagent` / `subagent_fork`」
+  与「名额耗尽可退回 `subagent`」两条替代路径，改成「**只用一次就自己做**」「名额耗尽自己做」；⑤ 去掉「大范围同构用 workflow 扇出」一句。
+- ⚠ **两个后果写进注释**（不隐藏）：**宿主未提供 `agentTeams` 时该预设没有任何委派工具**（那就自己做）；
+  「legacy 同名冲突」在本组合中不再可能存在。
+- `agent-presets/projection/README.md` 7 处定点对齐 + 顶部加 v1.15.96+ 变更说明；persona 常驻长度按 YAML 解析重算 = **2915** 字符
+  （原写 2394 → 2629，已标注为历史数）。
+
+**② `adr/0095` 两处补记（`c931f98`）**
+
+- **口径更正**：`verifySources: "full"` 的代价来自 **9 次 `listDir`**（8 个日期目录 + resources）+ `readText` 0–1 次 ≈ **4.1 s**
+  ⇒ 它是「**逐目录文件级比对**」，**不是**「重读全部 9.5k 个文件」——原补记写法会被读成后者。
+- **输出层判据**：外部原地改 `> 决策：` 行后，索引里的 `content` 仍是旧值（`outputStale=true`），而 canonical `{id,type,status}` 差集 = **0**
+  ⇒ **陈旧只能用输出层判据报，canonical 只适合判等价**。
+- 三条恢复句柄在冻结构建下的复测值：`full` = 4,071 ms / 删索引重建 = 12,077 ms / 切回 `fs` = 10,809 ms（修复后 diff 均 0）。
+
+**③ 修 `test/recall-envelope.test.ts` 的时间炸弹（本版新增：`verify` 在提交前就红了，过闸门是发版前提）**
+
+- **现象**：`npm run verify` = **60 / 61**，`test/recall-envelope.test.ts:112` 断言「有命中时不应是无匹配」红。
+- **根因（分层实测，非推断）**：fixture 种子硬编码 `2026-09-04/05/06`；`forget` **缺省=开**（v1.15.85「默认全开」）、
+  `staleDays` 默认 **14**；本地日期到 **2026-09-20** 时三条种子的 age = **14 / 15 / 16** ⇒ `isForgettable` 逐条为真
+  ⇒ `keep` 把候选清空 ⇒ 读侧「无匹配」。分层读数：`listMemories` = **3** → `materializeAtoms.sources` = **0**；
+  对照 `forget.enabled: false` ⇒ **3**（探针 `probe-recall.ts`，跑完即删）⇒ **是「到期才引爆」，不是产品代码回归。**
+- **修法（沿用既有约定，不新造）**：`recall-attribution.test.ts:1312` 的 **v1.15.38 约定**「fixture 日期必须相对今天，不能硬编码」
+  ⇒ 三批 fixture 全改相对今天：`seeds` 用 `today(1)/today(2)/today(3)`（**保留相对顺序** —— ③ 段按日期断言排序：
+  `alpha-ref` 最新 > `alpha-src` > `alpha-util`）、`longSeeds` / `manySeeds` 用 `today((i % 8) + 1)`。
+- **深层根因（比现象值钱）**：这**不是第 1 颗** —— T12（时间炸弹 fixture）在 v1.15.43 已判定「22 个文件、只有 1 个真炸弹」
+  并 ✅ 闭环；但那次判定的前提是 **`forget` 默认关**，而 **v1.15.85 翻的是判据本身的默认值**，之后**没有重跑那次判定**
+  ⇒ 闭环结论被静默推翻。**判据级教训**：凡**改默认值**（而不是改代码）的变更，必须重新判定**所有依赖该判据的 fixture**；
+  已写进 `BACKLOG.md` T12 的补记。
+- **未做（沿用 T12 既有裁决「不擅自改未经复现的」）**：其余 21 个文件**未按新默认重判** —— 它们今天全绿，
+  但「不耦合」的前提已变，需要一次「按 `forget` / `retention` 默认开重跑」的判定。
+
+**验证**（本机语料根 `D:\project\dsh1`）
+
+- `npm run build` → `npm run verify` ⇒ 末行 `[run-tests] ALL PASS ✅`（**61 个检查 61 通过**），`VERIFY_EXIT=0`。
+- `npm run audit:docs` ⇒ ①–⑤ 全绿（① 三方版本一致 = 1.15.97；③ 默认开关表 **20 行**未动；
+  ④ 当前版本行与 CHANGELOG 条目**无 ≥40 字逐字重复**）。
+- 单测对照：修前 `node test/recall-envelope.test.ts` 在 ② 段红；修后七段（①–⑦）**全绿**。
+- 本轮**不改源码、不改 `dist/`** ⇒ 检查条数与 v1.15.96 相同；预设侧的挂载校验（`standingKeyFor(projection)` = MOUNTED OK）
+  已在原提交里用临时探针做过并卸载。
+- ⚠ **未做**（原提交就写明）：真开一个 projection 会话看工具表 —— 只有真实会话才显示该组合产出的 agent 与工具面。
+
 ## [v1.15.96] T17-B 派生索引一期落地 —— **换物化载体**（`CandidateProvider`）：读侧不再逐个读 + 解析 9.5k 个记忆文件
 
 `adr/0095` 一期实现轮（规格 `DESIGN.md` D1–D14 在 `../.docs/fix/2026-09-16/t17b/`）。**默认不变**（`derivedIndex.provider`

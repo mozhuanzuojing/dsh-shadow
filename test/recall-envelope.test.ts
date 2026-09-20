@@ -11,6 +11,7 @@ import { deprioritizeFactor, DEPRIORITIZE_FACTOR, approxEntries } from "../dist/
 import { truncationNote, renderIndexBudgeted } from "../dist/retrieval/render.js";
 import { NEVER_WORSE_UNIT } from "../dist/retrieval/loss.js";
 import { intentOf } from "../dist/core/intent.js";
+import { today } from "../dist/core/util.js";   // fixture 日期必须**相对今天**（v1.15.38 约定，见下方 seeds 注释）
 
 const { apply, name, inject } = mod;
 const WS = "D:/ws";
@@ -67,10 +68,15 @@ const memText = (entry: string, line: string) =>
   `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] ${line}\n`;
 const mem = (date: string, time: string, slug: string) => `${WS}/.shadow/${date}/${date}--${time}-${slug}.md`;
 
+// ⚠ **日期必须相对今天，不能硬编码**（`recall-attribution.test.ts` 里 v1.15.38 立下的**同一条**约定）：
+//   `forget` 缺省=开、`staleDays` 默认 14 ⇒ 写死的日期一旦变旧到 14 天，三条种子会被遗忘判据**全部**滤掉，
+//   ② 段当场红成「无匹配」。v1.15.97 实测：种子原为 `2026-09-04/05/06`，本地日期滚到 2026-09-20 起红
+//   （v1.15.96 发版当天 age=10/11/12 仍是绿的 ⇒ 这是一颗**到期才引爆**的雷，不是代码回归）。
+//   相对顺序必须保留：`alpha-ref`（1 天前，最新）> `alpha-src`（2 天前）> `alpha-util`（3 天前）—— ③ 段按日期断言排序。
 const seeds = [
-  { rel: mem("2026-09-05", "100000", "alpha-src"), text: memText("src/alpha.ts", "一手代码 alpha 实现") },
-  { rel: mem("2026-09-06", "100000", "alpha-ref"), text: memText("references-agents/alpha.md", "通用命名 alpha 说明") },
-  { rel: mem("2026-09-04", "100000", "alpha-util"), text: memText("src/alpha-util.ts", "alpha 工具函数") },
+  { rel: mem(today(2), "100000", "alpha-src"), text: memText("src/alpha.ts", "一手代码 alpha 实现") },
+  { rel: mem(today(1), "100000", "alpha-ref"), text: memText("references-agents/alpha.md", "通用命名 alpha 说明") },
+  { rel: mem(today(3), "100000", "alpha-util"), text: memText("src/alpha-util.ts", "alpha 工具函数") },
 ];
 const baseCfg = { summary: { enabled: false }, recall: {} };
 
@@ -140,7 +146,7 @@ assert.ok(!cAll.includes("近似候选·未验证"), "全冷却时不出现「�
 
 // 预算截断（集成）：12 条长记忆 + 小预算
 const longSeeds = Array.from({ length: 12 }, (_, i) => ({
-  rel: mem(`2026-09-0${(i % 8) + 1}`, `1000${String(i).padStart(2, "0")}`, `budget-${i}`),
+  rel: mem(today((i % 8) + 1), `1000${String(i).padStart(2, "0")}`, `budget-${i}`),
   text: memText(`src/budget${i}.ts`, `alpha 填充 ${"内容".repeat(80)}`),
 }));
 const budgetHost = makeHost(baseCfg, longSeeds);
@@ -240,7 +246,7 @@ console.log("✔ ⑤ intentOf mode/旗标 goal 消歧");
 // ─────────────────────────────────────────────
 // 真 `.shadow` 实测：`_index.md` **2199 KB / 24628 行**（8310 条记忆）⇒ 此前那条路径整篇原样返回。
 const manySeeds = Array.from({ length: 300 }, (_, i) => ({
-  rel: mem(`2026-09-0${(i % 8) + 1}`, `1000${String(i).padStart(2, "0")}`, `idx-${i}`),
+  rel: mem(today((i % 8) + 1), `1000${String(i).padStart(2, "0")}`, `idx-${i}`),
   text: memText(`src/idx${i}.ts`, `索引填充 alpha ${i}`),
 }));
 const bigHost = makeHost(baseCfg, manySeeds);
