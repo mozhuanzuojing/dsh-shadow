@@ -45,6 +45,10 @@
   而它们与索引**逐字节相同**（`git diff --numstat -- dist` = 0 行 · `git add --dry-run -- dist` = 0 条）。
   若它又出现，先用这两条命令判真假，别急着 `git add -A`。
 - 源码入口：`index.ts`（Cordis adapter）→ tsc → `dist/index.js`（DSH 加载编译后 JS）。
+- **改默认值时跑一次 `npm run sweep:timebomb`**（T12 的可复现探针，`tools/timebomb-sweep.ts`）——
+  凡改 `forget` / `retention` / `compact` 这类**默认值**（不是改代码）的变更，都要重跑「假日期 × 全部测试」这道判定：
+  v1.15.43 的判定前提被 v1.15.85「默认全开」悄悄翻掉、没人重跑，直到 v1.15.98 才发现 6 个测试到期必炸。
+  分钟级，**刻意不进 `verify`**（`verify` 要的是快速缝合线）。
 
 ## 脚本一律 TypeScript
 
