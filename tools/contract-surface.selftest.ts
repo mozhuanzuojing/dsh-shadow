@@ -200,6 +200,7 @@ const CONFIG_KEY_FROZEN: string[] = [
   "context",
   "llmRecall",
   "writeConsent",
+  "capture",
   "queryLog",
   "projectionStore",
   "indexEngine",

@@ -2,6 +2,7 @@ export declare const buildClueHeader: (entry: string, arr: any[], srcId?: string
     project?: string;
     agent?: string;
     goal?: string;
+    foldedMaterials?: string[];
 }) => string;
 /**
  * 登记 `_meta.json` 里的一条。**返回是否登记成功**（v1.15.56）。

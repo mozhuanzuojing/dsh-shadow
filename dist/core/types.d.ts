@@ -67,6 +67,22 @@ export interface ShadowConfig {
     };
     /** P5 默认回写显式同意：true=仅当用户显式要求记忆时才落盘，否则只累积；默认 false 保持现有采集流。 */
     writeConsent?: boolean;
+    /**
+     * **记录粒度**（v1.19.0 / `adr/0097`）：动作回声落到哪。
+     *
+     * · `"audit"`（**默认**）= 一批里**只有 action**（无 `user` / `decision` / `assistant`）时，
+     *   它不是「记忆」而是**审计流**：一行一条 JSON 追加进 `.shadow/audit/<date>.jsonl`。
+     *   记忆仍按「含线索的批」一条一个文件。
+     *   **实测依据**（`adr/0097` §1）：14,342 个记忆文件里 **93.1% 是「0 用户消息 且 0 决策」的纯动作回声**，
+     *   中位 439 B，其中 62.5% 的行是逐条重复的溯源样板 ⇒ 降级后记忆文件 14,342 → 5,423（**2.64×**）。
+     * · `"memory"` = 旧行为（每条回声一个记忆文件）；**逃生口**，不是推荐值。
+     *
+     * ⚠ 审计流属**系统派生记录**层（同 `query-log/`）⇒ 不进 `_meta.json`、不进索引、不计 hits；
+     * 其材料会折叠进下一条记忆的「背景/材料」（`core/writer-core.ts` 的 `auditMaterials`）。
+     */
+    capture?: {
+        echo?: "audit" | "memory";
+    };
     /** Phase 1A.5 Shadow Query Observatory：默认开启（观察真实查询）；enabled:false 关闭旁路记录。系统派生记录（.shadow/query-log/），rm -rf 不影响 Atom。 */
     queryLog?: {
         enabled?: boolean;

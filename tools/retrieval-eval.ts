@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveEvalRoot } from "./eval-root.lib.ts";
 import {
   stableStringify,
   sha256Hex,
@@ -46,7 +47,8 @@ const BASELINE_PATH = join(here, "retrieval-eval.baseline.json");
  * 仍然不默默评空语料。`SHADOW_EVAL_ROOT` 优先级最高（冻结语料快照走它）。
  */
 const CANDIDATE_ROOTS = [join(here, ".."), join(here, "..", ".."), join(here, "..", "..", "..")];
-const ROOT = process.env.SHADOW_EVAL_ROOT || CANDIDATE_ROOTS.find((r) => existsSync(join(r, ".shadow"))) || CANDIDATE_ROOTS[0];
+// v1.19.0：解析**收一处**到 `tools/eval-root.lib.ts`（粒度门用同一份；两条实测教训也搬到了那里）。
+const ROOT = resolveEvalRoot(here);
 const SHADOW = join(ROOT, ".shadow");
 const K = Number(process.env.SHADOW_EVAL_K || 5);
 const MAX_DOCS = Number(process.env.SHADOW_EVAL_DOCS || 1500);

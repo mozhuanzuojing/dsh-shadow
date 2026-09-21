@@ -18,7 +18,9 @@ import { buildIndexText, consolidateText } from "./writer-render.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
 import { sanitizeText, isUnsafe } from "../security/scrub.js";
-import { routeFor, noteDegrade, markDerivedDirty } from "./writer-core.js";
+import { routeFor, noteDegrade, markDerivedDirty, rememberAuditMaterials, takeAuditMaterials } from "./writer-core.js";
+import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "./capture-granularity.js";
+import { appendJsonlLine } from "../persistence/jsonl-append.js";
 import { invalidateProjection, shadowSourcesFingerprint } from "./projection-store.js";
 import type { WriterCore } from "./writer-core.js";
 import type { WriterHooks } from "./writer-capture.js";
@@ -304,18 +306,42 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       return;
     }
     const entry = hooks.primaryComp?.(id || "") || "shadow";
+    const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
+    // 事件 → Trace：与审计流共用同一份归一化（v1.19.0 / adr/0097）。
+    const traces = traceOf(arr, id);
+    // ── v1.19.0（adr/0097 D1/D2）：**粒度分流** ────────────────────────────────────────────────
+    // 一批里**只有 action**（无 user / decision / assistant）时它**不是记忆** ——
+    // CONTEXT.md 的五个要素一个都没有 —— 它是**审计流**：一行一条 JSON 追加进
+    // `.shadow/audit/<date>.jsonl`，不再各占一个 inode、不再各带一份溯源样板。
+    // 判据是纯函数 `classifyBatch`；复核判据 = 记忆文件的 `> 证据链：来源(...)` 不得只有「动作」
+    // （门：`tools/granularity-audit.ts`）。
+    if (isAuditBatch(arr) && echoToAudit(core.config)) {
+      if (id) core.pending.delete(id);
+      if (id) core.comps.delete(id);
+      const auditRel = auditStreamRel(today());
+      const lines = auditLinesOf(traces, { agent: id ? String(id) : undefined, project });
+      if (lines.length) {
+        const r = await appendJsonlLine(fs, ws, auditRel, lines.join("\n"));
+        if (!r.ok) {
+          // 失败**不静默**（ADR-0049）：审计流写不进去与「本来就没动作」必须可区分。
+          core.lastFlushError = { at: Date.now(), err: `审计流追加失败（${auditRel}）：${r.reason}` };
+          console.error("[dsh-shadow][error]", core.lastFlushError.err);
+        }
+      }
+      // D4：材料**折叠进下一条记忆** —— 否则「纯动作批读过的文件」会从记忆层消失（审计流读侧不消费）。
+      rememberAuditMaterials(core, id, actionMaterials(arr));
+      return;
+    }
     if (id) core.pending.delete(id);
     if (id) core.comps.delete(id);
     try {
       const rel = `${SHADOW_ROOT}/${today()}/${compact()}-${slug(entry)}.md`;
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       const head = `# ${entry}\n\n`;
-      const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
-      const extra = { project, agent: id ? String(id) : undefined, goal: core.goalByAgent.get(String(id || "")) };
+      // 先前那些**已降级进审计流**的批读过的文件，并入本条记忆的「背景/材料」（即取即清）。
+      const extra = { project, agent: id ? String(id) : undefined, goal: core.goalByAgent.get(String(id || "")), foldedMaterials: takeAuditMaterials(core, id) };
       const clue = buildClueHeader(entry, arr, id, extra);
-      // 事件 → Trace → Memory：正常化采集源为有序 Trace，再据此塑形正文（输出保持一致）。
-      const traces = traceOf(arr, id);
-      const bodyLines = traces.map((t) => `- [${t.at}] [${t.comp || entry}] ${sanitizeText(t.text)}`).filter((l) => !isUnsafe(l));
+      const bodyLines = bodyLinesOf(traces, entry);
       const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
       await fs.writeText(t, `${head}${clue}${body}\n`);
       // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。

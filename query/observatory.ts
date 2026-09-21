@@ -13,7 +13,8 @@
 //     `.shadow/query-log/` 从未被创建过（默认开启的观测层因此**一次都没落盘**）。
 //   - query/title 做轻量 scrub（密钥打码 + 剔除控制/双向字符），防敏感检索词与注入残留回显。
 import { SHADOW_ROOT } from "../core/paths.js";
-import { today, isNotFound } from "../core/util.js";
+import { today, isNotFound, errText } from "../core/util.js";
+import { appendJsonlLine } from "../persistence/jsonl-append.js";
 import { nodeTypeOf } from "../core/node.js";
 import type { ParsedMemory } from "../core/episode.js";
 import { sanitizeText, scrubUnsafe } from "../security/scrub.js";
@@ -70,8 +71,7 @@ export const evidenceBreakdownOf = (nodes: any[]): { byType: Record<string, { to
 
 const logRel = (date: string) => `${SHADOW_ROOT}/query-log/${date}.jsonl`;
 
-/** 异常 → 一句**能给读者看**的原因（不臆造，只搬真实异常信息）。 */
-const errText = (e: any): string => String((e && e.message) || e || "原因未知").replace(/\s+/g, " ").slice(0, 200);
+// `errText` 于 v1.19.0 提到 `core/util.ts`（现在被 `persistence/jsonl-append.ts` 共用）——留这一行防「以为它还在这儿」。
 
 /**
  * 一次观测写入的**结果**（v1.15.94 从 `boolean` 收紧为对象）。
@@ -112,31 +112,14 @@ export const recordQueryObservation = async (fs: any, ws: string, cfg: any, obs:
   // 默认开启（本阶段就是要观察真实查询）；显式 queryLog.enabled=false 才关。
   if (!fs || !ws) return { ok: false };
   if (cfg?.queryLog && cfg.queryLog.enabled === false) return { ok: false };
-  let target: any;
-  try {
-    const rel = logRel(obs.date);
-    target = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
-  } catch (e: any) {
-    return { ok: false, reason: `定位观测文件失败：${errText(e)}` };
-  }
-  // 追加式写入要读回**已有内容**，但「还没有这个文件」是**正常**的（第一次写）——
-  // 与「读失败」必须分开：旧版在这里把两者归成一个 `catch`，于是首写永远失败。
-  let prev = "";
-  try {
-    prev = (await fs.readText(target)) || "";
-  } catch (e: any) {
-    if (!isNotFound(e)) return { ok: false, reason: `读取既有观测失败：${errText(e)}` };
-    prev = ""; // 不存在 ⇒ 当空串（首写）
-  }
-  try {
-    const line = JSON.stringify({ ...obs, query: scrubQuery(obs.query), nodeTitles: (obs.nodeTitles || []).map(tidy) });
-    await fs.writeText(target, prev.endsWith("\n") || !prev.length ? prev + line + "\n" : prev + "\n" + line + "\n");
-    return { ok: true };
-  } catch (e: any) {
-    // **不再静默**：失败由返回值上抛给调用方去留痕。这里连 log 都不打是**有意的** ——
-    // `console.log` 不算 ADR-0049 的可见信号，打了反而会让人以为「已经有信号了」。
-    return { ok: false, reason: `写入观测文件失败：${errText(e)}` };
-  }
+  // 追加实现**收一处**（v1.19.0，`adr/0097` D2）：与审计流共用 `persistence/jsonl-append.ts`。
+  // 那份实现已含本条原先自己处理的两件事：**「还没有这个文件」不是失败**（真实 fs 对不存在的路径抛错 ⇒
+  // v1.15.94 缺陷 A：首写永远失败、目录永远建不出来）与**同进程内「读-改-写」排队**
+  // （原来两次并发 query 会各自读到同一份 `prev`、后写把先写覆盖掉）。
+  // **仍然不静默**：失败由返回值上抛给调用方经 `deps.noteDegrade` 留痕。
+  const line = JSON.stringify({ ...obs, query: scrubQuery(obs.query), nodeTitles: (obs.nodeTitles || []).map(tidy) });
+  const r = await appendJsonlLine(fs, ws, logRel(obs.date), line);
+  return r.ok ? { ok: true } : { ok: false, reason: r.reason };
 };
 
 /** 汇总所有 query-log（跨日期），供 `read_shadow({mode:"query-log"})` 展示。 */

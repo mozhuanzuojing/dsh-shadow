@@ -199,5 +199,12 @@ export const parseAsOf = (v: any): { date: string; timestamp?: string; timezone?
   return null;
 };
 
+/**
+ * 异常 → 一句**能给读者看**的原因（不臆造，只搬真实异常信息）。
+ * v1.19.0：从 `query/observatory.ts` 提到这里 —— 它现在被两处共用（`query-log` 与
+ * `persistence/jsonl-append.ts` 的追加失败原因）。
+ */
+export const errText = (e: any): string => String((e && e.message) || e || "原因未知").replace(/\s+/g, " ").slice(0, 200);
+
 export const tokenize = (s: unknown) =>
   String(s || "").toLowerCase().split(/[\s,，。、;；:：()（）\[\]"'`]+/).map((t) => t.trim()).filter((t) => t && (/[\u4e00-\u9fff]/.test(t) ? t.length >= 1 : t.length >= 2));

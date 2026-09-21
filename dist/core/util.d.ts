@@ -99,4 +99,10 @@ export declare const parseAsOf: (v: any) => {
     timestamp?: string;
     timezone?: string;
 } | null;
+/**
+ * 异常 → 一句**能给读者看**的原因（不臆造，只搬真实异常信息）。
+ * v1.19.0：从 `query/observatory.ts` 提到这里 —— 它现在被两处共用（`query-log` 与
+ * `persistence/jsonl-append.ts` 的追加失败原因）。
+ */
+export declare const errText: (e: any) => string;
 export declare const tokenize: (s: unknown) => string[];

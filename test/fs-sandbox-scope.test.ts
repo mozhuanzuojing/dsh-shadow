@@ -100,6 +100,16 @@ const mkCtx = (m: Map<string, string>, policySvc: any) => {
 const flushOf = async (listeners: Map<string, Function>, T: any) =>
   await listeners.get("agent/turn-stopping")!({ agent: T });
 
+/**
+ * 一轮交互里的**用户消息**（v1.19.0 / `adr/0097` D1）：有了「线索」这批才落**记忆文件** ——
+ * 纯动作批现在走审计流（`.shadow/audit/<date>.jsonl`），而本文件测的是**记忆写入**的沙箱策略接线。
+ */
+const userMsgOf = (listeners: Map<string, Function>, T: any) =>
+  listeners.get("session/event")!(
+    { id: T.id, header: { cwd: CWD } },
+    { type: "user/message", data: { content: [{ type: "text", text: "把这次改动记下来" }] } },
+  );
+
 // ── ① 核心复现：会话 cwd（D:/proj）≠ 服务启动目录（C:/svc）⇒ 记忆必须落盘 ──
 {
   const store = new Map<string, string>();
@@ -111,6 +121,7 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
 
   // 采集一条动作，触发 flush
   listeners.get("tools/result")!({ agent: T, name: "build" });
+  userMsgOf(listeners, T); // adr/0097 D1：含线索才落记忆文件（纯动作批走审计流）
   await flushOf(listeners, T);
 
   const written = [...m.keys()].filter((k) => k.includes("/.shadow/") && k.endsWith(".md"));
@@ -127,6 +138,7 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T2");
   listeners.get("tools/result")!({ agent: T, name: "build" });
+  userMsgOf(listeners, T); // adr/0097 D1：含线索才落记忆文件（纯动作批走审计流）
   await flushOf(listeners, T);
 
   const fsMock: any = services.fs;
@@ -145,6 +157,7 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T3");
   listeners.get("tools/result")!({ agent: T, name: "build" });
+  userMsgOf(listeners, T); // adr/0097 D1：含线索才落记忆文件（纯动作批走审计流）
   await flushOf(listeners, T);
 
   const fsMock: any = services.fs;
@@ -164,6 +177,7 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T4");
   listeners.get("tools/result")!({ agent: T, name: "build" });
+  userMsgOf(listeners, T); // adr/0097 D1：含线索才落记忆文件（纯动作批走审计流）
   await flushOf(listeners, T);
   assert.ok([...m.keys()].some((k) => k.endsWith(".md")), "danger-full-access 会话必须能落盘");
   console.log("✔ ④ danger-full-access 会话写入成功（与真机当前策略一致）");

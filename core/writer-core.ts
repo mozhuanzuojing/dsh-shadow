@@ -54,6 +54,25 @@ export const dirtyRelsFor = (core: WriterCore, ws: string): string[] => {
   return out;
 };
 
+/** 审计材料折叠缓冲的上界（`adr/0097` D4）：只保最近这些条，防长工具链把一条记忆的材料表撑爆。 */
+const AUDIT_MATERIAL_CAP = 40;
+
+/** 记下**已降级进审计流**的那批读过的文件（供下一条记忆折叠）。 */
+export const rememberAuditMaterials = (core: WriterCore, agentId: string | undefined, mats: string[]): void => {
+  if (!mats.length) return;
+  const key = agentId || "";
+  const merged = [...(core.auditMaterials.get(key) || []), ...mats];
+  core.auditMaterials.set(key, merged.slice(Math.max(0, merged.length - AUDIT_MATERIAL_CAP)));
+};
+
+/** 取出并清空（**即取即清**：同一条材料不该被折叠进两条记忆）。 */
+export const takeAuditMaterials = (core: WriterCore, agentId: string | undefined): string[] => {
+  const key = agentId || "";
+  const out = core.auditMaterials.get(key) || [];
+  core.auditMaterials.delete(key);
+  return out;
+};
+
 /**
  * 消费一批 dirty（**只有成功并入索引之后才允许调**，见 `WriterCore.derivedDirty` 的注释）。
  * 按 `ws|rel` **精确删**：不能整表清空 —— 那会连带丢掉别的 rel 尚未并入的变更。
@@ -100,6 +119,17 @@ export interface WriterCore {
    * 否则 `patchSummary` 的原地改写会永久丢失（粗信号看不见它）。
    */
   derivedDirty: Set<string>;
+  /**
+   * **审计批的材料折叠缓冲**（v1.19.0 / `adr/0097` D4）。
+   *
+   * 纯动作批降级进审计流之后，它读过的文件（`改/读 <path>`）不能从**记忆层**消失 ——
+   * 审计流是系统派生记录层，读侧不消费它 ⇒ 那些路径攒在这里，并入**下一条记忆**的「背景/材料」，即取即清。
+   *
+   * · 键是 agentId（同一 agent 的连续动作批属于同一条线索）；
+   * · **有界**（`AUDIT_MATERIAL_CAP`）：长工具链不该把一条记忆的材料表撑爆；
+   * · 随实例销毁（不做模块级单例，同 `degrade` / `derivedDirty` 的纪律）。
+   */
+  auditMaterials: Map<string, string[]>;
   // 配置派生
   MAX_PENDING: number;
   /**
@@ -151,6 +181,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     indexDirty: new Set(),
     indexFingerprint: new Map(),
     derivedDirty: new Set(),
+    auditMaterials: new Map(),
     degrade: new Map(),
     MAX_PENDING: 60,
     forgetCfg: config.forget ?? {},

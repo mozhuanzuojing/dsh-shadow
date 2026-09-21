@@ -2,8 +2,9 @@
 import { today } from "./util.js";
 import { scrubUnsafe, referencedMaterials } from "../security/scrub.js";
 import { mutateMeta } from "../persistence/meta.js";
+import { materialOfAction } from "./capture-granularity.js";
 
-export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra?: { project?: string; agent?: string; goal?: string }) => {
+export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra?: { project?: string; agent?: string; goal?: string; foldedMaterials?: string[] }) => {
   const mats: string[] = [];
   const prompts: string[] = [];
   const userPoints: string[] = [];
@@ -13,7 +14,11 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
     if (p && !seen.has(p)) { seen.add(p); mats.push(p); }
   };
   for (const e of arr) {
-    if (e.kind === "action" && /^改\/读 /.test(e.text)) addMat(e.text.replace(/^改\/读 /, "").trim());
+    if (e.kind === "action") {
+      // 判据收一处（v1.19.0 / adr/0097）：与审计流的材料折叠共用同一份「哪种 action 算材料」。
+      const m = materialOfAction(e.text);
+      if (m) addMat(m);
+    }
     if (e.kind === "user") {
       const raw = scrubUnsafe(e.text.replace(/^用户：/, ""));
       const refs = referencedMaterials(raw);
@@ -22,6 +27,9 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
       userPoints.push(`「${raw.slice(0, 48)}」`);
     }
   }
+  // v1.19.0（adr/0097 D4）：并入**先前那些已降级进审计流**的批读过的文件 —— 否则「纯动作批读过的文件」
+  // 会从记忆的「背景/材料」里消失（审计流里的路径**读侧不消费**；边界见 adr/0097 §5）。
+  for (const m of extra?.foldedMaterials || []) addMat(m);
   const acts = arr.filter((x) => x.kind === "action").length;
   const usr = arr.filter((x) => x.kind === "user").length;
   // ── Decision Capture（v1.1.1）：决策作为一等事件进入 Memory。 ──

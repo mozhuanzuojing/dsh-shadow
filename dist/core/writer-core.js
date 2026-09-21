@@ -32,6 +32,23 @@ export const dirtyRelsFor = (core, ws) => {
             out.push(k.slice(prefix.length));
     return out;
 };
+/** 审计材料折叠缓冲的上界（`adr/0097` D4）：只保最近这些条，防长工具链把一条记忆的材料表撑爆。 */
+const AUDIT_MATERIAL_CAP = 40;
+/** 记下**已降级进审计流**的那批读过的文件（供下一条记忆折叠）。 */
+export const rememberAuditMaterials = (core, agentId, mats) => {
+    if (!mats.length)
+        return;
+    const key = agentId || "";
+    const merged = [...(core.auditMaterials.get(key) || []), ...mats];
+    core.auditMaterials.set(key, merged.slice(Math.max(0, merged.length - AUDIT_MATERIAL_CAP)));
+};
+/** 取出并清空（**即取即清**：同一条材料不该被折叠进两条记忆）。 */
+export const takeAuditMaterials = (core, agentId) => {
+    const key = agentId || "";
+    const out = core.auditMaterials.get(key) || [];
+    core.auditMaterials.delete(key);
+    return out;
+};
 /**
  * 消费一批 dirty（**只有成功并入索引之后才允许调**，见 `WriterCore.derivedDirty` 的注释）。
  * 按 `ws|rel` **精确删**：不能整表清空 —— 那会连带丢掉别的 rel 尚未并入的变更。
@@ -59,6 +76,7 @@ export function createWriterCore(opts) {
         indexDirty: new Set(),
         indexFingerprint: new Map(),
         derivedDirty: new Set(),
+        auditMaterials: new Map(),
         degrade: new Map(),
         MAX_PENDING: 60,
         forgetCfg: config.forget ?? {},

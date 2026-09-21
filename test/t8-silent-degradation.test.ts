@@ -171,6 +171,9 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
 
   // (a) `summary`：走真实 flush（push → onTurnStopping），`patchSummary` 会调 `summarizeTurn`
   collector.push("a1", { kind: "action", text: "改/读 spec/x.md", comp: "spec/x.md", source: "fs" });
+  // v1.19.0（adr/0097 D1）：`patchSummary` 只对**记忆批**跑 —— 纯动作批现在走审计流，
+  // 而本块测的是「summary 降级必须留痕」⇒ 得让这批含线索（否则测的是一条不再存在的路径）。
+  collector.push("a1", { kind: "assistant", text: "我：看一下这份规格。", comp: "", source: "assistant" });
   await collector.onTurnStopping({ agent: { id: "a1" } });
   const wSummary = collector.getFlushWarn();
   assert.ok(wSummary.includes("summary"), `\`summary\` 降级必须留痕（T8 第 2 条：文件里「没有摘要」与「尚未生成」不可区分）；实际 ${JSON.stringify(wSummary)}`);
@@ -468,7 +471,9 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
   const dC = await run("query", { topic: "pkg-a" }, { strict: true, write: qDeny.write }, sawQueryLogFile);
   assert.equal(dC.observed, false, "**正对照**：写被拒时文件不得存在（证明桩真的拦住写）");
   assert.ok(dC.second.includes("queryLog"), `写失败必须可见；实际 ${JSON.stringify(dC.second.slice(-600))}`);
-  assert.match(dC.second, /写入观测文件失败/, `横幅必须说**真实**原因（写失败发生在写那一步）；实际 ${JSON.stringify(dC.second.slice(-600))}`);
+  // v1.19.0：措辞来自**共用的**追加实现（`persistence/jsonl-append.ts`，与审计流收一处）——
+  // 原来的「写入观测文件失败」是 query-log 专用写法；现在统一成「追加写入失败」。判据（写那一步失败）不变。
+  assert.match(dC.second, /追加写入失败/, `横幅必须说**真实**原因（写失败发生在写那一步）；实际 ${JSON.stringify(dC.second.slice(-600))}`);
   assert.ok(!dC.second.includes("不可写"), "旧版写死的「`.shadow/query-log/` 不可写」口径必须消失（它把原因说错，把排障引向错误方向）");
 
   // (D-d) 台账的四种情形（严格桩）：

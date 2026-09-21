@@ -329,19 +329,23 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   // A 档：cooldown 默认关，测分层 + 预算
   const P7 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P7.apply(ctx7, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  obs7("plugin-a/util.js");     // 纯动作记忆 → 应判 L0
+  obs7("plugin-a/util.js");     // v1.19.0（adr/0097 D1）：纯动作批 ⇒ **审计流**，不再落记忆文件
   await flush7();
   obs7("plugin-b/entry.js");    // 含用户决策 → 应判 L2
   user7("决定：把插件入口改造成 bundle 模式。");
   await flush7();
   const rs7 = toolRegistry.get("read_shadow");
   const exec7 = { agent: agentsById.get("T7") };
-  const rL0 = await rs7.execute({ topic: "plugin-a", max_tokens: 4096 }, exec7);
-  assert.ok(rL0.includes("plugin-a"), `纯动作记忆应命中路径：\n${rL0}`);
-  assert.ok(!rL0.includes("…"), `纯动作记忆(L0)应只给摘要、无命中片段：\n${rL0}`);
+  // ── v1.19.0（adr/0097）：本块原先断言「纯动作记忆 ⇒ L0（只给摘要、无命中片段）」——
+  // 那个**类别已被设计取消**（纯动作批现在是审计流，不再是记忆）⇒ 改为锁**取代它的两条判据**：
+  //   ① 审计批**不得**产生以它自己命名的记忆文件；
+  //   ② 它的材料**折叠进下一条记忆**（D4）⇒ 按 plugin-b 查得到那条记忆、且它带着 plugin-a 的路径。
+  const rA = await rs7.execute({ topic: "plugin-a", max_tokens: 4096 }, exec7);
+  assert.ok(!rA.includes("plugin-a-util-js.md"), `纯动作批**不得**落成记忆文件（adr/0097 D1）；实际：\n${rA}`);
   const rL2 = await rs7.execute({ topic: "plugin-b", max_tokens: 4096 }, exec7);
   assert.ok(rL2.includes("bundle"), `含决策记忆(L2)应命中正文：\n${rL2}`);
   assert.ok(rL2.includes("…"), `含决策记忆(L2)应给命中片段：\n${rL2}`);
+  assert.ok(rL2.includes("plugin-a/util.js"), `审计批的材料必须折叠进下一条记忆的「背景/材料」（adr/0097 D4）；实际：\n${rL2}`);
   // max_tokens 参数应被接受且返回正常结果（不抛错、能命中）
   const rBudget = await rs7.execute({ topic: "plugin-b", max_tokens: 2048 }, exec7);
   assert.ok(!String(rBudget).startsWith("ERR"), `max_tokens 参数不应导致错误：${rBudget}`);
@@ -356,7 +360,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   assert.ok(first.includes("bundle"), `冷热淘汰首查应命中：\n${first}`);
   const second = await rs7b.execute({ topic: "plugin-b", max_tokens: 4096 }, exec7);
   assert.ok(String(second).includes("无匹配"), `冷热淘汰应抑制刚发过的内容：\n${second}`);
-  console.log("✔ 场景7 分层召回：L0 仅摘要 / L2 出片段 / 小预算降级 / 冷热淘汰生效");
+  console.log("✔ 场景7 分层召回：审计批不落记忆（adr/0097）+ 材料折叠进下一条记忆 / L2 出片段 / 小预算降级 / 冷热淘汰生效");
 }
 
 // ─────────────────────────────────────────────
@@ -681,6 +685,9 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const ag14 = { id: "F14", session: { header: { cwd: "D:/project" } } };
   agentsById.set("F14", ag14 as any);
   f14("fs/observed", { targetKey: "C:/sandbox14/a.txt", displayPath: "C:/sandbox14/a.txt" }, { kind: "present", version: "v1" }, { agent: { id: "F14" } });
+  // v1.19.0（adr/0097 D1）：兜底要测的是「**记忆**在没有 turn-stopping 时也能落盘」⇒ 这批必须含线索
+  // （纯动作批现在按设计进审计流，测不到这条兜底路径）。
+  f14("session/event", { id: "F14", header: { cwd: "D:/project" } }, { type: "user/message", data: { content: [{ type: "text", text: "记一下这次改动" }] } });
   // 关键：不触发 turn-stopping，仅靠 session/flush 兜底落盘
   await f14("session/flush", { id: "F14" });
   assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
@@ -721,6 +728,9 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   f15("tools/result", { agent: ag15, name: "edit" });
   // 一个语义文件改动（应作为 entry）
   f15("fs/observed", { targetKey: "C:/ws15/proj/file.txt", displayPath: "C:/ws15/proj/file.txt" }, { kind: "present", version: "v1" }, { agent: { id: "T15" } });
+  // v1.19.0（adr/0097 D1）：本块测的是**记忆**的入口选择（工具名不作入口）⇒ 这批必须含线索；
+  // 纯动作批现在进审计流、一条记忆都不生成。user 记录的 `comp` 为空 ⇒ 不影响入口选择本身。
+  f15("session/event", { id: "T15", header: { cwd: "C:/ws15" } }, { type: "user/message", data: { content: [{ type: "text", text: "看一下这个文件" }] } });
   await f15("session/flush", { id: "T15" });
   const keys15 = [...store15.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(keys15.length === 1, `应生成 1 条记忆：${keys15.join(",")}`);
