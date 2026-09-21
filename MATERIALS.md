@@ -67,23 +67,23 @@ node tools/materials-ledger.ts          # 默认根 = D:\project\dsh1\vendor\_sr
 | `ECC` | affaan-m/ECC | `2b6e839` 2026-09-20 · Fix/proximity a11y risk cues (#3193) **(浅)** | **≠ HEAD**：508 处 | **MIT** | 3549 文件 / 81.07 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
 | `hackingtool` | Z4nzu/hackingtool | `ef5334f` 2026-08-23 · Add context7.json with URL and public key **(浅)** | **干净（= HEAD）** | **MIT** | 164 文件 / 4.55 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
 | `jev-ultrafast` | browser-use/jev-ultrafast | `1231850` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **干净（= HEAD）** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
-| `langextract` | google/langextract | `70cfb98` 2026-09-13 · Prepare v1.7.0 release (#539) **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 180 文件 / 23.77 MB | **150 文件 / 12,809 KB** | 见 `adr/0090` |
+| `langextract` | google/langextract | `3fa926d` 2026-09-20 · Clarify suppressed parsing errors (#521) **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 194 文件 / 23.84 MB | **150 文件 / 12,824 KB** | 见 `adr/0090` |
 | `langextract--snapshot-v1.6.0` | google/langextract | `62a2576` 2026-07-02 · Prepare v1.6.0 release (#484) **(浅)** | **≠ HEAD**：19 处 | **Apache-2.0** | 177 文件 / 22.76 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
 | `marker` | datalab-to/marker | `8a1d234` 2026-09-13 · @tryingET has signed the CLA in datalab-to/mar… **(浅)** | **≠ HEAD**：1 处 | **Apache-2.0** | 294 文件 / 18.50 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
 | `MoneyPrinterTurbo` | harry0703/MoneyPrinterTurbo | `919170b` 2026-09-20 · fix(api): parse subtitle enabled as boolean **(浅)** | **≠ HEAD**：99 处 | **MIT** | 243 文件 / 335.84 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
 | `open-lovable` | firecrawl/open-lovable | `69bd93b` 2025-11-19 · v3 **(浅)** | **干净（= HEAD）** | **MIT** | 365 文件 / 3.58 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
-| `openclaw` | openclaw/openclaw | `c1c870a4` 2026-09-15 · fix(plugins): use vendor logos and one consist… **(浅)** | **干净（= HEAD）** | **MIT** | 43351 文件 / 711.91 MB | **43322 文件 / 575,043 KB** | 见 `references.md` §17/§19 |
+| `openclaw` | openclaw/openclaw | `4912a41d` 2026-09-20 · perf: reduce Code Mode source preparation over… **(浅)** | **干净（= HEAD）** | **MIT** | 47203 文件 / 788.66 MB | **47167 文件 / 615,863 KB** | 见 `references.md` §17/§19 |
 | `OpenSpec` | Fission-AI/OpenSpec | `bae58cf` 2026-09-17 · docs: fix Docslab links to unfinished pages (#… **(浅)** | **≠ HEAD**：216 处 | **MIT** | 1191 文件 / 11.76 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
 | `OpenViking` | volcengine/OpenViking | `f6010a5` 2026-09-20 · fix(storage): lazily replay delta table during… **(浅)** | **≠ HEAD**：1470 处 | **AGPL-3.0** | 4071 文件 / 160.93 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
-| `PageIndex` | VectifyAI/PageIndex | `ae16956` 2026-09-08 · Merge pull request #491 from VectifyAI/zmtomor… **(浅)** | **干净（= HEAD）** | **MIT** | 192 文件 / 54.09 MB | **163 文件 / 29,975 KB** | 未核（本表未逐项复核，**不编**） |
-| `rtk` | rtk-ai/rtk | `d402152` 2026-09-14 · Merge pull request #1422 from JackDanger/fix/s… | **干净（= HEAD）** | **Apache-2.0** | 605 文件 / 15.70 MB | **577 文件 / 6,287 KB** | 见 `adr/0087`/`adr/0090` |
+| `PageIndex` | VectifyAI/PageIndex | `71714e8` 2026-09-20 · get_document_id accepts a path: strip the fold… **(浅)** | **干净（= HEAD）** | **MIT** | 281 文件 / 56.55 MB | **177 文件 / 31,283 KB** | 未核（本表未逐项复核，**不编**） |
+| `rtk` | rtk-ai/rtk | `727ee6e` 2026-09-20 · Merge pull request #4117 from KuSh/fix/3681-gi… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 618 文件 / 17.15 MB | **582 文件 / 6,447 KB** | 见 `adr/0087`/`adr/0090` |
 | `strix` | usestrix/strix | `56e9ae9` 2026-09-20 · runtime: read_only local sources become :ro bi… **(浅)** | **≠ HEAD**：40 处 | **Apache-2.0** | 534 文件 / 12.59 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
 | `superpowers` | obra/superpowers | `5bf4e78` 2026-09-18 · Release v6.4.1: diagnosing-superpowers, Native… **(浅)** | **≠ HEAD**：80 处 | **MIT** | 224 文件 / 2.43 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
 | `system_prompts_leaks` | asgeirtj/system_prompts_leaks | `c7b2c31` 2026-09-17 · Update claude-fable-5.1.md **(浅)** | **≠ HEAD**：121 处 | LICENSE · 首行「」 | 503 文件 / 18.92 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
 | `taste-skill` | Leonxlnx/taste-skill | `5217fb4` 2026-09-20 · Merge pull request #120 from Leonxlnx/cursor/r… **(浅)** | **≠ HEAD**：2 处 | **MIT** | 183 文件 / 4.44 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
 | `ui` | shadcn-ui/ui | `a87a63b` 2026-09-17 · feat(registry): add nine community registries … **(浅)** | **≠ HEAD**：24 处 | **MIT** | 5828 文件 / 62.59 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
 | `web-access` | eze-is/web-access | `33eef84` 2026-08-19 · fix: stabilize CDP page readiness (v2.5.4) **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 61 文件 / 0.16 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
-| `zvec-grep` | zvec-ai/zvec-grep | `5265395` 2026-09-04 · fix: surface embedding failures and avoid redu… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 402 文件 / 32.83 MB | **373 文件 / 18,101 KB** | 未核（本表未逐项复核，**不编**） |
+| `zvec-grep` | zvec-ai/zvec-grep | `b1d0ce9` 2026-09-20 · chore: integrate Rust workspace alongside Type… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 767 文件 / 37.54 MB | **731 文件 / 22,097 KB** | 未核（本表未逐项复核，**不编**） |
 
 共 **24** 个目录（= 材料 + 可能存在的版本快照，如 `langextract--snapshot-v1.6.0`）。
 
@@ -349,13 +349,16 @@ node tools/materials-ledger.ts <别的枚举根>        # 换根
 **访问前先查最新**（用户 2026-09-20 立的规则；完整口径见 `AGENTS.md` 的同名小节）：
 
 ```powershell
-node tools/materials-freshness.ts            # 只读：谁落后、落后到哪个 sha、**爆炸半径**
-node tools/materials-freshness.ts --update   # 只移 HEAD（`reset --mixed`）⇒ **工作树不动，读到的仍是旧内容**
-node tools/materials-freshness.ts --update --hard   # 连工作树更新（**覆盖 vendored 拷贝**，先看代价）
+node tools/materials-freshness.ts --only <目录名>   # 典型：只访问某一个材料（~1s）
+node tools/materials-freshness.ts                  # 全部（命中缓存 ~0.7s；实查 ~25s）
+node tools/materials-freshness.ts --update         # 只移 HEAD（`reset --mixed`）⇒ **工作树不动，读到的仍是旧内容**
+node tools/materials-freshness.ts --update --hard  # 连工作树更新（**覆盖 vendored 拷贝**，先看代价）
 ```
 
-两条**硬边界**：① 目录名带 `--snapshot-<版本>` 的是**冻结快照**，默认**不更新**（要动须 `--include-frozen`）；
-② 它**要联网**，所以**不在 `verify` 里** —— 本仓的门刻意不联网。
+三条**硬边界**：① 目录名带 `--snapshot-<版本>` 的是**冻结快照**，默认**不更新**（要动须 `--include-frozen`）；
+② 它**要联网**，所以**不在 `verify` 里** —— 本仓的门刻意不联网；
+③ **性能**（v1.18.3）：实查 24 个仓 ≈ **25s**，且**调并发没用**（对端限流并发小请求）⇒
+用 `--only` 只查你要用的那个，或靠**带 TTL 的缓存**（默认 `600s`，落在系统临时目录）。
 
 **其余（分面规模 / 许可抽查）**：
 
