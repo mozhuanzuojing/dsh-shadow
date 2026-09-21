@@ -94,10 +94,34 @@ const readCache = (): Record<string, CacheEntry> => {
 const SNAPSHOT_MARK = "--snapshot-";
 const isFrozenSnapshot = (name: string): boolean => name.includes(SNAPSHOT_MARK);
 
+/**
+ * GitHub 要走**代理**（用户 2026-09-20 提醒：「github 相关下载要用代理哦」）。
+ *
+ * 实测（本机 2026-09-20，`ls-remote` 往返）：
+ *   继承环境变量 **972ms** · 显式 `-c http.proxy=…` **958ms** · **直连 1114ms**
+ * ⇒ 小请求差别很小，**首次大 clone/fetch 才见真章**（`openclaw` 那种 ~700MB 的仓）。
+ *
+ * **为什么不靠继承**：`execFile` 的子进程默认会继承环境变量，所以它「碰巧能用」——
+ * 但那是**隐式**的：换个不继承环境的宿主、或 `NO_PROXY` 被改，就会**静默退回直连**（慢，且没人知道为什么）。
+ * ⇒ 这里**显式**取、显式传，并在输出里**打印用的是哪个代理**（没有代理也要**说出来**，不静默直连）。
+ * 优先级：`SHADOW_GITHUB_PROXY` > `HTTPS_PROXY` > `https_proxy` > `HTTP_PROXY` > `http_proxy`。
+ */
+const PROXY = (() => {
+  const explicit = process.env.SHADOW_GITHUB_PROXY;
+  if (explicit) return explicit;
+  for (const k of ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"]) {
+    const v = process.env[k];
+    if (v) return v;
+  }
+  return "";
+})();
+
 /** 跑 git 取 stdout；失败返回 undefined（由调用方**显式**判缺件，不静默当成「没问题」）。 */
 const git = (dir: string, args: string[]): Promise<string | undefined> =>
   new Promise((resolve) => {
-    execFile("git", ["-C", dir, ...args], { encoding: "utf8" }, (err, stdout) => {
+    // 代理**显式**传给 git（见 PROXY 的注释：不靠子进程隐式继承环境）。
+    const pre = PROXY ? ["-c", `http.proxy=${PROXY}`, "-c", `https.proxy=${PROXY}`] : [];
+    execFile("git", [...pre, "-C", dir, ...args], { encoding: "utf8" }, (err, stdout) => {
       resolve(err ? undefined : String(stdout).trim());
     });
   });
@@ -263,6 +287,11 @@ console.log(`枚举根：${ROOT}`);
 console.log("口径：本地 HEAD vs **远端默认分支**的当前 sha（`git ls-remote --symref`，**不 fetch**）。");
 console.log(`模式：${DO_UPDATE ? `**--update${HARD ? " --hard（会覆盖工作树）" : "（只移 HEAD，**工作树不动**）"}**` : "只检查（只读）"}${INCLUDE_FROZEN ? " · --include-frozen" : ""} · 并发 ${JOBS}`);
 console.log(`范围：${ONLY.length ? `**仅 ${ONLY.join(" · ")}**` : `全部（${dirs.length} 个）`} · 缓存 TTL **${MAX_AGE}s**（命中就不上网）· 缓存文件 \`${CACHE_PATH}\``);
+console.log(
+  PROXY
+    ? `代理：**${PROXY}**（显式传给 git；设 \`SHADOW_GITHUB_PROXY\` 可覆盖）`
+    : "代理：**（未设）⇒ 直连** —— GitHub 大下载会慢；设 `SHADOW_GITHUB_PROXY` 或 `HTTPS_PROXY`（本机常用 `http://127.0.0.1:9910`）",
+);
 console.log("");
 console.log("| 目录 | 本地 | 远端最新 | 分支 | 冻结? | 判定 | 被引用于 | 耗时 |");
 console.log("|---|---|---|---|---|---|---|---|");

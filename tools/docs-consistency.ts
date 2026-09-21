@@ -21,6 +21,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { join, resolve } from "node:path";
+import { checkCitations } from "./citation-audit.lib.ts";
 
 // ── 公共：读文件并**归一化行尾** ─────────────────────────────────────────────
 /**
@@ -459,7 +460,7 @@ export const checkVersionTags = (root: string): { ok: boolean; code: number; lin
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop()!);
 if (isMain || process.argv[1]?.endsWith("docs-consistency.ts")) {
   const ROOT = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
-  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT), checkVersionTags(ROOT)];
+  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT), checkVersionTags(ROOT), checkCitations(ROOT)];
   for (const r of results) for (const l of r.lines) console.log(l);
   const failed = results.find((r) => !r.ok);
   if (!failed) {

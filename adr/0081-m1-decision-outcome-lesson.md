@@ -47,9 +47,9 @@
 
 | 现状 | 证据 | 判断 |
 |---|---|---|
-| `decision→outcome` 相关性统计（纯统计、确定性标记集、无 AI） | `reflection/patterns/success-rate.ts:1-29`（`ReflectionDecisionOutcome = {decision, outcome, count, successRate}`） | ✅ **M3 的算法内核已存在** |
+| `decision→outcome` 相关性统计（纯统计、确定性标记集、无 AI） | `reflection/patterns/success-rate.ts` 的 `decisionOutcomeCorrelation`（返回 `ReflectionDecisionOutcome = {decision, outcome, count, successRate}`；该类型本身定义在 `reflection/types.ts`，**不在**这个文件里） | ✅ **M3 的算法内核已存在** |
 | 重复决策 / 重复结果的 tally（≥2 次） | `reflection/patterns/decision-outcome.ts:15-16`（`repeatedDecisions` / `repeatedOutcomes`） | ✅ 已有 |
-| **完整性闸门**：只有「decision + outcome 齐备」的轨迹才参与 Reflection | `reflection/types.ts:22`、`reflection/engine.ts:20` | ✅ **这正是 M1 缺口的直接后果**（决策没结果 ⇒ 进不了 Pattern） |
+| **完整性闸门**：只有「decision + outcome 齐备」的轨迹才参与 Reflection | `reflection/types.ts:35`（`reflectionEligible: hasDecision && hasOutcome`）、`reflection/engine.ts:22`（`reflectTraces` 里 `filter(t => completenessOf(t).reflectionEligible)`） | ✅ **这正是 M1 缺口的直接后果**（决策没结果 ⇒ 进不了 Pattern） |
 | cross-domain abstraction（不同 decision 共享同一 outcome → 候选抽象） | `dream/compress.ts:18-55` | ✅ 已有雏形 |
 | **缺**：Pattern 作为**一等对象**（`observations` / `support` / `counter_examples` / `confidence` / `evidence[]`） | 现在只活在 `reflection.learning.statement` + `evidenceCount` 里 | ❌ **M3 的真缺口**：`reflection/types.ts:8` 的结构**没有反例字段**，而用户 schema 明确要 `counter_examples` |
 
