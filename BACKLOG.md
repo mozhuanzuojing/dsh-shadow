@@ -1092,29 +1092,27 @@
 - **依据**：`MATERIALS.md` §1 的注（「换盘前」快照；旧枚举根 `G:\project\dsh1` 已不存在）· §5「更新方法」·
   §2.9 的实测与复核命令 · **同族先例**：模块归属表的生成器已按**同样理由**重建进 `tools/module-ownership.ts`（v1.16.0）。
 
-### T21. **审计流（`.shadow/audit/`）尚未被读侧消费** —— 起点：`adr/0097` D2/D4（v1.19.0）
+### T21. **审计流（`.shadow/audit/`）尚未被读侧消费** —— 起点：`adr/0097` D2/D4（v1.19.0）· ⚠ **部分收口（v1.19.1）**
 
-- **现状**：`adr/0097` 把「只有 action 的批」从记忆文件降级为**审计流**（`.shadow/audit/<date>.jsonl`，一行一条 JSON）。
-  它属**系统派生记录层**（同 `query-log/`）⇒ 至今**不进 `_meta.json`、不进索引、不计 hits、无生命周期**。
-- **缺的是什么**：那些动作回声里带着 `改/读 <path>`（**材料/证据**）。v1.19.0 用「折叠进下一条记忆的
-  `背景/材料`」补了**常见情形**（`core/writer-core.ts` 的 `auditMaterials`，有界 40 条），
-  但若一个纯动作批之后再无记忆批，那些材料**只留在审计流里**（文件在、可 grep，但不出现在任何记忆的「背景/材料」）。
-- **要做的**：让读侧的**证据派生**能按需消费审计流（至少：`read_shadow` 的 `背景/材料` 与 lineage 的 materials
-  能取到同一天同一 agent 的审计材料），并明确它与 `_meta.json` 的关系（不进 hits 是刻意的；不重复登记）。
-- **判据（完成时）**：① 一个「只有动作、无后继记忆」的 fixture 上，材料仍可从读路径取到；
-  ② 审计流**仍不进** `_meta.json` / 索引（不得因为接进读侧就把它变成「记忆」）；
-  ③ 读不到审计流时**留痕**（ADR-0049），不得静默当「没有材料」。
+- ✅ **v1.19.1 做了什么**：`persistence/audit-stream.ts`（`readAuditStream` / `renderAuditStreamDiag`）+
+  挂在 `read_shadow({debug:true})` 的诊断区。材料 = `materials` 字段 ∪ 从 `改/读 <path>` 推断。
+  **三条判据全部落地并有端到端断言**（`test/granularity-e2e.test.ts` ④⑤）：材料可从读路径取到 ·
+  审计流仍不进 `_meta.json`/索引（`listMemories` = 0）· 读失败留痕且与「还没采集」**渲染成不同文本**。
+- ⚠ **仍未做（这才是本条继续挂着的原因）**：材料**只到「可见可查」**（debug 面），
+  **没有**接进 lineage / evidence 的**聚合面** —— 若将来要让审计材料参与证据派生（`AtomEvidenceRef` 那一层），
+  那是另一件事：要回答「审计记录与哪条记忆同属一条线索」（现在只有 `agent` + 日期两个弱键）。
+- **原判据（保留）**：① 一个「只有动作、无后继记忆」的 fixture 上材料仍可从读路径取到 ✅；
+  ② 审计流**仍不进** `_meta.json` / 索引 ✅；③ 读不到审计流时**留痕**（ADR-0049）✅。
 
-### T22. **写侧粒度分流没有端到端测试**（`makeMaterialize` 的 flush）—— 起点：`adr/0097` D1（v1.19.0）
+### T22. **写侧粒度分流没有端到端测试**（`makeMaterialize` 的 flush）—— ✅ **已结案（v1.19.1）**
 
-- **现状**：`test/capture-granularity.test.ts` 锁了**单元**（判据/落点/字段不丢/跨模块 `isMemoryFileName`）
-  与**静态接线**（`flush` 确实调用判据、且顺序在落盘之前）。
-- **缺的是什么**：**没有**用假 fs 驱动 `makeMaterialize(...).flush()` 跑一遍、断言
-  「纯动作批 ⇒ 只长 `.shadow/audit/<date>.jsonl`、**不长**记忆文件」与「含线索的批 ⇒ 长记忆文件、审计流不动」。
-  本仓有这种失效形态的先例（`knowledgeEngine.enabled` 生产零读取）⇒ 静态守卫只挡住「没接线」，挡不住「接了但行为不对」。
-- **要做的**：搭一个最小假 fs（`resolve` / `readText` / `writeText` / `listDir`）+ `createWriterCore`，
-  驱动 flush 两条路径；断言**文件系统层面的后果**（哪些路径被写了）。
-- **完成判据**：两条路径各有正/负对照；假 fs 记录到的写入集合与预期**逐路径相等**。
+- ✅ **落地**：`test/granularity-e2e.test.ts` —— 用**假宿主 + `createShadowCollector`** 驱动**真实 `flush`**，
+  断言**文件系统层面的后果**（不是「函数被调用」）：① 纯动作批只写 `.shadow/audit/*.jsonl`、不写记忆文件、
+  `listMemories` 也收不到；② 含思维落点的批写记忆文件、审计流不动；③ `capture.echo:"memory"` 逃生口可回退；
+  ④⑤ 见 T21。
+- ✅ **顺带抓出一个测试自身的假绿**：假 fs 的 `listDir` 第一版只回文件、不合成**目录项** ⇒
+  `listMemories` 看到 0 个日期目录，①的「收不到」断言**因错误的理由通过**（②的正对照立刻把它抓出来）。
+  已修 mock 并写明由来（`adr/0097` §7.3）。
 
 ---
 

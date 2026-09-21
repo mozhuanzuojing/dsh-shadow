@@ -23,25 +23,13 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { resolveEvalRoot } from "./eval-root.lib.ts";
-
-/** 起点（含）：这一天及之后的日期目录按新判据判；之前**豁免**。 */
-export const GRANULARITY_FROM = "2026-09-21";
-
-/** 唯一表示「只有动作」的来源串（比较点不写字面量，见文件头）。 */
-const ACTION_ONLY = "动作";
-const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
-const SOURCE_RE = /> 证据链：来源\(([^)]*)\)/;
-const MD_SUFFIX = ".md";
-const DERIVED_PREFIX = "_";
+import { GRANULARITY_FROM, ACTION_ONLY, DATE_DIR_RE, isMemoryName, pureActionVerdict } from "./granularity.lib.ts";
 
 export interface GranularityResult {
   ok: boolean;
   code: number;
   lines: string[];
 }
-
-/** 记忆文件名判据（与 `persistence/files.ts:39-41` 同一口径；为什么内联见文件头）。 */
-const isMemoryName = (name: string): boolean => name.endsWith(MD_SUFFIX) && !name.startsWith(DERIVED_PREFIX);
 
 export const checkGranularity = (root: string, opts: { from?: string } = {}): GranularityResult => {
   const from = opts.from || GRANULARITY_FROM;
@@ -101,14 +89,14 @@ export const checkGranularity = (root: string, opts: { from?: string } = {}): Gr
         unknown++;
         continue;
       }
-      const m = SOURCE_RE.exec(text);
-      if (!m) {
+      const verdict = pureActionVerdict(text);
+      if (verdict === null) {
         unknown++;
         continue;
       }
       judged++;
-      if (m[1] === ACTION_ONLY) {
-        violations.push(`  ✗ ${d}/${f.name} —— 来源(${m[1]}) 只有动作 ⇒ 它是**审计流**，不该落成记忆文件（adr/0097 D1）`);
+      if (verdict) {
+        violations.push(`  ✗ ${d}/${f.name} —— 来源(${ACTION_ONLY}) 只有动作 ⇒ 它是**审计流**，不该落成记忆文件（adr/0097 D1）`);
       }
     }
   }
@@ -148,7 +136,8 @@ export const checkGranularity = (root: string, opts: { from?: string } = {}): Gr
     lines: [
       `✔ 粒度门：起点之后没有「纯动作回声」落成记忆文件（${scope}）`,
       ...readings,
-      `  ⚠ 能力边界：**起点之前的历史未判**（豁免 ${exempt} 条，` + "`adr/0097` §5.3 记录了「历史回收未做」）；",
+      `  ⚠ 能力边界：**起点之前的历史已按 \`adr/0097\` §5.3 回收**（v1.19.1 用 \`tools/granularity-reclaim.ts\` 的 \`--apply\`，
+       原始内容全量备份在 \`vendor/.docs/fix/2026-09-21/reclaimed-pure-action-memories.jsonl\`）——本门只看**起点之后**；`,
       "    未判定的条目不等于「已验证」。",
     ],
   };

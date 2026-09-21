@@ -4,6 +4,7 @@ import { SHADOW_ROOT } from "../core/paths.js";
 import { resolveWorkspace } from "../core/scope.js";
 import { readRel, listMemories } from "../persistence/files.js";
 import { readMeta, mutateMeta } from "../persistence/meta.js";
+import { readAuditStream, renderAuditStreamDiag } from "../persistence/audit-stream.js";
 import { readLedger, writeLedger } from "../retrieval/ledger.js";
 import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf, onByDefault } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor, approxEntries, deprioritizeFactor } from "../retrieval/rank.js";
@@ -180,6 +181,10 @@ export async function runReadShadow(deps, args, exec) {
         memories = memories.filter((m) => m.date <= asOf.date);
     if (debugMode)
         diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf.date}` : ""}`);
+    // v1.19.1（adr/0097 T21）：审计流**只进 debug 诊断**（绝不进召回正文）——
+    // 让「降级进审计流的那些动作与材料」至少可见、可查；读失败时说清**原因**（缺件不静默，ADR-0049）。
+    if (debugMode)
+        diag.push(renderAuditStreamDiag(await readAuditStream(fs, ws)));
     // v0.23 Observation Trace：旁路记录观察轨迹（不影响 recall/排序/答案）；ObserverState 只读取不自动推断。
     const obsSoul = await readSoul(fs, ws);
     const obsIdentity = await readIdentity(fs, ws, agent?.id);
