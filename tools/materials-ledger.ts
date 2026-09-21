@@ -147,8 +147,8 @@ console.log("枚举口径：目录 = 根下第一层；文件/字节 = 递归、
 console.log("          许可 = `LICENSE|LICENCE|COPYING*` 中第一个的首行 + 关键词识别；版本 = `git log -1`（取不到则降级读 .git/HEAD）。");
 console.log(`材料数：${dirs.length}`);
 console.log("");
-console.log("| 目录 | 远端 | HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |");
-console.log("|---|---|---|---|---|---|---|");
+console.log("| 目录 | 远端 | HEAD | 工作树 vs HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |");
+console.log("|---|---|---|---|---|---|---|---|");
 
 const degraded: string[] = [];
 const noGit: string[] = [];
@@ -197,8 +197,21 @@ for (const name of dirs) {
 
   const withGit = sizeOf(dir, true);
   const without = sizeOf(dir, false);
+
+  // **工作树 vs HEAD**：承接 `.git` 之后，只报 HEAD 会**暗示**「本地拷贝 == 上游那一版」——
+  // 实测不是（例如 `OpenViking` 差 739 处、`ECC` 差 508 处）⇒ 这一列是**防止过度声称**的。
+  // 只报**总数**、不按状态码分桶：既够用，又避免再引入「内联字面量比较」（那已被棘轮抓过两次）。
+  const dirtyLines = (git(dir, ["status", "--porcelain", "--untracked-files=normal"]) ?? "")
+    .split("\n")
+    .filter(Boolean);
+  const drift = !hasGit
+    ? "—（无 `.git`）"
+    : dirtyLines.length === 0
+      ? "**干净（= HEAD）**" // 与上游那一版逐文件一致（不含被 .gitignore 的面）
+      : `**≠ HEAD**：${dirtyLines.length} 处`;
+
   console.log(
-    `| \`${basename(dir)}\` | ${remote} | ${head} | ${licenseOf(dir)} | ${withGit.files} 文件 / ${(withGit.kb / 1024).toFixed(2)} MB | **${without.files} 文件 / ${without.kb.toLocaleString("en-US")} KB** | ${STATUS[name] ?? "未核（本表未逐项复核，**不编**）"} |`,
+    `| \`${basename(dir)}\` | ${remote} | ${head} | ${drift} | ${licenseOf(dir)} | ${withGit.files} 文件 / ${(withGit.kb / 1024).toFixed(2)} MB | **${without.files} 文件 / ${without.kb.toLocaleString("en-US")} KB** | ${STATUS[name] ?? "未核（本表未逐项复核，**不编**）"} |`,
   );
 }
 
@@ -214,6 +227,12 @@ if (degraded.length) {
   console.log("");
   console.log(`⚠ **有 \`.git\` 但 git 取不到 ${degraded.length} 个**（降级只给了 SHA）：${degraded.join(" · ")}`);
   console.log("  ⇒ 这些行的 HEAD 列**不完整**，不得据它断言版本/日期（ADR-0049：缺件不静默）。");
+}
+if (!noGit.length && !degraded.length) {
+  console.log("");
+  console.log("✔ **24/24 都有 `.git` 且都取到了 HEAD**（v1.18.1 补：原先 18 个没有 `.git`）。");
+  console.log("  ⚠ **但「有 HEAD」≠「本地拷贝等于那一版」** —— 看「工作树 vs HEAD」一列：");
+  console.log("  差 0 处才是逐文件一致；差 N 处表示这份**vendored 拷贝**与上游那一版**不同**（被裁剪/改动/版本略偏）。");
 }
 console.log("");
 console.log("⚠ `台账状态` 一列**不可机械推** ⇒ 只对已核过的给结论，其余 `未核`。");

@@ -43,51 +43,66 @@
 > 而**真实的现状**此前没有任何一节承载 —— 实测：`vendor/_src` 的 24 个目录里，**18 个**在本文里**连名字都搜不到**。
 > 本节由 `tools/materials-ledger.ts` **生成**，数字**现枚举**（`BACKLOG` T20 的 (a) 方案）。
 >
-> **⚠ 一条要紧的实测结论（2026-09-20）**：这 24 个目录里 **18 个根本没有 `.git`** ⇒
-> 它们**没有版本溯源**，**版本与远端都不可核**。所以**不要给它们填 HEAD** ——
-> 上方 §1 给 `archify` / `openviking` 等记的 HEAD 是**旧枚举根**的读数，**在本机的当前拷贝上复核不了**。
-> 这正是「**缺件不静默**」：要么留空并**标注不可核**，要么**重新克隆**把 `.git` 取回来。
-> （有 `.git` 的 6 个里，**5 个是浅克隆**、只 `rtk` 是全量。）
+> **✅ 缺口已补（v1.18.1）：24/24 都有 `.git`、都取到了 HEAD。**
+> v1.18.0 实测出「24 个里有 **18 个没有 `.git`**」（⇒ 没有版本溯源、版本与远端都不可核）；
+> 本轮按用户指令把这 18 个补上：**逐个确认上游** → `git init` + `remote add` + `fetch --depth 1` + `git reset --mixed`
+> ⇒ **只加元数据，不动任何工作树文件**。
+> 其中 `langextract--snapshot-v1.6.0` 取的是 **tag `v1.6.0`**（它是**版本快照**，取 `main` 就是错的）。
+>
+> **新增一列「工作树 vs HEAD」** —— 因为 **「有 HEAD」≠「本地拷贝等于那一版」**：
+> 实测 **10 个干净**、**14 个有差异**（`OpenViking` 1470 处 · `ECC` 508 · `OpenSpec` 216…）。
+> 只报 HEAD 会**暗示**本地拷贝 == 上游那一版，那是**过度声称**。
 
 ```powershell
 node tools/materials-ledger.ts          # 默认根 = D:\project\dsh1\vendor\_src
 ```
 
 <!-- 以下表格由 tools/materials-ledger.ts 输出；改它请重跑命令，勿手改 -->
-| 目录 | 远端 | HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |
-|---|---|---|---|---|---|---|
-| `agent-skills` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 196 文件 / 0.84 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
-| `archify` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 471 文件 / 38.20 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
-| `browser-harness` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 187 文件 / 3.36 MB | **187 文件 / 3,438 KB** | 未核（本表未逐项复核，**不编**） |
-| `data-engineer-handbook` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | （无 LICENSE 文件） | 124 文件 / 233.92 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
-| `ECC` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 3520 文件 / 49.68 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
-| `hackingtool` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 135 文件 / 2.64 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
-| `jev-ultrafast` | browser-use/jev-ultrafast | `1231850` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
-| `langextract` | google/langextract | `70cfb98` 2026-09-13 · Prepare v1.7.0 release (#539) **(浅)** | **Apache-2.0** | 180 文件 / 23.77 MB | **150 文件 / 12,809 KB** | 见 `adr/0090` |
-| `langextract--snapshot-v1.6.0` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 150 文件 / 12.48 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
-| `marker` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 265 文件 / 13.78 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
-| `MoneyPrinterTurbo` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 214 文件 / 201.60 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
-| `open-lovable` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 336 文件 / 2.81 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
-| `openclaw` | openclaw/openclaw | `c1c870a4` 2026-09-15 · fix(plugins): use vendor logos and one consist… **(浅)** | **MIT** | 43351 文件 / 711.91 MB | **43322 文件 / 575,043 KB** | 见 `references.md` §17/§19 |
-| `OpenSpec` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 1162 文件 / 8.56 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
-| `OpenViking` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **AGPL-3.0** | 4042 文件 / 98.75 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
-| `PageIndex` | VectifyAI/PageIndex | `ae16956` 2026-09-08 · Merge pull request #491 from VectifyAI/zmtomor… **(浅)** | **MIT** | 192 文件 / 54.09 MB | **163 文件 / 29,975 KB** | 未核（本表未逐项复核，**不编**） |
-| `rtk` | rtk-ai/rtk | `d402152` 2026-09-14 · Merge pull request #1422 from JackDanger/fix/s… | **Apache-2.0** | 605 文件 / 15.70 MB | **577 文件 / 6,287 KB** | 见 `adr/0087`/`adr/0090` |
-| `strix` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 505 文件 / 9.09 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
-| `superpowers` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 195 文件 / 1.63 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
-| `system_prompts_leaks` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | LICENSE · 首行「」 | 474 文件 / 14.47 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
-| `taste-skill` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 64 文件 / 1.68 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
-| `ui` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 5799 文件 / 45.50 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
-| `web-access` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | （无 LICENSE 文件） | 14 文件 / 0.09 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
-| `zvec-grep` | zvec-ai/zvec-grep | `5265395` 2026-09-04 · fix: surface embedding failures and avoid redu… **(浅)** | **Apache-2.0** | 402 文件 / 32.83 MB | **373 文件 / 18,101 KB** | 未核（本表未逐项复核，**不编**） |
+| 目录 | 远端 | HEAD | 工作树 vs HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |
+|---|---|---|---|---|---|---|---|
+| `agent-skills` | addyosmani/agent-skills | `dc27a9c` 2026-09-20 · Merge #579: move security-and-hardening code p… **(浅)** | **≠ HEAD**：57 处 | **MIT** | 225 文件 / 1.27 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
+| `archify` | tt-a1i/archify | `29f1ff5` 2026-09-21 · docs: broaden README introduction beyond devel… **(浅)** | **≠ HEAD**：176 处 | **MIT** | 500 文件 / 52.94 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
+| `browser-harness` | browser-use/browser-harness | `afbcc38` 2026-09-07 · Merge pull request #757 from warun7/fix/video-… **(浅)** | **≠ HEAD**：9 处 | **MIT** | 216 文件 / 5.57 MB | **187 文件 / 3,438 KB** | 未核（本表未逐项复核，**不编**） |
+| `data-engineer-handbook` | DataExpert-io/data-engineer-handbook | `103edb0` 2026-08-03 · Adding Day 1 link **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 153 文件 / 294.40 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
+| `ECC` | affaan-m/ECC | `2b6e839` 2026-09-20 · Fix/proximity a11y risk cues (#3193) **(浅)** | **≠ HEAD**：508 处 | **MIT** | 3549 文件 / 81.07 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
+| `hackingtool` | Z4nzu/hackingtool | `ef5334f` 2026-08-23 · Add context7.json with URL and public key **(浅)** | **干净（= HEAD）** | **MIT** | 164 文件 / 4.55 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
+| `jev-ultrafast` | browser-use/jev-ultrafast | `1231850` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **干净（= HEAD）** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
+| `langextract` | google/langextract | `70cfb98` 2026-09-13 · Prepare v1.7.0 release (#539) **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 180 文件 / 23.77 MB | **150 文件 / 12,809 KB** | 见 `adr/0090` |
+| `langextract--snapshot-v1.6.0` | google/langextract | `62a2576` 2026-07-02 · Prepare v1.6.0 release (#484) **(浅)** | **≠ HEAD**：19 处 | **Apache-2.0** | 177 文件 / 22.76 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
+| `marker` | datalab-to/marker | `8a1d234` 2026-09-13 · @tryingET has signed the CLA in datalab-to/mar… **(浅)** | **≠ HEAD**：1 处 | **Apache-2.0** | 294 文件 / 18.50 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
+| `MoneyPrinterTurbo` | harry0703/MoneyPrinterTurbo | `919170b` 2026-09-20 · fix(api): parse subtitle enabled as boolean **(浅)** | **≠ HEAD**：99 处 | **MIT** | 243 文件 / 335.84 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
+| `open-lovable` | firecrawl/open-lovable | `69bd93b` 2025-11-19 · v3 **(浅)** | **干净（= HEAD）** | **MIT** | 365 文件 / 3.58 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
+| `openclaw` | openclaw/openclaw | `c1c870a4` 2026-09-15 · fix(plugins): use vendor logos and one consist… **(浅)** | **干净（= HEAD）** | **MIT** | 43351 文件 / 711.91 MB | **43322 文件 / 575,043 KB** | 见 `references.md` §17/§19 |
+| `OpenSpec` | Fission-AI/OpenSpec | `bae58cf` 2026-09-17 · docs: fix Docslab links to unfinished pages (#… **(浅)** | **≠ HEAD**：216 处 | **MIT** | 1191 文件 / 11.76 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
+| `OpenViking` | volcengine/OpenViking | `f6010a5` 2026-09-20 · fix(storage): lazily replay delta table during… **(浅)** | **≠ HEAD**：1470 处 | **AGPL-3.0** | 4071 文件 / 160.93 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
+| `PageIndex` | VectifyAI/PageIndex | `ae16956` 2026-09-08 · Merge pull request #491 from VectifyAI/zmtomor… **(浅)** | **干净（= HEAD）** | **MIT** | 192 文件 / 54.09 MB | **163 文件 / 29,975 KB** | 未核（本表未逐项复核，**不编**） |
+| `rtk` | rtk-ai/rtk | `d402152` 2026-09-14 · Merge pull request #1422 from JackDanger/fix/s… | **干净（= HEAD）** | **Apache-2.0** | 605 文件 / 15.70 MB | **577 文件 / 6,287 KB** | 见 `adr/0087`/`adr/0090` |
+| `strix` | usestrix/strix | `56e9ae9` 2026-09-20 · runtime: read_only local sources become :ro bi… **(浅)** | **≠ HEAD**：40 处 | **Apache-2.0** | 534 文件 / 12.59 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
+| `superpowers` | obra/superpowers | `5bf4e78` 2026-09-18 · Release v6.4.1: diagnosing-superpowers, Native… **(浅)** | **≠ HEAD**：80 处 | **MIT** | 224 文件 / 2.43 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
+| `system_prompts_leaks` | asgeirtj/system_prompts_leaks | `c7b2c31` 2026-09-17 · Update claude-fable-5.1.md **(浅)** | **≠ HEAD**：121 处 | LICENSE · 首行「」 | 503 文件 / 18.92 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
+| `taste-skill` | Leonxlnx/taste-skill | `5217fb4` 2026-09-20 · Merge pull request #120 from Leonxlnx/cursor/r… **(浅)** | **≠ HEAD**：2 处 | **MIT** | 183 文件 / 4.44 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
+| `ui` | shadcn-ui/ui | `a87a63b` 2026-09-17 · feat(registry): add nine community registries … **(浅)** | **≠ HEAD**：24 处 | **MIT** | 5828 文件 / 62.59 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
+| `web-access` | eze-is/web-access | `33eef84` 2026-08-19 · fix: stabilize CDP page readiness (v2.5.4) **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 61 文件 / 0.16 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
+| `zvec-grep` | zvec-ai/zvec-grep | `5265395` 2026-09-04 · fix: surface embedding failures and avoid redu… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 402 文件 / 32.83 MB | **373 文件 / 18,101 KB** | 未核（本表未逐项复核，**不编**） |
 
 共 **24** 个目录（= 材料 + 可能存在的版本快照，如 `langextract--snapshot-v1.6.0`）。
 
-⚠ **无 `.git` 18 个** ⇒ 这批材料**没有版本溯源**，版本与远端**不可核**：
-`agent-skills` · `archify` · `browser-harness` · `data-engineer-handbook` · `ECC` · `hackingtool` ·
-`langextract--snapshot-v1.6.0` · `marker` · `MoneyPrinterTurbo` · `open-lovable` · `OpenSpec` ·
-`OpenViking` · `strix` · `superpowers` · `system_prompts_leaks` · `taste-skill` · `ui` · `web-access`
-⇒ **不得**给它们填 HEAD / 远端 —— 那只能来自**别处**，而那样填的数**复核不了**。
+✔ **24/24 都有 `.git` 且都取到 HEAD**（v1.18.1 补；原先 **18 个没有**）。
+⚠ **「有 HEAD」≠「本地拷贝 = 那一版」** —— 看「工作树 vs HEAD」列：**干净 10 个 / 有差异 14 个**。
+
+**上游是怎么确定的（判据分级 —— 别把弱判据当强判据）**：
+
+| 判据 | 用在 | 强度 |
+|---|---|---|
+| **仓内自指**：`package.json.repository` / `pyproject` 的 `Repository =` / README 的 shields 徽章**自指本仓** | `marker` · `langextract--snapshot-v1.6.0` · `system_prompts_leaks` | **强** |
+| **旧枚举根记录**（本文 §1 的「远端」列） | `archify`（`tt-a1i/archify`）· `OpenViking` | 中 |
+| **workspace 写里的「来源仓库」行**（`references-agents/<名>/AGENTS.md`） | `taste-skill` · `web-access` | 中 |
+| **目录名 / 标题推断 + 「本地与远端文件集重叠」验证** | 其余 11 个 | **弱**（但**过了验证**：`??` 占比 ≈ 0 ⇒ 本地**每个**文件都在远端 HEAD 的树里） |
+
+⇒ **弱判据那 11 个之所以敢接，是因为验证而不是因为像**；将来若发现某个接错了，
+**判据就是这一列**（那个目录的 `??` 会飙高），而不是靠记忆。
+**验证方法**（补 `.git` 时逐个跑过，接错即回滚）：
+`git init` → `git fetch --depth 1 origin <branch|tag>` → `git reset --mixed FETCH_HEAD` → 量 `?? / 本地文件数`。
 
 ⚠ `台账状态` 一列**不可机械推** ⇒ 只对**已核过**的给结论，其余 `未核`（**不编**）。
 逐项的「已吸收 / 未读 / 下一步」在本文 §2 与 `references.md`，**不在生成器的输出里**。
@@ -324,6 +339,9 @@ node tools/materials-ledger.ts <别的枚举根>        # 换根
 它的口径**自己打印**（含不含隐藏文件 / 含不含 `.git` / 许可怎么识别 / 取不到 git 时怎么降级），
 并且 **「无 `.git`」与「git 降级」分开报** —— 前者是说「这份材料**没有版本溯源**」，
 后者才是「工具取不到」。**两者不许混为一谈**（这正是 harness 那条「工件存在 ≠ 运行时能力」的同族纪律）。
+**另有一列「工作树 vs HEAD」**（v1.18.1 加）：**「有 HEAD」≠「本地拷贝等于那一版」**——
+差 0 处才是逐文件一致，差 N 处说明这份 vendored 拷贝与上游那一版不同（裁剪 / 改动 / 版本略偏）。
+只报 HEAD 会**暗示**两者相等 ⇒ 那是**过度声称**。
 
 **§1 的历史快照不许改** —— 它是「换盘前」那次枚举。按本文一贯口径（**归档层改写＝伪造历史**），
 现在有了 §1.1，判据是「**当前态只认 §1.1**」。
