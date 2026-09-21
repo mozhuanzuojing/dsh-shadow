@@ -346,6 +346,17 @@ node tools/materials-ledger.ts <别的枚举根>        # 换根
 **§1 的历史快照不许改** —— 它是「换盘前」那次枚举。按本文一贯口径（**归档层改写＝伪造历史**），
 现在有了 §1.1，判据是「**当前态只认 §1.1**」。
 
+**访问前先查最新**（用户 2026-09-20 立的规则；完整口径见 `AGENTS.md` 的同名小节）：
+
+```powershell
+node tools/materials-freshness.ts            # 只读：谁落后、落后到哪个 sha、**爆炸半径**
+node tools/materials-freshness.ts --update   # 只移 HEAD（`reset --mixed`）⇒ **工作树不动，读到的仍是旧内容**
+node tools/materials-freshness.ts --update --hard   # 连工作树更新（**覆盖 vendored 拷贝**，先看代价）
+```
+
+两条**硬边界**：① 目录名带 `--snapshot-<版本>` 的是**冻结快照**，默认**不更新**（要动须 `--include-frozen`）；
+② 它**要联网**，所以**不在 `verify` 里** —— 本仓的门刻意不联网。
+
 **其余（分面规模 / 许可抽查）**：
 
 ```powershell
