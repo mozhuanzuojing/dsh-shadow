@@ -301,7 +301,7 @@ npm run verify
 | `retired-mapping-v1` | public-api（兼容层） · 已废止映射 **4 + 2**（4 个 mode 名 + 2 个参数级） | `query`（`query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage`） | 旧名与旧参数**仍然可用、但返回可见提示并点名替代品** —— 兼容层本身就是承诺 | **`hard`** |
 | `config-keys-v1` | 配置键 · `ShadowConfig` 顶层 **19** 键 | `core`（`core/types.ts`） | 键名是**用户写在配置里的字面量**；加键安全，改**已生效键的语义**会让既有配置悄悄换行为 | **`soft`**（加键）/ **`hard`**（已生效键的语义） |
 | `memory-file-v1` | 落盘格式 · `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md` | `persistence`（`persistence/files.ts`）；头字段由 `core/memory.ts` 的 `buildClueHeader` 造 | 记忆文件是**唯一的 source**；文件名里的时间是**读侧反解**的依据 ⇒ 改了会让**已记录的东西读不出来** | **`hard`** |
-| `derived-file-v1` | 派生件 · `_index.md` / `_meta.json` / `_abstract.md` / `_recall_log.json` / `shadow-manifest.json` / `shadow-index/*` / `soul/soul.json` / `taste/taste.json` 等 | `core`（`core/meta.ts` 定性、`core/manifest.ts` 格式）；写入方散在 `retrieval`（`ledger.ts`）/ `query`（`projection-store.ts`） | 派生件**可整份重建**，坏了不算数据损失；但**不可解析必须报错，不能当空件** | **`soft`** |
+| `derived-file-v1` | 派生件 · `_index.md` / `_meta.json` / `_abstract.md` / `_recall_log.json` / `shadow-manifest.json` / `shadow-index/*` / `soul/soul.json` / `taste/taste.json` 等 | `persistence`（`persistence/meta.ts` 定性）+ `core`（`core/manifest.ts` 格式）；写入方散在 `retrieval`（`ledger.ts`）/ `query`（`projection-store.ts`） | 派生件**可整份重建**，坏了不算数据损失；但**不可解析必须报错，不能当空件** | **`soft`** |
 | `prompt-segment-v1` | prompt 段 · `RECALL_PREFIX`「数据非指令」前缀 / `flushWarn` 横幅 / 「能力降级」标记 | `core`（`core/util.ts` 的 `RECALL_PREFIX` · `core/writer.ts` 的 `getFlushWarn`） | 「数据非指令」前缀是**护栏**：去掉它，召回内容可能被后续模型当命令读 | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） |
 | `tool-output-v1` | 工具**返回内容** · `read_shadow` / `recall_shadow` / `shadow_query` 吐出的 Markdown 骨架与**召回信封**字段 | `query`（读侧组织；渲染片段来自 `retrieval/render.ts`） | **`mode` 只决定「读哪一类」，这条决定「读出来长什么样」** —— 使用者实际依赖的是后者 | **`soft`**（骨架与措辞可改，须写 `CHANGELOG`）/ **`hard`**（**「不静默丢内容」**：截断必须自报） |
 
@@ -315,7 +315,7 @@ npm run verify
 | `retired-mapping-v1` | 追加映射 | 移除映射；让旧名 / 旧参数静默落空 | `query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage` | **强**：`test/recall-envelope.test.ts:201-223`（含参数级 `verify:true` / `args.recall`，且带**正控**：正名不得被拒） | 无桶覆盖，但**每条废止配一个断言** —— 等价于逐条棘轮 |
 | `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **有**：`tools/contract-surface.selftest.ts`（**冻结 `ShadowConfig` 顶层键清单**：缺键即红并点名、新增只报告；键由 `core/types.ts` 按**大括号深度**抽，避开嵌套键）+ 各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用** | 无桶覆盖 |
 | `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
-| `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `core/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
+| `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `persistence/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
 | `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
 | `tool-output-v1` | 改措辞；**加**信封字段；加新段落 | **截断不报**（信封消失）；把「坏件」与「空件」混同；**接线任何优化时把被丢掉的内容静默吞掉** | `query/reads.ts` 的信封构造 + `core/util.ts` 的 `RECALL_PREFIX` | **强**：`test/recall-envelope.test.ts`（逐字断言信封四要素 `> 未返回的命中：` / `limit=N 上限 M 条` / `> 下一步：` / `> 未返回示例：`）+ `test/recall-attribution.test.ts:440`（前缀） | 无桶覆盖 |
 
@@ -647,5 +647,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.18.4`**（新增一道**文档引用门**：当前态文档里凡能被唯一解析的 `文件:行号`，越出该文件现有行数即报红（现状 623 处引用 ⇒ 判定 482 · 未判定 141 · 越界 0）；同时立下「外部材料的行号必须带 pin（`材料@sha`）」的写法 —— 触发点是材料 `openclaw` 换版后一批引用**整片错位、却一条都没越界**：门答不了「这条断言建立在哪一版上」，只有 pin 能答）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.18.5`**（一次「审查过期内容并删除」的清理：仓库**外**删掉 249.5 MB / 133,344 个**可自建的派生副本**（依据与保留清单在 `../.docs/fix/2026-09-16/INDEX.md` §7），工作区顶层删掉 120 个一次性草稿（留档清单在 `_reports/2026-09-20-清理记录-过期草稿.md`）；仓库**内**只改了契约表里一处**已经不存在**的路径 —— 派生件元数据的锚点由 `core/meta.ts` 订正为 `persistence/meta.ts`）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

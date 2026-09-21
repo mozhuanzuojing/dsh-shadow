@@ -3,6 +3,78 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.18.5] 审查过期内容并删除（仓库外 249.5 MB 派生副本 + 137 项一次性草稿）+ 修 README 一处过期路径
+
+用户指令：「**审查过期的文档或内容 然后删除**」。本轮**先取证再动手**：每一项删除都先证明「它是派生物，或有权威替代」；
+证明不了的**一律保留**（附理由）。
+
+### ① 仓库外：`vendor/.docs/fix/2026-09-16` 从 293.08 MB 降到 43.59 MB（删 133,344 文件 / 249.49 MB）
+
+那个目录原本 **293.08 MB / 153,455 文件**，而 `INDEX.md` §6.2 的可重放命令**每次运行都会自建**这些副本
+⇒ 体积几乎全是「上一次跑完的中间态」。逐项证明「消费它的脚本会自建」后才删：
+
+| 被删 | 体积 | 谁在重跑时重建 |
+|---|---|---|
+| `t17b\t17b-evd-scratch\` | 158.23 MB | `t17b-evd-lib.mts` 的 `rmSync`+`cpSync(SNAP→dst)`；`t17b-evd-REPORT.md` 原文即写「可整目录删」 |
+| `t17b\scratch\ws-sql` | 31.24 MB | `probe-parent-verify.mts:62-68`（它是唯一会被探针改动的副本 ⇒ 每次都从快照重建） |
+| `t17b\scratch\ws-bench` | 18.95 MB | `probe-parent-bench.mts:37-39` |
+| `t17b\scratch\index-copy.sqlite` | 20.50 MB | `t17b-diag.mts:14`（`if (!existsSync(COPY)) copyFileSync(...)`） |
+| `t17b\scratch\{ws-fs,ws-base,ws-empty}` | 13.30 MB | `probe-parent-verify.mts:64-68` / `:222` |
+| `t17b\scratch\baseline\` | 0.86 MB | `probe-parent-verify.mts:98-106`（`git archive HEAD dist`） |
+| `t17b\scratch\mut\` | ~0 | `probe-fs-cost.mts`（注释即写「自建合成目录」） |
+| `t17a\scratch\ws2` | 6.41 MB | `probe-t17a-red.mts:341-342` |
+
+**刻意保留**（都有「不会被自建」的证据，所以**不能**删）：`t17b\scratch\snap\`（**语料冻结快照** ——
+`probe-parent-verify.mts:55-59` 只在它**缺失**时才从**当时的工作区**复制 ⇒ 删了它，重跑测的就是**今天**的语料、
+§6.5 的数字不再可比）、`t17b\scratch\ws-mut`（`probe-dir-token.mts` 直接假定它存在，全仓**无自建代码**）、
+`t17a\scratch\{ws,index.sqlite}`（`t17a-lib.mts:31` 的 `FROZEN_WS` 与 `t17b-lib.mts:15` 只读引用的索引）。
+依据与保留清单写在 **`../.docs/fix/2026-09-16/INDEX.md` §7**；另在该目录**两处引用了被删路径**的文档里就地标注了
+「已删 + 怎么重建」（`t17b-evd-REPORT.md`、`fts5-recall-equivalence.md`）—— **缺件不静默**。
+
+### ② 工作区顶层：删 120 个一次性草稿（0.41 MB）+ 3 项杂件
+
+`D:\project\dsh1` 顶层有 **120 个 `_*` 草稿**（88 个 2026-08-25 · 31 个 08-26 · 1 个 09-05，全是 WSL 探针会话的一次性脚本）。
+三条判据：① `_` 前缀 + 那三个日期；② **单遍全文匹配 25,723,257 字符**（`.shadow/` `_reports/` `docs/`
+`references-agents/` `e2e-lab/` `seed/` `tools/` `packages/` `cc-kit-expanded/` 下的 `*.md|json|txt|yml|ts|py`）
+逐名查引用 —— **命中 0**（唯一一次「命中」复核后是**子串误报**：记忆引的是 `…/Temp/sync_wsl_default_model.py`）；
+③ 不是记忆 / 正式报告 / 材料。
+另删 `.q2.tmp`（`retrieval/render.ts` 的补丁草稿）、`_research/__pycache__/`（字节码缓存）、空目录 `_tmp/`。
+**留档**：`_reports/2026-09-20-清理记录-过期草稿.md`（173 行：120 行删除表 + 「审查后保留」及理由）。
+⚠ 工作区**不是 git 仓库** ⇒ 这些删除**不可恢复**，所以先写清单再删。
+
+### ③ 仓库内：`_research/` 删 17 个废弃品（120.7 KB）
+
+那是 **`gitignore` 的机器本地草稿区**（`.gitignore:7`）。删掉 13 个 `commit-msg*.txt`（2026-09-11 的提交信息草稿）、
+`audit-raw.txt`、两个 `.txt` 后缀的**退役生成器**、以及已被 `tools/toolset-seed.json` 取代的 `seed-verified.json`。
+**保留**被 `adr/0058` 引用的研究链（`toolset_sources.json` / `winget_*`）—— 那是「当时的取证」，不是草稿。
+
+### ④ 本版唯一的仓库内改动：README 契约表里一处**已经不存在的路径**
+
+`README.md` 两处把派生件的元数据锚在 **`core/meta.ts`** —— 该文件在 `adr/0003` Phase 2 拆层后**已不存在**：
+同类里只有 `persistence/meta.ts`（`readMetaVersioned` / `writeMetaGuarded` 的所在，`adr/0095` §2 也是这么引的）。
+⇒ 两处改为 `persistence/meta.ts`，该格的层归属同时由 `core` 订正为 `persistence`。
+
+**它是怎么被找到的**：对 **101 份当前态文档**扫「带目录的仓库内路径引用」，得 **74 个候选**；逐个复核后
+**73 个是「路径根歧义」造成的假阳性** —— 引用的是**别的材料内部**的路径（如 `adr/0048` 的 `daemon/change-set.ts`
+明写属 `vendor/_src/zvec-grep`）或相对**工作区根**而非仓库根（如 `adr/0085` 的 `dsh-shadow/AGENTS.md`）。
+⇒ **真过期 1 个**（本条）；另有 **1 个是故意的腐化自检夹具名**（`BACKLOG.md:680` 的 `core/lexicon.ts`，
+它不是在断言该文件存在，而是在说「本轮用不存在的路径实测到自检会报」）。
+
+### 未做 / 边界（**别当已清完**）
+
+- **不删**（看不懂就不删）：`_reports/` 的正式报告、工作区 `_research/`（2026-09-11 的 arxiv 取证，
+  比 `_reports/references-study`（09-08）**更新**）、`cc-kit-expanded/`、`dashy/`
+  （**独立 git 仓库**的项目工作副本 —— 其中 `node_modules` 233 MB 是**已安装依赖**，不是过期内容）、
+  `vendor/_src` 24 个材料（用户明确要求保留并更新到最新）。
+- `archify_README_ZH.md` / `ppt-master_README.md`（2026-08-23 · 无人引用）**保留**：**证明不了是副本**
+  （与材料内 `README_ZH.md` 的体积不同），且 `ppt-master` 的本体已不在本机（`MATERIALS.md:15-16` 有记载）。
+- `README.md` 的 `soul/soul.json` / `taste/taste.json` 是**记忆工作区**里的派生件路径，不是仓库路径 ⇒ 不改。
+- `adr/0003:125` 的 Phase 3 计划写 `core/arbitrate.ts`，实现落在 `observer/arbitrate.ts` ——
+  **未改**：那是**决策记录里的原始计划文本**，改写它等于改写计划；要动应加补记。
+- 扫描的能力边界：**按名字判、不解析语义**；路径根歧义会产出假阳性（本轮 73/74）⇒
+  **不得**据此宣称「文档里的路径引用已全部正确」。
+
+
 ## [v1.18.4] 给「行号腐烂」配一道**门**（`audit:docs` ⑥）+ 材料引用立 **pin** 规则 + `openclaw` → `052d26ee`
 
 起点是一次**自查**：v1.18.3 按新规矩把材料 `openclaw` 更新到 `052d26ee`（工作树一并更新）后，
