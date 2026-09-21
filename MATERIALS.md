@@ -18,6 +18,7 @@
 > 现枚举根 = `D:\project\dsh1\vendor\_src` ⇒ **22 个目录 = 21 份材料 + 1 份上版快照**（即上面第 2 项那种「重点材料」
 > 现在连本体都取不到 —— `adr/0078` 对 `hl_mem` 的一手源码更正**无法复核**）。
 > **本表的数字一行未改**（按 §5 纪律：改数必须重跑枚举命令，而那个根已不可用）；逐份判定见 `adr/0089`。
+> ⇒ **当前态另见 §1.1**（生成器输出，v1.18.0 起）—— **下面这一节只作历史**。
 
 ## 1. 名册（8 项，按「对本项目的相关度」排序）
 
@@ -35,6 +36,61 @@
 **另有（非「外来材料」，但同属本工作区）：**
 - `dsh-shadow/.shadow/`（327 KB）——**记忆树本体**（我的思维/决策投影，是本项目的一等数据，不是参考资料）。
 - `.docs/`（850 KB）——本工作区的**证据文档**（`fix/<日期>/…`），按用户规则产出。
+
+### 1.1 名册（**当前态** —— 由生成器输出，**不要手写**）
+
+> **为什么单开一节**：上方 §1 是「**换盘前**」的快照（旧枚举根 `G:\project\dsh1` 已不存在），
+> 而**真实的现状**此前没有任何一节承载 —— 实测：`vendor/_src` 的 24 个目录里，**18 个**在本文里**连名字都搜不到**。
+> 本节由 `tools/materials-ledger.ts` **生成**，数字**现枚举**（`BACKLOG` T20 的 (a) 方案）。
+>
+> **⚠ 一条要紧的实测结论（2026-09-20）**：这 24 个目录里 **18 个根本没有 `.git`** ⇒
+> 它们**没有版本溯源**，**版本与远端都不可核**。所以**不要给它们填 HEAD** ——
+> 上方 §1 给 `archify` / `openviking` 等记的 HEAD 是**旧枚举根**的读数，**在本机的当前拷贝上复核不了**。
+> 这正是「**缺件不静默**」：要么留空并**标注不可核**，要么**重新克隆**把 `.git` 取回来。
+> （有 `.git` 的 6 个里，**5 个是浅克隆**、只 `rtk` 是全量。）
+
+```powershell
+node tools/materials-ledger.ts          # 默认根 = D:\project\dsh1\vendor\_src
+```
+
+<!-- 以下表格由 tools/materials-ledger.ts 输出；改它请重跑命令，勿手改 -->
+| 目录 | 远端 | HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |
+|---|---|---|---|---|---|---|
+| `agent-skills` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 196 文件 / 0.84 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
+| `archify` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 471 文件 / 38.20 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
+| `browser-harness` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 187 文件 / 3.36 MB | **187 文件 / 3,438 KB** | 未核（本表未逐项复核，**不编**） |
+| `data-engineer-handbook` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | （无 LICENSE 文件） | 124 文件 / 233.92 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
+| `ECC` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 3520 文件 / 49.68 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
+| `hackingtool` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 135 文件 / 2.64 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
+| `jev-ultrafast` | browser-use/jev-ultrafast | `1231850` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
+| `langextract` | google/langextract | `70cfb98` 2026-09-13 · Prepare v1.7.0 release (#539) **(浅)** | **Apache-2.0** | 180 文件 / 23.77 MB | **150 文件 / 12,809 KB** | 见 `adr/0090` |
+| `langextract--snapshot-v1.6.0` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 150 文件 / 12.48 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
+| `marker` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 265 文件 / 13.78 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
+| `MoneyPrinterTurbo` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 214 文件 / 201.60 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
+| `open-lovable` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 336 文件 / 2.81 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
+| `openclaw` | openclaw/openclaw | `c1c870a4` 2026-09-15 · fix(plugins): use vendor logos and one consist… **(浅)** | **MIT** | 43351 文件 / 711.91 MB | **43322 文件 / 575,043 KB** | 见 `references.md` §17/§19 |
+| `OpenSpec` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 1162 文件 / 8.56 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
+| `OpenViking` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **AGPL-3.0** | 4042 文件 / 98.75 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
+| `PageIndex` | VectifyAI/PageIndex | `ae16956` 2026-09-08 · Merge pull request #491 from VectifyAI/zmtomor… **(浅)** | **MIT** | 192 文件 / 54.09 MB | **163 文件 / 29,975 KB** | 未核（本表未逐项复核，**不编**） |
+| `rtk` | rtk-ai/rtk | `d402152` 2026-09-14 · Merge pull request #1422 from JackDanger/fix/s… | **Apache-2.0** | 605 文件 / 15.70 MB | **577 文件 / 6,287 KB** | 见 `adr/0087`/`adr/0090` |
+| `strix` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **Apache-2.0** | 505 文件 / 9.09 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
+| `superpowers` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 195 文件 / 1.63 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
+| `system_prompts_leaks` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | LICENSE · 首行「」 | 474 文件 / 14.47 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
+| `taste-skill` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 64 文件 / 1.68 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
+| `ui` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | **MIT** | 5799 文件 / 45.50 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
+| `web-access` | **（无 `.git` ⇒ 远端不可核）** | **（无 `.git` ⇒ 版本不可核）** | （无 LICENSE 文件） | 14 文件 / 0.09 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
+| `zvec-grep` | zvec-ai/zvec-grep | `5265395` 2026-09-04 · fix: surface embedding failures and avoid redu… **(浅)** | **Apache-2.0** | 402 文件 / 32.83 MB | **373 文件 / 18,101 KB** | 未核（本表未逐项复核，**不编**） |
+
+共 **24** 个目录（= 材料 + 可能存在的版本快照，如 `langextract--snapshot-v1.6.0`）。
+
+⚠ **无 `.git` 18 个** ⇒ 这批材料**没有版本溯源**，版本与远端**不可核**：
+`agent-skills` · `archify` · `browser-harness` · `data-engineer-handbook` · `ECC` · `hackingtool` ·
+`langextract--snapshot-v1.6.0` · `marker` · `MoneyPrinterTurbo` · `open-lovable` · `OpenSpec` ·
+`OpenViking` · `strix` · `superpowers` · `system_prompts_leaks` · `taste-skill` · `ui` · `web-access`
+⇒ **不得**给它们填 HEAD / 远端 —— 那只能来自**别处**，而那样填的数**复核不了**。
+
+⚠ `台账状态` 一列**不可机械推** ⇒ 只对**已核过**的给结论，其余 `未核`（**不编**）。
+逐项的「已吸收 / 未读 / 下一步」在本文 §2 与 `references.md`，**不在生成器的输出里**。
 
 ---
 
@@ -177,21 +233,14 @@ the configured root is the fallback for agentless calls and sessions without a c
 | **未读 / 未核** | 同 `references.md` §19.5 + §20.3：未装、未跑、未调付费 API；`snapshot.js` 未逐行；`docs/design.md` 与 4 份 measurement JSON 未读；浅克隆 |
 | **下一步** | 本切片目标已达成，**无待办**；若要看它**怎么跑**，需 Chrome + `TYPESAFE_API_KEY` + `TEXT_MODEL_API_KEY` —— **要花钱，须先问** |
 
-> ⚠ **口径边界（不许据此推断全表）**：本节**只补本轮请求的这一份**。
-> **实测的缺口**（2026-09-20）：现枚举根 `vendor/_src` 下**共 24 个目录**
-> （含 `langextract--snapshot-v1.6.0` 这类**版本快照**），而**本表里连名字都搜不到的就有 18 个** ——
-> `browser-harness` · `openclaw` · `rtk` · `strix` · `marker` · `OpenSpec` · `PageIndex` ·
-> `MoneyPrinterTurbo` · `web-access` · `zvec-grep` · `agent-skills` · `ECC` · `hackingtool` ·
-> `superpowers` · `taste-skill` · `system_prompts_leaks` · `data-engineer-handbook` · `open-lovable`。
-> （其中多份在 `references.md` §15 / `adr/0091` 有**题材内**记录 —— 缺的是**本台账的行**，不是「没人看过」。）
-> ⇒ **本表其余行本轮未重测**；**要改那些数，必须按 §5 重跑枚举命令**，不得照抄本节。
->
-> **复核命令**（口径：目录名是否在**本文件**里出现过至少一次）：
+> ⚠ **口径边界**：本节只写**这一份**的**状态面**；它的**名册面**（版本 / 许可 / 规模）在 **§1.1**（生成器输出）。
+> ✅ **原缺口已闭环（v1.18.0）**：本文原先对现枚举根的 **18 个**目录**连名字都没有**；
+> 现在 **§1.1 已把它们全部入账**，复核命令的缺口为 **0**：
 >
 > ```powershell
 > $m = Get-Content MATERIALS.md -Raw
 > Get-ChildItem D:\project\dsh1\vendor\_src -Directory |
->   Where-Object { $m -notmatch [regex]::Escape($_.Name) } | Select-Object -ExpandProperty Name
+>   Where-Object { $m -notmatch [regex]::Escape($_.Name) } | Select-Object -ExpandProperty Name   # ⇒ 空
 > ```
 
 ---
@@ -265,19 +314,28 @@ Table 1/2/3**（裁定 `adr/0080`；**A.1/A.2 表体与 Table 4/5 仍未读到**
 
 ## 5. 更新方法（**改这张表必须重跑这些命令**）
 
+**§1.1 的名册（当前态）＝一条命令** —— 它**就是**这张表的生成器（v1.18.0 补；`BACKLOG` T20 的 (a) 方案）：
+
 ```powershell
-cd G:\project\dsh1
-# 名册与规模（口径：递归、不排除 node_modules；要口径洁净的数字就加过滤）
-Get-ChildItem -Directory -Force | ForEach-Object { ... }        # 见建立时的命令
-# 每个 repo 的身份与版本
-foreach ($d in @('hl_mem','openviking','archify','awesome-dsh-plugin','ppt-master','voyager')) { git -C $d remote get-url origin; git -C $d log -1 --format='%h %ad %s' --date=short }
-# harness 分面规模（**排除 node_modules**）
-Get-ChildItem -Recurse -File <面> | Where-Object { $_.FullName -notmatch '\\node_modules\\' }
-# 许可证
-Get-ChildItem <repo> -File | Where-Object { $_.Name -match '^(LICENSE|LICENCE|COPYING)' }
+node tools/materials-ledger.ts                    # 默认根 = D:\project\dsh1\vendor\_src
+node tools/materials-ledger.ts <别的枚举根>        # 换根
 ```
 
-**纪律**：① 数字必须**写出枚举口径**（含不含 `node_modules`、含不含隐藏文件）；
+它的口径**自己打印**（含不含隐藏文件 / 含不含 `.git` / 许可怎么识别 / 取不到 git 时怎么降级），
+并且 **「无 `.git`」与「git 降级」分开报** —— 前者是说「这份材料**没有版本溯源**」，
+后者才是「工具取不到」。**两者不许混为一谈**（这正是 harness 那条「工件存在 ≠ 运行时能力」的同族纪律）。
+
+**§1 的历史快照不许改** —— 它是「换盘前」那次枚举。按本文一贯口径（**归档层改写＝伪造历史**），
+现在有了 §1.1，判据是「**当前态只认 §1.1**」。
+
+**其余（分面规模 / 许可抽查）**：
+
+```powershell
+# 分面规模（要口径洁净的数字就排掉 node_modules —— §6 的老教训）
+Get-ChildItem <repo> -Recurse -File | Where-Object { $_.FullName -notmatch '\\node_modules\\' }
+```
+
+**纪律**：① 数字必须**写出枚举口径**（含不含 `node_modules`、含不含隐藏文件、含不含 `.git`）；
 ② 发现「同一目录两个数字不同」时，**先查口径**再判谁错（本项目已踩过：同一目录 8 个 vs 9 个 `.py`，差额是 `__init__.py`）。
 
 ---
