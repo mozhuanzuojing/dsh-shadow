@@ -57,14 +57,14 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   // 时机：不在 apply() 里探测服务——Cordis 的服务是异步挂载的，apply 时可能尚未 provide
   //（见下方 queryDeps.fs 的懒解析注释：急切快照会拿到 undefined 并永久固化），那时探测会误报。
   // 可靠时机有两处：Cordis 保证服务就绪的 inject 回调，以及首个 agent/turn-stopping。
-  // v1.20.0：基线由 0.1.5-rc.1 抬到 0.1.7-alpha.1（ADR-0098）。抬升的**唯一**理由是
+  // v1.20.0：基线由 0.1.5-rc.1 抬到 0.1.7-alpha.2（ADR-0098）。抬升的**唯一**理由是
   // 预设形态：0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的
   // `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录
   // **没有读取者**（官方 shipped skill 原文：Nothing reads that directory any more）
   // ⇒ 形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。
   // 插件**体**（fs / tools / systemPrompt / goal / session 事件）实测未变（ADR-0098 §实测），
   // 变的是随包预设的形态 —— 所以这是一次**声明上的硬切**，不是插件面破坏。
-  const HOST_BASELINE = "0.1.7-alpha.1"; // 与 package.json 的 engines.dsh 同步维护
+  const HOST_BASELINE = "0.1.7-alpha.2"; // 与 package.json 的 engines.dsh 同步维护
   const reportHostGap = (kind: "error" | "warn", lines: string[]): void => {
     if (!lines.length) return;
     const head = kind === "error"
