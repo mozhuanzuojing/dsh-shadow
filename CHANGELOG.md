@@ -3,6 +3,88 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.0] 适配 DSH 0.1.7-alpha.1：预设迁到声明行 + Teams 移到 profile 平面 + 基线上抬（ADR-0098）
+
+用户指令：「dsh-shadow 插件 适配 dsh最新的0.1.7-alpha.1 版本」。**先在代码上核对清楚「适配」到底指什么，再动手** ——
+`0.1.7-alpha.1` 是 npm 的 `alpha` tag（`latest` 反而是 `0.0.1-rc.1`），而本机运行体是 `0.1.5-rc.2`。
+
+### ① 先量：0.1.5-rc.2 → 0.1.7-alpha.1 到底变了什么
+
+**结论：插件体没坏，坏的只有随包预设的形态。**判据是逐文件比对两面 `.d.ts`（本机 0.1.5-rc.2 安装体 vs
+`npm pack` 下来的 0.1.7-alpha.1 tarball）——**不是读 CHANGELOG、不是推断**：
+
+| 面 | 实测 |
+|---|---|
+| `dsh-goal` | **逐字未变**（0 行差异）—— `goal/changed` 契约没动 |
+| `dsh-session` 的 `user/message` / `assistant/message` | 事件**形状未变**；`SurfaceEventType` 只多了一个 `developer/message`，而 `core/collect.ts` 只认前两者、其余返回 `null` ⇒ **直接被忽略** |
+| `dsh-fs` | 只**新增** `watch()`；`readText`/`writeText`/`listDirectory`/`stat`/`processPath` 与 `FsWriteIntent`/`FsInfo.version`/`FS_STALE_VERSION` 全未变（ADR-0068 的并发纪律继续成立） |
+| `dsh-system-prompt` | `context({name,order,text})` 未变（只多了 `interpolate` 与两个 section 序号） |
+| `header.cwd` | 仍在 |
+| `SESSION_FORMAT_VERSION` | 3 → 4（本插件不读会话文件格式，无影响） |
+
+⇒ 抬升基线的理由是**形态**，不是接口。
+
+### ② 预设形态迁移：`~/.dsh/.agent-presets/<id>/` → declaration row
+
+- **0.1.7 把预设机制换掉了**：预设现在是 `@deepseek-ai/dsh-agent-preset` 的一条声明行
+  （`config: {id, name, description, order, plugins[]}`），随 **bundle** 的 `dsh.bundle.patch`
+  （**数组**）里的 patch 文件发布。旧目录形态在 0.1.7 上**没有任何读取者** —— 官方 shipped
+  `editing-cordis-compositions` skill 原文：*Nothing reads that directory any more*。
+- **落地**：新增 `presets/projection.patch.yml`（照抄 shipped `standard.patch.yml` 的结构）；
+  `package.json` 的 `dsh.bundle.patch` 由字符串改为数组
+  `["./cordis.patch.yml", "./presets/projection.patch.yml"]`；`files` 由 `agent-presets` 换成 `presets`；
+  删掉 `agent-presets/projection/`（其 `README.md` 经 `git mv` 迁到 `presets/README.md`，历史保留）。
+- ⚠ **这是一扇单向门**：迁成声明行后，≤0.1.6 不再认它。`$DSH_HOME/.agent-presets/projection/` 那份
+  **运行副本不删**（它是部署产物，服务仍在 0.1.5-rc.2 上的环境），但仓库不再提供它的源。
+
+### ③ Agent Teams 移到 profile 平面（T1）：预设里那一行删掉
+
+0.1.7 把 Teams 收成**一个 profile 层 bundle**：`@deepseek-ai/dsh-experimental-agent-team-profile`
+的 `cordis.patch.yml` 插 `agent-team`（服务）+ `tool-agent-team`（9 个工具）+ `ui-agent-team`，
+**并自己 disable** `tool-subagent-control` / `tool-subagent-list-agents` / `tool-subagent` / `tool-subagent-fork`。
+
+- ⇒ 用户 2026-09-16 定调的「**如非必要，不得轻易开子代理**」（v1.15.96 靠手工删 6 行维持）现在由**上游**执行。
+  本预设**不再持有任何委派行**（连 `tool-agent-team` 也删）—— 否则同一进程第二次挂载会因
+  `prompt section "team:policy" is already registered in this scope` 失败。
+- 名额上限改在 profile 里按 id override，且**必须重述该行全部 config 键**（patch 替换整份 `config`）：
+  `maxMembers: 4`（ADR-0056）+ `maxTasks` / `maxPendingMessagesPerMember` / `maxMessageBytes` / `disposalTimeoutMs`。
+
+### ④ 预设内容：以 0.1.7 `standard` 为基线重建（P-B + F1）
+
+原先的 projection 是**旧版 standard 的副本**（实测：`standard@0.1.5` + persona + 删 6 行）——
+它连 `command-goal` 与 `present` 都缺（0.1.5 的 standard 就已经有）。本轮按用户裁决**以 0.1.7 `standard`
+为基线重建**，只保留两处有意偏差：persona 文本、delegation 组不含委派行。F1 = 忠实照抄 standard 取值
+（`tool-ralph` → `disabled: true`、`tool-web` → `fetch: true`，吸收 `command-goal` / `present` /
+`tool-plugin-manager`）。persona 文本**逐字未改**（YAML 折叠语义下 **2915 字符**，与 `presets/README.md`
+记录的读数一致）。
+
+### ⑤ 棘轮与门
+
+- **新测试** `test/preset-projection.test.ts`：锁声明行身份、`bundle.patch` 是数组且两个 patch 都存在、
+  `agent-presets/` 已退役、**行清单 27 项逐字**、**T1 不变量（0 个 `tool-subagent*`、0 个 `tool-agent-team`）**、
+  F1 忠实性。行清单是**写死的棘轮**（同 `recall-envelope.test.ts` 的 `mode` 计数）：上游增删行时它**故意**变红，由人裁决。
+- **两处工具漂移一并修**：`tools/audit-layers.lib.ts` 的 `SOURCE_EXCLUDED_DIRS` 与
+  `FORBIDDEN_TARGETS_EVERYWHERE`、以及 `tools/audit-corpus.lib.ts` 的描述注释，原先都写着已退役的
+  `agent-presets` —— 现在是 `presets`（同一判据只该有一处实现）。
+
+### ⑥ 隔离真机实测（本机 `%TEMP%\dsh17`，**未触碰 live profile**）
+
+环境：全新 `DSH_HOME` + `dsh --from-default-profile` 建的 `shadow17`（web 面）与 `shadow17hl`（headless 面），
+`dsh` 本体 = `@deepseek-ai/dsh@0.1.7-alpha.1`。⚠ **pnpm 12 的构建审批键是 `allowBuilds`（映射），不是
+`onlyBuiltDependencies`** —— 后者会被静默忽略、`ERR_PNPM_IGNORED_BUILDS` 照旧；`pnpm approve-builds --all -y`
+写的就是它。
+
+| 面 | 结果 |
+|---|---|
+| 组合 | `dsh --profile shadow17 --dump-config`：`preset-projection` **组合出 27 行**、`tool-subagent*` **0**、`agent-team` 的 `maxMembers: 4` 生效（override 重述全部键） |
+| 激活 | web 面启动 **零 `did not activate` 警告**（headless 面报 `pending (waiting for service: agentPresets)` —— 预设是 web 面特性，**预期**，非缺陷） |
+| 真机写盘 | 隔离 home **补上用户提供的模型凭据**后跑两轮真模型回合（`--profile shadow17hl`）：`_index.md` / `_abstract.md` / `_meta.json` / **5 枚记忆原子** / **1 份 Episode 收口 consolidated 文件**（「由 2 个原子记忆在 Episode 收口时合并」）/ `audit/2026-09-22.jsonl` |
+| 读侧召回 | 第二轮 `read_shadow`（不带参数）正确报出日期目录 `2026-09-22/` 与条目数 ⇒ 采集→落盘→索引/摘要/meta→Episode 收口→审计流→**读侧召回**，整条链在 0.1.7 上**真的通** |
+| 能力探测 | 全程**无** `[dsh-shadow]` 告警 ⇒ `fs` / `tools` 两个硬依赖在 0.1.7 上齐备 |
+
+**仍未复核（不声称）**：Web UI 的预设选择器渲染 —— 未在浏览器里看过。
+（凭据只作进程环境变量传入，未写任何文件；隔离 home 用毕即删。）
+
 ## [v1.19.1] 历史纯动作文件**回收**（用户明示）+ T21/T22 收口 + 粒度判据收一处
 
 用户指令：「**1、回收 2、fix**」。

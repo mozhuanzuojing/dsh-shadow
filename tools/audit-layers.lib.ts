@@ -34,7 +34,7 @@ export const SOURCE_EXCLUDED_DIRS = [
   "node_modules",
   ...NON_REPO_DIRS,
   ".docs",
-  "agent-presets",
+  "presets",
   "docs",
 ];
 
@@ -63,7 +63,7 @@ export const DIRECTION_RULES = [
 ];
 
 /** 任何层都不许 import 的层：`(root)` = `index.ts`（Cordis 适配器只许被入口加载）。 */
-export const FORBIDDEN_TARGETS_EVERYWHERE = ["(root)", "agent-presets"];
+export const FORBIDDEN_TARGETS_EVERYWHERE = ["(root)", "presets"];
 
 /** 把相对路径解析成层名；根下直接的文件落为 `(root)`。 */
 export const layerOf = (relPath: string): string => {

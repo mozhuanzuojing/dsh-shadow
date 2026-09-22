@@ -3,21 +3,34 @@
 This preset is **package-owned**. It is the **single source of truth** shipped with
 `dsh-shadow`. Local installs are deployment artifacts, not development sources.
 
-- **Source of truth**: `agent-presets/projection/` in the `dsh-shadow` repository.
-- **Runtime copy**: `~/.dsh/.agent-presets/projection/` is a **deployment artifact**.
+- **Source of truth**: `presets/projection.patch.yml` in the `dsh-shadow` repository.
+- **Runtime form**: a `preset-projection` declaration row composed from the installed package.
 
-> **Do not edit the installed copy directly.**
-> Modify the source preset here and republish / re-install.
+> **Do not edit the composed row directly.**
+> Modify the source patch here and republish / re-install.
 
-## Install (deploy from package)
+## Install (0.1.7+: the preset ships as a bundle patch)
+
+Since `v1.20.0` / ADR-0098 this preset is a **`@deepseek-ai/dsh-agent-preset`
+declaration row** published by the package's own bundle — not a directory copied
+into `$DSH_HOME/.agent-presets/`. Installing the package **is** the install:
 
 ```bash
-cp -r agent-presets/projection ~/.dsh/.agent-presets/projection
+dsh plugin --profile <profile> add dsh-shadow
 ```
 
-The DSH roster mounts it via `agentPresets.standingKeyFor('projection')` and
-validates the mount. If you only use the runtime copy, re-copy from the package
-after each upgrade — never hand-edit it.
+`package.json` → `dsh.bundle.patch` lists **two** patches: `./cordis.patch.yml`
+(mounts the plugin row) and `./presets/projection.patch.yml` (declares the
+`projection` preset). The roster resolves it via
+`agentPresets.standingKeyFor('projection')` and validates the mount.
+
+⚠ **The legacy form is dead.** Before declaration rows, a preset was a directory
+`$DSH_HOME/.agent-presets/<id>/` holding `preset.yml` + `agent.cordis.yml`.
+0.1.7 has **no reader** for that directory — the shipped
+`editing-cordis-compositions` skill states it verbatim: *Nothing reads that
+directory any more*. If you installed the old copy into a `≤0.1.6` home, that
+copy is now a **frozen deployment artifact**: keep it only while you still run
+`≤0.1.6`, and never hand-edit it (this package no longer ships its source).
 
 ## What it configures
 
@@ -26,6 +39,19 @@ thinking agent, everything is a file, and its thinking/context/decisions are
 auto-persisted into the shadow memory tree by the `dsh-shadow` plugin, and it
 should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
 a host bundle and is always on; this preset only steers how the agent uses it.
+
+> **Change note — v1.20.0 / ADR-0098: the preset became a declaration row, and Agent Teams moved
+> to the profile plane.** Both changes are forced by DSH `0.1.7-alpha.1`:
+> 1. The preset is no longer a `$DSH_HOME/.agent-presets/<id>/` directory — it is a
+>    `@deepseek-ai/dsh-agent-preset` declaration row in `presets/projection.patch.yml`, applied
+>    through `package.json` → `dsh.bundle.patch` (now an **array**). See「Install」above.
+> 2. **This preset now carries no delegation-plane row at all** — the `tool-agent-team` row is
+>    gone too. 0.1.7 ships Agent Teams as ONE profile-level bundle
+>    (`@deepseek-ai/dsh-experimental-agent-team-profile`) which mounts `agent-team` /
+>    `tool-agent-team` / `ui-agent-team` **and itself disables `tool-subagent*`**. So the
+>    v1.15.96 discipline (「如非必要，不得轻易开子代理」) is now enforced *upstream* instead of by
+>    hand here, and this preset is a faithful copy of the shipped `standard` preset except for the
+>    persona. Both facts are locked by `test/preset-projection.test.ts`.
 
 > **Change note — v1.15.96+: Agent Team only, and「默认不派」.** 用户 2026-09-16 定调
 > 「子代理特别耗时、消耗 token；如非必要，不得轻易开子代理」⇒ this preset **removed every
@@ -157,19 +183,30 @@ What this preset adds in the composition, and what it requires:
 
 | Piece | Plane | Row |
 |---|---|---|
-| Team domain service `ctx.agentTeams` | **host** (profile `cordis.patch.yml`) | `@deepseek-ai/dsh-experimental-agent-team` with `config: { maxMembers: 4 }` |
-| Nine model-facing Team tools | **preset** (this file) | `@deepseek-ai/dsh-experimental-tool-agent-team` |
+| Team domain service `ctx.agentTeams` + the nine Team tools + the Team Web UI | **profile bundle** (0.1.7+) | `@deepseek-ai/dsh-experimental-agent-team-profile` |
+| Projection persona, plus the rest of the agent plane | **preset** (`presets/projection.patch.yml`) | `@deepseek-ai/dsh-agent-preset` |
 
 The nine tools are `spawn_teammate`, `send_message`, `list_agents`, `wait_agent`,
-`interrupt_agent`, `team_task_create`, `team_task_list`, `team_task_get`, `team_task_update`
-(`freshProvider: spawn` / `forkProvider: fork` mirror the delegation providers, which after
-v1.15.96 exist **only** here — the preset's own `tool-subagent*` rows were removed).
+`interrupt_agent`, `team_task_create`, `team_task_list`, `team_task_get`, `team_task_update`.
+Since v1.20.0 they come entirely from that profile bundle; the bundle also disables
+`tool-subagent-control` / `tool-subagent-list-agents` / `tool-subagent` / `tool-subagent-fork`,
+which is what makes Agent Teams the only delegation mechanism.
 
-**Prerequisite, and it fails silently.** The Team package injects `agentTeams`, so with no host row
-the row never activates — but `standingKeyFor` still reports a successful mount, and the nine tools
-simply never appear. That contradicts this repository's ADR-0049「缺件不静默」: the Teams wiring has
-**no** visible degradation path. Install the host row (durable session storage is already in the
-base profile) before expecting the tools.
+**Prerequisite, and how it fails now.** Install the bundle into the profile and add it to
+`dsh.profile.bundles`:
+
+```bash
+dsh plugin --profile <profile> add @deepseek-ai/dsh-experimental-agent-team-profile
+```
+
+To cap the roster, override the `agent-team` row **by id** in the profile's `cordis.patch.yml` —
+and restate **every** config key, because a patch replaces the whole `config`:
+`maxMembers`, `maxTasks`, `maxPendingMessagesPerMember`, `maxMessageBytes`, `disposalTimeoutMs`.
+⚠ The bundle defaults to `maxMembers: 8`; this deployment caps it at 4 (ADR-0056).
+
+Without the bundle the preset still mounts and `standingKeyFor` still reports success, but the
+Team tools never appear — that is the ADR-0049「缺件不静默」gap. Since v1.20.0 what you must check
+is the **bundle's install state**, not a hand-written host row.
 
 **Name collision — no longer applicable (v1.15.96).** Upstream documents a deliberate collision
 between the Team tools and the legacy continuable-subagent controls
@@ -220,10 +257,16 @@ The preset only configures how an agent uses `read_shadow` / shadow memory. It d
 DSH built-in plugins (`@deepseek-ai/dsh-*`) and `{{model}}` / `{{cwd}}`; it carries
 no user-machine-specific paths or keys, so it is portable.
 
-## Note on DSH preset management
+## Note on DSH preset management (current as of 0.1.7-alpha.1)
 
-`dsh` currently exposes **no** `dsh preset install/doctor` subcommand (verified:
-`dsh preset --help` treats the args as profile boot args). Agent presets are loaded
-from `~/.dsh/.agent-presets/<id>/` and validated by `agentPresets.standingKeyFor`.
-This package does **not** reinvent that mechanism — it documents the package-owned
-install flow instead.
+`dsh` still exposes **no** `dsh preset install/doctor` subcommand (verified: `dsh preset --help`
+treats the args as profile boot args). An agent preset is declared as an
+`@deepseek-ai/dsh-agent-preset` row inside a bundle's `dsh.bundle.patch` list and resolved by
+`agentPresets.standingKeyFor` — the shipped `standard` / `ptc` / `minimal` / `cordis` presets are
+exactly this shape in `dsh-web-app/presets/`. The registry row
+(`@deepseek-ai/dsh-agent-preset-registry`, `config.default`) is inserted by `dsh-web-app`; a preset
+bundle must **not** insert a second one.
+
+⚠ The `$DSH_HOME/.agent-presets/<id>/` directory form is **gone**: 0.1.7 has no reader for it (see
+「Install」). Any copy still sitting in a `≤0.1.6` home is a frozen deployment artifact, not a
+source.

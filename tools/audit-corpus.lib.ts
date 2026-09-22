@@ -9,7 +9,7 @@
 //
 // **本集问的问题**：「哪些目录**不属于这个仓库**」= 版本库内部（`.git`）+ 本机草稿（`_research`，已 `.gitignore`）。
 // ⚠ 它与 `tools/audit-layers.lib.ts` 的 `SOURCE_EXCLUDED_DIRS` **不是同一个问题**，两份**刻意不同**：
-//   那个问「哪些**不是源码**」（还要排 `dist` / `node_modules` / `docs` / `agent-presets` / `.docs`），
+//   那个问「哪些**不是源码**」（还要排 `dist` / `node_modules` / `docs` / `presets` / `.docs`），
 //   而 `audit-wiring` / `audit-drift` **故意**把 `dist` / `node_modules` 也走进来再分类
 //   （它们的 `isTestPath` 只认 `test/`，就是为此把这两处的 `.d.ts` 显式排除的）。
 //   ⇒ `SOURCE_EXCLUDED_DIRS` 由本文件的 `NON_REPO_DIRS` **派生**，`_research` / `.git` 只有本文件这一处。

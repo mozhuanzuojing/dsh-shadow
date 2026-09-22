@@ -122,7 +122,7 @@ npm run verify
 
 **结构门查什么**（v1.15.41，T13 前半）：① **文件级依赖图无环**；② **纯模块白名单零副作用**
 （`core/paths.ts` / `core/types.ts` / `core/util.ts` / `security/scrub.ts`，**带腐化自检**：白名单里的路径不存在**也算违规**）；
-③ **方向禁令**（`core↛query`、`core↛tools`、`persistence↛query`、`query↛tools`、**任何层↛`index.ts`**、任何层↛`agent-presets`）。
+③ **方向禁令**（`core↛query`、`core↛tools`、`persistence↛query`、`query↛tools`、**任何层↛`index.ts`**、任何层↛`presets`）。
 **它刻意不查**：**层间环** —— 实测存在 `{core, evidence, persistence}` 层间环，成因是 **`core/` 是混合脊柱**
 （`paths`/`types`/`util` 纯，`memory`/`writer-materialize`/`toolset-exec` 有副作用），**文件级并无环**；
 把它写成禁令会让门**当场就红**（假闸门）。CLI 会打印这条成因与**语料口径**。单独入口：`npm run audit:layers`。
@@ -451,7 +451,7 @@ node tools/module-ownership.ts   # 打印整张表 + **行数**（别在别处�
 - **证据门**：卡片没写 `source` → **不上投影**（卡片保留在磁盘）；解析不出来也不猜（无 LLM、不推断）。
 - **怎么查**：`shadow_query("关键词")`（全部类型）或 `shadow_query("…", { scope: ["resource"] })`（只查资源）；`read_shadow({ mode: "shadow-report" })` 的类型分布里会出现 `resource`。
 - **已知边界（v1.15.12 已修）**：`projectionStore` 开启且缓存命中时，缓存不感知资源目录变化（需 rebuild）；卡片属性是原文快照，系统不自动重抓。**现已两处覆盖**：写侧索引重建后自动失效 + 读侧**源指纹**（记忆日期目录 + `resources/`）不一致即重建。
-- **不属本轮**：投影模式预设里「资源侦察员 / 创意专家」的**工作方式**（那是预设平面），本版只做插件的类型与门——`agent-presets/` 本轮无改动。
+- **不属插件面**：投影模式预设里「资源侦察员 / 创意专家」的**工作方式**属于**预设平面**（`presets/projection.patch.yml`），本插件只做插件的类型与门。
 
 ### 护栏（读侧 + 写侧）
 
@@ -583,8 +583,8 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 
 | 项 | 值 |
 |---|---|
-| 验证基线 | **DSH `0.1.5-rc.1`**（在这一版上验证并运行） |
-| 声明 | `package.json` → `engines.dsh: ">=0.1.5-rc.1"` |
+| 验证基线 | **DSH `0.1.7-alpha.1`**（在这一版上验证并运行） |
+| 声明 | `package.json` → `engines.dsh: ">=0.1.7-alpha.1"` |
 | 更早版本 | **未经验证，不承诺可用** |
 
 **这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：**无任何代码读取**，仅散文注释提及；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**能观测到的防线是能力探测**——它只**报告**、不拦截：插件探测自己需要的宿主接口，缺哪个就报哪个：
@@ -596,7 +596,7 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 
 探测**不放在 `apply()`、也不放在 `inject` 回调**：Cordis 的服务是异步挂载的，`apply()` 时可能尚未 provide（会误报）；而 `ctx.inject(deps, cb)` **只在依赖就绪时才回调** —— 依赖缺失时回调根本不执行，把「缺 X」写进去等于「缺了就不报」（v1.15.3 修正的正是这一点）。故服务面检查**统一在首个 `agent/turn-stopping`**（此时宿主已完全挂载，且只报一次）。
 
-**为什么基线是 0.1.5-rc.1 而不是更早**：对照宿主包，本插件用到的接口（`fs` / `llm` / `agents` / `agentDefaultModel.currentSelection()` / `tools` / `systemPrompt` 六个服务，`session/event` / `agent/turn-stopping` 两个事件）在 `0.1.0-rc.7` 起就已存在——**这里没有已知的不兼容点**，基线表达的是「只在 0.1.5-rc.1 上验过」，不是「更早版本不兼容」。
+**为什么基线从 `0.1.5-rc.1` 抬到 `0.1.7-alpha.1`（ADR-0098）**：抬升的**唯一**理由是**预设形态**。0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的 `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录**没有任何读取者**（官方 shipped skill 原文 *Nothing reads that directory any more*）⇒ 随包预设的形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。**插件体本身没坏**——实测（对 0.1.5-rc.2 与 0.1.7-alpha.1 的 `.d.ts` 逐文件比对）：`dsh-goal` 逐字未变；`user/message` / `assistant/message` 事件形状未变（新增的 `developer/message` 被 `core/collect.ts` 直接忽略）；`fs` 只**新增** `watch`；`systemPrompt.context({name,order,text})` 未变；`session.header.cwd` 仍在。所以这是一次**声明上的硬切**，不是插件面破坏。完整证据与隔离实测见 `adr/0098`。
 
 
 ## 安装（持久化）
@@ -635,11 +635,11 @@ dsh --profile web --dump-config   # 确认无 Error:
 
 ## 投影模式（DSH agent 预设，生产包构成）
 
-`dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`agent-presets/projection/`）：
+`dsh-shadow` 插件本身经 bundle patch 在 **host 常开**。若要给会话一个"投影模式"的人格/纪律，可选用 DSH agent 预设 **`投影模式`**（id `projection`），**随本包入库**（`presets/projection.patch.yml`）：
 
-- 包内位置：`agent-presets/projection/`（`agent.cordis.yml` + `preset.yml` + `README.md`），是**生产包构成**，随包发布。
-- 内容：`standard` 的完整拷贝 + persona 改为"投影模式"——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9 立、**v1.13.2 补"编排者与专家不重做同一件事"**：① 先分活（不值得派的自己做、不许先做出成果再派）→ ② 准确激活专家 → ③ 提示词七要素（同一段原文只进一个专家的提示词，审查等要独立判断的场景例外）→ ④ **只验一错就要返工的那几条、其余按未复核处理并列出**（原「逐条复核」已废止）→ ⑤ 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）；**v1.15.4 起派活改为「team 优先」**（**v1.15.11 修正为「复用优先」**）：默认先判该不该派，该派时**按复用次数选机制**——**会复用 ≥2 次**（或需要共享任务板）才用官方 Agent Teams（具名 teammate、共享任务板用 revision 做 compare-and-set 协调），**只用一次就用 `subagent`**（要带会话上下文用 `subagent_fork`）——「优先 Team」只在复用成立，用一次时 teammate **比 subagent 更贵**（它多背 `team:policy` + 9 个工具 schema，**每成员每请求**）。**teammate 名额是会话终身累计、上限 4、不可释放、失败的创建也占名额**；往返纪律：**一次委派一条消息、最多 2 轮、避免 inactive 冷恢复**；名额耗尽不是死路（自己做 / `subagent` / `workflow`——后两者不吃名额）。**⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）与 **⑦ 创意与资源**（v1.14.1：先派资源侦察员——查资源库（`shadow_query` 带 `scope:["resource"]`，命中跳过外搜）→ 八类词 + 反向词（每类 ≤5、两轮无新资源即停）→ 评价 → 写卡进 `.shadow/resources/<名字>.md`；再派创意专家——只发散、不检索；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据）。
-- **安装到 DSH**：把 `agent-presets/projection/` 复制到 `~/.dsh/.agent-presets/projection/`（三个文件），或在 DSH 部署脚本中引用包内该目录。**本预设额外要求 host 组合提供 `ctx.agentTeams`**（profile 的 `cordis.patch.yml` 挂 `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.1`，包无 `dsh.bundle` 故 `dsh plugin add` 不会自动插行）；缺该行时预设仍报挂载成功、但 9 个 Team 工具**静默不出现**——这是 ADR-0049「缺件不静默」的一个已知例外。另：`tool-agent-team` **每个进程只能挂一次**（第二次报 `prompt section "team:policy" is already registered in this scope`），细节见预设 README。
+- 包内位置：`presets/projection.patch.yml`（`@deepseek-ai/dsh-agent-preset` 声明行）+ `presets/README.md`，是**生产包构成**，随包发布。`package.json` → `dsh.bundle.patch` 是**数组**：`./cordis.patch.yml`（插件行）+ `./presets/projection.patch.yml`（预设声明行）。
+- 内容：**0.1.7 shipped `standard` 预设的忠实副本** + persona 改为"投影模式"（唯二的两处有意偏差：persona 文本、delegation 组不含任何委派行）——agent 是独立思维意识体、思维/决策主动沉淀进 `shadow`，缺上下文先 `read_shadow` / `recall_shadow`（内部 `mode:recovery`，勿自造 `mode:recall`）；**并自带「按任务类型派子代理专家」的工作方式**（v1.12.9 立、**v1.13.2 补"编排者与专家不重做同一件事"**：① 先分活（不值得派的自己做、不许先做出成果再派）→ ② 准确激活专家 → ③ 提示词七要素（同一段原文只进一个专家的提示词，审查等要独立判断的场景例外）→ ④ **只验一错就要返工的那几条、其余按未复核处理并列出**（原「逐条复核」已废止）→ ⑤ 并行/扇出；完整版见用户级规则 `moe-subagent-dispatch`）；**v1.15.4 起派活改为「team 优先」**（**v1.15.11 修正为「复用优先」**）：默认先判该不该派，该派时**按复用次数选机制**——**会复用 ≥2 次**（或需要共享任务板）才用官方 Agent Teams（具名 teammate、共享任务板用 revision 做 compare-and-set 协调），**只用一次就自己做**（本预设已无 `subagent` / `subagent_fork` 行）——「优先 Team」只在复用成立，用一次时 teammate **比 subagent 更贵**（它多背 `team:policy` + 9 个工具 schema，**每成员每请求**）。**teammate 名额是会话终身累计、上限 4、不可释放、失败的创建也占名额**；往返纪律：**一次委派一条消息、最多 2 轮、避免 inactive 冷恢复**；名额耗尽不是死路（自己做 / `workflow` 扇出——后者不吃名额）。**⑥ 契约与根因卫生**（v1.13.1：根因三部曲、禁止生造词、结论进 shadow/项目文档（对应全局 memory 存档）、交手前/改口径后四查——强化 `~/.agents/AGENTS.md`，非全文拷贝）与 **⑦ 创意与资源**（v1.14.1：先派资源侦察员——查资源库（`shadow_query` 带 `scope:["resource"]`，命中跳过外搜）→ 八类词 + 反向词（每类 ≤5、两轮无新资源即停）→ 评价 → 写卡进 `.shadow/resources/<名字>.md`；再派创意专家——只发散、不检索；卡片必须有 `source` 才进认知查询，`启发度` 要有引用证据）。
+- **安装到 DSH**：**装包即装预设** —— `dsh plugin --profile <p> add dsh-shadow`（bundle 自带的两个 patch 一起生效），不再需要复制目录。**Teams 不在本预设里**：0.1.7 起它由 profile 层的 `@deepseek-ai/dsh-experimental-agent-team-profile` bundle 提供（它插 `agent-team` / `tool-agent-team` / `ui-agent-team`，并自己 disable `tool-subagent*`）；不装该 bundle 时预设仍报挂载成功、但 9 个 Team 工具**静默不出现**——这是 ADR-0049「缺件不静默」的已知例外。要改名额上限（本部署为 4，见 ADR-0056），在 profile 的 `cordis.patch.yml` 里**按 id** override `agent-team`，且**必须重述该行全部 config 键**（patch 替换整份 `config`）。细节见预设 README。
 - 校验：经 `agentPresets.standingKeyFor('projection')` 挂载校验通过；改动后按 `copy → standingKeyFor(新 id) → remove` 做一次**全新挂载校验**（`projection` 已挂载时 `standingKeyFor` 返回既有世代，不会重读文件）。
 - 注意：预设引用 DSH 标准内置插件（`@deepseek-ai/dsh-*`）与 `{{model}}/{{cwd}}` 模板变量，不依赖用户机器专属配置；`dsh-shadow` 本身在 host 常开，预设只在 persona 里指引 agent 使用 `read_shadow`。
 
@@ -650,5 +650,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.19.1`**（**历史回收 + 两处缺口收口**：按指令把 8,919 个纯动作回声搬出记忆树、进了审计流（记忆文件降到 5,423、纯动作 0），原内容全量留档、逐条可逐字还原 ⇒ 可逆；审计流另接进读侧的调试输出（可见可查，**不**进召回正文）；写侧分流补上端到端测试）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.0`**（**DSH 0.1.7-alpha.1 适配**：随包 agent 预设从 `~/.dsh/.agent-presets/` 目录形态迁到声明行形态、Agent Teams 改由 profile 层 bundle 提供（本预设不再持有任何委派行）、验证基线与 `engines.dsh` 一并抬到 0.1.7-alpha.1；并在隔离真机上实测组合/激活/落盘三项）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 
