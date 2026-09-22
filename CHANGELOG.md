@@ -85,6 +85,24 @@
 **仍未复核（不声称）**：Web UI 的预设选择器渲染 —— 未在浏览器里看过。
 （凭据只作进程环境变量传入，未写任何文件；隔离 home 用毕即删。）
 
+### ⑦ live 部署实测（用户把日常环境升到 0.1.7-alpha.1 之后，同日补记）
+
+用户随后把 `~/.dsh/profiles/web` 升到 `0.1.7-alpha.1`（原来手写的两行 Teams 换成
+`@deepseek-ai/dsh-experimental-agent-team-profile` **一个 bundle**）并重启宿主。**这是比 ⑥ 更强的证据**——
+每一步都发生在真实日常环境里：
+
+- `dsh --version` = **`0.1.7-alpha.1`**；profile 的 `node_modules/dsh-shadow` 是指向本仓库工作树的 Junction，
+  读到 `version: 1.20.0` / `engines.dsh: >=0.1.7-alpha.1` / `presets/` 随包 / `agent-presets/` 已不存在
+- `dsh --profile web --dump-config` 同时出现 `agent-preset-registry` / `preset-standard` /
+  团队三行（`agent-team` / `tool-agent-team` / `ui-agent-team`）/ `dsh-shadow` / **`preset-projection`**
+- 本会话持续落下记忆原子、`_meta.json` 同步更新、审计流记到本 session；
+  `recall_shadow` 恢复包的时间上界追到刚刚写入的原子 ⇒ **读侧在 0.1.7 上通**
+
+⇒ 预设、插件、读写路径在**真实日常环境**里全部实活。
+
+⚠ **一处实现事实**（供后来者）：`@deepseek-ai/dsh-agent-preset` 与 `-registry` **随 `@deepseek-ai/dsh`
+本体发布**（在 dlx 树里），**不在** profile 的 `node_modules` 里 ⇒ 声明行这条路径不要求插件包自带它们。
+
 ## [v1.19.1] 历史纯动作文件**回收**（用户明示）+ T21/T22 收口 + 粒度判据收一处
 
 用户指令：「**1、回收 2、fix**」。

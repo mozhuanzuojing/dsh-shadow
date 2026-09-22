@@ -78,12 +78,16 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 必然结果，不是错误。⇒ 仍在 `≤0.1.6` 上运行的环境，**不删**其 `$DSH_HOME/.agent-presets/projection/`
 运行副本（部署产物），但仓库不再提供它的源。
 
-⚠ **具体后果（本机实测确认，用户 2026-09-22 裁为「接受」）**：本机 live profile
-（`~/.dsh/profiles/web`）以 `link:` 直接指向本仓库工作树，而它的 `node_modules` 里只有 0.1.5 的
-`@deepseek-ai/dsh-agent-presets`（复数），**没有** 0.1.7 的 `@deepseek-ai/dsh-agent-preset`（单数）。
-⇒ 该 profile **下次重启时 `dsh-shadow` 这一行会装不上**，shadow 记忆与 `read_shadow` 随之消失。
-三条出路：① 把该 profile 的 `link:` 指向 `v1.19.1` 的独立副本（推荐，日常环境零变化）；
-② 把该 profile 升到 `0.1.7-alpha.1`；③ 先把它从 `bundles` 里摘掉。**本次选择的是「接受」。**
+⚠ **具体后果（本机实测确认）**：本机 live profile（`~/.dsh/profiles/web`）以 `link:` 直接指向本仓库
+工作树，而它的 `node_modules` 里只有 0.1.5 的 `@deepseek-ai/dsh-agent-presets`（复数），**没有** 0.1.7 的
+`@deepseek-ai/dsh-agent-preset`（单数）。⇒ 该 profile 在 0.1.5 上重启时 `dsh-shadow` 这一行会装不上。
+三条出路：① 把该 profile 的 `link:` 指向 `v1.19.1` 的独立副本；② 把该 profile 升到 `0.1.7-alpha.1`；
+③ 先把它从 `bundles` 里摘掉。
+
+**实际走向（2026-09-22 补记）**：用户随后选了 **②** —— 把 live profile 升到 `0.1.7-alpha.1`，把原来手写的
+`@deepseek-ai/dsh-experimental-agent-team` + `-tool-agent-team` 两行换成
+`@deepseek-ai/dsh-experimental-agent-team-profile` **一个 bundle**（正合 §2.2 的形态），并重启宿主。
+⇒ 这一格由「已接受的代价」升级为**活体验证**，见 §4.3。
 
 ### 3.2 迁移是**单向门**（这是本 ADR 存在的主要原因）
 
@@ -131,10 +135,29 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 **工具面副产品**：pnpm 12 的构建审批键是 **`allowBuilds`（映射）**，不是 `onlyBuiltDependencies` ——
 后者被静默忽略、`ERR_PNPM_IGNORED_BUILDS` 照旧；`pnpm approve-builds --all -y` 写的就是它。
 
+### 4.3 live 部署（用户把日常环境升到 0.1.7-alpha.1 之后，2026-09-22 补记）
+
+**这是比 §4.2 更强的证据**：§4.2 是隔离 home，本节的每一步都发生在**用户真实日常环境**里。
+
+| 项 | 实测 |
+|---|---|
+| 宿主 | `dsh --version` → **`0.1.7-alpha.1`**（运行体 = `dlx/3452292f…/@deepseek-ai/dsh@0.1.7-alpha.1`，PID 6488） |
+| profile | `~/.dsh/profiles/web` 的 bundles = `dsh-base` / `dsh-web-app` / `dsh-experimental-agent-team-profile` / `dsh-shadow` / `…voice-input-bundle` —— 原来手写的两行 Teams 已换成**一个 bundle**（正合 §2.2） |
+| 本插件 | profile 的 `node_modules/dsh-shadow` 是指向本仓库工作树的 **Junction**：`version: 1.20.0`、`engines.dsh: >=0.1.7-alpha.1`、`presets/` 随包、`agent-presets/` 不存在 |
+| **组合** | `dsh --profile web --dump-config` 同时出现 `agent-preset-registry` / `preset-standard` / 团队三行（`agent-team` / `tool-agent-team` / `ui-agent-team`）/ `dsh-shadow` / **`preset-projection`** |
+| **活体写入** | 本会话（`session-529db010…`）在 `.shadow/2026-09-22/` 持续落下记忆原子（实测 16:08:11 → 16:09:12 连续 6 枚）、`_meta.json` 同步更新、当天审计流记到该 session 的动作 |
+| **活体读取** | `recall_shadow` 返回的恢复包**时间上界 = 16:09:23**（看得见刚写入的原子）⇒ 读侧在 0.1.7 上通 |
+
+⚠ **一处与「预设包」有关的实现事实**（供后来者）：`@deepseek-ai/dsh-agent-preset` 与
+`@deepseek-ai/dsh-agent-preset-registry` **随 `@deepseek-ai/dsh` 本体发布**（在 dlx 树里），
+**不在** profile 的 `node_modules` 里 —— 所以声明行这条路径**不要求插件包自带它们**，
+包名写对即可（本仓 `presets/projection.patch.yml` 只写 `@deepseek-ai/dsh-agent-preset`，正确）。
+
 ## 5. 边界与未复核
 
 - **完整回合 + 召回：已跑通**（凭据由用户在本轮提供，只作进程环境变量、未写任何文件）。端到端链路
   **采集 → 落盘 → 索引/摘要/meta 物化 → Episode 收口 → 审计流 → 读侧召回**在 0.1.7 上真的通。
+- **live 部署：已跑通**（§4.3）—— 用户日常环境升到 0.1.7 后，本版本的预设、插件与读写路径全部实活。
 - **仍未复核**：Web UI 的预设选择器渲染（未在浏览器里看过）。
 - **本 ADR 不主张**「插件体在 0.1.7 上的一切行为都与 0.1.5 相同」：只主张 §4.1 列出**比对过**的那些面。
 - **未做的扩张**：0.1.7 新增的 `plugin_manager` / `dsh-config-editor` / `fs.watch` 等能力**一律未接入** ——
