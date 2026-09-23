@@ -1253,7 +1253,7 @@
 ### ✅ D7. `hits` 的范围：其它读入口算不算命中？—— **已结案（v1.20.6，选 ②）**
 
 - **决定（用户）**：**② 所有返回 Memory Atom 的读入口都算命中**（接受探测性 `shadow_query` 抬 hotness）。
-- **落地**：`core/served-hits.ts` 的 `recordServedHits` 为唯一写入；主题召回 / recovery / query / episode / decision / task / context 接线；`test/hit-accumulation.test.ts` ⑤⑥ 锁 recovery 与 query。
+- **落地**：`noteServedAtoms` → `recordServedHits`；主题召回 rel 来自 `renderWithinBudget`；ReadQuery 用命名提取器；`test/hit-accumulation.test.ts` ①b 锁两集合 + ⑤–⑩ 锁各读入口。
 - **不选 ③**：不引入 `readHits` 第二计数。
 - **原选项表与代价对比**见本条历史正文（归档在下方，不改正）。
 

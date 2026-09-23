@@ -106,3 +106,13 @@ AssertionError: 被返回的记忆必须在 _meta.json 里有记录（hits 是�
   `query/topic-recall.ts`，ReadQuery 各 handler 在返回具体 rel 后调用。
 - **测试**：`test/hit-accumulation.test.ts` ⑤ recovery · ⑥ query。
 - **不改正文**：上文「只在主题召回路径累积 / 立 D7」是 v1.15.24 的历史口径，保留作归档。
+
+## 补记（主题召回三政策分家）
+
+- **复发面加深**：`servedRels`（hits）与 `servedDetail`（冷却）的 locality 从编排旁路拆出——
+  `retrieval/budget-render.ts` 的 `renderWithinBudget` **在接口上**同时返回两集合；
+  `retrieval/cooldown.ts` 的 `prepareCooldown` / `filterCooled` / `commitDetailCooldown` 管冷却两拍；
+  打分在 `query/topic-score.ts`；编排 `query/topic-recall.ts` 只串起来。
+- **写入门**：生产路径只调 `noteServedAtoms`（内调 `recordServedHits`）；ReadQuery 用结构型
+  `relsFromMemoryRefs` / `relsFromDecisionRels` / `relsFromSources` 取 rel，再进同一门。
+- **不改正文 / 不改 v1.20.6 补记**：上文历史口径保留。

@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.7] 主题召回三政策分家 + 已返回 rel 提取
+
+加深 ADR-0067 复发面：`servedRels`（hits）与 `servedDetail`（冷却）不再同居于编排旁路。
+
+- **预算渲染**：`retrieval/budget-render.ts` 的 `renderWithinBudget` 在接口上返回两集合；`servedDetail ⊆ servedRels`；forceL0 降级后再判 `…`。
+- **冷却两拍**：`retrieval/cooldown.ts` 的 `prepareCooldown` / `filterCooled` / `commitDetailCooldown`（关冷却时 turn≡1，现语义）。
+- **打分**：`query/topic-score.ts` 的 `scoreTopicCandidates` → `{ scored, entryList }`；编排 `query/topic-recall.ts` 只串起来。
+- **写入门**：生产只调 `noteServedAtoms`；ReadQuery 用 `relsFromMemoryRefs` / `relsFromDecisionRels` / `relsFromSources`。
+- **测试**：`hit-accumulation` ①b 主锁两集合 + ⑦–⑩ 冒烟；`lifecycle-signal-table` 参数信号改指 `topic-score.ts`。
+- **文档**：CONTEXT「已返回 rel 提取」；ADR-0067 补记；BACKLOG D7 指针。语义不变，不改 `servedDetail` 判据。
+
 ## [v1.20.6] `dist/` 不再进 git + 七期架构加深（D7=②）
 
 ### A. `dist/` 不再进 git（正常发包模型）

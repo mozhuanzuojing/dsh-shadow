@@ -25,7 +25,9 @@ import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
 import { today, stamp, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { recordServedHits } from "../core/served-hits.js";
+import {
+  noteServedAtoms, relsFromMemoryRefs, relsFromDecisionRels, relsFromSources,
+} from "../core/served-hits.js";
 import {
   attributeOutcomes, outcomeReadout, renderOutcomeReadout,
   type DecisionRecord,
@@ -63,7 +65,7 @@ const matOpts = (deps: any, ctx: ReadCtx) => ({
 
 /** D7=②：凡返回具体记忆 rel 的 mode 都记 hits（不计 toolset / index 等无 Atom 出口）。 */
 const noteAtomHits = async (ctx: ReadCtx, rels: readonly string[]) => {
-  await recordServedHits(ctx.fs, ctx.ws, rels, {
+  await noteServedAtoms(ctx.fs, ctx.ws, rels, {
     observerId: ctx.agent?.id ? String(ctx.agent.id) : undefined,
   });
 };
@@ -110,13 +112,13 @@ const episodeDecision: ReadQuery = {
       const shown = needle
         ? eps.filter((e) => [e.title, e.objective, ...e.entries, ...e.materials, ...e.decisions.map((d) => d.text), ...e.actions.map((a) => a.text)].join(" ").toLowerCase().includes(needle))
         : eps;
-      await noteAtomHits(ctx, shown.flatMap((e) => e.memoryRefs));
+      await noteAtomHits(ctx, relsFromMemoryRefs(shown));
       return scrubFinal(RECALL_PREFIX + body + flushWarn);
     }
     const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
-    const rels: string[] = [];
-    for (const k of Object.keys(dl.byEntry)) for (const d of dl.byEntry[k]) rels.push(d.rel);
-    await noteAtomHits(ctx, rels);
+    const decisionItems: { rel: string }[] = [];
+    for (const k of Object.keys(dl.byEntry)) for (const d of dl.byEntry[k]) decisionItems.push({ rel: d.rel });
+    await noteAtomHits(ctx, relsFromDecisionRels(decisionItems));
     return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + appendOutcomeReadout(dl) + flushWarn);
   },
 };
@@ -134,7 +136,7 @@ const task: ReadQuery = {
     const shown = needle
       ? tasks.filter((t) => [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.outcomes, ...t.evidence].join(" ").toLowerCase().includes(needle))
       : tasks;
-    await noteAtomHits(ctx, shown.flatMap((t) => t.memoryRefs));
+    await noteAtomHits(ctx, relsFromMemoryRefs(shown));
     return scrubFinal(RECALL_PREFIX + body + flushWarn);
   },
 };
@@ -153,7 +155,7 @@ const context: ReadQuery = {
     const shown = needle
       ? refs.filter((r) => `${r.subject} ${r.value}`.toLowerCase().includes(needle))
       : refs;
-    await noteAtomHits(ctx, shown.flatMap((r) => r.source));
+    await noteAtomHits(ctx, relsFromSources(shown));
     return scrubFinal(RECALL_PREFIX + body + flushWarn);
   },
 };
@@ -186,7 +188,7 @@ const recovery: ReadQuery = {
     } else {
       out = renderRecovery(topic, tasks, refs);
     }
-    await noteAtomHits(ctx, chosen ? chosen.memoryRefs : []);
+    await noteAtomHits(ctx, chosen ? relsFromMemoryRefs([chosen]) : []);
     return scrubFinal(RECALL_PREFIX + out + flushWarn);
   },
 };
@@ -245,7 +247,7 @@ const shadowQuery: ReadQuery = {
       deps.noteDegrade?.("queryLog", `观测记录写入失败（${obs.reason}）`, "查询观测数据**丢失**：`mode:\"query-log\"` 的统计建立在被削过的样本上，而它只显示「尚无记录」，与「从没查过」不可区分");
     }
     // D7=②：返回的 ShadowNode.source（记忆 Atom / 资源卡路径）都记一次 hits。
-    await noteAtomHits(ctx, items.map((it) => it.source).filter(Boolean));
+    await noteAtomHits(ctx, relsFromSources(items));
     return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + truncNote + flushWarn);
   },
 };

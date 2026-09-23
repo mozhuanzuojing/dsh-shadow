@@ -1,4 +1,4 @@
-// dsh-shadow —— core/served-hits.ts：召回已返回 hits 的**唯一写入 seam**（D7=②，架构加深 P3）。
+// dsh-shadow —— core/served-hits.ts：召回已返回 hits 的写入 seam + 已返回 rel 提取（D7=②）。
 //
 // 语义（用户拍板）：`hits` / `confirmedBy` =「被任何返回 Memory Atom 的读入口读过」。
 //   主题召回、recovery、shadow_query、episode/decision/task/… 凡落到具体记忆 rel 的集合都算。
@@ -7,7 +7,11 @@
 // **不计**（调用方负责不传）：纯配置/观测 mode、废止消息、空命中、toolset 巡检。
 // debug 诊断拼装本身不另算第二次 —— 只对真正返回给调用方的 Atom rel 调本函数一次。
 //
-// 纪律：生产路径禁止在别处对 `rec.hits++`；一律走 `recordServedHits`（判据收一处）。
+// 纪律：
+//   · 生产路径禁止在别处对 `rec.hits++`；
+//   · 编排 / ReadQuery **只许**走 `noteServedAtoms`（勿绕门直调 `recordServedHits`）；
+//   · `recordServedHits` 留给门内与单测。
+// 提取器只收结构形状 —— **禁止本文件 import query/**（audit:layers）。
 import { today } from "./util.js";
 import { mutateMeta } from "../persistence/meta.js";
 
@@ -49,4 +53,46 @@ export const recordServedHits = async (
       next[p] = rec;
     }
   });
+};
+
+/**
+ * 生产路径写入门：主题召回传 turn；ReadQuery 不传（与旧 noteAtomHits 一致）。
+ */
+export const noteServedAtoms = async (
+  fs: any,
+  ws: string,
+  rels: readonly string[],
+  opts?: { turn?: number; observerId?: string },
+): Promise<void> => {
+  await recordServedHits(fs, ws, rels, opts);
+};
+
+/** episode / task / recovery：`shown.flatMap(x => x.memoryRefs)`。 */
+export const relsFromMemoryRefs = (
+  items: readonly { memoryRefs?: readonly string[] | null }[],
+): string[] => items.flatMap((it) => (Array.isArray(it.memoryRefs) ? [...it.memoryRefs] : []));
+
+/** decision：已收集的 `{ rel }` 列表。 */
+export const relsFromDecisionRels = (
+  items: readonly { rel?: string | null }[],
+): string[] => items.map((it) => String(it.rel || "").trim()).filter(Boolean);
+
+/** context 的 `r.source` 与 shadow_query 的 `it.source`。 */
+export const relsFromSources = (
+  items: readonly { source?: string | readonly string[] | null }[],
+): string[] => {
+  const out: string[] = [];
+  for (const it of items) {
+    const s = it.source;
+    if (Array.isArray(s)) {
+      for (const x of s) {
+        const t = String(x || "").trim();
+        if (t) out.push(t);
+      }
+    } else {
+      const t = String(s || "").trim();
+      if (t) out.push(t);
+    }
+  }
+  return out;
 };
