@@ -1,7 +1,7 @@
 // dsh-shadow —— selfhood/dream/compress.ts：Offline Compression Cycle（读 TemporalGraph 的来源轨迹 → Pattern Engine + Alternative Engine → DreamResult）。
 // Pattern 输出是 Observation（结构 + 频率 + 候选解释），不是 Conclusion/Principle；causality 归 v0.28。
 import type { DreamPattern, Hypothesis, DreamResult, AlternativeExplanation } from "./types.js";
-import { readObservationTraces } from "../../observer/trace.js";
+import { readObservationTraces } from "../../subject/observer/trace.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
 import { today } from "../../core/util.js";
 // 「正/负结果」判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。

@@ -16,7 +16,7 @@ import {
   L0_MAX, L1_MAX, SIDECAR_NAME,
   deriveL0, deriveL1, renderSidecar, parseSidecar, sidecarDrift, sidecarRel,
   type MemoryFace,
-} from "../dist/core/abstract.js";
+} from "../dist/core/view/abstract.js";
 import { listMemories } from "../dist/persistence/files.js";
 
 const face = (name: string, time: string, entry: string, topics: string[] = []): MemoryFace => ({ name, time, entry, topics });
@@ -47,7 +47,7 @@ const face = (name: string, time: string, entry: string, topics: string[] = []):
   // 截断只在超长时发生（`cap(x) === x` 当 x 未超长）——
   // 这条不变量重要：若短文本也加省略号，「每次读都略有不同」会让棘轮恒红。
   // 注：抽取**只剥标题行**（`#` 开头），**不剥列表记号** `- ` —— 那是文档化行为
-  //（L1 的正文由 bullet 组成，故 L0 会带上 `- `；见 `core/abstract.ts` 的 `deriveL0` 注释）。
+  //（L1 的正文由 bullet 组成，故 L0 会带上 `- `；见 `core/view/abstract.ts` 的 `deriveL0` 注释）。
   assert.equal(deriveL0("## 概览\n短文本"), "短文本", "未超长时不得加省略号");
   assert.equal(deriveL0("## 概览\n- 短文本"), "- 短文本", "列表记号按文档化行为保留（只剥标题）");
   console.log("✔ ② L0 由 L1 确定性抽取；层间不一致在**构造上**不可能（L0 = f(L1)）");

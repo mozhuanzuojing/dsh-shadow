@@ -21,7 +21,7 @@ export const validateAtomProjection = (atom: AtomLike): AtomProjectionVerdict =>
   //   保留该分支无害（要么是前瞻、要么是遗漏），但不得据它推论「session 原子被挡住了」。
   //
   // `kind === "metadata"` 这一支**可达，且已按 ADR-0066 校准**：判据收敛到
-  //   `core/episode.ts` 的 `isSessionMetadataAtom`（精度 100%、只挡 1.3% 的库）。
+  //   `core/view/episode.ts` 的 `isSessionMetadataAtom`（精度 100%、只挡 1.3% 的库）。
   //   此前它按旧判准**拦掉 66.9% 的库**，使主题召回（不过 kind 门）与 `shadow_query`
   //   （过 kind 门）对同一份语料可见性相差 66.9% —— 那是**漂移**：同一条记忆在两个入口
   //   一处可见一处不可见。校准后两条读路径可见性一致（91.1% 进入投影）。

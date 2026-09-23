@@ -1,7 +1,7 @@
 // dsh-shadow —— Phase 3 Knowledge Engine（保留树：规范→章节→条款→约束，不转 chunk）。
 import assert from "node:assert/strict";
 import { createKnowledgeEngine, renderKnowledgeTree, retrieveKnowledge, buildCorpusTree, renderRetrieved, flattenSections, progressiveDisclosure, refineTree, buildTree, isBoilerplateLine, sectionPath, renderKnowledgeRetrieval } from "../dist/core/knowledge/engine.js";
-import { parseMemory } from "../dist/core/episode.js";
+import { parseMemory } from "../dist/core/view/episode.js";
 
 // 一段带层级标题的规范文档
 const SPEC = `# spec/u8-openapi-biz-sa.md

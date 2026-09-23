@@ -10,7 +10,7 @@ import * as mod from "../dist/index.js";
 import { deprioritizeFactor, DEPRIORITIZE_FACTOR, approxEntries } from "../dist/retrieval/rank.js";
 import { truncationNote, renderIndexBudgeted } from "../dist/retrieval/render.js";
 import { NEVER_WORSE_UNIT } from "../dist/retrieval/loss.js";
-import { intentOf } from "../dist/core/intent.js";
+import { intentOf } from "../dist/core/admission/intent.js";
 import { today } from "../dist/core/util.js";   // fixture 日期必须**相对今天**（v1.15.38 约定，见下方 seeds 注释）
 
 const { apply, name, inject } = mod;

@@ -1,6 +1,6 @@
 // dsh-shadow —— ADR-0048⑥：授权范围搜索（zg authorization 思想，防越权泄漏）。
 import assert from "node:assert/strict";
-import { inScope, authorizeScope } from "../dist/core/authorization.js";
+import { inScope, authorizeScope } from "../dist/core/admission/authorization.js";
 
 const scope = { workspace: "D:/project/dsh1", allowed: ["D:/project/shared"], denied: ["D:/project/dsh1/.secret"] };
 assert.equal(inScope("D:/project/dsh1/vendor/dsh-shadow/README.md", scope), true, "workspace 内放行");

@@ -1,6 +1,6 @@
 // dsh-shadow —— v1.8.0 AtomKind：memory 二级属性（非新 type），task/metadata/experience 分类 + createdBy。
 import assert from "node:assert/strict";
-import { deriveAtomKind, deriveCreatedBy } from "../dist/core/episode.js";
+import { deriveAtomKind, deriveCreatedBy } from "../dist/core/view/episode.js";
 
 // kind：task
 assert.equal(deriveAtomKind({ entry: "tmp/dnw_todo.md", materials: [], decisions: [], goal: "", userMessages: [] }), "task", "todo 路径→task");

@@ -40,11 +40,11 @@ import { existsSync, renameSync, unlinkSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { readRel, timeFromName } from "../../persistence/files.js";
 import { isMemoryFileName } from "../../persistence/files.js"; // 记忆文件判据的唯一实现（判据收一处）
-import { parseMemory } from "../episode.js";
+import { parseMemory } from "../view/episode.js";
 import { SHADOW_ROOT } from "../paths.js";
 import { isNotFound } from "../util.js"; // 「读侧目标不存在」的唯一判据（判据收一处；不许再各写一份）
 // 权威源目录的判据与投影指纹**同源**（判据收一处）：见 `shadowSourcesFingerprint` 的注释。
-import { DATE_DIR_NAME, RESOURCES_DIR_NAME, isSourceDirEntry } from "../projection-store.js";
+import { DATE_DIR_NAME, RESOURCES_DIR_NAME, isSourceDirEntry } from "../view/projection-store.js";
 import type { CandidateProvider, CandidateSet, CandidateState, MemorySource } from "../types.js";
 
 /** 索引器 / 表结构的令牌（`adr/0095` §五「必须做」）。不匹配 = `corrupt`（D5）；升级这里即触发整体重建。 */

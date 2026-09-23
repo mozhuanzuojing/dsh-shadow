@@ -1,7 +1,7 @@
 // dsh-shadow —— core/manifest.ts：Shadow Manifest（zg `manifest.json` / `status --debug` / observability 思想，ADR-0048 ⑧）。
 // 记录索引投影的元数据（版本/构建时间/节点数/来源数）+ 诊断（每文件失败）。系统派生，rm -rf 可重建。
 import { SHADOW_ROOT } from "./paths.js";
-import type { ShadowNode } from "./node.js";
+import type { ShadowNode } from "./view/node.js";
 
 export interface ShadowManifest {
   version: string;

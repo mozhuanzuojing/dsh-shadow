@@ -1,8 +1,8 @@
 // dsh-shadow —— Phase 2 Index Engine（候选生成）：fs 默认 / zg 复用 provider / semble（ADR-0054）
 //   三者未装/不可用一律 unavailable，**绝不 fallback 成 verified**。
 import assert from "node:assert/strict";
-import { createIndexEngine, rankRefs } from "../dist/core/index-engine.js";
-import { stripBracketedNoProxy, parseSembleRefs } from "../dist/core/semble.js";
+import { createIndexEngine, rankRefs } from "../dist/core/candidate/index-engine.js";
+import { stripBracketedNoProxy, parseSembleRefs } from "../dist/core/candidate/semble.js";
 
 // fs 默认：空候选（走全量扫描），provider=fs
 const fsEngine = createIndexEngine({}, { verify: async () => ({ status: "verified", source: "fs", matches: [], confidence: 0, freshness: "fresh", provenance: { provider: "fs" } }), discover: async () => [] });

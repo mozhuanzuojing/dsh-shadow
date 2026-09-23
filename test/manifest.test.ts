@@ -1,7 +1,7 @@
 // dsh-shadow —— ADR-0048⑧：Shadow Manifest（索引元数据 + 诊断）。
 import assert from "node:assert/strict";
 import { buildManifest, writeManifest, readManifest, renderManifest } from "../dist/core/manifest.js";
-import type { ShadowNode } from "../dist/core/node.js";
+import type { ShadowNode } from "../dist/core/view/node.js";
 
 const files = new Map();
 const fs = {

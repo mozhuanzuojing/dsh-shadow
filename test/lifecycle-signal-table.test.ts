@@ -1,4 +1,4 @@
-// dsh-shadow —— core/lifecycle.ts 的**状态机信号表棘轮**（吸收 hl_mem 的 `assert_transition()`；ADR-0077，v1.15.38）
+// dsh-shadow —— core/retention/lifecycle.ts 的**状态机信号表棘轮**（吸收 hl_mem 的 `assert_transition()`；ADR-0077，v1.15.38）
 //
 // 要防的不是「非法迁移」（这里没有可写坏的持久状态），而是
 // **状态机悄悄长出一条生产上不可达的分支**：`lifecycleOf` 读了某个 `rec.<字段>`，
@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { lifecycleOf } from "../dist/core/lifecycle.js";
+import { lifecycleOf } from "../dist/core/retention/lifecycle.js";
 import { hasProducer, stripComments } from "../tools/audit-wiring.lib.ts";
 
 // ── 声明表：本状态机的**信号表**与**状态表**（吸收 hl_mem 的 `assert_transition()`；ADR-0077）──────
@@ -21,9 +21,9 @@ import { hasProducer, stripComments } from "../tools/audit-wiring.lib.ts";
 // 这里没有可写坏的持久状态，风险是**状态机悄悄长出一条生产上不可达的分支**——
 // `lifecycleOf` 读了某个 `rec.<字段>`，而**没有任何生产代码写过那个触发值**，
 // 于是这个状态只活在测试夹具里，读代码的人却以为生产会走到它。
-// （`core/lifecycle.ts` 的注释早已用散文写过这件事；散文不会在漂移时报警，这里把它变成机器可核的声明。）
+// （`core/retention/lifecycle.ts` 的注释早已用散文写过这件事；散文不会在漂移时报警，这里把它变成机器可核的声明。）
 //
-// **为什么这张表刻意不在 `core/lifecycle.ts` 里**（本轮自曝，且是审计工具自检抓出来的）：
+// **为什么这张表刻意不在 `core/retention/lifecycle.ts` 里**（本轮自曝，且是审计工具自检抓出来的）：
 //   表必须同时写出**字段名**与**触发值**，而 `hasProducer` 是**文本**判据 ——
 //   两者**同一行共现**就会被当成「写入者」⇒ 审计工具**丢掉了 `status=superseded` 这个真线索**
 //   （`tools/audit-wiring.selftest.ts` ⑨ 之前那组断言立刻变红）。
@@ -34,11 +34,11 @@ import { hasProducer, stripComments } from "../tools/audit-wiring.lib.ts";
 //   `derived`  —— 能：生产里有写入者/调用点。
 //   `external` —— 不能：只有外部人工或测试夹具能置位；`why` 必须写明为什么保留它。
 const SIGNALS: { key: string; field: string; literal?: string; boolTrue?: boolean; producer: "derived" | "external"; why: string }[] = [
-  { key: "pinned", field: "pinned", boolTrue: true, producer: "external", why: "生产只写 pinned:false（core/memory.ts:75、core/writer-materialize.ts:125），**真值无写入者**；保留为外部人工信任标记，优先级最高的外部权威状态" },
+  { key: "pinned", field: "pinned", boolTrue: true, producer: "external", why: "生产只写 pinned:false（core/retention/memory.ts:75、core/writer-materialize.ts:125），**真值无写入者**；保留为外部人工信任标记，优先级最高的外部权威状态" },
   { key: "statusArchived", field: "status", literal: "archived", producer: "external", why: "生产只写 status:\"active\"/\"compacted\"，**archived 无写入者**；保留为外部人工归档" },
   { key: "statusSuperseded", field: "status", literal: "superseded", producer: "external", why: "取代是「相对当前可见记忆集」的读时判断，持久化会随可见集失效；只有外部/夹具置位" },
-  { key: "confirmedBy", field: "confirmedBy", producer: "derived", why: "core/served-hits.ts 的 recordServedHits 按 observer 回填（保留最后 10 个）" },
-  { key: "hits", field: "hits", producer: "derived", why: "core/served-hits.ts 的 recordServedHits：`rec.hits = (rec.hits||0)+1`" },
+  { key: "confirmedBy", field: "confirmedBy", producer: "derived", why: "core/retention/served-hits.ts 的 recordServedHits 按 observer 回填（保留最后 10 个）" },
+  { key: "hits", field: "hits", producer: "derived", why: "core/retention/served-hits.ts 的 recordServedHits：`rec.hits = (rec.hits||0)+1`" },
   { key: "superseded", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-score.ts（`verdictOf` 的读时裁决）" },
   { key: "conflictCount", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-score.ts（证据路径缺失计数）" },
   { key: "stale", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-score.ts（年龄/热度判据）" },
@@ -79,14 +79,14 @@ const prodAll = walk(repoRoot)
   .map((rel) => ({ file: rel, text: readFileSync(join(repoRoot, rel), "utf8") }));
 
 // 生产源码全量扫描 —— 表本身已在**测试面**（见上方说明），故这里**无需**排除任何生产文件。
-//   （历史：表曾在 `core/lifecycle.ts`，为此必须排除该文件；移出后排除与其正控一并删掉，
+//   （历史：表曾在 `core/retention/lifecycle.ts`，为此必须排除该文件；移出后排除与其正控一并删掉，
 //    留下的是更干净的判据：生产面就是生产面。）
 const prod = prodAll;
 
-const lifecycleSrc = readFileSync(join(repoRoot, "core/lifecycle.ts"), "utf8");
+const lifecycleSrc = readFileSync(join(repoRoot, "core/retention/lifecycle.ts"), "utf8");
 const lcLines = stripComments(lifecycleSrc).split(/\r?\n/);
 const fnStart = lcLines.findIndex((l) => l.includes("export const lifecycleOf"));
-assert.ok(fnStart >= 0, "应能在 core/lifecycle.ts 里定位 lifecycleOf");
+assert.ok(fnStart >= 0, "应能在 core/retention/lifecycle.ts 里定位 lifecycleOf");
 const fnEnd = lcLines.findIndex((l, i) => i > fnStart && /^\};?\s*$/.test(l));
 assert.ok(fnEnd > fnStart, "应能定位 lifecycleOf 的函数体结尾");
 const fnBody = lcLines.slice(fnStart, fnEnd + 1).join("\n");
@@ -140,7 +140,7 @@ const boolTrueSites = (files: { file: string; text: string }[], field: string): 
   // **判据自曝正控**（本轮真踩过）：把「表 + 生产」混在一起喂给 `hasProducer`，它**必然**误报——
   //   因为表里 `field` 与 `literal` 同行共现。这正是「表不能放在生产面」的原因，也证明
   //   `tools/audit-wiring.selftest.ts` 变红**不是测试坏了**，而是表放错了位置。
-  const tableInProd = [...prod, { file: "core/lifecycle.ts", text: 'const S = [{ field: "status", literal: "archived" }];' }];
+  const tableInProd = [...prod, { file: "core/retention/lifecycle.ts", text: 'const S = [{ field: "status", literal: "archived" }];' }];
   assert.ok(hasProducer(tableInProd, "status", "archived").length > 0, "正控：声明表放进生产面时 `hasProducer` 确会误报（这就是必须放测试面的理由）");
   console.log(`✔ ② 外部权威信号 ${SIGNALS.filter((x) => x.producer === "external").length} 个：生产零写入者 + 判据正控 + 「表放生产面必然误报」自曝正控`);
 }
@@ -193,7 +193,7 @@ const boolTrueSites = (files: { file: string; text: string }[], field: string): 
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · `producer` 的『参数信号由 query/topic-score.ts 生产』只核到**那行确实传了** `v.superseded`；" +
-  "`verdictOf` 的裁决语义正确性由 `observer/arbitrate.ts` 自己的测试负责，不在本表范围内；");
+  "`verdictOf` 的裁决语义正确性由 `subject/observer/arbitrate.ts` 自己的测试负责，不在本表范围内；");
 console.log("  · 只核本仓库源码。别的会话/外部工具直接改 `_meta.json` 塞入 `pinned: true` 这类运行时事实**扫不到**" +
   "（⇒ 表说的是「本仓库生产代码写不出」，不是「运行时永不会出现」）；");
 console.log("  · `lifecycleOf` 内部的**优先级顺序**没有被这张表表达 —— 顺序仍是代码事实，" +

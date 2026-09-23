@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 import { missingTypesOf } from "../dist/query/observatory.js";
-import type { ParsedMemory } from "../dist/core/episode.js";
+import type { ParsedMemory } from "../dist/core/view/episode.js";
 const { apply, name, inject } = mod;
 
 const WS = "D:/ws";

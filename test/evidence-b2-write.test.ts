@@ -1,7 +1,7 @@
 // dsh-shadow —— v1.8.0 B2（写侧采集）端到端：同回合「决策 + fs/observed 材料」→ 决策原子带 evidence。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
-import { parseMemory } from "../dist/core/episode.js";
+import { parseMemory } from "../dist/core/view/episode.js";
 const { apply, name, inject } = mod;
 
 const WS = "D:/ws";

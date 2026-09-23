@@ -4,7 +4,7 @@
 // 与 writer.ts 原实现逐字一致；挂起时经 hooks.flush 兜底落盘（hooks 由 composition root 注入，解 cycle）。
 import { stamp, under, component } from "../util.js";
 import { sanitizeText } from "../../security/scrub.js";
-import { extractMessage, classifyUser, extractDecisionStatement, extractReason, goalText } from "../collect.js";
+import { extractMessage, classifyUser, extractDecisionStatement, extractReason, goalText } from "../retention/collect.js";
 import { resolveWorkspace } from "../scope.js";
 import type { WriterCore } from "./core.js";
 

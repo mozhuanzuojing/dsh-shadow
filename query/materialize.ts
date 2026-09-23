@@ -14,7 +14,7 @@
 //   · **降级必须可见**（ADR-0049）：provider 落到 `unavailable`/`corrupt`/`query-error` ⇒ 本次回退 `fs`
 //     全量（结果不变）并经 `opts.note` 留一条横幅；健康路径**一次都不留痕**（输出逐字节不变）。
 import { readMeta } from "../persistence/meta.js";
-import { isForgettable, isCompacted } from "../core/forget.js";
+import { isForgettable, isCompacted } from "../core/retention/forget.js";
 import { createCandidateProvider, fsCandidateProvider } from "../core/candidate/provider.js";
 
 export interface MaterializedView {

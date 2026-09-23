@@ -248,7 +248,7 @@ import assert from "node:assert/strict";
 
 // ── ⑥ 报告不得说谎：候选统计必须暴露「有记录被拒」，观测统计必须暴露「有坏行被剔除」 ──
 {
-  const { candidateStats, projectFacts } = await import("../dist/core/proposal.js");
+  const { candidateStats, projectFacts } = await import("../dist/core/admission/proposal.js");
   const P = (id: string) => ({ type: "proposal", id, kind: "outcome", source: "user", inputRefs: [{ file: "a.ts", line: 1 }], proposedRelation: "x", createdAt: "2026-09-01T00:00:00Z" });
   const C = (id: string, proposal: string) => ({ type: "confirmation", id, proposal, actor: "human", action: "confirm", timestamp: "2026-09-02T00:00:00Z" });
   const good = [P("p1"), C("c1", "p1")];

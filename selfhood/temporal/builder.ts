@@ -1,7 +1,7 @@
 // dsh-shadow —— selfhood/temporal/builder.ts：TemporalGraph 构建（从 ObservationTrace 派生，可重建）。
 import type { TemporalGraph } from "./types.js";
 import { GRAPH_VERSION } from "./types.js";
-import { readObservationTraces } from "../../observer/trace.js";
+import { readObservationTraces } from "../../subject/observer/trace.js";
 import { readIdentityVersions } from "../identity/timeline.js";
 import { buildNode } from "./node.js";
 import { buildEdges } from "./edge.js";

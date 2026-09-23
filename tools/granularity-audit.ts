@@ -4,7 +4,7 @@
  * ## 判据（**只有一条**）
  *
  * **一条记忆文件不得是「纯动作回声」** —— 即 `> 证据链：来源(动作)` 里**只有**「动作」。
- * 它等价于生产侧的 `isAuditBatch`（`core/capture-granularity.ts`）：只有 action 的批该进审计流，
+ * 它等价于生产侧的 `isAuditBatch`（`core/retention/capture-granularity.ts`）：只有 action 的批该进审计流，
  * 不该落成记忆文件。两条判据同源，门只是**在语料上复核生产侧有没有做到**。
  *
  * ## 边界（用门之前先读；ADR-0049：缺件不静默）

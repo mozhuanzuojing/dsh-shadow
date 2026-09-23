@@ -15,8 +15,8 @@ import {
   ATTRIBUTION_RULE,
   type DecisionRecord,
   type OutcomeObservation,
-} from "../dist/core/decision-outcome.js";
-import { projectFacts } from "../dist/core/proposal.js";
+} from "../dist/core/admission/decision-outcome.js";
+import { projectFacts } from "../dist/core/admission/proposal.js";
 
 const D = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
   id: "d1",

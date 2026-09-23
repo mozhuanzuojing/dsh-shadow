@@ -18,7 +18,7 @@
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 import { listMemories, memoryFileName, timeFromName } from "../dist/persistence/files.js";
-import { newestByEntryOf, verdictOf } from "../dist/observer/arbitrate.js";
+import { newestByEntryOf, verdictOf } from "../dist/subject/observer/arbitrate.js";
 
 const { apply, name, inject } = mod;
 const WS = "D:/ws";

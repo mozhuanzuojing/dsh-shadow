@@ -16,7 +16,7 @@ import { isAbsoluteLocator } from "./paths.js";
  * 并在 `mode:"context"` / `verifyEvidence` 里报「已过时/证据缺失」——**这是假漂移**。
  * 实测量级：全库 2514 次路径状引用中有 1025 次「不可解析」，其中绝大多数是绝对路径被双前缀所致。
  *
- * **边界**：这是**正确性**修复，不扩大任何授权。`inScope` / `authorizeScope`（`core/authorization.ts`）
+ * **边界**：这是**正确性**修复，不扩大任何授权。`inScope` / `authorizeScope`（`core/admission/authorization.ts`）
  * 仍单独管「哪些候选允许返回」；本函数只回答存在性，且绝对路径**本来就在记忆里**。
  */
 /**

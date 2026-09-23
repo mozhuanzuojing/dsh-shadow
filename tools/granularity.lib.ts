@@ -9,7 +9,7 @@
  * 两处必须**逐字同判**，否则回收跑完门还红（或更糟：门绿了而回收漏了一批）。
  * ⇒ 抽到这里。本仓已因「同一判据两份实现」返工过两次（`tools/comparison-points.lib.ts`、`core/util.ts:numOr`）。
  *
- * ## 判据（与生产侧 `core/capture-granularity.ts` 的 `isAuditBatch` 同源）
+ * ## 判据（与生产侧 `core/retention/capture-granularity.ts` 的 `isAuditBatch` 同源）
  *
  * 「`> 证据链：来源(动作)` 里**只有**动作」= 纯动作回声 = 该进审计流，不该是记忆文件。
  */

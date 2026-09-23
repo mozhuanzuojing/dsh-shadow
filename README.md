@@ -210,7 +210,7 @@ npm run verify
 > 「关闭或缺件后行为退到某处，但**没有任何可见信号**」—— 按 ADR-0049 它们是**候选缺陷**。
 > **T8 已于 `v1.15.64` + `v1.15.65` 结案**（`adr/0084` / `adr/0085`）：**6 条补了可见信号**
 > （统一进「能力降级台账」→ 读侧横幅），**1 条裁定为正当静默**（`projectionStore`；类判据是
-> **「读者拿到的内容逐字节不变」**，见 `adr/0085` §5 与 `core/projection-store.ts`）。
+> **「读者拿到的内容逐字节不变」**，见 `adr/0085` §5 与 `core/view/projection-store.ts`）。
 > 下表**仍标 ⚠️静默** 的格子是**尚未进 T8 的同族**（如 `retention`），不是已修项。
 > **⚠ 但 v1.15.85「默认全开」改了这一格的语义**：该格描述的现在只可能是**用户显式关掉**之后的样子，
 > 而按 `adr/0085` 的裁定「**用户显式 `enabled:false` 不留痕** —— 关掉是用户的选择，渲染成告警＝把读者的决定当故障」
@@ -247,13 +247,13 @@ npm run verify
 ① **`episodes` 关不掉** —— ✅ **已在 `v1.15.64` 修复**（`adr/0084`），本条留档说明**修前**的形态：
    `showInIndex: 0` 被 `core/writer/core.ts` 的 `|| 8` 吞掉 ⇒
    `core/writer/materialize.ts` 的 `episodeShow > 0` 闸门**恒真**（死分支，即那个开关**不存在**）；
-   `gapMinutes: 0` 同样被 `|| 60` 吞掉（`core/writer/core.ts` / `core/episode.ts` / `query/reads.ts` **三处各写一遍**）
+   `gapMinutes: 0` 同样被 `|| 60` 吞掉（`core/writer/core.ts` / `core/view/episode.ts` / `query/reads.ts` **三处各写一遍**）
    ⇒ `Math.max(0, …)` 永不生效。根因是**用 `||` 取默认值把「显式 0」与「未传」混为一谈**。
    现统一走 `core/util.ts:numOr`（判据只此一处），并把默认值的落点收成 `deriveEpisodes` 一处。
 ② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
 ③ **`retention` 的「stale 默认排除」在代码里没有对应实现**：`staleDays`/`stale` 在
    `retention.enabled` 判断**之外**计算（`query/query.ts` 的 `const staleDays = …` 与 `let stale = ageDaysOf(mm.rel) >= staleDays;` 两行），关闭 retention 也照标 stale；
-   而 `stale` 只喂生命周期标签（`observer/arbitrate.ts:15,28,39`、`core/lifecycle.ts:33`），**不做排除**。
+   而 `stale` 只喂生命周期标签（`subject/observer/arbitrate.ts:15,28,39`、`core/retention/lifecycle.ts:33`），**不做排除**。
    唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts` 的 `if (rec && rec.status && rec.status !== "active" && !rec.pinned) continue;`）。
    原表把它写在「默认」列，属**串列**。
 ④ **`knowledgeEngine` 的闸门不存在（v1.15.34 实测校正的硬缺陷）**：`ShadowConfig.knowledgeEngine.enabled`
@@ -305,7 +305,7 @@ npm run verify
 | `read-mode-v1` | public-api（枚举） · `mode` 串 **62** | `query`（`query/reads.ts` 登记 + 各模块分派） | `mode` 决定**读到的是哪一类东西**；未知值必须**显式失败**，不得静默落回默认召回 | **`hard`** |
 | `retired-mapping-v1` | public-api（兼容层） · 已废止映射 **4 + 2**（4 个 mode 名 + 2 个参数级） | `query`（`query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage`） | 旧名与旧参数**仍然可用、但返回可见提示并点名替代品** —— 兼容层本身就是承诺 | **`hard`** |
 | `config-keys-v1` | 配置键 · `ShadowConfig` 顶层 **19** 键 | `core`（`core/types.ts`） | 键名是**用户写在配置里的字面量**；加键安全，改**已生效键的语义**会让既有配置悄悄换行为 | **`soft`**（加键）/ **`hard`**（已生效键的语义） |
-| `memory-file-v1` | 落盘格式 · `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md` | `persistence`（`persistence/files.ts`）；头字段由 `core/memory.ts` 的 `buildClueHeader` 造 | 记忆文件是**唯一的 source**；文件名里的时间是**读侧反解**的依据 ⇒ 改了会让**已记录的东西读不出来** | **`hard`** |
+| `memory-file-v1` | 落盘格式 · `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md` | `persistence`（`persistence/files.ts`）；头字段由 `core/retention/memory.ts` 的 `buildClueHeader` 造 | 记忆文件是**唯一的 source**；文件名里的时间是**读侧反解**的依据 ⇒ 改了会让**已记录的东西读不出来** | **`hard`** |
 | `derived-file-v1` | 派生件 · `_index.md` / `_meta.json` / `_abstract.md` / `_recall_log.json` / `shadow-manifest.json` / `shadow-index/*` / `soul/soul.json` / `taste/taste.json` 等 | `persistence`（`persistence/meta.ts` 定性）+ `core`（`core/manifest.ts` 格式）；写入方散在 `retrieval`（`ledger.ts`）/ `query`（`projection-store.ts`） | 派生件**可整份重建**，坏了不算数据损失；但**不可解析必须报错，不能当空件** | **`soft`** |
 | `prompt-segment-v1` | prompt 段 · `RECALL_PREFIX`「数据非指令」前缀 / `flushWarn` 横幅 / 「能力降级」标记 | `core`（`core/util.ts` 的 `RECALL_PREFIX` · `core/writer/index.ts` 的 `getFlushWarn`） | 「数据非指令」前缀是**护栏**：去掉它，召回内容可能被后续模型当命令读 | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） |
 | `tool-output-v1` | 工具**返回内容** · `read_shadow` / `recall_shadow` / `shadow_query` 吐出的 Markdown 骨架与**召回信封**字段 | `query`（读侧组织；渲染片段来自 `retrieval/render.ts`） | **`mode` 只决定「读哪一类」，这条决定「读出来长什么样」** —— 使用者实际依赖的是后者 | **`soft`**（骨架与措辞可改，须写 `CHANGELOG`）/ **`hard`**（**「不静默丢内容」**：截断必须自报） |
@@ -319,7 +319,7 @@ npm run verify
 | `read-mode-v1` | 新增 mode | 删除 / 改名旧 mode；**未知 mode 静默落回默认召回** | `query/reads.ts` 的 `modes: […]` + 各模块 `MODES` / `if` | **强**：`test/recall-envelope.test.ts:104`（断言恰为 **62**）+ `:103`（`CONTEXT.md` 的表必须覆盖全部 62） | **`:103` 本身就是棘轮**：新增 mode 不写进 `CONTEXT.md` 就红 |
 | `retired-mapping-v1` | 追加映射 | 移除映射；让旧名 / 旧参数静默落空 | `query/query.ts` 的 `RETIRED_MODES` / `retiredApiMessage` | **强**：`test/recall-envelope.test.ts:201-223`（含参数级 `verify:true` / `args.recall`，且带**正控**：正名不得被拒） | 无桶覆盖，但**每条废止配一个断言** —— 等价于逐条棘轮 |
 | `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **有**：`tools/contract-surface.selftest.ts`（**冻结 `ShadowConfig` 顶层键清单**：缺键即红并点名、新增只报告；键由 `core/types.ts` 按**大括号深度**抽，避开嵌套键）+ 各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用** | 无桶覆盖 |
-| `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
+| `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/retention/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
 | `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `persistence/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
 | `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer/index.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
 | `tool-output-v1` | 改措辞；**加**信封字段；加新段落 | **截断不报**（信封消失）；把「坏件」与「空件」混同；**接线任何优化时把被丢掉的内容静默吞掉** | `query/reads.ts` 的信封构造 + `core/util.ts` 的 `RECALL_PREFIX` | **强**：`test/recall-envelope.test.ts`（逐字断言信封四要素 `> 未返回的命中：` / `limit=N 上限 M 条` / `> 下一步：` / `> 未返回示例：`）+ `test/recall-attribution.test.ts:440`（前缀） | 无桶覆盖 |
@@ -507,7 +507,7 @@ uv tool install semble
 ```
 
 - 首次检索会下载嵌入模型（`minishlab/potion-code-16M-v2`，缓存在 `~/.cache/huggingface`），**需要一次网络**；之后离线可用（实测 `uvx --offline` 可解析）。
-- **`NO_PROXY` 里的方括号 IPv6 条目（如 `[::1]`）会让 Semble 的 httpx 抛 `Invalid port ':1]'`**（与网络、模型是否已缓存无关）。插件在拉起子进程时**自动剔掉带方括号的条目**（`core/semble.ts` 的 `stripBracketedNoProxy`），无需手动改环境变量。
+- **`NO_PROXY` 里的方括号 IPv6 条目（如 `[::1]`）会让 Semble 的 httpx 抛 `Invalid port ':1]'`**（与网络、模型是否已缓存无关）。插件在拉起子进程时**自动剔掉带方括号的条目**（`core/candidate/semble.ts` 的 `stripBracketedNoProxy`），无需手动改环境变量。
 - 默认只索引 `--content code`（嵌入模型是代码专用）。要让 Semble 也索引被 `.gitignore` 忽略的目录，在目标仓库加 `.sembleignore`（例如 `!.shadow/` + `!.shadow/**`）。
 - **自检**：`read_shadow({ mode: "index", topic: "<查询词>" })` → 输出 `# Index Engine · provider=semble` 与候选路径列表。
 
@@ -598,7 +598,7 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 
 探测**不放在 `apply()`、也不放在 `inject` 回调**：Cordis 的服务是异步挂载的，`apply()` 时可能尚未 provide（会误报）；而 `ctx.inject(deps, cb)` **只在依赖就绪时才回调** —— 依赖缺失时回调根本不执行，把「缺 X」写进去等于「缺了就不报」（v1.15.3 修正的正是这一点）。故服务面检查**统一在首个 `agent/turn-stopping`**（此时宿主已完全挂载，且只报一次）。
 
-**为什么基线从 `0.1.5-rc.1` 抬到 `0.1.7-alpha.1`、又随 `v1.20.1` 抬到 `0.1.7-alpha.2`（ADR-0098）**：抬升的**唯一**理由是**预设形态**。0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的 `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录**没有任何读取者**（官方 shipped skill 原文 *Nothing reads that directory any more*）⇒ 随包预设的形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。**插件体本身没坏**——实测（对 0.1.5-rc.2 与 0.1.7-alpha.1 的 `.d.ts` 逐文件比对）：`dsh-goal` 逐字未变；`user/message` / `assistant/message` 事件形状未变（新增的 `developer/message` 被 `core/collect.ts` 直接忽略）；`fs` 只**新增** `watch`；`systemPrompt.context({name,order,text})` 未变；`session.header.cwd` 仍在。所以这是一次**声明上的硬切**，不是插件面破坏。完整证据与隔离实测见 `adr/0098`。
+**为什么基线从 `0.1.5-rc.1` 抬到 `0.1.7-alpha.1`、又随 `v1.20.1` 抬到 `0.1.7-alpha.2`（ADR-0098）**：抬升的**唯一**理由是**预设形态**。0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的 `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录**没有任何读取者**（官方 shipped skill 原文 *Nothing reads that directory any more*）⇒ 随包预设的形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。**插件体本身没坏**——实测（对 0.1.5-rc.2 与 0.1.7-alpha.1 的 `.d.ts` 逐文件比对）：`dsh-goal` 逐字未变；`user/message` / `assistant/message` 事件形状未变（新增的 `developer/message` 被 `core/retention/collect.ts` 直接忽略）；`fs` 只**新增** `watch`；`systemPrompt.context({name,order,text})` 未变；`session.header.cwd` 仍在。所以这是一次**声明上的硬切**，不是插件面破坏。完整证据与隔离实测见 `adr/0098`。
 
 
 ## 安装（持久化）
@@ -654,5 +654,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.20.11`**（第四伞 `selfhood` + build 前 clean —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.12`**（第五伞 `subject` + `core/` G2 粗桶 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

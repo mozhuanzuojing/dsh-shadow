@@ -1,10 +1,10 @@
 // dsh-shadow —— 第二次 Replay（ADR-0037 五指标）· 真实 v1.1.1 新数据。
 // 只读真实 .shadow（默认 WSL OpenAPI-Gateway，可用 SHADOW_REPLAY_ROOT/SHADOW_REPLAY_DATE 覆盖），
-// 用 dist/core/episode.js 的量规统计 Episodes/Decisions，并按 ADR-0037 计算 5 指标。
+// 用 dist/core/view/episode.js 的量规统计 Episodes/Decisions，并按 ADR-0037 计算 5 指标。
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../dist/core/episode.js";
-import { decisionClass, extractDecisionStatement } from "../dist/core/collect.js";
+import { parseMemory, deriveEpisodes, deriveDecisions, renderEpisodes, renderDecisions } from "../dist/core/view/episode.js";
+import { decisionClass, extractDecisionStatement } from "../dist/core/retention/collect.js";
 
 const ROOT = process.env.SHADOW_REPLAY_ROOT || "//wsl.localhost/debian-u8-1/home/g/project/OpenAPI-Gateway/.shadow";
 const DATE = process.env.SHADOW_REPLAY_DATE || "2026-09-07";

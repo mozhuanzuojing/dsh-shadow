@@ -20,7 +20,7 @@ export const isPathLike = (p: string) => p && !/^https?:|github\.com|arxiv/i.tes
  * ①引用是**具体**路径 且 ②它确实解析不到 时才报「引用失效」。
  *
  * 注意：`isPathLike`（旧函数）**故意不收窄** —— 它服务的是「这像不像一条路径引用」的粗筛
- * （`core/context.ts` / `observer/*` 用它挑候选）；收窄会改变那些调用方的候选集。
+ * （`core/view/context.ts` / `observer/*` 用它挑候选）；收窄会改变那些调用方的候选集。
  * 需要「可检查」语义的地方用本函数。
  */
 export const isConcreteLocator = (p: unknown): boolean => {
@@ -39,7 +39,7 @@ export const isConcreteLocator = (p: unknown): boolean => {
  * 于是「磁盘上明明存在」的文件被判 `not_found/stale`。
  * 该形状在记忆证据里很常见（跨项目、跨目录的绝对引用）。
  *
- * 单一来源：`evidence/filesystem.ts`（存在性检查）与 `core/semble.ts`（候选绝对化）共用，
+ * 单一来源：`evidence/filesystem.ts`（存在性检查）与 `core/candidate/semble.ts`（候选绝对化）共用，
  * 避免两处各自写正则而漂移（本仓 ⑥「因果跌倒 / 注释断链」要防的正是这个）。
  */
 export const isAbsoluteLocator = (p: unknown): boolean => {

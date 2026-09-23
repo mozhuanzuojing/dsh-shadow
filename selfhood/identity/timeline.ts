@@ -3,7 +3,7 @@
 // 存储：.shadow/identity/<at>-v<N>.json（不可变版本）+ .shadow/identity/timeline.md（索引）。Core 来自 soul.json（curated 稳定锚）。
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { IdentityModel } from "./types.js";
-import { readSoul } from "../../soul/soul.js";
+import { readSoul } from "../../subject/soul/soul.js";
 import { today } from "../../core/util.js";
 import { scrubUnsafe } from "../../security/scrub.js";
 

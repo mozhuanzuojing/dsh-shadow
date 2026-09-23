@@ -6,7 +6,7 @@
 // 判据来自**实测**而不是来自目录名（这是本轮最重要的结论）：
 //   一份「按目录分层」的草案（core 不得碰 node:fs / 不得 import persistence）在本仓**实测即为红**：
 //   `core/toolset/exec.ts:18-19` 真的 import `node:fs` + `node:child_process`（它是**执行器**），
-//   `core/judgment.ts` / `core/memory.ts` / `core/writer/materialize.ts` 真的 import `persistence/`。
+//   `core/admission/judgment.ts` / `core/retention/memory.ts` / `core/writer/materialize.ts` 真的 import `persistence/`。
 //   ⇒ **`core/` 不是「纯函数层」，是「脊柱」**（paths/types/util 纯 + memory/writer 有副作用）。
 //   故本工具只保留**实测为真**的三类判据（当前基线全绿，接入即是棘轮）：
 //     ① **文件级依赖图无环**（实测当前 0 个强连通分量）；
@@ -66,10 +66,10 @@ export const DIRECTION_RULES = [
 export const FORBIDDEN_TARGETS_EVERYWHERE = ["(root)", "presets"];
 
 /**
- * Mode-family / 域导航伞（ADR-0101 · ADR-0103）：只收编顶层平铺，**不是**结构层。
+ * Mode-family / 域导航伞（ADR-0101 · ADR-0103 · ADR-0104）：只收编顶层平铺，**不是**结构层。
  * `layerOf` 在这些伞下取**第二段**（叶子层名），这样 `DIRECTION_RULES` / 所有权报告语义不变。
  */
-export const MODE_FAMILY_UMBRELLAS = ["stance", "trajectory", "epistemic", "selfhood"] as const;
+export const MODE_FAMILY_UMBRELLAS = ["stance", "trajectory", "epistemic", "selfhood", "subject"] as const;
 
 const UMBRELLA_SET = new Set<string>(MODE_FAMILY_UMBRELLAS);
 

@@ -9,19 +9,19 @@ import { noMatchText, truncationNote } from "../retrieval/render.js";
 import { tierLossNote } from "../retrieval/loss.js";
 import { prepareCooldown, filterCooled, commitDetailCooldown } from "../retrieval/cooldown.js";
 import { renderWithinBudget } from "../retrieval/budget-render.js";
-import { kgTrace } from "../observer/observer.js";
-import { readSoul } from "../soul/soul.js";
-import { readIdentity } from "../soul/identity.js";
-import { observerContextOf } from "../observer/core.js";
-import { readObserverState } from "../observer/state.js";
-import { recordObservationTrace } from "../observer/trace.js";
+import { kgTrace } from "../subject/observer/observer.js";
+import { readSoul } from "../subject/soul/soul.js";
+import { readIdentity } from "../subject/soul/identity.js";
+import { observerContextOf } from "../subject/observer/core.js";
+import { readObserverState } from "../subject/observer/state.js";
+import { recordObservationTrace } from "../subject/observer/trace.js";
 import { scrubFinal } from "../security/scrub.js";
-import { noteServedAtoms } from "../core/served-hits.js";
+import { noteServedAtoms } from "../core/retention/served-hits.js";
 import { scoreTopicCandidates } from "./topic-score.js";
 import type { ShadowQueryDeps } from "./types.js";
 import type { MaterializedView } from "./materialize.js";
 import type { AgentLike } from "../core/types.js";
-import type { ParsedMemory } from "../core/episode.js";
+import type { ParsedMemory } from "../core/view/episode.js";
 
 export interface TopicRecallCtx {
   fs: any;

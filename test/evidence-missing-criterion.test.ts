@@ -5,8 +5,8 @@
 // **且** ② 它确实解析不到」才算「证据缺失」（借 CASCADE/FSE 2026）。
 //
 // 同一判据在两个消费点上被表达：
-//   · `observer/arbitrate.ts:92`  `.filter(isPathLike).filter(isConcreteLocator)` —— **正确**
-//   · `observer/judgment.ts:26`   `.filter(isPathLike)`                        —— **漏了 ①**
+//   · `subject/observer/arbitrate.ts:92`  `.filter(isPathLike).filter(isConcreteLocator)` —— **正确**
+//   · `subject/observer/judgment.ts:26`   `.filter(isPathLike)`                        —— **漏了 ①**
 // 而 `evidence/paths.ts:22-24` 的注释明文写着：*「`isPathLike` **故意不收窄** …… 需要「可检查」
 // 语义的地方用 `isConcreteLocator`」* —— 契约被违反在一处。
 //
@@ -16,8 +16,8 @@
 //
 // 本测试用**已知答案**：通配符引用**不得**被判冲突；真实不存在的具体路径**必须**被判冲突。
 import assert from "node:assert/strict";
-import { judgmentOfClaim } from "../dist/observer/judgment.js";
-import { conflictOf } from "../dist/observer/arbitrate.js";
+import { judgmentOfClaim } from "../dist/subject/observer/judgment.js";
+import { conflictOf } from "../dist/subject/observer/arbitrate.js";
 
 /** 按「磁盘上有没有这条路径」作答的假 Gateway（只认具体路径）。 */
 const fakeGateway = async (ref: any) => {

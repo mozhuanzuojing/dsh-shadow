@@ -57,8 +57,8 @@ const CMP_RE_SRC = String.raw`(?:\btypeof\s+)?\b([\w$]+(?:\??\.[\w$]+)*)\s*===\s
  *     只是**巧合同名**，不是「同一条判据」⇒ 也是**噪音**。
  *
  * 真语料证据（v1.15.64 实测，**全部是假阳**）：
- *   · `v=string`   ← `core/proposal.ts:90` · `core/scope.ts:10` · `core/util.ts:103`
- *   · `v=object`   ← `core/proposal.ts:89` · `core/util.ts:104` · `tools/retrieval-eval.lib.ts:24`
+ *   · `v=string`   ← `core/admission/proposal.ts:90` · `core/scope.ts:10` · `core/util.ts:103`
+ *   · `v=object`   ← `core/admission/proposal.ts:89` · `core/util.ts:104` · `tools/retrieval-eval.lib.ts:24`
  *   · `wiring=object` ← `tools/cli-wiring.selftest.ts:78`（`typeof b.wiring === "object"`）
  *   · `v=number`   ← `core/util.ts:96`（v1.15.64 新建，就是它把棘轮顶红的）
  *

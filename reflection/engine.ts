@@ -7,7 +7,7 @@ import { completenessOf, type Reflection, type ReflectionLearningType, type Refl
 import { repeatedDecisions, repeatedOutcomes } from "./patterns/decision-outcome.js";
 import { decisionOutcomeCorrelation } from "./patterns/success-rate.js";
 import { distortionPatterns } from "./patterns/distortion.js";
-import { readObservationTraces } from "../observer/trace.js";
+import { readObservationTraces } from "../subject/observer/trace.js";
 import { today } from "../core/util.js";
 import { scrubUnsafe } from "../security/scrub.js";
 

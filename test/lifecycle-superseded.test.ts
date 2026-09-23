@@ -1,4 +1,4 @@
-// dsh-shadow —— core/lifecycle.ts：生命周期与**读时取代裁决**的一致性 + 优先级（v1.15.18，ADR-0061）
+// dsh-shadow —— core/retention/lifecycle.ts：生命周期与**读时取代裁决**的一致性 + 优先级（v1.15.18，ADR-0061）
 //
 // 背景（实测的真缺陷）：`lifecycleOf` 原本只认 `rec.status === "superseded"`（持久化的 `_meta.json`），
 // 而**生产代码从不写这个值** —— 唯一写入者是测试夹具（`recall-attribution.test.ts` 手工塞入）。
@@ -9,7 +9,7 @@
 // 为什么不改成持久化：取代是「**相对当前可见记忆集**」的判断，写进派生文件会随可见集变化而失效。
 // ⇒ 正确做法是让 `lifecycleOf` **接受读时裁决**（新增可选参数），由调用方回填。
 import assert from "node:assert/strict";
-import { lifecycleOf } from "../dist/core/lifecycle.js";
+import { lifecycleOf } from "../dist/core/retention/lifecycle.js";
 
 // ─────────────────────────────────────────────
 // ① 读时裁决真的能产生 SUPERSEDED（修前此断言红：只有持久化那条路，且无写入者）

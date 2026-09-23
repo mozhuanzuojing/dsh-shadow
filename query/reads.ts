@@ -4,12 +4,12 @@
 // 共享物化由 query/materialize.ts 提供（`materializeAtoms` 唯一定义，收敛重复脚手架）。
 import {
   deriveEpisodes, renderEpisodes, deriveDecisions, renderDecisions,
-} from "../core/episode.js";
-import type { ParsedMemory } from "../core/episode.js";
-import { deriveTasks, renderTasks } from "../core/task.js";
-import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { renderRecovery, renderRecoveryFor, bestTask } from "../core/recall.js";
-import { createIndexEngine } from "../core/index-engine.js";
+} from "../core/view/episode.js";
+import type { ParsedMemory } from "../core/view/episode.js";
+import { deriveTasks, renderTasks } from "../core/view/task.js";
+import { deriveContextReferences, renderContextRefs } from "../core/view/context.js";
+import { renderRecovery, renderRecoveryFor, bestTask } from "../core/view/recall.js";
+import { createIndexEngine } from "../core/candidate/index-engine.js";
 import { unavailableHint } from "../core/toolset/index.js";
 import { surveyCapabilities, renderSurvey, installCapability, renderInstall, precheckCapabilities, renderPrecheck, type SurveyOptions } from "../core/toolset/exec.js";
 import {
@@ -18,20 +18,20 @@ import {
 } from "../core/knowledge/engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
-import { loadOrBuildProjection, shadowSourcesFingerprint } from "../core/projection-store.js";
-import { deriveShadowNodes, deriveShadowNodeFailures, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/node.js";
-import { listResourceCards, deriveResourceNodes } from "../core/resource.js";
+import { loadOrBuildProjection, shadowSourcesFingerprint } from "../core/view/projection-store.js";
+import { deriveShadowNodes, deriveShadowNodeFailures, queryShadow, matchShadowNodes, renderContext as renderShadowContext } from "../core/view/node.js";
+import { listResourceCards, deriveResourceNodes } from "../core/view/resource.js";
 import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
 import { today, stamp, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
 import {
   noteServedAtoms, relsFromMemoryRefs, relsFromDecisionRels, relsFromSources,
-} from "../core/served-hits.js";
+} from "../core/retention/served-hits.js";
 import {
   attributeOutcomes, outcomeReadout, renderOutcomeReadout,
   type DecisionRecord,
-} from "../core/decision-outcome.js";
+} from "../core/admission/decision-outcome.js";
 
 export interface ReadCtx {
   fs: any;

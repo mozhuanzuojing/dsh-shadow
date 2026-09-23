@@ -3,6 +3,15 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.12] 第五伞 `subject` + `core/` G2 职责粗桶
+
+导航整理，**无行为变更**（mode / 召回 / `.shadow/` 落盘不变；`layerOf` 伞下取第二段，`core/*` 子目录仍 = `core`）。
+
+- **第五伞**：`subject/{soul,observer}`（与 `selfhood` 对仗）；见 ADR-0104。
+- **G2**：`core/retention/` · `view/` · `admission/`；`index-engine`/`semble` 并入 `candidate/`；根上留纯模块/基建；见 ADR-0105。
+- **文档**：CONTEXT / BACKLOG T13 进度 B；当前态活路径随迁；**不改** CHANGELOG 历史条目。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+
 ## [v1.20.11] 第四伞 `selfhood` + emit 前必须 clean
 
 导航整理 + 构建纪律，**无行为变更**（mode / 召回 / `.shadow/` 落盘不变）。

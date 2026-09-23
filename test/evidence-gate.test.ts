@@ -1,6 +1,6 @@
 // dsh-shadow —— v1.8.0 Evidence Gate：Invariant 1(无证据 decision 不进 query) / Invariant 3(projection 无 generate·infer·guess)。
 import assert from "node:assert/strict";
-import { deriveShadowNodes } from "../dist/core/node.js";
+import { deriveShadowNodes } from "../dist/core/view/node.js";
 import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 
 const atom = (over) => ({
@@ -42,7 +42,7 @@ console.log("✔ evidence-gate：metadata memory 与无证据 decision 被排除
 
 // ── v1.15.57：**被拒收的原子必须可观测**（manifest 曾恒报「失败项 0」） ──
 {
-  const { deriveShadowNodeFailures } = await import("../dist/core/node.js");
+  const { deriveShadowNodeFailures } = await import("../dist/core/view/node.js");
   const { buildManifest, renderManifest } = await import("../dist/core/manifest.js");
   const parsed = [
     meta,      // 排除

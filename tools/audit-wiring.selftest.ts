@@ -97,7 +97,7 @@ console.log("✔ ⑤ 调用点计数正确：Called/Built 有调用点，NeverCa
 // ─────────────────────────────────────────────
 const CASES = [
   ["test/foo.test.ts", false], ["./test/foo.test.ts", false], ["tools/fixtures/x.ts", false],
-  ["core/lifecycle.ts", true], ["query/query.ts", true], ["tools/audit-wiring.ts", true],
+  ["core/retention/lifecycle.ts", true], ["query/query.ts", true], ["tools/audit-wiring.ts", true],
   ["node_modules/x/y.ts", false], ["dist/core/x.js", false], ["a/test/b.ts", false],
 ];
 for (const [p, want] of CASES) {

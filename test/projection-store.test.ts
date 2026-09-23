@@ -1,8 +1,8 @@
 // dsh-shadow —— Phase 1B Projection Store（Performance Feature，默认关）：save/load/invalidate/rebuild + 缓存行为。
 import assert from "node:assert/strict";
-import { createJsonlProjectionStore, loadOrBuildProjection } from "../dist/core/projection-store.js";
-import { ChangeSet } from "../dist/core/change-set.js";
-import type { ShadowNode } from "../dist/core/node.js";
+import { createJsonlProjectionStore, loadOrBuildProjection } from "../dist/core/view/projection-store.js";
+import { ChangeSet } from "../dist/core/retention/change-set.js";
+import type { ShadowNode } from "../dist/core/view/node.js";
 
 const makeFs = () => {
   const files = new Map();

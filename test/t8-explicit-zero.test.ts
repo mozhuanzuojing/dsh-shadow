@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 import { numOr } from "../dist/core/util.js";
-import { deriveEpisodes, type ParsedMemory } from "../dist/core/episode.js";
+import { deriveEpisodes, type ParsedMemory } from "../dist/core/view/episode.js";
 
 const { apply, name, inject } = mod;
 const WS = "D:/ws";

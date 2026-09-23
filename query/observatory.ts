@@ -15,8 +15,8 @@
 import { SHADOW_ROOT } from "../core/paths.js";
 import { today, isNotFound, errText } from "../core/util.js";
 import { appendJsonlLine } from "../persistence/jsonl-append.js";
-import { nodeTypeOf } from "../core/node.js";
-import type { ParsedMemory } from "../core/episode.js";
+import { nodeTypeOf } from "../core/view/node.js";
+import type { ParsedMemory } from "../core/view/episode.js";
 import { sanitizeText, scrubUnsafe } from "../security/scrub.js";
 
 /** 一条查询观测记录（旁路、可重建）。
@@ -373,7 +373,7 @@ export const renderFitnessReport = (r: any): string => {
 /**
  * 把报告写成 .shadow/shadow-report.md（系统派生记录，rm -rf 可重建）。
  *
- * **裁定：这里的静默是正当的**（判据见 `core/projection-store.ts` 的「正当静默类判据」）——
+ * **裁定：这里的静默是正当的**（判据见 `core/view/projection-store.ts` 的「正当静默类判据」）——
  * 报告**正文**由调用方 `query/reads.ts:259` **原样返回给读者**，落盘只是留一份副本
  * ⇒ 写失败时**读者拿到的内容逐字节不变**。
  * 这正是它与 sidecar 写失败的区别（后者会让 `_index.md` 少一行 ⇒ 必须有信号）。

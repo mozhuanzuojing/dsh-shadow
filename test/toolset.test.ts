@@ -3,7 +3,7 @@
 //   （边界依据见 core/toolset.ts 文件头：安全边界表 + inv 178 Authority ≠ Ownership + inv 182 scope 不可扩大）。
 import assert from "node:assert/strict";
 import { CAPABILITIES, capabilityOf, remedyFor, unavailableHint } from "../dist/core/toolset/index.js";
-import { createIndexEngine } from "../dist/core/index-engine.js";
+import { createIndexEngine } from "../dist/core/candidate/index-engine.js";
 
 // ─────────────────────────────────────────────
 // ① 台账自洽：每项必须有 id/label/provides/degradesTo/doc，且至少有一条 default 处置

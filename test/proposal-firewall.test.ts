@@ -13,7 +13,7 @@ import {
   candidateStats,
   type Proposal,
   type Confirmation,
-} from "../dist/core/proposal.js";
+} from "../dist/core/admission/proposal.js";
 
 const P = (over: Partial<Proposal> = {}): Proposal => ({
   type: "proposal",

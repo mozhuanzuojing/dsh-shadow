@@ -433,7 +433,7 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
   // ── (C) `abstracts`（目录摘要 sidecar）：T8-A **漏项**，v1.15.65 复查时补上 ──
   //    为什么它不是「正当静默」那一类：写失败时 `writeAbstracts` 会 `continue`，
   //    于是该日期目录的 L0 **不再被写进 `_index.md`** ⇒ **读者拿到的内容变了**（索引少一行）。
-  //    判据见 `core/projection-store.ts` 的「正当静默类判据」。这条正是我上一轮
+  //    判据见 `core/view/projection-store.ts` 的「正当静默类判据」。这条正是我上一轮
   //    「站在同一个 `catch` 旁边却没给它加信号」的漏项。
   const abDeny = { write: (p: string) => p.includes("_abstract.md") };
   const abHealthy = await run(undefined, {}, {}, undefined, {}, undefined);

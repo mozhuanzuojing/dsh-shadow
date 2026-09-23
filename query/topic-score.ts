@@ -4,10 +4,10 @@ import { ageDaysOf, onByDefault } from "../core/util.js";
 import { scoreMemory, breakdownOf, tierFor, deprioritizeFactor } from "../retrieval/rank.js";
 import {
   evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lineageOf,
-} from "../observer/arbitrate.js";
-import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
+} from "../subject/observer/arbitrate.js";
+import { lifecycleOf, hotnessOf } from "../core/retention/lifecycle.js";
 import { scrubUnsafe } from "../security/scrub.js";
-import type { ParsedMemory } from "../core/episode.js";
+import type { ParsedMemory } from "../core/view/episode.js";
 
 export interface TopicScoreOpts {
   fs: any;

@@ -3,9 +3,9 @@
 //   A1 解析状态机不得吞掉固有层字段（投影段在前 / 投影段后再写固有层）；
 //   A2 结论与引用证据必须出现在真实 shadow_query 渲染输出里（queryShadow 只取前 6 行）。
 import assert from "node:assert/strict";
-import { parseResourceCard, deriveResourceNodes, resourceIdOf, listResourceCards, RESOURCE_DIR } from "../dist/core/resource.js";
+import { parseResourceCard, deriveResourceNodes, resourceIdOf, listResourceCards, RESOURCE_DIR } from "../dist/core/view/resource.js";
 import { validateAtomProjection } from "../dist/core/lineage/validator.js";
-import { matchShadowNodes, queryShadow, renderContext } from "../dist/core/node.js";
+import { matchShadowNodes, queryShadow, renderContext } from "../dist/core/view/node.js";
 
 const CARD = `# PageIndex
 - source: https://github.com/VectifyAI/PageIndex

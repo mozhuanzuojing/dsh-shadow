@@ -95,7 +95,7 @@ if (layerCycles.length > 0) {
   console.log("已知**非违规**（留档，不判）：层间成环");
   for (const c of layerCycles) console.log(`   ~ { ${c.join(", ")} }`);
   console.log("   成因：`core/` 是**混合层**（`core/paths.ts`/`types.ts`/`util.ts` 是无依赖纯模块，");
-  console.log("   而 `core/memory.ts`/`writer-materialize.ts`/`toolset-exec.ts` 有副作用）⇒ 层间环是命名artifact，");
+  console.log("   而 `core/retention/memory.ts`/`writer-materialize.ts`/`toolset-exec.ts` 有副作用）⇒ 层间环是命名artifact，");
   console.log("   **文件级**无环（①为 0）。要消掉它得先拆 `core/`，那是架构决策（BACKLOG T13），不是门禁。");
   console.log("");
 }

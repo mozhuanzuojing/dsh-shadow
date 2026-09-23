@@ -5,14 +5,14 @@
 // 与上层 ranking（`query/query.ts`）的事。
 //
 // 为什么新起一条边界、而不是给今天的 `IndexEngine` 加 provider（`adr/0095` §十、T17-A §3.4）：
-//   · `IndexEngine.refs` 的域是「文件 + 行号」（`dist/core/index-engine.js:4`），表达不了「记忆原子候选」；
+//   · `IndexEngine.refs` 的域是「文件 + 行号」（`dist/core/candidate/index-engine.js:4`），表达不了「记忆原子候选」；
 //   · 全仓唯一调用点只把 `refs` 打印成列表（`query/reads.ts` 的 `mode:"index"`）⇒ 候选预筛**没有召回消费者**。
 //   ⇒ 给它加 sqlite provider 等于「召回一点没快」，所以一期换的是**物化载体**（T17-A 的 (c1)）。
 //
 // 判据收一处（`AGENTS.md`）：遗忘/收口的判据**只有一份实现**（`query/materialize.ts` 里算出的 `keep`），
 // provider 只**接收**它、绝不复制它。索引里存**全部**枚举到的文件（D4），过滤留给读侧。
 import { listMemories, readRel } from "../../persistence/files.js";
-import { parseMemory } from "../episode.js";
+import { parseMemory } from "../view/episode.js";
 import { createSqliteCandidateProvider } from "./sqlite.js";
 import type { CandidateProvider, CandidateSet, MemorySource } from "../types.js";
 

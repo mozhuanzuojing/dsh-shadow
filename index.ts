@@ -33,7 +33,7 @@ import { runReadShadow } from "./query/query.js";
 import type { ShadowQueryDeps } from "./query/types.js";
 export type { EvidenceMatch, EvidenceProvider, GatewayEvidenceRef, EvidenceResult, ShadowConfig, ShadowScope, ShadowScopeKind } from "./core/types.js";
 export { firstNonEmpty, resolveShadowScope, resolveWorkspace } from "./core/scope.js";
-export { recordObservationTrace, renderObservationTrace } from "./observer/trace.js";
+export { recordObservationTrace, renderObservationTrace } from "./subject/observer/trace.js";
 export { reflectOf, renderReflection } from "./reflection/engine.js";
 
 export const name = "dsh-shadow";

@@ -1,6 +1,6 @@
 // dsh-shadow —— v1.8.0 Evidence Lineage：parseMemory 派生 lineage/kind + breakdown（纯函数）。
 import assert from "node:assert/strict";
-import { parseMemory, deriveAtomKind, deriveCreatedBy } from "../dist/core/episode.js";
+import { parseMemory, deriveAtomKind, deriveCreatedBy } from "../dist/core/view/episode.js";
 import { evidenceBreakdownOf } from "../dist/query/observatory.js";
 
 const SAMPLE = `# io/backend/src/main/java/com/openapi/io/dept/DeptMapService.java

@@ -4,24 +4,24 @@
 // fs 重、领域逻辑最密；用显式 WriterCore 注入（状态 + 配置派生），便于无 harness 验证。
 // 与 writer.ts 原实现逐字一致；flush 经 hooks.primaryComp 取主入口（composition root 注入，解 cycle）。
 import { SHADOW_ROOT } from "../paths.js";
-import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../abstract.js";
+import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../view/abstract.js";
 import type { AgentLike } from "../types.js";
 import { resolveWorkspace } from "../scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
 import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
 import { readRel, listMemories, memoryFileName, timeFromName } from "../../persistence/files.js";
 import { readMeta, mutateMeta } from "../../persistence/meta.js";
-import { buildClueHeader, registerMeta } from "../memory.js";
-import { traceOf } from "../trace.js";
+import { buildClueHeader, registerMeta } from "../retention/memory.js";
+import { traceOf } from "../retention/trace.js";
 import { streamText, textMessage } from "./llm.js";
 import { buildIndexText, consolidateText } from "./render.js";
-import { parseMemory, deriveEpisodes, episodesIndexText } from "../episode.js";
-import { isForgettable, oldestBeyond, isCompacted } from "../forget.js";
+import { parseMemory, deriveEpisodes, episodesIndexText } from "../view/episode.js";
+import { isForgettable, oldestBeyond, isCompacted } from "../retention/forget.js";
 import { sanitizeText, isUnsafe } from "../../security/scrub.js";
 import { routeFor, noteDegrade, markDerivedDirty, rememberAuditMaterials, takeAuditMaterials } from "./core.js";
-import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "../capture-granularity.js";
+import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "../retention/capture-granularity.js";
 import { appendJsonlLine } from "../../persistence/jsonl-append.js";
-import { invalidateProjection, shadowSourcesFingerprint } from "../projection-store.js";
+import { invalidateProjection, shadowSourcesFingerprint } from "../view/projection-store.js";
 import type { WriterCore } from "./core.js";
 import type { WriterHooks } from "./capture.js";
 
@@ -145,7 +145,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
 
   // ── 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）────────────────────────────
   //  每条记忆一份摘要是 O(N) 写；**每个日期目录一份**是 O(#dates) 写，故代价有界（见 types.ts 的注释）。
-  //  层次：记忆（source）→ L1 → L0，**每层只从它下面那层派生**（`core/abstract.ts` 的唯一纪律）。
+  //  层次：记忆（source）→ L1 → L0，**每层只从它下面那层派生**（`core/view/abstract.ts` 的唯一纪律）。
   //  返回「最近 N 个目录的 L0」供 `_index.md` 引用 —— 这条读路径让 sidecar **不是死代码**。
   const writeAbstracts = async (fs: any, ws: string, recs: any[]): Promise<string> => {
     if (core.abstractCfg.enabled === false) return "";
@@ -172,7 +172,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
         await fs.writeText(t, text);
       } catch (e: any) {
         console.log("[dsh-shadow] abstract sidecar write failed:", e && e.message);
-        // T8-A 漏项（v1.15.65 补）：这一条**不是**「正当静默」那一类（判据见 `core/projection-store.ts`）——
+        // T8-A 漏项（v1.15.65 补）：这一条**不是**「正当静默」那一类（判据见 `core/view/projection-store.ts`）——
         // 下面的 `continue` 会让该日期目录的 L0 **不再被写进 `_index.md`**（`sections.push` 被跳过）
         // ⇒ **读者拿到的内容变了**（索引里少一行），且 sidecar 文件也不存在。
         // 我上一轮修 T8-A 时就站在这个 `catch` 旁边，却没给它加信号 —— 而这正是

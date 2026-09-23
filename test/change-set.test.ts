@@ -1,6 +1,6 @@
 // dsh-shadow —— ADR-0048⑤：ChangeSet（zg change-set 思想，变革驱动索引）。
 import assert from "node:assert/strict";
-import { ChangeSet } from "../dist/core/change-set.js";
+import { ChangeSet } from "../dist/core/retention/change-set.js";
 
 // 创建/修改/删除 + 目录
 const cs = new ChangeSet({ root: "D:/ws" });

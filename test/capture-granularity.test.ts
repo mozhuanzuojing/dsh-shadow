@@ -17,7 +17,7 @@ import {
   bodyLinesOf,
   materialOfAction,
   actionMaterials,
-} from "../dist/core/capture-granularity.js";
+} from "../dist/core/retention/capture-granularity.js";
 import { isMemoryFileName } from "../dist/persistence/files.js";
 
 const action = (text: string) => ({ kind: "action", text, comp: "x", time: "10:00:00" });
@@ -56,10 +56,10 @@ assert.equal(obj.text, "改/读 core/x.ts", "审计行必须保留原文");
 // ── 正文归一化：记忆正文与审计流共用同一份（否则两条路径会各自演化出不同的安全判据）──
 assert.deepEqual(bodyLinesOf(traces, "shadow"), ["- [10:00:00] [core/x.ts] 改/读 core/x.ts"]);
 
-// ── 材料抽取：判据收一处（`core/memory.ts` 与审计流材料折叠共用）──
+// ── 材料抽取：判据收一处（`core/retention/memory.ts` 与审计流材料折叠共用）──
 assert.equal(materialOfAction("改/读 core/x.ts"), "core/x.ts");
 assert.equal(materialOfAction("调用 edit"), undefined, "非 fs 动作不是材料（否则「调用 X」会被当路径）");
-assert.deepEqual(actionMaterials([action("改/读 a.ts"), action("调用 edit"), action("改/读 a.ts")]), ["a.ts", "a.ts"], "去重交给调用方（core/memory.ts 的 addMat）");
+assert.deepEqual(actionMaterials([action("改/读 a.ts"), action("调用 edit"), action("改/读 a.ts")]), ["a.ts", "a.ts"], "去重交给调用方（core/retention/memory.ts 的 addMat）");
 
 // ── ⑤ 静态接线守卫：判据不得「只存在、从不执行」──
 // 由来：本仓有过这种失效形态（`core/types.ts:52` 自陈 `knowledgeEngine.enabled` **生产零读取**；
