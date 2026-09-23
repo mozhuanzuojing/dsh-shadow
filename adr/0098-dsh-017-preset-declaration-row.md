@@ -162,3 +162,24 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 - **本 ADR 不主张**「插件体在 0.1.7 上的一切行为都与 0.1.5 相同」：只主张 §4.1 列出**比对过**的那些面。
 - **未做的扩张**：0.1.7 新增的 `plugin_manager` / `dsh-config-editor` / `fs.watch` 等能力**一律未接入** ——
   本次是**适配**（让既有能力在新宿主上成立），不是**能力扩张**；要接入须另立 ADR。
+
+## 6. 补记（2026-09-23）：基线再抬到 `0.1.7-alpha.2`，落成 `v1.20.1`
+
+上游在 `0.1.7-alpha.1` 之后又发了 **`0.1.7-alpha.2`**（现为 npm 的 `alpha` tag）。仓库里先到了一个
+`chore: raise dsh compatibility baseline to 0.1.7-alpha.2`（`0706f4c`），但它**只改了代码面**
+（`engines.dsh` / 插件描述 / `HOST_BASELINE`），把**当前态文档**留在 `0.1.7-alpha.1`，且与 `v1.20.0`
+共用版本号与 tag。
+
+**本 ADR 正文不改写**（§2/§3 那几条取舍是**决策当时**的事实）；此处只记后续：
+
+- **三条结论在 alpha.2 上全部继续成立**：§1 的判据面（预设形态是唯一硬断裂、插件体未变）无需重开 ——
+  alpha.2 是 `alpha.1` 之后的补丁版，没有改变 §4.1 比对过的任何一面。
+- **alpha.2 上的实测（用户 live 环境，2026-09-23）**：`dsh --version` = **`0.1.7-alpha.2`**；
+  live profile 的 `--dump-config` 含 `agent-preset-registry` / `preset-standard` / 团队三行 /
+  `dsh-shadow` / **`preset-projection`**；本会话持续落盘，`recall_shadow` 读得到刚写入的原子。
+- **基线口径**：`engines.dsh` 与 `HOST_BASELINE` 一并抬到 `0.1.7-alpha.2`；`README` / `CONTEXT` /
+  `presets/README` 的**当前态取值**同步（即 `v1.20.1`）。
+- **教训（值得记）**：基线是**能推出来的字段**，却被手写在 ≥4 份当前态文档里，而**没有任何门**守
+  「README 的基线表 = `package.json` 的 `engines.dsh`」—— `audit:docs` ① 只比三方**版本号**，
+  `host-probe.test.ts` ⑥ 只比 `HOST_BASELINE` 与 `engines.dsh`。⇒ 下次「抬基线」应当**同时**改
+  README/CONTEXT，**或**给这条一致性配一道门（本补记只记判据，不擅自开门）。

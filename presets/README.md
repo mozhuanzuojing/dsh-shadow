@@ -41,7 +41,7 @@ should call `read_shadow` to retrace its own trajectory. `dsh-shadow` itself is
 a host bundle and is always on; this preset only steers how the agent uses it.
 
 > **Change note — v1.20.0 / ADR-0098: the preset became a declaration row, and Agent Teams moved
-> to the profile plane.** Both changes are forced by DSH `0.1.7-alpha.1`:
+> to the profile plane.** Both changes are forced by DSH `0.1.7`:
 > 1. The preset is no longer a `$DSH_HOME/.agent-presets/<id>/` directory — it is a
 >    `@deepseek-ai/dsh-agent-preset` declaration row in `presets/projection.patch.yml`, applied
 >    through `package.json` → `dsh.bundle.patch` (now an **array**). See「Install」above.
@@ -257,7 +257,7 @@ The preset only configures how an agent uses `read_shadow` / shadow memory. It d
 DSH built-in plugins (`@deepseek-ai/dsh-*`) and `{{model}}` / `{{cwd}}`; it carries
 no user-machine-specific paths or keys, so it is portable.
 
-## Note on DSH preset management (current as of 0.1.7-alpha.1)
+## Note on DSH preset management (current as of 0.1.7-alpha.2)
 
 `dsh` still exposes **no** `dsh preset install/doctor` subcommand (verified: `dsh preset --help`
 treats the args as profile boot args). An agent preset is declared as an
