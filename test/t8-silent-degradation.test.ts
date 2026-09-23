@@ -19,8 +19,8 @@
 // **反例正控**写在每一组里：若把机制改成「永远打印横幅」或「永远不打印」，
 // 正/负对照中必有一侧变红 —— 防止本测试退化成恒真。
 import assert from "node:assert/strict";
-import { streamText } from "../dist/core/writer-llm.js";
-import { createShadowCollector } from "../dist/core/writer.js";
+import { streamText } from "../dist/core/writer/llm.js";
+import { createShadowCollector } from "../dist/core/writer/index.js";
 import { recordQueryObservation, summarizeQueryLog } from "../dist/query/observatory.js";
 import { readLedger } from "../dist/retrieval/ledger.js";
 import * as mod from "../dist/index.js";

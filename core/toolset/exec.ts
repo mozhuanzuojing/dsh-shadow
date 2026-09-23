@@ -26,8 +26,8 @@ import {
   remedyFor,
   CATEGORY_ORDER,
   type Capability,
-} from "./toolset.js";
-import { resolveZgInvocation, resetZgInvocationCache } from "../evidence/zg.js";
+} from "./index.js";
+import { resolveZgInvocation, resetZgInvocationCache } from "../../evidence/zg.js";
 
 /** provider 探测超时（首次可能触发索引/模型加载）。 */
 const PROBE_TIMEOUT_PROVIDER = 15000;

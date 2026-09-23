@@ -46,7 +46,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 
 **④ D11 的落地 = 新增类型化字段作唯一事实源，`note` 由它派生（渲染逐字不变）。**
 取值域是**类型** `VerSrcKind = "measured" | "authority" | "none"`（`core/util.ts`）；
-`core/toolset.ts` 的 `tool()` 不再收字符串，`note` 用 `verSrcLabel(verSrc)` 渲染；
+`core/toolset/index.ts` 的 `tool()` 不再收字符串，`note` 用 `verSrcLabel(verSrc)` 渲染；
 下游 `claimOf()` **不再正则反解散文**，改读 `verSrcKind` / `verSrcVersion`；
 未知/非法取值一律返回 `null`（=「未标」），**不许默认成强档**。
 
@@ -57,7 +57,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 | 损失形态 / 句柄 / never_worse | **新** `retrieval/loss.ts` | `Lossiness{ none, tail, whole }` · `RecoverHandle{file, locator}` · `handleText` · `neverWorseChars`（单位 `chars`）· `lossLine`（可复取/不可复取二选一）· `excerptWorthwhile`（区分「本来就短」）· `tierLossNote` |
 | 索引路径 | `retrieval/render.ts` | `renderIndexBudgeted(idx, maxChars, source = INDEX_HANDLE)`：加**损失行**（形态 + 句柄/不可复取）；出口改为 `neverWorseChars(body + notes, raw)`；披露里的段名**限长**（见 §自检 ②） |
 | 召回路径 | `query/query.ts` | 降档前取句柄：**无句柄不降档**；降档必须**真省字**（`degraded.length <= render.length`）；「本是够长却没给片段」记进披露，输出 `tierLossNote`（**条内**损失）与信封（**条级**损失）分开 |
-| 出处类型化 | `core/util.ts` / `core/toolset.ts` | 新增 `VerSrcKind` + `verSrcLabel`（查表）；`Capability` 增 `verSrcKind` / `verSrcVersion`；57 个调用点 `"权威核验"` ⇒ `"authority"`；两个 provider 条目显式 `"none"` |
+| 出处类型化 | `core/util.ts` / `core/toolset/index.ts` | 新增 `VerSrcKind` + `verSrcLabel`（查表）；`Capability` 增 `verSrcKind` / `verSrcVersion`；57 个调用点 `"权威核验"` ⇒ `"authority"`；两个 provider 条目显式 `"none"` |
 | 出处读取 | `tools/toolset-authority.lib.ts` / `.ts` | `claimOf(cap)` 读类型化字段；`ledgerMismatch` 入参同步 |
 
 ### C. 判据与测试（**每条都配反向不变量**）
@@ -105,7 +105,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 - 「**被省略**」与「**本来就短**」在输出上**可区分**了（这是 D9 的完成判据①），且被省略的部分**有句柄可复取**。
 - 有损路径多了一道**全函数守卫**（出口唯一）：*压完没变短 ⇒ 别压*。
 - `verSrc` 从「散文里的一段字符串」变成**类型化字段**：弱档**折不进**散文，缺失**不会**默认成强档。
-- **零新增依赖、零新增存储、零改签入清单**（63 行 `core/toolset.ts` 的 57 处只是把字面量换成类型取值）。
+- **零新增依赖、零新增存储、零改签入清单**（63 行 `core/toolset/index.ts` 的 57 处只是把字面量换成类型取值）。
 
 ### 负 / 已知边界（诚实）
 

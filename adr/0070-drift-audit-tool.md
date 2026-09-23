@@ -70,7 +70,7 @@ v1.15.22–26 连续五轮，找到的都是**同一族**缺陷：**机制是对
 | B-POS `phase === "ghost"` 跨两文件 | **报**（两侧各一条） |
 | B-NEG `only === "here"` 单文件 | 不报 |
 
-**② git 历史里的真缺陷（最强的一组）**：`0c4e06b:core/writer-materialize.ts` 的 `:41` 与 `:215`
+**② git 历史里的真缺陷（最强的一组）**：`0c4e06b:core/writer/materialize.ts` 的 `:41` 与 `:215`
 就是 ADR-0069 的两处真缺陷，而同文件**当前版本**已修。检测器必须「**旧版报 2 条、新版报 0 条**」。
 把历史编码进测试（而不是靠人记），是为了让结论**可复现**。
 
@@ -180,11 +180,11 @@ AssertionError: 通配符 `scripts/*.ps1` 不是「可检查的具体路径」�
 |---|---|---|
 | `c.status=supported` | **真漂移（已修 + 已加锁）** | 见下节 3；键**已消失** |
 | `res.status=not_found` | 第 7 处真缺陷 | **v1.15.27 已修**（`observer/judgment.ts` 补 `isConcreteLocator`） |
-| `c.kind=provider` / `c.kind=reference` | **正当分层** | `toolset.ts` **声明** `kind` ↔ `toolset-exec.ts` **消费**；并实测其边界不变量 **107 项全满足**（v1.15.29 已复核） |
+| `c.kind=provider` / `c.kind=reference` | **正当分层** | `toolset.ts` **声明** `kind` ↔ `core/toolset/exec.ts` **消费**；并实测其边界不变量 **107 项全满足**（v1.15.29 已复核） |
 | `r.status=unavailable` | **正当分层** | `core/index-engine.ts:54,66` **产出** `unavailable`（zg/semble 缺件）↔ `query/lenses.ts（`unavailableHint` 消费）` **消费**它并渲染缺件提示（`unavailableHint`）。**同一契约的两个角色**；且 `unavailable` 是**宿主声明的类型值**（`core/types.ts:59` `EvidenceStatus`），非本仓自造 |
 | `err.code=ENOENT` | **正当分层** | 两处都是**同一个外部契约**（Node `execFile` 的 `err.code`）在各自 CLI 上的一致性检查：`core/semble.ts:45` → `semble_not_installed`、`evidence/zg.ts:68` → `zg_not_installed`。**口径一致**（都映射到 `unavailable` + provider 专属 reason），非漂移 |
-| `e.kind=user` | **正当分层** | `core/memory.ts` 是**写侧**（构造线索头 / 统计用户消息数）、`core/writer-materialize.ts:203` 是**读侧**（`writeConsent` 门判断本回合是否含用户明说）。两者读的是**同一份 `pending` 事件流**的同一字段，属生产/消费 |
-| `kind=error` | **误报（同形不同义）** | `core/writer-llm.ts:31` 是**宿主流事件**的 `chunk.reason.kind`（外部输入，`dsh-llm` 契约）；`index.ts:61-68` 是本插件 `reportHostGap` 自己的**局部形参** `kind`。二者**接收者与语义都不同**，仅字面量同形 —— 正是工具「无类型分析」的已知噪声 |
+| `e.kind=user` | **正当分层** | `core/memory.ts` 是**写侧**（构造线索头 / 统计用户消息数）、`core/writer/materialize.ts:203` 是**读侧**（`writeConsent` 门判断本回合是否含用户明说）。两者读的是**同一份 `pending` 事件流**的同一字段，属生产/消费 |
+| `kind=error` | **误报（同形不同义）** | `core/writer/llm.ts:31` 是**宿主流事件**的 `chunk.reason.kind`（外部输入，`dsh-llm` 契约）；`index.ts:61-68` 是本插件 `reportHostGap` 自己的**局部形参** `kind`。二者**接收者与语义都不同**，仅字面量同形 —— 正是工具「无类型分析」的已知噪声 |
 | `type=principle` / `type=anti_pattern` | **正当分层（且已由类型锁）** | `reflection/engine.ts:32` **产出** `ReflectionLearningType`（`reflection/types.ts:6` 三值联合）↔ `identity/types.ts:47` **映射**为 `IdentityChangeType`。两侧**共用同一类型声明**（`identity/types.ts:4` import 它）⇒ 类型层已保证口径一致 |
 | `v=string` | **误报（短局部别名）** | `core/scope.ts:10` / `core/util.ts:54` 的 `v` 都是回调形参名（`values.find((v) => …)`）。工具无作用域分析，属已记录的「短局部变量别名」噪声 |
 
@@ -219,7 +219,7 @@ B 段小计 **11 键/28 处 → 10 键/25 处**。
 
 ### 4. 附带：台账「两级边界」不变量**从实测升级为棘轮**（T5 附带项）
 
-`core/toolset.ts:3-6, 44-46` 规定两级语义不同：`reference` = 插件**不接线**的通用 CLI 目录
+`core/toolset/index.ts:3-6, 44-46` 规定两级语义不同：`reference` = 插件**不接线**的通用 CLI 目录
 （`degradesTo` 必须表明「不影响插件行为」）、`provider` = **插件内接线**的可选增强
 （缺件 = 能力降级，必须给**确定性退路** + `provides` + `install`）。
 v1.15.29 只做过一次**实测**（107 项全满足），**没有断言** ⇒ 加条目时可能把边界写糊。

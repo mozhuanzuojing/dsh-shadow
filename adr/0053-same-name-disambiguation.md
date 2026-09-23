@@ -14,7 +14,7 @@ ADR-0050 硬切了 4 个旧名，并在 §2 留下一份「**保留**」清单�
 | 词 | 层 A | 层 B | 今天靠什么区分 |
 |----|------|------|----------------|
 | `verify` | `mode:"verify"` = 跑 VerificationRun（证据运行） | `args.verifyEvidence` = 经 Evidence Gateway 验**证据路径** | 注释（`index.ts` 参数描述里写「≠ mode:verify」） |
-| `EvidenceRef` | Gateway `EvidenceRef{path}`（`core/types.ts`） | lineage `AtomEvidenceRef{type,locator}`（`core/lineage.ts`） | 只差 `Atom` 前缀，类型系统不拦混用 |
+| `EvidenceRef` | Gateway `EvidenceRef{path}`（`core/types.ts`） | lineage `AtomEvidenceRef{type,locator}`（`core/lineage/index.ts`） | 只差 `Atom` 前缀，类型系统不拦混用 |
 | `reality*` | `mode:"real-evidence"`（正名后） | 字段 `realityEvidenceRef` **仍在用已废止的词根 `reality`**；`index.ts` 自己标注「字段名历史遗留」 | 无 |
 
 `mode:"reality"` 已于 ADR-0050 废止，但**同族的字段名**没跟着改——这是「正名硬切」只切了一半的残留。

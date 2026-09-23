@@ -23,7 +23,7 @@ D5（ADR-0066）暴露的漂移形态是「**同一份语料，两条读路径�
 
 ⇒ **投影与源头脱钩**，且差额随每次会话增长。
 
-**根因**（`core/writer-materialize.ts` 的 `ensureIndex`）：
+**根因**（`core/writer/materialize.ts` 的 `ensureIndex`）：
 
 ```ts
 if (!core.indexDirty.has(ws) && core.indexCacheWarm.has(ws)) return; // 已最新且已预热 → 跳过重建

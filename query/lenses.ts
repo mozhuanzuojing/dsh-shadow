@@ -5,7 +5,7 @@ import { tokenize, today, RECALL_PREFIX } from "../core/util.js";
 import { approxEntries } from "../retrieval/rank.js";
 import { noMatchText } from "../retrieval/render.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
-import { unavailableHint } from "../core/toolset.js";
+import { unavailableHint } from "../core/toolset/index.js";
 import { readSoul, soulText } from "../soul/soul.js";
 import { readIdentity, renderIdentity } from "../soul/identity.js";
 import { observerContextOf, renderObserverContext } from "../observer/core.js";

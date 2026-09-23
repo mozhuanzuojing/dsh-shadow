@@ -80,7 +80,7 @@ interface WingetRun { ok: boolean; code: number | string; out: string; err: stri
 ### 4. 文档与注释里的路径引用一并归一
 
 `adr/0058`、`adr/0060`、`adr/0062`、`BACKLOG.md`、`CHANGELOG.md`、`CONTEXT.md`、
-`core/toolset.ts`、`core/projection-store.ts`、`docs/toolchain-windows.md`、`tools/toolset-seed.json`
+`core/toolset/index.ts`、`core/projection-store.ts`、`docs/toolchain-windows.md`、`tools/toolset-seed.json`
 里的 `tools/*.mjs` 路径引用全部改为 `.ts`（**历史条目也改**：文件已不存在，
 留旧路径就是文档漂移；改动本身记在本版本条目里，可追溯）。
 

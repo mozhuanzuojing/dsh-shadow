@@ -55,7 +55,7 @@
 `ShadowProjectionStore.invalidateFor?()`（`core/projection-store.ts`）**在生产中未接线**：
 - `ChangeSet` 唯二消费者是 `test/change-set.test.ts` 与 `test/projection-store.test.ts`；
 - 生产侧只在**类型位置**提到它（`invalidateFor?(set: ChangeSet)`），而该方法**本身也无调用者**；
-- 生产走的是**粗粒度清空** `invalidateProjection` → `invalidate()`（`writer-materialize.ts:213`）。
+- 生产走的是**粗粒度清空** `invalidateProjection` → `invalidate()`（`core/writer/materialize.ts:213`）。
 
 **但这不是正确性缺陷**（本 ADR 明确纠正可能的夸大）：
 - 投影缓存是**可重建派生**，清空后下次读自动重建 ⇒ 粗粒度路径**正确**；
@@ -146,7 +146,7 @@
 | 类别 | 条数 | 符号 |
 |---|---|---|
 | **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`trajectory/long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
-| **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge-engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
+| **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge/engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
 | **误报 · 跨层 API** | **1** | `ChangeSet` —— `core/projection-store.ts:85` 的 store 工厂在生产被调用（`:168`），故 `invalidateFor(new ChangeSet(...))` 是**可达消费点**。⚠ **与 D1 的关系**：D1 说「`ChangeSet`/`invalidateFor` 生产中未接线」**仍然成立**（无生产**实例化点**）；两条不矛盾 —— 一条说「接口可达」，一条说「没人实例化」。⇒ **D1 维持原判** |
 | **零引用（生产 + 测试皆无调用）** | **18 符号 / 8 决定** | 见 §4 表 |
 | **仅测试消费** | **4** | `renderRetrieved`、`isExchangeable`、`readTemporalGraph`、`readGraph`（后二者 ADR-0071 已定「保留 + 改正 + 收敛」） |
@@ -189,7 +189,7 @@
 | `writeMeta` | **保留并注明** | `persistence/meta.ts:92` 已声明是「明确要覆盖」的逃生舱；生产写 meta **一律走 `mutateMeta` 事务**（ADR-0068）⇒ 它不是遗漏接线，是**有意留的后门**。本 ADR 登记结论、不重复其注释 |
 | `relationForProposal` | **保留并注明**（+ **新风险**，见 §5） | `temporal/edge.ts:29` 原文已写「保留：…v0.26 不跑 reflection，留接口」 |
 | `renderIntent` / `renderIdentityModel` | **保留并注明** | 二者同型：都是**完整形态的渲染器**，而实际读侧走别的路径（`observer/core.ts:31` 内联 / `soul/identity.ts` 的 `renderIdentity`）。它们承载「完整形态」的唯一落点，删掉会让模型只能以原始 JSON 出现；**接线与否属产品决策** ⇒ T1 待决。已在两处代码加注 |
-| `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的**目标能力**，实现完整；是否启用属产品决策（默认路径可能刻意不做成本折叠）⇒ T1 待决。已在 `core/knowledge-cost.ts` 加注 |
+| `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的**目标能力**，实现完整；是否启用属产品决策（默认路径可能刻意不做成本折叠）⇒ T1 待决。已在 `core/knowledge/cost.ts` 加注 |
 | 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷。已在 `expansion-guard.ts` 加注（家族级） |
 | `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 15 个都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
 | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |

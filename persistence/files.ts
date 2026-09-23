@@ -16,7 +16,7 @@ export const readRel = async (fs: any, ws: string, rel: string) => {
 // 与生命周期标签。所以「同一个文件的时间」必须与「它是怎么被读到的」无关。
 //
 // 为什么必须是**函数**而不是两处各写一遍正则（v1.15.38 修复）：
-//   写侧（`core/writer-materialize.ts` 造 consolidated 文件名）与读侧（本文件的枚举）
+//   写侧（`core/writer/materialize.ts` 造 consolidated 文件名）与读侧（本文件的枚举）
 //   曾各自决定 `time`：写侧用 `ep.startedAt.slice(11,17).replace(/:/g,"")`（`YYYY-MM-DD HH:MM:SS`
 //   下取到 `"09:00:"` → `"0900"`，**4 位、不是 HHMMSS**），且文件名里**没有**时间戳 ⇒
 //   读侧正则 `^\d{4}-\d{2}-\d{2}--(\d{6})` 不匹配 ⇒ 重启后同一文件 `time = ""`。
@@ -32,7 +32,7 @@ export const memoryFileName = (date: string, time: string, rest: string): string
 /**
  * **记忆文件判据（唯一一份实现）**：`.md`、非 `_index.md`、非 `_` 前缀。
  *
- * 为什么必须收成一处（T17-B）：派生索引（`core/candidate-sqlite.ts` 的 `enumDateDir`）**也**要按这个判据
+ * 为什么必须收成一处（T17-B）：派生索引（`core/candidate/sqlite.ts` 的 `enumDateDir`）**也**要按这个判据
  * 筛记忆文件。两处各写一遍就会出现「索引收了、召回没收」这类**语义漂移**（`tools/audit-drift.ts` 的 B 段
  * 正是抓「同一条判据在 ≥2 个生产模块被表达」）。完整理由与演变见 `listMemories` 循环里的注释（v1.15.35 / D6）。
  */

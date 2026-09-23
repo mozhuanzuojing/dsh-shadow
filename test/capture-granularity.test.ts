@@ -67,7 +67,7 @@ assert.deepEqual(actionMaterials([action("改/读 a.ts"), action("调用 edit"),
 // 这里只证明「`flush` 的生产路径**确实**问了粒度判据，且审计分支在写记忆文件**之前**」。
 // ⚠ 能力边界：**静态检查，不证明运行时行为**；真正的端到端（假 fs 驱动 `makeMaterialize`）见 `BACKLOG` T22。
 {
-  const src = readFileSync(new URL("../core/writer-materialize.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../core/writer/materialize.ts", import.meta.url), "utf8");
   const iGuard = src.indexOf("isAuditBatch(arr)");
   const iGuardCfg = src.indexOf("echoToAudit(core.config)");
   const iAuditWrite = src.indexOf("appendJsonlLine(");

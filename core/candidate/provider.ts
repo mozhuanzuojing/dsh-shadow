@@ -11,15 +11,15 @@
 //
 // 判据收一处（`AGENTS.md`）：遗忘/收口的判据**只有一份实现**（`query/materialize.ts` 里算出的 `keep`），
 // provider 只**接收**它、绝不复制它。索引里存**全部**枚举到的文件（D4），过滤留给读侧。
-import { listMemories, readRel } from "../persistence/files.js";
-import { parseMemory } from "./episode.js";
-import { createSqliteCandidateProvider } from "./candidate-sqlite.js";
-import type { CandidateProvider, CandidateSet, MemorySource } from "./types.js";
+import { listMemories, readRel } from "../../persistence/files.js";
+import { parseMemory } from "../episode.js";
+import { createSqliteCandidateProvider } from "./sqlite.js";
+import type { CandidateProvider, CandidateSet, MemorySource } from "../types.js";
 
 // D2 的导出面**原样**（`MemorySource` / `CandidateSet` / `CandidateProvider` 仍是本模块的公开导出）。
 // 类型的声明体住在 `core/types.ts`：那是「领域 DTO / 接口」的既有落点，也是唯一能同时被本模块与
 // `candidate-sqlite.ts` 引用而**不产生文件级依赖环**的地方（`audit-layers` 把 `import type` 也算边）。
-export type { CandidateProvider, CandidateSet, CandidateState, MemorySource } from "./types.js";
+export type { CandidateProvider, CandidateSet, CandidateState, MemorySource } from "../types.js";
 
 const okSet = (provider: "fs" | "sqlite", sources: MemorySource[], atoms: any[]): CandidateSet =>
   ({ provider, state: "ok", sources, atoms });

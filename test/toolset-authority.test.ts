@@ -27,7 +27,7 @@ import { claimOf, ledgerMismatch, unsubstantiatedMeasured, countInconsistency, t
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..");
 const manifest = JSON.parse(readFileSync(join(repoRoot, "tools", "toolset-authority.json"), "utf8"));
-const { CAPABILITIES } = await import("../dist/core/toolset.js");
+const { CAPABILITIES } = await import("../dist/core/toolset/index.js");
 
 // ─────────────────────────────────────────────
 // ① 清单自洽：counts 与 rows 实际相符

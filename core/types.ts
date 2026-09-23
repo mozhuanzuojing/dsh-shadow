@@ -39,7 +39,7 @@ export interface ShadowConfig {
    * · `"memory"` = 旧行为（每条回声一个记忆文件）；**逃生口**，不是推荐值。
    *
    * ⚠ 审计流属**系统派生记录**层（同 `query-log/`）⇒ 不进 `_meta.json`、不进索引、不计 hits；
-   * 其材料会折叠进下一条记忆的「背景/材料」（`core/writer-core.ts` 的 `auditMaterials`）。
+   * 其材料会折叠进下一条记忆的「背景/材料」（`core/writer/core.ts` 的 `auditMaterials`）。
    */
   capture?: { echo?: "audit" | "memory" };
   /** Phase 1A.5 Shadow Query Observatory：默认开启（观察真实查询）；enabled:false 关闭旁路记录。系统派生记录（.shadow/query-log/），rm -rf 不影响 Atom。 */
@@ -49,7 +49,7 @@ export interface ShadowConfig {
   /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback) | semble(本地语义检索 CLI，ADR-0054；同不 fallback)。 */
   indexEngine?: { provider?: "fs" | "zg" | "semble" };
   /**
-   * T17-B 派生索引（`adr/0095` 一期）：**候选来源**provider（见 `core/candidate-provider.ts`）。
+   * T17-B 派生索引（`adr/0095` 一期）：**候选来源**provider（见 `core/candidate/provider.ts`）。
    *
    * · `provider`：`"fs"`（**默认**）| `"sqlite"`。
    *   **默认是 `fs`**，且 T17-B **不改默认**（D8）—— 改默认是 T17-C 的事：
@@ -66,7 +66,7 @@ export interface ShadowConfig {
    *  ⚠ **`enabled` 不是闸门（v1.15.34，D8 实测校正）**：本字段**生产零读取** ——
    *  `mode:"knowledge"` 的读路径**无条件**建树（`query/reads.ts:141`），与 `enabled` 无关。
    *  原注释写「默认 off」描述的是一处**不存在的开关**（同一缺陷另见 README 的表）。
-   *  **本 mode 唯一的闸门是 `llmNavigate.enabled`**（`core/writer.ts:79-80`）：默认关，
+   *  **本 mode 唯一的闸门是 `llmNavigate.enabled`**（`core/writer/index.ts:79-80`）：默认关，
    *  关时走确定性 `retrieveKnowledge`，且**输出显式标注**「LLM 导航未启用/失败 → 确定性检索」
    *  （`query/reads.ts:154`，符合 ADR-0049「缺件不静默」）。
    *  `provider` 亦为**占位**（`createKnowledgeEngine` 恒返回 `provider:"tree"`，不吃配置）。
@@ -90,8 +90,8 @@ export interface ShadowConfig {
 }
 
 // ── T17-B 候选来源边界（`adr/0095` 一期 D2）────────────────────────────────────
-// **为什么这四个类型住在这个文件**：它们同时被 `core/candidate-provider.ts`（边界的定义方与 `fs` provider）
-// 与 `core/candidate-sqlite.ts`（`sqlite` provider）使用。若把它们留在 `candidate-provider.ts`，
+// **为什么这四个类型住在这个文件**：它们同时被 `core/candidate/provider.ts`（边界的定义方与 `fs` provider）
+// 与 `core/candidate/sqlite.ts`（`sqlite` provider）使用。若把它们留在 `candidate-provider.ts`，
 // 两个文件之间就会出现一条 `import type` 的反向边，而 `audit-layers` 的**文件级无环门**把「所有 `from` 子句」
 // 都算依赖边（`import type` 也算）⇒ 必红。本文件正是「领域 DTO / 接口（类型仅声明、无运行时依赖）」的落点，
 // 且它本身没有任何 import ⇒ 不引入新环。`candidate-provider.ts` 照 D2 **原样 re-export** 这四个类型。

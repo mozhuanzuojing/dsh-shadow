@@ -32,7 +32,7 @@
 |---|---|
 | `core/memory.ts:74` | `"active"` |
 | `query/topic-recall.ts（lifecycle 默认 active）` | `"active"`（默认） |
-| `core/writer-materialize.ts:88` | `"compacted"` |
+| `core/writer/materialize.ts:88` | `"compacted"` |
 | **`"superseded"`** | **无生产写入者** —— 唯一来源是 `test/recall-attribution.test.ts:1319` 的**测试夹具手工塞入** |
 
 ⇒ 那三条分支在生产中**不可达**（与 ADR-0057 记录的 P0 同类：**机制存在、接线断了**）。

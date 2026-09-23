@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { probeCapability, resolveInstall, installCapability } from "../dist/core/toolset-exec.js";
+import { probeCapability, resolveInstall, installCapability } from "../dist/core/toolset/exec.js";
 
 // ─────────────────────────────────────────────
 // ① resolveInstall：把声明式配方解析成真实 argv

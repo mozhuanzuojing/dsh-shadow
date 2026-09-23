@@ -75,9 +75,9 @@ console.log("✔ ② 分类器正确（7 例：生产 / 测试 / 工具自身 / 
 // ─────────────────────────────────────────────
 {
   const before = gitShow("0c4e06b", "core/writer-materialize.ts");
-  const after = read(join(repoRoot, "core", "writer-materialize.ts"));
+  const after = read(join(repoRoot, "core", "writer", "materialize.ts"));
   const hitBefore = findFreshnessAsksProcess([{ file: "core/writer-materialize.ts", text: before }]);
-  const hitAfter = findFreshnessAsksProcess([{ file: "core/writer-materialize.ts", text: after }]);
+  const hitAfter = findFreshnessAsksProcess([{ file: "core/writer/materialize.ts", text: after }]);
   assert.deepEqual(hitBefore.map((h) => h.line).sort((a, b) => a - b), [41, 215],
     `修复前应报 :41 与 :215 两条；实际 ${JSON.stringify(hitBefore.map((h) => h.line))}`);
   assert.ok(hitBefore.every((h) => /Ensure|ensure/.test(h.detail)), "两条都应落在 ensure* 函数上（函数名收窄生效）");

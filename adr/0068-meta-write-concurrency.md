@@ -24,7 +24,7 @@
 |---|---|---|
 | `core/memory.ts` `registerMeta` | 短 | 读 → 加一条 → 写 |
 | `query/query.ts`（v1.15.24 新改） | 短 | 读 → 累加命中 → 写；**频率最高** |
-| `core/writer-materialize.ts` `runCompact` | **长** | 读 meta → **重建索引 + Episode 收口** → 写回**全量** |
+| `core/writer/materialize.ts` `runCompact` | **长** | 读 meta → **重建索引 + Episode 收口** → 写回**全量** |
 
 **fs 契约本身提供了守卫**（已读 `@deepseek-ai/dsh-fs@0.1.5-rc.2` 的类型定义核实，非推断）：
 

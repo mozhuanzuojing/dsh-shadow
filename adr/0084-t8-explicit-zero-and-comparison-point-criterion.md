@@ -35,15 +35,15 @@
 
 | # | 位置 | 承诺 0 有意义的**出处** | 被吞成 | 后果 |
 |---|---|---|---|---|
-| 1 | `core/writer-materialize.ts` 的 `writeAbstracts` → `abstracts.showInIndex`（**修前**在此行取默认） | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 | 文档承诺与代码不符；`!show` 分支**永不可达** |
-| 2 | `core/writer-core.ts` 的 `createWriterCore` → `episodes.showInIndex` | T8-B 立账时判定 | 8 | `core/writer-materialize.ts` 的 `rebuildIndex` 里 `episodeShow > 0` **恒真 = 死分支** ⇒「关掉 Episodes 段」**这个开关不存在** |
-| 3 | `core/writer-core.ts` 的 `createWriterCore` → `episodes.gapMinutes` | T8-B 立账时判定 | 60 | 无法表达「同一分钟才算同一段」 |
+| 1 | `core/writer/materialize.ts` 的 `writeAbstracts` → `abstracts.showInIndex`（**修前**在此行取默认） | **`core/types.ts:55` 明写**「默认 3，**0 = 不列**」 | 3 | 文档承诺与代码不符；`!show` 分支**永不可达** |
+| 2 | `core/writer/core.ts` 的 `createWriterCore` → `episodes.showInIndex` | T8-B 立账时判定 | 8 | `core/writer/materialize.ts` 的 `rebuildIndex` 里 `episodeShow > 0` **恒真 = 死分支** ⇒「关掉 Episodes 段」**这个开关不存在** |
+| 3 | `core/writer/core.ts` 的 `createWriterCore` → `episodes.gapMinutes` | T8-B 立账时判定 | 60 | 无法表达「同一分钟才算同一段」 |
 | 4 | `core/episode.ts` 的 `deriveEpisodes` 的 `gapMinutes` | 同 3（**库函数层**） | 60 | 同上；且它是**默认值的实际落点** |
-| 5 | `core/writer-materialize.ts` 的 `runCompact` → `compact.gapMinutes` | 同 3 | `episodeGap` | 同上 |
+| 5 | `core/writer/materialize.ts` 的 `runCompact` → `compact.gapMinutes` | 同 3 | `episodeGap` | 同上 |
 | 6 | `query/reads.ts` 的 episode/decision 读查询 → `episodes.gapMinutes` | 同 3 | 60 | 同上，**且是第三处口径分叉** |
 
 **#6 是「找出遗漏之处」的产物**：`episodes.gapMinutes` 的默认值算法此前在**三个地方各写一遍**
-（`writer-core.ts` / `episode.ts` / `query/reads.ts`）——**判据分叉**，而三份都吞 0。
+（`core/writer/core.ts` / `episode.ts` / `query/reads.ts`）——**判据分叉**，而三份都吞 0。
 
 ### 2.2 判据（**本仓唯一一份**：`core/util.ts:numOr`）
 
@@ -164,7 +164,7 @@ numOr(v, dflt, min = 0)
 | 比较点扫描判据落点 | 2 处 | **1 处** | `comparison-points.lib.ts` |
 | `npm run verify` | 53/53 | **54/54** | 新增 `test/t8-explicit-zero.test.ts` |
 
-**红前绿后**（不是推断）：把 `writer-core.ts` / `writer-materialize.ts` 的三处调用点**临时还原**为
+**红前绿后**（不是推断）：把 `core/writer/core.ts` / `core/writer/materialize.ts` 的三处调用点**临时还原**为
 `||` 形态、重新 `tsc`、再跑新测试 ⇒ `③b episodes.showInIndex:0` **真的红**，
 报文里打印出修前索引仍含 `## 任务回溯（Episodes）` 段。恢复后 54/54 全绿。
 

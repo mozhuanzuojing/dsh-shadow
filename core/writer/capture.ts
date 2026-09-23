@@ -2,11 +2,11 @@
 // 从 createShadowCollector 迁出的「事件 → pending」部分：push + 四个事件 handler（fs/tool/goal/session），
 // 以及 primaryComp（主题入口统计）。只改 core.pending/comps/goalByAgent/cwdBySession，不碰 fs/索引。
 // 与 writer.ts 原实现逐字一致；挂起时经 hooks.flush 兜底落盘（hooks 由 composition root 注入，解 cycle）。
-import { stamp, under, component } from "./util.js";
-import { sanitizeText } from "../security/scrub.js";
-import { extractMessage, classifyUser, extractDecisionStatement, extractReason, goalText } from "./collect.js";
-import { resolveWorkspace } from "./scope.js";
-import type { WriterCore } from "./writer-core.js";
+import { stamp, under, component } from "../util.js";
+import { sanitizeText } from "../../security/scrub.js";
+import { extractMessage, classifyUser, extractDecisionStatement, extractReason, goalText } from "../collect.js";
+import { resolveWorkspace } from "../scope.js";
+import type { WriterCore } from "./core.js";
 
 export interface WriterHooks {
   /** pending 超阈值时交给 materialize 落盘（composition root 注入）。 */

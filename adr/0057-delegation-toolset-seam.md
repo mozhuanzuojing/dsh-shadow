@@ -17,7 +17,7 @@
 | host 插件 | 工具集台账 | 两级条目（provider 2 + reference 48）+ 探测 + 审批安装 | 只有按 id 的入口 `capabilityOf(id)` |
 | preset | 委派纪律 | persona ①②（该不该派 / 规模与复用） | 通篇不提工具集、缺件、能力下限 |
 
-`core/toolset*.ts` 全文不提 teammate/subagent；persona ①②–⑦ 全文不提台账。唯一交叉是 `core/toolset.ts:12` 引 inv 182 **作为权限依据**，不是协作。
+`core/toolset*.ts` 全文不提 teammate/subagent；persona ①②–⑦ 全文不提台账。唯一交叉是 `core/toolset/index.ts:12` 引 inv 182 **作为权限依据**，不是协作。
 
 ### 调查中先暴露的三个事实（都不是偏好，是代码/条文）
 
@@ -26,7 +26,7 @@
 **为何三个版本全绿**：三个 toolset 测试（`toolset` / `toolset-exec` / `toolset-catalog`）**全部直接 import 执行函数**，从不走 `dispatchReadQuery`——执行函数是对的，**断的是接线**。→ 已修，并补 `test/toolset-dispatch.test.ts`（只走真实入口）。
 
 **F2（硬约束）「先装再派」在同一个会话内收益为零。**
-`core/toolset-exec.ts` 的 `installCapability` failed 分支已写明：「宿主进程的 PATH 是启动时快照，**新装的工具通常要重启宿主才能被本进程看到**」；ADR-0055 §4 同义。而委派的 teammate 是**同进程内的子 Agent**。
+`core/toolset/exec.ts` 的 `installCapability` failed 分支已写明：「宿主进程的 PATH 是启动时快照，**新装的工具通常要重启宿主才能被本进程看到**」；ADR-0055 §4 同义。而委派的 teammate 是**同进程内的子 Agent**。
 ⇒「预检 → 缺件先装 → 再派」这条最自然的整合链路**本会话内不成立**；可行处置只剩**降级**或**告知需重启**。
 
 **F3（边界）装工具的审批凭据是「发起者」，故不能顺着委派漏下去。**

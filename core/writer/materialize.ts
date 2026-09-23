@@ -3,27 +3,27 @@
 // rebuildIndex（L2 增量索引→_index.md）、runCompact（Episode 收口归档）、patchSummary、ensureIndex。
 // fs 重、领域逻辑最密；用显式 WriterCore 注入（状态 + 配置派生），便于无 harness 验证。
 // 与 writer.ts 原实现逐字一致；flush 经 hooks.primaryComp 取主入口（composition root 注入，解 cycle）。
-import { SHADOW_ROOT } from "./paths.js";
-import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "./abstract.js";
-import type { AgentLike } from "./types.js";
-import { resolveWorkspace } from "./scope.js";
-import { policyForAgent, scopedFs, sessionPolicy } from "./fs-scope.js";
-import { today, compact, slug, topicsInText, numOr, onByDefault } from "./util.js";
-import { readRel, listMemories, memoryFileName, timeFromName } from "../persistence/files.js";
-import { readMeta, mutateMeta } from "../persistence/meta.js";
-import { buildClueHeader, registerMeta } from "./memory.js";
-import { traceOf } from "./trace.js";
-import { streamText, textMessage } from "./writer-llm.js";
-import { buildIndexText, consolidateText } from "./writer-render.js";
-import { parseMemory, deriveEpisodes, episodesIndexText } from "./episode.js";
-import { isForgettable, oldestBeyond, isCompacted } from "./forget.js";
-import { sanitizeText, isUnsafe } from "../security/scrub.js";
-import { routeFor, noteDegrade, markDerivedDirty, rememberAuditMaterials, takeAuditMaterials } from "./writer-core.js";
-import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "./capture-granularity.js";
-import { appendJsonlLine } from "../persistence/jsonl-append.js";
-import { invalidateProjection, shadowSourcesFingerprint } from "./projection-store.js";
-import type { WriterCore } from "./writer-core.js";
-import type { WriterHooks } from "./writer-capture.js";
+import { SHADOW_ROOT } from "../paths.js";
+import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../abstract.js";
+import type { AgentLike } from "../types.js";
+import { resolveWorkspace } from "../scope.js";
+import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
+import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
+import { readRel, listMemories, memoryFileName, timeFromName } from "../../persistence/files.js";
+import { readMeta, mutateMeta } from "../../persistence/meta.js";
+import { buildClueHeader, registerMeta } from "../memory.js";
+import { traceOf } from "../trace.js";
+import { streamText, textMessage } from "./llm.js";
+import { buildIndexText, consolidateText } from "./render.js";
+import { parseMemory, deriveEpisodes, episodesIndexText } from "../episode.js";
+import { isForgettable, oldestBeyond, isCompacted } from "../forget.js";
+import { sanitizeText, isUnsafe } from "../../security/scrub.js";
+import { routeFor, noteDegrade, markDerivedDirty, rememberAuditMaterials, takeAuditMaterials } from "./core.js";
+import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "../capture-granularity.js";
+import { appendJsonlLine } from "../../persistence/jsonl-append.js";
+import { invalidateProjection, shadowSourcesFingerprint } from "../projection-store.js";
+import type { WriterCore } from "./core.js";
+import type { WriterHooks } from "./capture.js";
 
 export interface MaterializeResult {
   flush: (agent: AgentLike | undefined) => Promise<void>;

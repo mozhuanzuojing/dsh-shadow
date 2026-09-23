@@ -3,6 +3,14 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.9] `core/` 前缀簇收编（writer / knowledge / lineage / candidate / toolset）
+
+导航整理，**无行为变更**（`layerOf` 仍 = `core`；mode / 召回不变）。
+
+- **16 文件 → 5 子目录**（去前缀）：见 ADR-0102；`collect` / `memory` / `forget` 等仍平铺在 `core/` 根。
+- **文档**：CONTEXT 术语；BACKLOG T13 进度 B 记「第四伞待开」；当前态活路径随迁；**不改** CHANGELOG 历史条目。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` 全绿。
+
 ## [v1.20.8] Mode-family 三伞收编（stance / trajectory / epistemic）
 
 导航整理，**无行为变更**（mode 契约 / 召回逻辑 / 层语义不变）。

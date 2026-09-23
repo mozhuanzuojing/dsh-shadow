@@ -8,8 +8,8 @@ import { SHADOW_ROOT } from "./paths.js";
 import { slug, today } from "./util.js";
 import { scrubUnsafe } from "../security/scrub.js";
 import type { ShadowNode, ShadowRel } from "./node.js";
-import type { AtomEvidenceRef } from "./lineage.js";
-import { validateAtomProjection } from "./lineage-validator.js";
+import type { AtomEvidenceRef } from "./lineage/index.js";
+import { validateAtomProjection } from "./lineage/validator.js";
 
 /** 资源卡目录（相对工作区；位于 shadowRoot 内，写入受既有安全边界约束）。 */
 export const RESOURCE_DIR = `${SHADOW_ROOT}/resources`;

@@ -132,8 +132,8 @@ node tools/materials-freshness.ts --max-age 0      # 强制实查（不信缓存
 ## 引用纪律（v1.15.65 立）
 
 本仓的核心纪律之一是「每条断言带 `文件:行号`」。代价是**行号是最易腐烂的引用形态**：
-v1.15.65 只改了 6 个文件，就产生 **≥5 处**过期行号（`core/writer-core.ts:69`、
-`core/writer-materialize.ts:161` 等），散落在 `README` / `BACKLOG` / `adr/*` 里。
+v1.15.65 只改了 6 个文件，就产生 **≥5 处**过期行号（`core/writer/core.ts:69`、
+`core/writer/materialize.ts:161` 等），散落在 `README` / `BACKLOG` / `adr/*` 里。
 
 ### 历史文档 vs 当前态文档（**先分清楚，再谈修**）
 
@@ -149,7 +149,7 @@ v1.15.65 只改了 6 个文件，就产生 **≥5 处**过期行号（`core/writ
 ### 四条操作要求（v1.18.4 补第 4 条）
 
 - **优先引符号名**（函数名 / 常量名 / 配置键），行号只在必要时加，且写成
-  「`core/writer-core.ts` 的 `episodeShow`」这种**不依赖行号也能定位**的形式。
+  「`core/writer/core.ts` 的 `episodeShow`」这种**不依赖行号也能定位**的形式。
 - **改完代码，回头核对引用它的文档**：对每个改过的文件跑一次
   `Select-String -Path *.md,adr\*.md -Pattern '<文件名>:\d+'`，只处理**当前态**文档里那些。
   跑一次 `node tools/citation-audit.ts .` 更快：它把「**越界**」这一类直接判掉

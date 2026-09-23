@@ -2,7 +2,7 @@
 // 用 mock fs 驱动 createShadowCollector 的 flush 落盘路径（此前写路径无测试覆盖）。
 // 断言：push 累积 → onTurnStopping flush → 记忆文件落盘（含主入口 + 用户消息），无失败警告。
 import assert from "node:assert/strict";
-import { createShadowCollector } from "../dist/core/writer.js";
+import { createShadowCollector } from "../dist/core/writer/index.js";
 
 const files = new Map<string, string>();
 const fs = {

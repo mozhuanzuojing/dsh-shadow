@@ -6,7 +6,7 @@
 //   - resource 无 evidence（卡片里的 source 链接/路径）→ reject context（卡片保留：收进库 ≠ 有出处）。
 //   - 其余 → allowed。
 // 关键：reject 不是删除，Atom 仍然存在；只影响「是否进入 shadow_query context / 认知查询」。
-import type { NodeType, AtomKind, AtomLineage, AtomProjectionVerdict } from "./lineage.js";
+import type { NodeType, AtomKind, AtomLineage, AtomProjectionVerdict } from "./index.js";
 
 export interface AtomLike {
   type: NodeType;

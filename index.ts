@@ -26,7 +26,7 @@
  */
 
 import type { GatewayEvidenceRef, EvidenceResult, ShadowConfig } from "./core/types.js";
-import { createShadowCollector } from "./core/writer.js";
+import { createShadowCollector } from "./core/writer/index.js";
 import { scopedFs, sessionPolicy } from "./core/fs-scope.js";
 import { routeVerify } from "./evidence/gateway.js";
 import { runReadShadow } from "./query/query.js";

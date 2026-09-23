@@ -4,7 +4,7 @@
 - 决定日期：2026-09-10
 - 关联 ADR：ADR-0001（不引向量库）、ADR-0049（缺件不静默）、ADR-0029.1（inv 178 Authority ≠ Ownership）、ADR-0030（inv 182 Delegation Scope 不可扩大）、ADR-0054（Semble 作为候选 provider）
 - 关联术语：`../CONTEXT.md`（mode `toolset` / provider / reference）
-- **勘误说明**：本 ADR 的编号在 CONTEXT.md / README.md / `core/toolset.ts` 中已被引用（v1.15.10），但 ADR 文件本身当时漏写——本次补齐（这正是本仓 ⑥「四查」要防的「遗漏 / 注释断链」）。
+- **勘误说明**：本 ADR 的编号在 CONTEXT.md / README.md / `core/toolset/index.ts` 中已被引用（v1.15.10），但 ADR 文件本身当时漏写——本次补齐（这正是本仓 ⑥「四查」要防的「遗漏 / 注释断链」）。
 
 ## Context
 

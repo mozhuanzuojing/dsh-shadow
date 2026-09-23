@@ -61,7 +61,7 @@ const PROBE_CALL = /\b(\w*(?:Fingerprint|fingerprint)\w*|\w*listDir|listMemories
 
 /**
  * 进程内集合的 `.has(`。三种接收者形态（都是**可解释的**启发式，不是类型分析）：
- *   ① `core.<field>.has(` —— `WriterCore` 就是进程内状态的持有者（见 `core/writer-core.ts` 注释）；
+ *   ① `core.<field>.has(` —— `WriterCore` 就是进程内状态的持有者（见 `core/writer/core.ts` 注释）；
  *   ② `<name>.has(`，其中 `<name>` 是**本文件**里 `const X = new Set(` / `new Map(` 出来的；
  *   ③ `<ident>.<prop>.has(`，其中 `<prop>` 的**名字本身**表示进程内记账（`*Map` / `*Set` / `*Cache`
  *      / `*Dirty` / `*Warm` / `*Seen` / `*Visited`）—— 属性名是这类语义时，它几乎必然在内存里。
@@ -89,7 +89,7 @@ export interface DriftLead {
 
 /**
  * 收集「进程内集合」的局部名：`const X = new Set(` / `new Map(`。
- * 也把 `core.<field>` 视作进程内状态 —— `WriterCore` 就是进程内状态的持有者（见 `core/writer-core.ts` 注释）。
+ * 也把 `core.<field>` 视作进程内状态 —— `WriterCore` 就是进程内状态的持有者（见 `core/writer/core.ts` 注释）。
  */
 export const collectLocalCollections = (text: string): Set<string> => {
   const out = new Set<string>();

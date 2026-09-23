@@ -124,7 +124,7 @@ export const checkGranularity = (root: string, opts: { from?: string } = {}): Gr
         ...readings,
         "",
         "  怎么修：`capture.echo` 默认就是 `\"audit\"` ⇒ 出现本违规说明落盘走了旧路径；",
-        "  查 `core/writer-materialize.ts` 的 flush 分流（`isAuditBatch`）与 `core/types.ts` 的 `capture.echo`。",
+        "  查 `core/writer/materialize.ts` 的 flush 分流（`isAuditBatch`）与 `core/types.ts` 的 `capture.echo`。",
         `  ⚠ 起点（${from}）**之前**的文件是**归档**，**不要**为了让门变绿去改它们（改写归档 = 伪造历史）。`,
       ],
     };

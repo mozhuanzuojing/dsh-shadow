@@ -10,12 +10,12 @@ import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
 import { renderRecovery, renderRecoveryFor, bestTask } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
-import { unavailableHint } from "../core/toolset.js";
-import { surveyCapabilities, renderSurvey, installCapability, renderInstall, precheckCapabilities, renderPrecheck, type SurveyOptions } from "../core/toolset-exec.js";
+import { unavailableHint } from "../core/toolset/index.js";
+import { surveyCapabilities, renderSurvey, installCapability, renderInstall, precheckCapabilities, renderPrecheck, type SurveyOptions } from "../core/toolset/exec.js";
 import {
   createKnowledgeEngine, renderKnowledgeTree, buildCorpusTree, retrieveKnowledge,
   renderKnowledgeRetrieval, sectionPath, flattenSections,
-} from "../core/knowledge-engine.js";
+} from "../core/knowledge/engine.js";
 import { summarizeQueryLog, renderQueryLogSummary, buildFitnessReport, renderFitnessReport, writeShadowReport } from "./observatory.js";
 import { readManifest, renderManifest } from "../core/manifest.js";
 import { loadOrBuildProjection, shadowSourcesFingerprint } from "../core/projection-store.js";
@@ -260,7 +260,7 @@ const knowledge: ReadQuery = {
     const parsedK = (await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx))).parsed;
     // v1.15.34（D8）：**无条件**建树 —— 这里**没有** `knowledgeEngine.enabled` 闸门
     //（该键生产零读取；`createKnowledgeEngine` 也不再收 config —— 它从来没用过）。
-    // 本 mode 的唯一闸门是 `llmNavigate`（`core/writer.ts:79`，默认关）。
+    // 本 mode 的唯一闸门是 `llmNavigate`（`core/writer/index.ts:79`，默认关）。
     const tree = await createKnowledgeEngine().build(parsedK);
     const topicK = String(args?.topic || "").trim();
     if (topicK) {
@@ -293,7 +293,7 @@ const index: ReadQuery = {
     if (r.refs.length) for (const ref of r.refs) lines.push(`- ${ref.type} ${ref.locator}${ref.fragment?.start ? `:${ref.fragment.start}` : ""}`);
     else lines.push(r.provider === "fs" ? "- （fs: 全量扫描，无候选预筛）" : `- （${r.provider} 未产出候选：未装、超时或未命中）`);
     // ADR-0049 的延伸（v1.15.8）：缺件不只报 unavailable，还给**可执行的确切命令**。
-    // 插件不代装（见 core/toolset.ts 头的边界依据）；命令由 agent 经宿主 approval 栈执行。
+    // 插件不代装（见 core/toolset/index.ts 头的边界依据）；命令由 agent 经宿主 approval 栈执行。
     if (r.unavailable) {
       const hint = unavailableHint(r.provider, r.reason);
       if (hint) lines.push("", hint);
@@ -304,7 +304,7 @@ const index: ReadQuery = {
 
 // ── toolset：工具集台账（只读巡检 / 能力预检）+ 显式安装（审批门）──
 // 巡检与预检都是只读的；安装只在显式传 `install:"<id>"` 时发生，且**一律先要审批**、
-// 拿不到 `allowed-once` 就不装（见 core/toolset-exec.ts 的权限模型注释）。
+// 拿不到 `allowed-once` 就不装（见 core/toolset/exec.ts 的权限模型注释）。
 const toolset: ReadQuery = {
   modes: ["toolset"],
   run: async (deps, args, exec, _ctx) => {

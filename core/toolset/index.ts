@@ -13,7 +13,7 @@
 //   故：默认只**检测与提示**；安装只在**显式调用**时发生，且**一律先经宿主审批**
 //   （`ctx.approval.request` 只有 `allowed-once` 是授予，见 core/toolset-exec.ts）。
 
-import { verSrcLabel, type VerSrcKind } from "./util.js";
+import { verSrcLabel, type VerSrcKind } from "../util.js";
 
 /** 缺件处置：一条可复制执行的命令 + 可选的坑说明。 */
 export interface CapabilityRemedy {

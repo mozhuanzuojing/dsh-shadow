@@ -9,12 +9,12 @@
 ## Context
 
 `tools/audit-drift.ts` 的检测 B 报出 `c.kind=provider` / `c.kind=reference` 两个键跨
-`core/toolset.ts` 与 `core/toolset-exec.ts`。**先判它是不是漂移**：
+`core/toolset/index.ts` 与 `core/toolset/exec.ts`。**先判它是不是漂移**：
 
 - `toolset.ts` **声明** `kind`（`Capability.kind: ToolKind`，**类型必填**），
-  `toolset-exec.ts` **消费**它（探测超时、渲染、审批）。
+  `core/toolset/exec.ts` **消费**它（探测超时、渲染、审批）。
 - ⇒ **正当的分层**（生产者/消费者），不是漂移。顺带核对了它文档化的边界不变量：
-  `core/toolset.ts:3` 写「两级台账**必须分清，否则边界就糊了**」，且 `degradesTo` 注释规定
+  `core/toolset/index.ts:3` 写「两级台账**必须分清，否则边界就糊了**」，且 `degradesTo` 注释规定
   「reference 填『不影响插件行为』」。**实测 107 项全部满足**（105 reference 均含该口径、
   2 provider 均给确定性退路 + `provides` + `install`）—— 边界没糊，但**这条不变量没有棘轮**。
 
@@ -22,7 +22,7 @@
 
 ### 事实链（全部实测）
 
-**① 标签与事实不符。** `core/toolset.ts` 对 `verSrc` 的定义：
+**① 标签与事实不符。** `core/toolset/index.ts` 对 `verSrc` 的定义：
 
 | 标签 | 定义（原文） |
 |---|---|
@@ -107,7 +107,7 @@
   （新命令真的用它）。
 - **离线棘轮**：台账被静默改版本/改出处而没重跑生成器 ⇒ 测试红。不联网也能守。
 - **工具经正对照标定**（④），不是「报 0 就信 0」。
-- 补上了 `core/toolset.ts:3`「两级边界」不变量的实测（107 项全满足）—— 并记入 T5 复核结论。
+- 补上了 `core/toolset/index.ts:3`「两级边界」不变量的实测（107 项全满足）—— 并记入 T5 复核结论。
 
 ### 负 / 已知边界
 - **清单里的 `machineVersion` 是生成时那台机器的读数**，属**证据留档**；测试不重探测

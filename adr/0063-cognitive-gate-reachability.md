@@ -13,7 +13,7 @@ ADR-0062 造的接线审计工具在 T1/T2 分诊里报了两条**看起来是�
 ```
 A 类：isCognitiveAtom        core/episode.ts      测试引用 1
 A 类：isMetadataMemoryText   core/episode.ts      测试引用 1
-B 类：kind=session           core/lineage-validator.ts:18
+B 类：kind=session           core/lineage/validator.ts:18
 B 类：status=archived        core/forget.ts:18, core/lifecycle.ts:28
 ```
 
@@ -24,12 +24,12 @@ B 类：status=archived        core/forget.ts:18, core/lifecycle.ts:28
 
 ### 1. `deriveAtomKind` 会产出 `metadata`，但 **`session` / `artifact` 全仓无生产者**
 
-`AtomKind` 声明 5 个值（`core/lineage.ts:14`：`experience | metadata | session | task | artifact`），
+`AtomKind` 声明 5 个值（`core/lineage/index.ts:14`：`experience | metadata | session | task | artifact`），
 而唯一生产者 `deriveAtomKind`（`core/episode.ts`）覆盖全部分支后只能产出 3 个：
 
 - **实测**（探针覆盖全部分支：决策 / 目标 / todo 词 / 无材料且 `entry==="shadow"` / 无材料且有用户话 / 有材料）：
   可产出 `{experience, metadata, task}`；**`session` 与 `artifact` 从未产出**。
-- ⇒ `core/lineage-validator.ts:18` 的 `kind === "session"` 那一支**永不可达**。
+- ⇒ `core/lineage/validator.ts:18` 的 `kind === "session"` 那一支**永不可达**。
   保留该分支无害（前瞻或遗漏），但**不得据它推论「session 原子被挡住了」**。
 - 复核：`node _research/measure-path-visibility.ts`（本文件末尾亦给出等价探针）。
 
@@ -39,7 +39,7 @@ B 类：status=archived        core/forget.ts:18, core/lifecycle.ts:28
 |---|---|---|---|
 | `isCognitiveAtom`（`core/episode.ts`） | 按 `kind` | **无** | 4137 条（若接线） |
 | `isMetadataMemoryText`（`core/episode.ts`） | 按**文本启发式**（`entry==="shadow"` + 有用户要点 + 无材料 + 无决策） | **无** | **110 条** |
-| `validateAtomProjection`（`core/lineage-validator.ts:18`，由 `core/node.ts:48` 调用） | 按 `kind` | **有**（投影路径） | 4137 条（= 挡住 67.2% 的节点） |
+| `validateAtomProjection`（`core/lineage/validator.ts:18`，由 `core/node.ts:48` 调用） | 按 `kind` | **有**（投影路径） | 4137 条（= 挡住 67.2% 的节点） |
 
 ⇒ **同一条规则有三份实现，两份从未接线，而三份口径互不相同**（文本启发式那份比 `kind` 那份**窄 37 倍**）。
 这不是「接线断了」那么简单 —— 是**规则本身有多义**。
@@ -49,7 +49,7 @@ B 类：status=archived        core/forget.ts:18, core/lifecycle.ts:28
 `deriveAtomKind` 第 4 行把 `p.entry === "shadow"` 当作「会话记账」的代理。但 `entry` 的来源是：
 
 ```ts
-// core/writer-materialize.ts:175
+// core/writer/materialize.ts:175
 const entry = hooks.primaryComp?.(id || "") || "shadow";
 ```
 
@@ -70,7 +70,7 @@ const entry = hooks.primaryComp?.(id || "") || "shadow";
 
 ### 4. `pinned` / `archived` 两个「人工权威状态」**无任何入口**（T3 结案）
 
-- **`pinned` 恒 false**：生产只写 `pinned: false`（`core/memory.ts:74`、`core/writer-materialize.ts:88`、
+- **`pinned` 恒 false**：生产只写 `pinned: false`（`core/memory.ts:74`、`core/writer/materialize.ts:88`、
   `query/topic-recall.ts（写 `pinned: false`）`），**`pinned: true` 全仓零处**（三路 grep：字面量 / `pinned:` / `pinned =`）。
 - **`archived` 无写入者**：`status: "archived"` 只见于 `core/forget.ts:18`、`core/lifecycle.ts:28`
   两个**读点**与 `retrieval/rank.ts:103` 的权重表。
@@ -87,7 +87,7 @@ const entry = hooks.primaryComp?.(id || "") || "shadow";
 
 ### 5. 本轮的**行为改动为零**
 
-只做两件事：**在源码注释里标注实测事实**（`core/episode.ts`、`core/lineage-validator.ts`），
+只做两件事：**在源码注释里标注实测事实**（`core/episode.ts`、`core/lineage/validator.ts`），
 **加一个决策锁测试**（`test/atom-kind-gate.test.ts`，32 个测试中的第 32 个）。
 **没有改 `deriveAtomKind` 的任何判断，没有接线任何函数，没有改 `validateAtomProjection` 的返回。**
 

@@ -3,7 +3,7 @@
 // 形状几乎一致：构建消息 → AbortController+超时 → stream 收集 text-delta → finish 中止/出错 → finally clear）。
 // 只封装「流式拿回文本」这一件事；调用方各自解析/兜底（行为与 writer.ts 原实现逐字一致）。
 // 契约：route 缺失 / llm 缺失 / finish 出错或中止 → 返回 ""（调用方按空值回退），绝不抛异常。
-import type { ShadowConfig } from "./types.js";
+import type { ShadowConfig } from "../types.js";
 
 export interface LlmRoute { provider: string; model: string }
 

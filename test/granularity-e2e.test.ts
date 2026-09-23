@@ -11,7 +11,7 @@
 //   ④ 读侧（T21）·审计流**可读且材料可见**（这正是 `adr/0097` §5.2 那条缺口）；
 //   ⑤ 读侧·**缺件不静默**（ADR-0049）：审计目录读失败 ⇒ `ok:false` + 真实原因；目录为空 ⇒ `ok:true` 且 `records:0`。
 import assert from "node:assert/strict";
-import { createShadowCollector } from "../dist/core/writer.js";
+import { createShadowCollector } from "../dist/core/writer/index.js";
 import { listMemories } from "../dist/persistence/files.js";
 import { readAuditStream, renderAuditStreamDiag } from "../dist/persistence/audit-stream.js";
 

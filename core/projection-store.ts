@@ -19,7 +19,7 @@ export interface ShadowProjectionStore {
    *
    * ⚠ **生产中未接线**（v1.15.19 用 `tools/audit-wiring.ts` 审计确认，见 ADR-0062）：
    *   本方法的**唯一调用点是测试**（`test/projection-store.test.ts`）。生产走的是
-   *   `invalidateProjection` 的**粗粒度清空**（`invalidate()`）——见 `writer-materialize.ts` 的
+   *   `invalidateProjection` 的**粗粒度清空**（`invalidate()`）——见 `core/writer/materialize.ts` 的
    *   `ensureIndex`：它在 `rebuildIndex` 后清整个缓存，而 `rebuildIndex` 本身是**全量扫描**
    *   （`listMemories`），**没有跟踪变更集**，故拿不到可喂给本方法的 `ChangeSet`。
    *
@@ -62,7 +62,7 @@ export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectio
       // **同类项（同一判据判出来的，不是逐个拍脑袋）**：
       //   · `query/observatory.ts:writeShadowReport` —— 报告正文由 `query/reads.ts:259`
       //     **原样返回给读者**，落盘只是留一份副本 ⇒ 写失败时读者拿到的内容不变 ⇒ 正当静默。
-      //   · **对比**：`core/writer-materialize.ts` 的 sidecar 写失败**不是**这一类 ——
+      //   · **对比**：`core/writer/materialize.ts` 的 sidecar 写失败**不是**这一类 ——
       //     那个日期目录的 L0 会**从 `_index.md` 里消失**（`continue` 跳过 `sections.push`），
       //     读者拿到的内容**变了** ⇒ 必须有信号（v1.15.65 已补）。
       // 这条判据同时解释了为什么 T8 的其他条目都必须有信号：它们都会**改变读者看到的内容**
@@ -121,7 +121,7 @@ export const getProjectionStore = (fs: any, ws: string): ShadowProjectionStore =
  * 但没人调，于是「开了 `projectionStore` 之后，记忆变了、`shadow_query` 仍读陈旧投影」，
  * 实际只能靠手动删 `.shadow/shadow-index/nodes.jsonl` 才能刷新。
  *
- * 触发时机：**写侧索引重建后**（`writer-materialize.ts` 的 `ensureIndex`）——那是「记忆集已变」的
+ * 触发时机：**写侧索引重建后**（`core/writer/materialize.ts` 的 `ensureIndex`）——那是「记忆集已变」的
  * 权威信号（记忆是插件自己写的）。资源卡是人/agent 手写的，不在插件写路径上，
  * 由 `loadOrBuildProjection` 的**源指纹**覆盖（见下）。
  * 仅当 `projectionStore.enabled === true` 时调用（默认关，保证默认路径零额外 I/O）。

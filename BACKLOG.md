@@ -238,7 +238,7 @@
 - **两处对原文的更正（原文措辞含糊，此处收紧）**：
   1. **`progressiveDisclosure` / `refineTree` 不是「误报」** —— 原文写「误报，但值得记」。
      准确表述：它们**仅测试消费**（`test/knowledge-engine.test.ts:53,59`），
-     生产命中只有 `core/knowledge-engine.ts:8` 的**注释** ⇒ 属「**注释造成的假调用点**」，
+     生产命中只有 `core/knowledge/engine.ts:8` 的**注释** ⇒ 属「**注释造成的假调用点**」，
      按三选一应落**零引用/仅测试消费**这一格，**不是**「有生产调用点」意义上的误报。
   2. **`renderIntent` 不是「生产有调用点」** —— 它是**零引用**；
      `observer/core.ts:20` 用的是 `intentOf`，渲染在 `:31` 内联 ⇒ 见 ADR-0062 §4。
@@ -270,14 +270,14 @@
   - `kind=deleted`（`core/change-set.ts`）—— 与 D1 同源（`ChangeSet` 未实例化）；
   - `status=compared` / `status=explored`（`epistemic/simulation/guard/reality-boundary.ts:5`）——
     需确认是不是**外部数据**（模拟结果的形态）；
-  - `kind=metadata` / `kind=session`（`core/lineage-validator.ts:18`）—— 需确认 `AtomKind` 的取值来源。
+  - `kind=metadata` / `kind=session`（`core/lineage/validator.ts:18`）—— 需确认 `AtomKind` 的取值来源。
 - **完成判据**：可疑项核准到「外部输入 / 真断线」；真断线进 D 段。
 
 ### T3. 已分诊：`pinned` / `archived` 两个「人工权威状态」**无任何入口**（升为 D4）
 
 - **原线索**：审计 B 类报 `status=archived` 无写入者（`core/forget.ts:18`、`core/lifecycle.ts:28`）。
 - **分诊中扩展**（第 9 轮）：**`pinned` 同样无写入者** —— 生产代码只写 `pinned: false`
-  （`core/memory.ts:74`、`core/writer-materialize.ts`、`query/query.ts` 三处），
+  （`core/memory.ts:74`、`core/writer/materialize.ts`、`query/query.ts` 三处），
   **`pinned: true` 全仓零处**（三路 grep 核实：字面量、`pinned:`、`pinned =`）。
 - **两者的可达性**：
   | 状态 | 读点 | 语义 | 生产可达？ |
@@ -331,7 +331,7 @@
 - **依据**：`adr/0070-drift-audit-tool.md`「未做」；`npm run audit:drift` 的 B 段。
 - **现状**：真仓库上 B 段报 **11 个键 / 28 处**（`v1.15.28` 修掉 `name=graph.json` 后从 12/30 降下来）。
   本轮（v1.15.29）**复核了第三个**：`c.kind=provider` / `c.kind=reference` —— **判为正当分层**
-  （`toolset.ts` **声明** `kind`（`Capability.kind: ToolKind`，类型必填）↔ `toolset-exec.ts` **消费**它），
+  （`toolset.ts` **声明** `kind`（`Capability.kind: ToolKind`，类型必填）↔ `core/toolset/exec.ts` **消费**它），
   并**顺带实测**了它文档化的边界不变量（`toolset.ts:3`「两级台账必须分清」+ `degradesTo` 规定
   reference 填「不影响插件行为」）：**107 项全满足** ⇒ 边界没糊。
   **但那条不变量仍没有棘轮**（本 ADR 只做了实测，未加断言）⇒ 见下「附带项」。
@@ -388,7 +388,7 @@
   | 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷；按**家族**加注，不逐条删 |
 
 - **四处代码注释已加**（供后续读者不再重复分诊）：
-  `stance/delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge-cost.ts`、
+  `stance/delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge/cost.ts`、
   `core/intent.ts`、`identity/timeline.ts`。
 - **两个仍未决的产品问题**（**不是「没做」而是「需你拍板」**）：
   ① `progressiveDisclosure` / `refineTree` 该**接线**还是**有意不启用**？
@@ -442,23 +442,23 @@
   **`console.log` 不算**。据此，以下 7 条关掉或缺件后**行为退到某处却无任何可见信号**：
 
 > **⚠ 这张表是 `v1.15.34` 的立账快照，保留原样**（以免丢失「当时查到什么」）。
-> 它的**位置列已按引用纪律换成符号名** —— 原始行号（如 `core/writer-core.ts` **第 69 行**）在后续版本里
+> 它的**位置列已按引用纪律换成符号名** —— 原始行号（如 `core/writer/core.ts` **第 69 行**）在后续版本里
 > 早已漂移，留着一串查不到东西的行号比不留更糟（见 `AGENTS.md`「引用纪律」）。
 > **当前状态与修法见下面的「状态」小节**；本节**不复制** ADR 的表（同一件事只写一处）。
 
   | # | 能力 | 位置（符号，非行号） | 静默形态（v1.15.34 实测） |
   |---|---|---|---|
-  | 1 | `llmRecall` | `core/writer.ts` 的 `recallSelect` + `core/writer-llm.ts` 的 `streamText` catch | 回退确定性 `renderRecovery` **无标记**；`label:""` 使 catch 的日志分支也不触发 ⇒ **连 log 都没有**（最彻底；且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） |
-  | 2 | `summary` | `core/writer-materialize.ts` 的 `summarizeTurn` / `patchSummary` | 缺 llm/route/finish 出错**均提前 `return ""`**（不记日志）⇒ 文件里只是「没有摘要」，与「尚未生成」不可区分 |
-  | 3 | `recall`（语义 B 档） | `core/writer.ts` 的 `expandTerms` + `query/query.ts` 的召回打分段 | `expandTerms → []`，输出与「本来就没配」完全一致。`README.md` 自己写「**静默**退回 A 档」= 文档已承认，但代码未给三条信号中任何一条 |
+  | 1 | `llmRecall` | `core/writer/index.ts` 的 `recallSelect` + `core/writer/llm.ts` 的 `streamText` catch | 回退确定性 `renderRecovery` **无标记**；`label:""` 使 catch 的日志分支也不触发 ⇒ **连 log 都没有**（最彻底；且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） |
+  | 2 | `summary` | `core/writer/materialize.ts` 的 `summarizeTurn` / `patchSummary` | 缺 llm/route/finish 出错**均提前 `return ""`**（不记日志）⇒ 文件里只是「没有摘要」，与「尚未生成」不可区分 |
+  | 3 | `recall`（语义 B 档） | `core/writer/index.ts` 的 `expandTerms` + `query/query.ts` 的召回打分段 | `expandTerms → []`，输出与「本来就没配」完全一致。`README.md` 自己写「**静默**退回 A 档」= 文档已承认，但代码未给三条信号中任何一条 |
   | 4 | `queryLog`（**默认开**） | `query/observatory.ts` 的 `recordQueryObservation`（`catch {}`，注释自陈「写失败静默」） | 观测数据丢失，读侧显示「尚无记录」⇒ 与「从没查过」不可区分。**默认开启项里的静默 ⇒ 优先级最高** |
   | 5 | `recall.cooldownTurns` | `retrieval/ledger.ts` 的 `readLedger`（读失败静默当空台账）+ `writeLedger`（写失败仅 `console.log`） | 冷却**静默失效**；`README.md` 亦自陈「写失败降级为『不去重』」 |
   | 6 | `projectionStore` | `core/projection-store.ts` 的 `load` / `invalidate` / `invalidateFor` | 缓存读失败/坏行 → 全量重建，零信号。**区别于前五条**：结果**仍正确**（ADR-0049:38 明列「缓存不是真相」），只损失性能 ⇒ **优先级最低** |
-  | 7 | `episodes` | `core/writer-materialize.ts` 的 `recOf`（解析失败静默）、Episodes 派生段（derive 失败仅 log）、`rebuildIndex` 写 `_index.md` | ③ 最重：`read_shadow()` 无参读到**静默陈旧**的索引 —— 与 **ADR-0069 同族**，而 ADR-0069 只修了「新鲜度问源」 |
+  | 7 | `episodes` | `core/writer/materialize.ts` 的 `recOf`（解析失败静默）、Episodes 派生段（derive 失败仅 log）、`rebuildIndex` 写 `_index.md` | ③ 最重：`read_shadow()` 无参读到**静默陈旧**的索引 —— 与 **ADR-0069 同族**，而 ADR-0069 只修了「新鲜度问源」 |
 
 - **另两处**开关/取默认值缺陷（v1.15.34 立账，**均已在 v1.15.64 修复**，见下「状态」）：
-  1. **`episodes` 关不掉**：`showInIndex: 0` 被 `core/writer-core.ts` 的 `|| 8` 吞掉 ⇒
-     `core/writer-materialize.ts` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
+  1. **`episodes` 关不掉**：`showInIndex: 0` 被 `core/writer/core.ts` 的 `|| 8` 吞掉 ⇒
+     `core/writer/materialize.ts` 的 `episodeShow > 0` **恒真（死分支）**；`gapMinutes: 0` 同样被 `|| 60` 吞
      ⇒ `Math.max(0, …)` 永不生效。**根因**：用 `||` 取默认把「显式 0」与「未传」混为一谈。
   2. **`kg` 被排在「默认」列**却不是 config 键（只是 per-call 参数）⇒ 已在 README 表注⑤标明。
 
@@ -668,9 +668,9 @@
   **193 文件 / 523 条 import 边**）：
   | 草案禁令 | 存量违规 | 例子 |
   |---|---:|---|
-  | `core` 不得碰 `node:fs` | 1 | `core/toolset-exec.ts:19`（它是**执行器**，不是纯派生） |
+  | `core` 不得碰 `node:fs` | 1 | `core/toolset/exec.ts:19`（它是**执行器**，不是纯派生） |
   | `core` 不得碰 `node:child_process` | 1 | 同上 `:18` |
-  | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts,13` |
+  | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer/materialize.ts:12,13` |
   | `query` 不得 import `persistence` | 4 | `query/materialize.ts` / `query/topic-recall.ts`（读路径**本来就要**读落盘文件） |
   ⇒ **`core/` 不是「纯函数层」，是「脊柱」**（`paths`/`types`/`util` 无依赖；`memory`/`writer-materialize`/`toolset-exec` 有副作用）。
   **照搬目录分层 = 当轮就红的门 = 假闸门** ⇒ **改判据对象**（完成判据 ① 的「先改表」即此）。
@@ -694,13 +694,16 @@
   包根 `.` **只导出 `version`**（连 `ScriptTarget` 都没有），AST API 在 `typescript/unstable/ast` 这类 unstable 子路径
   ⇒ 说明符抽取是**剥注释后的正则**，不是 AST。**已知边界**：字符串里形如 `from "./x"` 的文本会误命中，命中项须人工复核。
 
-#### ⬜ 进度 B（未做）：复杂度预算 + 拆 `core/`
+#### ⬜ 进度 B（部分）：复杂度预算仍未做 · `core/` 导航收编已做一刀 · 第四伞待开
 
 - **复杂度预算**：hl_mem 靠 AST 量「行数 / 参数数 / 函数体行数」+ 棘轮只降不升。本仓无可用 AST（见 ⑤）
   ⇒ 要么用「文件行数 / 导出数」当代理（**弱判据**，须先说明它与哪种风险对应），要么等 `unstable/ast` 稳定。
   **不先定判据就不写表** —— T13 前半的教训正是「表定错了，门就是红的」。
-- **拆 `core/`**：这是消掉层间环的唯一办法，属**架构决策**（把 `paths`/`types`/`util` 这类纯模块与
-  `memory`/`writer-materialize`/`toolset-exec` 分开），**不是门禁问题**，故作为候选留在此条下。
+- **`core/` 前缀簇（v1.20.9，ADR-0102）**：**不是**「拆纯度层」——只把已有前缀簇收进
+  `writer/` · `knowledge/` · `lineage/` · `candidate/` · `toolset/`；`layerOf` 仍 = `core`。
+  消掉 `{core, evidence, persistence}` 层间环仍要真拆混合脊柱，**另开架构决策**，不在本刀。
+- **下一刀（grill 候选 B，待开）**：根上剩余小域 `identity` / `dream` / `temporal`（+ 可选 `soul`/`observer`）
+  收进第四导航伞；顶层目录数再降，与 ADR-0101 同口径（伞 ≠ 层）。
 - **进度 C（v1.15.40 第 4 轮，hl_mem 门禁面深读的形状清单；全文 `references.md` §6.6）**：
   三个可照抄形状 —— ① **「生成器 + 签入产物 + 门禁逐字比对」三件套**（同形 6 次，唯一更新入口 `--update`/`--write`，
   **缺件即非零** + 失败文案自带更新指引）；② **allowlist 腐化自检**（白名单里的路径/函数**不存在也算违规**）
@@ -830,7 +833,7 @@
 > 它是 **v1.15.43「A 段残余 18 条逐条分诊」里的「无法判定（6）」桶**（定义在**本文件上方的 ✅ 已结案小节**里，
 > 距此处约 700 行 ⇒ **指针没有目标**）。6 条 = `hasNoUpgradeApi`（`stance/agency/guards.ts`）·
 > `renderIntent`（`core/intent.ts`）· `renderIdentityModel`（`identity/timeline.ts`）·
-> `progressiveDisclosure` + `refineTree`（`core/knowledge-cost.ts`，**同一处决定**）·
+> `progressiveDisclosure` + `refineTree`（`core/knowledge/cost.ts`，**同一处决定**）·
 > `relationForProposal`（`temporal/edge.ts`）。
 > **被排在 T15 之后的唯一原因**：它们缺的是**产品决策**（「哪些东西算受保护契约」），不是代码证据。
 > **v1.15.75 的判定落点与登记册缺口见 `adr/0086` §8.10**（#1/#2 不涉及兼容性；#6 **归 T7**）；
@@ -1028,8 +1031,8 @@
 - **OpenClaw 只借 30%**：借 `Markdown=canonical` / `SQLite=derived index` / `FTS5=lexical` / `vector=optional` /
   `rebuild=mandatory` / `fallback=filesystem`；**不搬它的整套 memory semantics**（会破坏本仓已冻结的 Evidence/Temporal/Scope/Authority/Projection/Identity/Verification）。
 - **T17-B 终态（2026-09-16，`v1.15.96`）**：落点是 T17-A 的 **(c1)「换物化载体」**，不是给 `IndexEngine` 加 provider ——
-  新边界 `core/candidate-provider.ts`（`CandidateSet` 四态：`ok` 含合法 0 行 / `unavailable` / `corrupt` / `query-error`），
-  `query/materialize.ts` 是唯一物化收敛点（`fs` provider 与今天逐字等价）；`core/candidate-sqlite.ts` 落
+  新边界 `core/candidate/provider.ts`（`CandidateSet` 四态：`ok` 含合法 0 行 / `unavailable` / `corrupt` / `query-error`），
+  `query/materialize.ts` 是唯一物化收敛点（`fs` provider 与今天逐字等价）；`core/candidate/sqlite.ts` 落
   `<ws>/.shadow/index.sqlite`（`index_meta` / `source` / `atom`）。`IndexEngine` / `deriveShadowNodes` /
   `validateAtomProjection` / 打分 / 渲染**一律未改**（由验收门逐文件断言）。
   - 新鲜度 = **目录令牌粗信号（~5 ms，一次 `listDir(.shadow)`）+ 变化目录细比对（逐条 upsert）+ 写侧精确信号**
@@ -1115,7 +1118,7 @@
 - **依据**：`adr/0062-wiring-audit.md` §3。
 - **现状**：`core/change-set.ts`（83 行）与 `ShadowProjectionStore.invalidateFor?()`
   **生产中未接线** —— 唯二消费者是两个测试；生产只在**类型位置**提到它；
-  实际走的是**粗粒度清空** `invalidateProjection`（`core/writer-materialize.ts`）。
+  实际走的是**粗粒度清空** `invalidateProjection`（`core/writer/materialize.ts`）。
 - **已明确**：**不是正确性缺陷**（投影缓存是可重建派生，清空后下次读自动重建 ⇒ 粗粒度路径正确）。
   它是 `ADR-0048⑤` 的**未接线优化**。
 - **接线的代价（已查明）**：需要**写侧新增变更跟踪** —— 现有 `rebuildIndex` 走 `listMemories`
@@ -1222,7 +1225,7 @@
 
 - **决定（用户「按推荐」授权）**：三条**都做**，且都归为 **Projection**（派生可重建，不违反 ADR-0003）。
 - **落地**：新增 `core/abstract.ts`（纯函数：`deriveL1` / `deriveL0` / `renderSidecar` / `parseSidecar` /
-  `sidecarDrift`）+ 接线 `core/writer-materialize.ts` 的 `rebuildIndex` + 枚举器分类判据收敛。
+  `sidecarDrift`）+ 接线 `core/writer/materialize.ts` 的 `rebuildIndex` + 枚举器分类判据收敛。
 - **选型（用户 2026-09-11 选定 A）**：sidecar 落 `.shadow/<date>/_abstract.md`，并**教 `listMemories` 跳 `_` 前缀**。
   三条边界：派生件不是 source · 所有输入显式传入（不读时钟/随机/fs）· 命名必须 `_` 前缀。
 - **层次**：记忆（source）→ L1（确定性，≤4000）→ L0（**由 L1 抽取**，≤256）→ `_index.md` 的目录摘要段。
@@ -1276,7 +1279,7 @@
   | 缺的列 | 为什么值得补 |
   |---|---|
   | **成熟度**（stable / beta / experimental） | 今天「默认关」的项里混着「稳定但耗 token」与「接口可能变」两类，**读表看不出区别** |
-  | **降级行为** | **ADR-0049「缺件不静默」要求降级必须可见**，但该口径目前**散在代码注释与 ADR 正文里**（`core/toolset.ts` 的 `degradesTo`、`routeVerify` 的 `unavailable`、`recall` 的关键词兜底、`evidenceProvider` 的 `fs` 回退…）—— **没有一处能一眼看全**「每个能力关掉 / 缺件时，行为退到哪」 |
+  | **降级行为** | **ADR-0049「缺件不静默」要求降级必须可见**，但该口径目前**散在代码注释与 ADR 正文里**（`core/toolset/index.ts` 的 `degradesTo`、`routeVerify` 的 `unavailable`、`recall` 的关键词兜底、`evidenceProvider` 的 `fs` 回退…）—— **没有一处能一眼看全**「每个能力关掉 / 缺件时，行为退到哪」 |
   | **晋级标准** | 什么条件下才允许 beta → stable。本仓只在个别 ADR 里零散出现「未验证/待实测」，**不是能力粒度的门** |
 - **为什么现在没做**：它**不是新功能**，是把**已有事实**（各能力的稳定度、降级路径、晋级条件）逐条**核实后**填表 ——
   需要先把 16 条能力逐条对着代码定「降级到哪」，属**独立工作量**；且用户本轮授权范围是
@@ -1332,7 +1335,7 @@
 
 - **依据**：`adr/0087` §A 甲-3（rtk `src/discover/mod.rs:34-49` 的 `Coverage::Measured/Estimated` +
   `src/discover/report.rs:99-131` 的注释原文 *"Kept as its own field … instead of silently going quiet about it"*）；
-  本仓现状：`core/toolset.ts` 的 `verSrc` 是个**字符串参数**（默认 `"权威核验"`），**嵌进 `note` 散文**，
+  本仓现状：`core/toolset/index.ts` 的 `verSrc` 是个**字符串参数**（默认 `"权威核验"`），**嵌进 `note` 散文**，
   下游 `tools/toolset-authority.lib.ts` 的 `claimOf()` 用**正则反解**它。
 - **为什么现在没做**：改动面含**已签入的离线棘轮** `tools/toolset-authority.json` 与
   `test/toolset-authority.test.ts`；且「弱档不许被合并」要靠**类型**承载，不是加个 `~` 前缀。
@@ -1614,12 +1617,12 @@ V/G/T6 真机与外部条件项
 
 | 线索 | 位置 | 后果 |
 |---|---|---|
-| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer-materialize.ts:223-225` + `:311-312`，消费方 `query/index-budget.ts（无参读 `_index.md`）` | serve **陈旧索引**且无告警；下一次也不再重建 |
-| flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer-materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
+| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer/materialize.ts:223-225` + `:311-312`，消费方 `query/index-budget.ts（无参读 `_index.md`）` | serve **陈旧索引**且无告警；下一次也不再重建 |
+| flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer/materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
 | FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `epistemic/validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
 | hypothesis 落盘失败后仍打印 `hypotheses N` | `epistemic/validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
 | 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/topic-recall.ts（冷却台账消费）` | **已冷却的记忆被重新返回**（召回输出变） |
-| meta 注册失败只 log | `core/memory.ts:77-79`（`writer-materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
+| meta 注册失败只 log | `core/memory.ts:77-79`（`core/writer/materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
 
 ### 6.2 中危（报告/统计面偏差，或需先决定语义）
 
@@ -1760,7 +1763,7 @@ V/G/T6 真机与外部条件项
 | `tsconfig.test.json` 只覆盖 3 个文件 | ✅ **已扩到 `test/**/*.ts`**：`typecheck:tests`（在 `verify` 内）现在守**整个测试面**；83 条诊断 → **0** |
 | 「169 个测试类型错误」这个数字 | ⚠ 已更正为 **83**（169 是 tsc 总输出行数，含续行）；见 §6.10 |
 | 批量改测试的**可信性** | ✅ **独立核实**：剥掉类型 cast 后所有断言**逐字相同**；新增的「补必填字段」经**行为核对**（旧/新输入喂同一产物，结果相同）；`@ts-ignore` 0 处 |
-| `core/knowledge-retrieval.ts:60` 声明窄于真实契约（`__path`） | ✅ **已修**：声明补 `__path?: string`、去掉 `as any` |
+| `core/knowledge/retrieval.ts:60` 声明窄于真实契约（`__path`） | ✅ **已修**：声明补 `__path?: string`、去掉 `as any` |
 | `test/` 中两处手写的 `isProductionPath`（ADR-0070 刻意放测试面） | ⬜ 未改（与 lib 改名后不同名，属**弱重复**） |
 | `epistemic/world/explain` 的 `Validation History:` 旧标签 | ⏸ **保留 + 纠正从句**（既有断言 `recall-attribution.test.ts:3230` 钉住该串；改名需同时改断言，留待后续） |
 

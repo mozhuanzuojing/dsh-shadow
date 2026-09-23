@@ -15,7 +15,7 @@ export const hotnessOf = (hits: number, ageDays: number, halfLife: number) => {
  *
  * **为什么必须由参数传入，而不是读 meta**：`meta[rel].status === "superseded"` 这条**在生产中永不可达**——
  * 已核实生产代码只写 `"active"`（`core/memory.ts`、`query/query.ts`）与 `"compacted"`
- * （`core/writer-materialize.ts`），唯一把 `"superseded"` 写进 meta 的是**测试夹具**
+ * （`core/writer/materialize.ts`），唯一把 `"superseded"` 写进 meta 的是**测试夹具**
  * （`test/recall-attribution.test.ts` 手工塞入）。原因是**取代是「相对当前可见记忆集」的读时判断**，
  * 把它持久化进派生文件（`_meta.json`）会随可见集变化而失效。
  * ⇒ 故保留 `rec?.status` 这条（兼容外部显式标记），并**并列**接受读时裁决。

@@ -4,7 +4,7 @@
 //   - **绝不**实现 EvidenceProvider.verify —— 实测 Semble 无阈值、无负信号（无关查询同样返回最高分），
 //     交它裁决就会违反 ADR-0043「无证据不返回」与 ADR-0049「绝不把近似说成 verified」。
 // 缺件不静默：semble 未装（ENOENT）→ unavailable，调用方回退 fs 全量扫描，**绝不**冒充有候选。
-import type { AtomEvidenceRef } from "./lineage.js";
+import type { AtomEvidenceRef } from "./lineage/index.js";
 import { isAbsoluteLocator } from "../evidence/paths.js";
 
 /** 单次检索超时。首次调用可能触发索引构建，故比 zg 的 8s 宽。 */

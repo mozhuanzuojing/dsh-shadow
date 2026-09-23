@@ -400,7 +400,7 @@ v1.15.43「A 段残余 18 条逐条分诊」把 18 条分成 **真断线 1 · �
 | 2 | `renderIntent` | 是否改调它（`observer/core.ts:31` 内联渲染） | **不在册** ⇒ 内部一致性问题，**内部重构允许** |
 | 3 | `renderIdentityModel` | 是否进某条读路径 | ✅ **已判（v1.15.77，见 §8.12）**：属 `tool-output-v1` 的 **`soft`** 半边 ⇒ **允许接线，须写 `CHANGELOG`**，且不得让原有内容静默消失 |
 | 4 | `progressiveDisclosure` | ADR-0048 成本折叠是否进默认读路径（与 #5 同一处决定） | ✅ **已判（§8.12）**：**允许接线，须写 `CHANGELOG``；但它会折叠内容 ⇒ **必须由信封披露被折叠的部分**（该契约的 `hard` 半边） |
-| 5 | `refineTree` | 同上 | 同上（`core/knowledge-cost.ts:7` 原文即写「生产里**无调用点**」） |
+| 5 | `refineTree` | 同上 | 同上（`core/knowledge/cost.ts:7` 原文即写「生产里**无调用点**」） |
 | 6 | `relationForProposal` | 「T7 三选一」 | **被 T7 挡着** ⇒ 归 T7，本轮不判 |
 
 **缺口**：#3/#4/#5 问的都是同一件事 ——「**把某个内部渲染/折叠接进默认读路径，算不算改受保护面？**」
@@ -465,7 +465,7 @@ fixture 里 README 的版本历史表**没有当前版本那一行**时，④ �
 | # | 实测（代码自带说明） | 为什么是同一件事 |
 |---|---|---|
 | 3 | `identity/timeline.ts:68` 写明：`mode:"identity-advance"` 会**写** `IdentityModel`，而 `renderIdentityModel` 在**生产无调用点**（`audit-wiring` A1 桶，测试引用 **0**） | **接线它 = 改 `mode:"identity-advance"` 的返回内容** |
-| 4 | `core/knowledge-cost.ts:7` 原文：「本文件的 `progressiveDisclosure` / `refineTree` 在生产里**无调用点** —— 生产读路径…（默认路径可能刻意不做成本折叠）」 | **接线它 = 改默认读路径的返回内容** |
+| 4 | `core/knowledge/cost.ts:7` 原文：「本文件的 `progressiveDisclosure` / `refineTree` 在生产里**无调用点** —— 生产读路径…（默认路径可能刻意不做成本折叠）」 | **接线它 = 改默认读路径的返回内容** |
 | 5 | 同上（同一个文件、**同一处决定**） | 同上 |
 
 ⇒ 三条问的都是「**改工具返回内容，算不算改受保护面？**」，而登记册里**没有一条契约覆盖「工具的返回内容」**

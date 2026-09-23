@@ -13,7 +13,7 @@
 
 import { scrubUnsafe } from "../security/scrub.js";
 import { numOr } from "./util.js";
-import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "./lineage.js";
+import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "./lineage/index.js";
 
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
@@ -90,7 +90,7 @@ export const deriveCreatedBy = (p: { decisionEvents: DecisionEvent[]; userMessag
  * `isMetadataMemoryText` 是它在**文本表面**的等价表达（给不 parseMemory 的读路径用）。
  *
  * 定义：**只在没有可执行内容时才成立** —— 入口是写侧兜底字面量 `"shadow"`
- * （`core/writer-materialize.ts:175`：`primaryComp?.(id || "") || "shadow"`，语义是「**没识别出组件**」），
+ * （`core/writer/materialize.ts:175`：`primaryComp?.(id || "") || "shadow"`，语义是「**没识别出组件**」），
  * **有用户要点、但既无材料也无决策**（用户说了话，系统没产出可执行的东西）。
  *
  * 为什么是这一条 —— 真语料 **7089 条**实测（`adr/0066`；探针 `_research/d5-signal-experiment.ts`）：
@@ -230,7 +230,7 @@ export interface DeriveEpisodesOpts {
 export const deriveEpisodes = (parsed: ParsedMemory[], opts: DeriveEpisodesOpts = {}): Episode[] => {
   // T8-B（v1.15.64）：`|| 60` 吞掉显式 `gapMinutes: 0`。0 是**有意义的**值 ——
   // 判据 `diff <= gapMinutes` 在 0 时要求「同一分钟内」才并入同一段。
-  // 本函数是 `gapMinutes` 默认值的**唯一来源**（`writer-core.ts` 与 `query/reads.ts`
+  // 本函数是 `gapMinutes` 默认值的**唯一来源**（`core/writer/core.ts` 与 `query/reads.ts`
   // 此前各自又算了一遍 `|| 60` ⇒ 三处口径分叉，现统一：调用方**原样传配置**，默认在这里落）。
   const gapMinutes = numOr(opts.gapMinutes, 60);
   const sorted = [...parsed].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));

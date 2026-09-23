@@ -57,7 +57,7 @@
 ### 1.3 本仓现状：决策的**捕获**侧已冻结，**原语**侧不存在
 
 - **已有、不重造**：`DecisionEvent`（`core/episode.ts:41`）· 写侧触发器
-  （goal 事件 / 用户拍板 / assistant 明确决策，`core/writer-capture.ts:96-118`）·
+  （goal 事件 / 用户拍板 / assistant 明确决策，`core/writer/capture.ts:96-118`）·
   派生血缘 `DecisionLineage`（`core/episode.ts:296`）· 派生投影 `deriveDecisions`
   （`core/episode.ts:300-321`）· outcome 归属与读数（`core/decision-outcome.ts`，
   `ATTRIBUTION_RULE = "same-key-window/v1"`）。
@@ -149,7 +149,7 @@
 
 - **候选集由调用方提供**，引擎 selects 而不 invents。同族依据：`stance/planning/guard.ts:4`
   的 `objectiveIsExternal`（「objective 必须外部来源」）。**引擎不得增加、改名或删除候选**。
-- `core/lineage-validator.ts:31`：**decision 无 `lineage.evidence` 不进 context（Atom 保留）**
+- `core/lineage/validator.ts:31`：**decision 无 `lineage.evidence` 不进 context（Atom 保留）**
   ⇒ `produced` 决策要成为可进入上下文的 Atom，**必须带非空 evidence**；
   这条 evidence **就是引擎的 `rawOutput`（+ 请求体）**，**逐字**，不是转述、不是摘要。
 - **这是 §6 与 ADR-0037 不冲突的支点**：0037 禁的是 **shadow 生成/推断**
@@ -246,7 +246,7 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 ## 8. 决定七：lineage / outcome **接线不重建**
 
-- `decision.produced` 的血缘走**既有** `AtomLineage` + `AtomEvidenceRef`（`core/lineage.ts`），
+- `decision.produced` 的血缘走**既有** `AtomLineage` + `AtomEvidenceRef`（`core/lineage/index.ts`），
   **不新造血缘类型**。
 - **outcome 只作为后续独立捕获的事实**，**不自动因果回链**到产出它的决策 ——
   0037「有 Decision ≠ 一定有 Reason」的同族纪律：**有 Decision ≠ 一定有 Outcome，
@@ -367,7 +367,7 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
       **28 行 = 27 个目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
       ⚠ 过程中 `audit:ratchet` **判红过一次**（`b_keys 95 → 100（+5）`）—— 因为初版把 `=== "(root)"`
       内联散在 5 处；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
-- [x] **端到端**（第 ⑥ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage-validator.ts`
+- [x] **端到端**（第 ⑥ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage/validator.ts`
       投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则正例是恒真的假绿）
 - [x] **T19 结案**（见 §12）：0037 的「❌ Confidence」**结构性成立**（类型里没有那个槽）⇒
       不再需要「概率后端落地前的那道门」

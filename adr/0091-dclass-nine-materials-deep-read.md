@@ -65,11 +65,11 @@ before calling a run clean."* + `:37` 的产物清单（报告 + `vulnerabilitie
 `README.md:7` 自述 **215 tools / 21 categories / 63 tags**；类目是**数据**（`src/hackingtool/catalog/*.yaml`，21 个文件）
 而不是代码；`tags.py` + `registry.py` + `ai_recommend.py` = **标签检索 + 推荐层**；
 `docs/TOOLS.md` 是派生文档；`scripts/audit_tools.py` + `.githooks/pre-push` = 台账的门。
-⇒ 与本仓的三件套（`core/toolset.ts` 台账 + `docs/toolchain-windows.md` 派生 + `test/toolset-catalog.test.ts` 棘轮）**同构**，
+⇒ 与本仓的三件套（`core/toolset/index.ts` 台账 + `docs/toolchain-windows.md` 派生 + `test/toolset-catalog.test.ts` 棘轮）**同构**，
 但规模差 2 倍（本仓台账 ~101 条有 winget 包）。
 **它的答案与本仓不同**：本仓靠**分层与场景选择**（`toolset.ts` 的 `kind`/`category` + 「替代：X」列 + 预检 `precheckCapabilities`），
 它靠**分类 + 标签 + 推荐**。⇒ 对「工具数量拐点」（10–15 个工具就跌破 90% 选择准确率）这条判据，
-hackingtool 是**「量大就得加检索层」**的活样本。**登记为对照，不改本仓设计**（本仓台账是**目录**、不接线执行，见 `core/toolset.ts:3-14`）。
+hackingtool 是**「量大就得加检索层」**的活样本。**登记为对照，不改本仓设计**（本仓台账是**目录**、不接线执行，见 `core/toolset/index.ts:3-14`）。
 
 **④ marker 的两条口径纪律，本仓都在做但没写全。**
 `benchmarks/README.md` 原文：*"Reproducible harness for the … numbers in the top-level README.

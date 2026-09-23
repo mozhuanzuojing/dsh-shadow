@@ -56,7 +56,7 @@
 抽成 `persistence/jsonl-append.ts`，两处共用（**判据收一处**：同一件事只有一份实现）。
 
 **D3（读侧不受影响，已逐条证明）**：`persistence/files.ts:50` 只认 `^\d{4}-\d{2}-\d{2}$` 的目录 ⇒ `audit/` **整个目录不被枚举**；
-`isMemoryFileName`（`files.ts:39-41`）只认 `.md` 且排除 `_` 前缀；`core/candidate-sqlite.ts:203` 用同一判据；
+`isMemoryFileName`（`files.ts:39-41`）只认 `.md` 且排除 `_` 前缀；`core/candidate/sqlite.ts:203` 用同一判据；
 目录级 sidecar（`retrieval/abstract.ts:159`）只由**记忆**落盘调用 ⇒ `audit/` 不会长 `_abstract.md`。
 ⇒ 审计流不进 `_meta.json`、不进索引、不计 hits、无生命周期 —— 与 `.shadow/query-log/`、`shadow-index/` 同一层级（系统派生记录）。
 

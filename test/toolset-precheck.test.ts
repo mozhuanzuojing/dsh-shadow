@@ -8,8 +8,8 @@
 //   ② 装完本进程内不可见（C4：PATH 是启动时快照）+ 由此得出「不要按先装再派做计划」
 //   ③ 缺件只能上报不能自装（inv 182：scope 不可在执行中隐式扩大）
 import assert from "node:assert/strict";
-import { CAPABILITIES, capabilityOf, findCapabilities } from "../dist/core/toolset.js";
-import { precheckCapabilities, renderPrecheck, PROCESS_LOCAL_VISIBILITY } from "../dist/core/toolset-exec.js";
+import { CAPABILITIES, capabilityOf, findCapabilities } from "../dist/core/toolset/index.js";
+import { precheckCapabilities, renderPrecheck, PROCESS_LOCAL_VISIBILITY } from "../dist/core/toolset/exec.js";
 
 // ─────────────────────────────────────────────
 // ① 反查：按「能力/用途/别名」都能找到台账条目

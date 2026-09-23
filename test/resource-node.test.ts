@@ -4,7 +4,7 @@
 //   A2 结论与引用证据必须出现在真实 shadow_query 渲染输出里（queryShadow 只取前 6 行）。
 import assert from "node:assert/strict";
 import { parseResourceCard, deriveResourceNodes, resourceIdOf, listResourceCards, RESOURCE_DIR } from "../dist/core/resource.js";
-import { validateAtomProjection } from "../dist/core/lineage-validator.js";
+import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 import { matchShadowNodes, queryShadow, renderContext } from "../dist/core/node.js";
 
 const CARD = `# PageIndex

@@ -2,7 +2,7 @@
 // 口径：缺件不只报 unavailable，还要给**可执行的确切命令**；但**插件绝不代装**
 //   （边界依据见 core/toolset.ts 文件头：安全边界表 + inv 178 Authority ≠ Ownership + inv 182 scope 不可扩大）。
 import assert from "node:assert/strict";
-import { CAPABILITIES, capabilityOf, remedyFor, unavailableHint } from "../dist/core/toolset.js";
+import { CAPABILITIES, capabilityOf, remedyFor, unavailableHint } from "../dist/core/toolset/index.js";
 import { createIndexEngine } from "../dist/core/index-engine.js";
 
 // ─────────────────────────────────────────────

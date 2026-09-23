@@ -2,9 +2,9 @@
 // 从 knowledge-engine.ts 迁出的「建树」部分：从文档/规范/代码 Atom 派生保留树（规范→章节→条款→约束），
 // 不转 vector/chunks（与 RAG 本质区别）。纯派生/纯读，不新建事实。
 // 只依赖 node/episode 类型；本 seam 提供 KnowNode/KnowledgeTree 类型，供 retrieval/cost 两 seam 引用。
-import type { ParsedMemory } from "./episode.js";
-import type { ShadowNode } from "./node.js";
-import { nodeTypeOf } from "./node.js";
+import type { ParsedMemory } from "../episode.js";
+import type { ShadowNode } from "../node.js";
+import { nodeTypeOf } from "../node.js";
 
 export interface KnowNode {
   title: string;

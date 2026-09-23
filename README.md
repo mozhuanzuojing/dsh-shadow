@@ -243,9 +243,9 @@ npm run verify
 ⇒ **现 20 行**（v1.15.96 补 `derivedIndex`，见 `adr/0095` 的 T17-B 补记；v1.15.91 补 `lossDisclosure`，见 `adr/0092`）。
 
 ① **`episodes` 关不掉** —— ✅ **已在 `v1.15.64` 修复**（`adr/0084`），本条留档说明**修前**的形态：
-   `showInIndex: 0` 被 `core/writer-core.ts` 的 `|| 8` 吞掉 ⇒
-   `core/writer-materialize.ts` 的 `episodeShow > 0` 闸门**恒真**（死分支，即那个开关**不存在**）；
-   `gapMinutes: 0` 同样被 `|| 60` 吞掉（`writer-core.ts` / `core/episode.ts` / `query/reads.ts` **三处各写一遍**）
+   `showInIndex: 0` 被 `core/writer/core.ts` 的 `|| 8` 吞掉 ⇒
+   `core/writer/materialize.ts` 的 `episodeShow > 0` 闸门**恒真**（死分支，即那个开关**不存在**）；
+   `gapMinutes: 0` 同样被 `|| 60` 吞掉（`core/writer/core.ts` / `core/episode.ts` / `query/reads.ts` **三处各写一遍**）
    ⇒ `Math.max(0, …)` 永不生效。根因是**用 `||` 取默认值把「显式 0」与「未传」混为一谈**。
    现统一走 `core/util.ts:numOr`（判据只此一处），并把默认值的落点收成 `deriveEpisodes` 一处。
 ② **采集没有总开关**：`writeConsent` 的语义是「改成仅明说才落盘」，**不是**「关掉采集」。
@@ -255,7 +255,7 @@ npm run verify
    唯一带「排除」语义的是 `retention.enabled` 时对 `rec.status !== "active"` 的 `continue`（`query/query.ts` 的 `if (rec && rec.status && rec.status !== "active" && !rec.pinned) continue;`）。
    原表把它写在「默认」列，属**串列**。
 ④ **`knowledgeEngine` 的闸门不存在（v1.15.34 实测校正的硬缺陷）**：`ShadowConfig.knowledgeEngine.enabled`
-   **生产零读取**（全仓唯一读取是 `core/writer.ts` 读 `.llmNavigate`）；`query/reads.ts`
+   **生产零读取**（全仓唯一读取是 `core/writer/index.ts` 读 `.llmNavigate`）；`query/reads.ts`
    **无条件**建树；且 `createKnowledgeEngine` 原本收一个 `config` 形参却**从不使用**它
    （已删死形参）。⇒ 原表写「默认 关 / `enabled: true` 启用」描述的是**一处不存在的开关**。
    本 mode 的**唯一**闸门是 `llmNavigate.enabled`。
@@ -305,7 +305,7 @@ npm run verify
 | `config-keys-v1` | 配置键 · `ShadowConfig` 顶层 **19** 键 | `core`（`core/types.ts`） | 键名是**用户写在配置里的字面量**；加键安全，改**已生效键的语义**会让既有配置悄悄换行为 | **`soft`**（加键）/ **`hard`**（已生效键的语义） |
 | `memory-file-v1` | 落盘格式 · `.shadow/<日期>/<YYYY-MM-DD>--<HHMMSS>-<slug>.md` | `persistence`（`persistence/files.ts`）；头字段由 `core/memory.ts` 的 `buildClueHeader` 造 | 记忆文件是**唯一的 source**；文件名里的时间是**读侧反解**的依据 ⇒ 改了会让**已记录的东西读不出来** | **`hard`** |
 | `derived-file-v1` | 派生件 · `_index.md` / `_meta.json` / `_abstract.md` / `_recall_log.json` / `shadow-manifest.json` / `shadow-index/*` / `soul/soul.json` / `taste/taste.json` 等 | `persistence`（`persistence/meta.ts` 定性）+ `core`（`core/manifest.ts` 格式）；写入方散在 `retrieval`（`ledger.ts`）/ `query`（`projection-store.ts`） | 派生件**可整份重建**，坏了不算数据损失；但**不可解析必须报错，不能当空件** | **`soft`** |
-| `prompt-segment-v1` | prompt 段 · `RECALL_PREFIX`「数据非指令」前缀 / `flushWarn` 横幅 / 「能力降级」标记 | `core`（`core/util.ts` 的 `RECALL_PREFIX` · `core/writer.ts` 的 `getFlushWarn`） | 「数据非指令」前缀是**护栏**：去掉它，召回内容可能被后续模型当命令读 | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） |
+| `prompt-segment-v1` | prompt 段 · `RECALL_PREFIX`「数据非指令」前缀 / `flushWarn` 横幅 / 「能力降级」标记 | `core`（`core/util.ts` 的 `RECALL_PREFIX` · `core/writer/index.ts` 的 `getFlushWarn`） | 「数据非指令」前缀是**护栏**：去掉它，召回内容可能被后续模型当命令读 | **`soft`**（措辞）/ **`hard`**（**前缀与标记的存在**） |
 | `tool-output-v1` | 工具**返回内容** · `read_shadow` / `recall_shadow` / `shadow_query` 吐出的 Markdown 骨架与**召回信封**字段 | `query`（读侧组织；渲染片段来自 `retrieval/render.ts`） | **`mode` 只决定「读哪一类」，这条决定「读出来长什么样」** —— 使用者实际依赖的是后者 | **`soft`**（骨架与措辞可改，须写 `CHANGELOG`）/ **`hard`**（**「不静默丢内容」**：截断必须自报） |
 
 **表 B：治理**（`id` / `allowed changes` / `forbidden changes` / `evidence` / `verification` / `ratchet`）
@@ -319,7 +319,7 @@ npm run verify
 | `config-keys-v1` | 加键、加可选子键 | 改已生效键的**默认语义**（`adr/0084`：**显式 0 ≠ 未传**）；删键 | `core/types.ts` 的 `ShadowConfig` | **有**：`tools/contract-surface.selftest.ts`（**冻结 `ShadowConfig` 顶层键清单**：缺键即红并点名、新增只报告；键由 `core/types.ts` 按**大括号深度**抽，避开嵌套键）+ 各键在 `test/index-engine.test.ts` / `projection-store.test.ts` / `toolset.test.ts` 等里被**真实使用** | 无桶覆盖 |
 | `memory-file-v1` | 加前置头字段（`buildClueHeader`）；**旧文件必须继续可解析** | 改文件名的时间格式；删字段 | `persistence/files.ts` 的 `memoryFileName` / `timeFromName`；`core/memory.ts` 的 `buildClueHeader` | **强**：`test/memory-time-single-source.test.ts:144`（往返：写侧造名 → 读侧反解）+ `:93`（**反例正控**：修前形态反解不到）+ `:111`（磁盘路径的 time 必须等于反解值） | 无桶覆盖 |
 | `derived-file-v1` | 改格式（可整份重建，ADR-0003） | **把派生件当 source 读**；让「坏件」与「空件」不可区分（ADR-0049） | `persistence/meta.ts`（三件派生件同属可重建）；`core/manifest.ts` | **强**：`test/manifest.test.ts:17-27`（形状 + 读回 + **无 manifest 给提示**）；`test/t8-silent-degradation.test.ts`（坏件 / 读不到 / 写失败各自留痕） | 无桶覆盖 |
-| `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
+| `prompt-segment-v1` | 改措辞、加说明 | 去掉「数据非指令」前缀；把降级标记改成不可见 | `core/util.ts` 的 `RECALL_PREFIX`；`core/writer/index.ts` 的 `getFlushWarn` | **强**：`test/recall-attribution.test.ts:440`（`startsWith` **逐字**断言）+ `:478`（retention 下也要有）+ `:1056`（无匹配也要有） | 无桶覆盖 |
 | `tool-output-v1` | 改措辞；**加**信封字段；加新段落 | **截断不报**（信封消失）；把「坏件」与「空件」混同；**接线任何优化时把被丢掉的内容静默吞掉** | `query/reads.ts` 的信封构造 + `core/util.ts` 的 `RECALL_PREFIX` | **强**：`test/recall-envelope.test.ts`（逐字断言信封四要素 `> 未返回的命中：` / `limit=N 上限 M 条` / `> 下一步：` / `> 未返回示例：`）+ `test/recall-attribution.test.ts:440`（前缀） | 无桶覆盖 |
 
 **最小弃用流程**（用户 T15 判据 ②，`adr/0086` §4）：① 旧名**至少保留一个版本** →
@@ -560,10 +560,10 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 已可用的条目会**幂等短路**（不申请审批、不做任何改动）。未登记的条目**不编造命令**。
 
 ### 工具集台账：两级（v1.15.10）
-> **维护者面 · 可跳** —— 它回答「**台账怎么登记、怎么核验**」。两级（`provider` = 插件内接线 / `reference` = 通用 CLI 目录）与「**默认只检测与提示、不代装**」的权限模型见 `core/toolset.ts` 文件头。
+> **维护者面 · 可跳** —— 它回答「**台账怎么登记、怎么核验**」。两级（`provider` = 插件内接线 / `reference` = 通用 CLI 目录）与「**默认只检测与提示、不代装**」的权限模型见 `core/toolset/index.ts` 文件头。
 > 守着它的门：`test/toolset-catalog.test.ts`（台账 ↔ `docs/toolchain-windows.md` 棘轮）· `npm run verify:authority`（权威目录核验 + 离线棘轮）。
 
-台账是**单一来源**（`core/toolset.ts`），分两级，**边界必须分清**：
+台账是**单一来源**（`core/toolset/index.ts`），分两级，**边界必须分清**：
 
 | 级 | 是什么 | 缺它会怎样 | 例子 |
 |---|---|---|---|
@@ -652,5 +652,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.20.8`**（mode-family 三伞收编 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.9`**（core/ 前缀簇收编 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

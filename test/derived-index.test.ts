@@ -15,10 +15,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve as pathResolve } from "node:path";
-import { createCandidateProvider } from "../dist/core/candidate-provider.js";
-import { createSqliteCandidateProvider, INDEX_SCHEMA_VERSION } from "../dist/core/candidate-sqlite.js";
+import { createCandidateProvider } from "../dist/core/candidate/provider.js";
+import { createSqliteCandidateProvider, INDEX_SCHEMA_VERSION } from "../dist/core/candidate/sqlite.js";
 import { deriveShadowNodes } from "../dist/core/node.js";
-import { createShadowCollector } from "../dist/core/writer.js";
+import { createShadowCollector } from "../dist/core/writer/index.js";
 import { materializeAtoms } from "../dist/query/materialize.js";
 import { runReadShadow } from "../dist/query/query.js";
 

@@ -6,10 +6,10 @@
 import { slug } from "./util.js";
 import { scrubUnsafe } from "../security/scrub.js";
 import type { ParsedMemory } from "./episode.js";
-import type { AtomKind, CreatedBy, NodeType } from "./lineage.js";
-import { validateAtomProjection } from "./lineage-validator.js";
+import type { AtomKind, CreatedBy, NodeType } from "./lineage/index.js";
+import { validateAtomProjection } from "./lineage/validator.js";
 
-export type { NodeType } from "./lineage.js";
+export type { NodeType } from "./lineage/index.js";
 export interface ShadowRel { type: string; target: string; source: string }
 export interface ShadowNode {
   id: string;

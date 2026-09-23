@@ -126,7 +126,7 @@ AssertionError: 工具应报出已知的 status=superseded（本轮确证的无�
 
 **复现**（实证，非推断）：
 
-- 写侧（本进程缓存）：`core/writer-materialize.ts` 用 `ep.startedAt.slice(11,17).replace(/:/g,"")`。
+- 写侧（本进程缓存）：`core/writer/materialize.ts` 用 `ep.startedAt.slice(11,17).replace(/:/g,"")`。
   `core/episode.ts:49` 声明格式是 `YYYY-MM-DD HH:MM:SS` ⇒ `slice(11,17)` = `"09:00:"` ⇒ `"0900"` ——
   **4 位、根本不是 HHMMSS**（全仓其它记忆的 `time` 都是 6 位）。
 - 读侧（重启后磁盘重扫）：`persistence/files.ts` 从**文件名**反解 `^\d{4}-\d{2}-\d{2}--(\d{6})`，

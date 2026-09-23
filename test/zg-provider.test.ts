@@ -17,17 +17,17 @@ const REAL = [
   "CHANGELOG.md",
   "  223-240 [heading Changelog > [v1.14.0] 新增第 6 个 NodeType `resource`] 231:\t- **证据门同门**（两道…）",
   "  433-446 [heading Changelog > [v1.8.0] Evidence Lineage Layer] 439:\t- **Validation Gate**…",
-  "core/lineage-validator.ts",
+  "core/lineage/validator.ts",
   "  17:export const validateAtomProjection = (atom: AtomLike): AtomProjectionVerdict => {",
 ].join("\n");
 
-const ref = { path: "core/lineage-validator.ts", query: "validateAtomProjection", kind: "symbol" as const };
+const ref = { path: "core/lineage/validator.ts", query: "validateAtomProjection", kind: "symbol" as const };
 const m = parseZgMatches(REAL, ref);
 assert.equal(m.length, 3, "应解析出 3 条命中");
 assert.equal(m[0].path, "CHANGELOG.md", "路径取自「上一行不缩进行」，不是 ref.path");
 assert.equal(m[0].startLine, 231, "行号取**命中行** 231，不是分块起始 223");
 assert.ok(m[0].matchedText.includes("证据门同门"), "命中文本保留");
-assert.equal(m[2].path, "core/lineage-validator.ts", "换文件后路径正确切换");
+assert.equal(m[2].path, "core/lineage/validator.ts", "换文件后路径正确切换");
 assert.equal(m[2].startLine, 17, "无 [heading] 的命中行也要解析");
 assert.equal(m[2].matchedText.startsWith("export const"), true, "无面包屑时文本完整");
 
@@ -112,11 +112,11 @@ delete process.env.DSH_SHADOW_ZG_CLI;
 resetZgInvocationCache();
 const real = resolveZgInvocation();
 if (real.cmd === process.execPath && real.prefix[0]) {
-  const rr = await zgVerify({ path: "core/lineage-validator.ts", query: "validateAtomProjection", kind: "symbol" }, { ws: repoRoot });
+  const rr = await zgVerify({ path: "core/lineage/validator.ts", query: "validateAtomProjection", kind: "symbol" }, { ws: repoRoot });
   assert.notEqual(rr.status, "unavailable", "zg 已就位却报 unavailable → spawn 修复失效");
   assert.equal(rr.status, "verified", `限定路径后应 verified（实测：不限定会被 40 条命中/16 文件的全局 top-N 截掉），实际 ${rr.status}`);
   assert.ok(rr.matches.length > 0, "verified 必须有命中");
-  assert.equal(rr.matches[0].path, "core/lineage-validator.ts", "命中路径就是被验的那条");
+  assert.equal(rr.matches[0].path, "core/lineage/validator.ts", "命中路径就是被验的那条");
   assert.ok(rr.matches[0].startLine, "命中带行号");
   console.log(`✔ ④ 真机 zg：status=${rr.status}，${rr.matches.length} 条命中，首条 ${rr.matches[0].path}:${rr.matches[0].startLine}`);
   // 不存在的路径 → not_found（zg 对它返回 exit 0 + 0 命中，不报错）

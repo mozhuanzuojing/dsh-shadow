@@ -3,7 +3,7 @@
 // zg 是证据传感器（discover/verify），不是裁决层；zg 未装 → unavailable，绝不静默 fallback 成 verified（证据契约）。
 // provider：fs（默认，全量扫描内存，行为不变）| zg（复用 zgEvidenceProvider.discover 做候选）| semble（本地语义检索 CLI，ADR-0054）。
 // semble 与 zg 同理：**检索层不是裁决层**——它从不 verify，只交候选回 Shadow Core。
-import type { AtomEvidenceRef } from "./lineage.js";
+import type { AtomEvidenceRef } from "./lineage/index.js";
 import type { EvidenceProvider } from "./types.js";
 import { authorizeScope } from "./authorization.js";
 import { zgEvidenceProvider } from "../evidence/zg.js";

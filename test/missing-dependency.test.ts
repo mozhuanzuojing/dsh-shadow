@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 import { routeVerify } from "../dist/evidence/gateway.js";
-import { streamText } from "../dist/core/writer-llm.js";
+import { streamText } from "../dist/core/writer/llm.js";
 
 const { apply, name, inject } = mod;
 const WS = "D:/ws";

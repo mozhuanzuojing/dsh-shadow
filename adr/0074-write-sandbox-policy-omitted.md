@@ -96,7 +96,7 @@ scopedFs(rawFs, policy)           // 只把 writeText 的第 5 参补齐；无�
 
 | # | 位置 | 会话来源 |
 |---|---|---|
-| ① | `core/writer-materialize.ts` 的 `flush(agent)` | 事件载荷带的 `agent.session` |
+| ① | `core/writer/materialize.ts` 的 `flush(agent)` | 事件载荷带的 `agent.session` |
 | ② | 同文件 `ensureIndex(ws, session)` | 新增可选参；由读侧入口透传 |
 | ③ | `index.ts` 的 `queryDeps.fs` | `queryDeps` 由 `const` 改为 `makeQueryDeps(exec)`，按本次 `exec.agent.session` 构造 |
 

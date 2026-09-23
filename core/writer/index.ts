@@ -3,12 +3,12 @@
 // 本文件只做组合：建 WriterCore（共享状态+cfg）→ makeCapture（事件→pending）→ makeMaterialize
 // （pending→文件+索引+meta+摘要）→ 以 hooks 解 capture↔materialize 的互相调用 → 拼装 ShadowCollector。
 // index.ts 只做 Cordis Adapter 接线（事件 wire + 工具注册 + config），本模块封装领域逻辑。
-import type { AgentLike, RecallCandidate, ShadowConfig } from "./types.js";
-import { tokenize } from "./util.js";
-import { streamText, textMessage } from "./writer-llm.js";
-import { createWriterCore, routeFor, noteDegrade, dirtyRelsFor, clearDerivedDirty } from "./writer-core.js";
-import { makeCapture, type WriterHooks } from "./writer-capture.js";
-import { makeMaterialize } from "./writer-materialize.js";
+import type { AgentLike, RecallCandidate, ShadowConfig } from "../types.js";
+import { tokenize } from "../util.js";
+import { streamText, textMessage } from "./llm.js";
+import { createWriterCore, routeFor, noteDegrade, dirtyRelsFor, clearDerivedDirty } from "./core.js";
+import { makeCapture, type WriterHooks } from "./capture.js";
+import { makeMaterialize } from "./materialize.js";
 
 export interface ShadowCollectorOpts {
   context: any;

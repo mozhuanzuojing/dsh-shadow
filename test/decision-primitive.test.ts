@@ -27,7 +27,7 @@ import { choose } from "../dist/decision/choice.js";
 import { resolveEngine, engineNames, ENGINES } from "../dist/decision/engine.js";
 import { heuristicEngine, HEURISTIC_ENGINE_NAME } from "../dist/decision/heuristic.js";
 import { producedToLineage, producedDecisionIsTraceable } from "../dist/decision/lineage.js";
-import { validateAtomProjection } from "../dist/core/lineage-validator.js";
+import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 
 /** 一份**合法**声明的样板；各反例只改动其中一处。 */
 const D = (over: Record<string, unknown> = {}) => ({

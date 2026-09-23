@@ -16,7 +16,7 @@
 ADR-0049 的判据很明确（`adr/0049:45` 的自检清单）：任何可选增强「**有可见信号（状态 / warn / debug 之一）**」。
 T8（v1.15.34 立账）顺着这条判据查出 **7 处降级没有任何一条信号**，且其中一个形态特别刺眼：
 
-> `core/writer-llm.ts` 的 `streamText` 唯一的痕迹是 `if (opts.label) console.log(...)`。
+> `core/writer/llm.ts` 的 `streamText` 唯一的痕迹是 `if (opts.label) console.log(...)`。
 > 而 `recallSelect` / `knowledgeNavigate` 传的是 `label: ""` ⇒ **连 log 都没有**。
 > 更根本的是：`!llm`、`!route`、`finish.reason.kind === "error"|"aborted"` 三条路径
 > **从不进 catch** ⇒ **即使有 label 也不会出声**。
@@ -27,9 +27,9 @@ T8（v1.15.34 立账）顺着这条判据查出 **7 处降级没有任何一条�
 ## 2. 决定一：信号的**唯一承接物**是 `WriterCore.degrade` + `getFlushWarn()`
 
 ```
-写侧（core/writer-core.ts）      noteDegrade(core, capability, reason, effect)   ← 唯一写入口
+写侧（core/writer/core.ts）      noteDegrade(core, capability, reason, effect)   ← 唯一写入口
                                   ↓
-统一渲染（core/writer.ts）        getFlushWarn()  把台账渲染成横幅（每个能力一行）
+统一渲染（core/writer/index.ts）        getFlushWarn()  把台账渲染成横幅（每个能力一行）
                                   ↓
 所有读路径（query/*.ts）          60+ 处 `+ flushWarn` ⇒ **一处渲染，全部 mode 同时获得信号**
 ```
@@ -76,7 +76,7 @@ T8（v1.15.34 立账）顺着这条判据查出 **7 处降级没有任何一条�
 |---|---|---|
 | `projectionStore` 缓存读失败 | **正当静默** | 重建结果与命中缓存逐字节等价（ADR-0003：源才是真相） |
 | `query/observatory.ts` 的 `writeShadowReport` 写失败 | **正当静默** | 报告正文由 `query/reads.ts` 的 shadow-report 读查询**原样返回给读者**（`return scrubFinal(RECALL_PREFIX + text + flushWarn)`），落盘只是副本 |
-| `core/writer-materialize.ts` sidecar 写失败 | **必须有信号** | `continue` 会让该日期目录的 L0 **不再写进 `_index.md`** ⇒ 索引少一行 = **内容变了** |
+| `core/writer/materialize.ts` sidecar 写失败 | **必须有信号** | `continue` 会让该日期目录的 L0 **不再写进 `_index.md`** ⇒ 索引少一行 = **内容变了** |
 
 **T8 其余条目同理**：少摘要 / 窄召回 / 冷却失效 / 观测数据丢失 / Episodes 段消失 —— 都会改变读者看到的内容。
 
@@ -157,7 +157,7 @@ T8（v1.15.34 立账）顺着这条判据查出 **7 处降级没有任何一条�
 | **因果（范围夸大）** | `adr/0084` 写「本仓 **25 处** `Number(x) \|\| dflt`」—— 实为 `core/` 下的**修前快照** | 已改为带范围与时刻的表述 |
 | **缺失环节** | `adr/0049` 的现状盘点表把 3 行「可见信号：否」冻结在那里，读者会当现状 | 已加 **补记**（增量表 + 「三选一实务上只用 flush warn」+ 类判据） |
 | **缺失环节** | 三方版本一致性曾是**发版仪式的一步**（`CHANGELOG` 的 v1.15.22 条目记着「三方版本一致 ✅ 均 `1.15.22`」），而**没有任何自动门**。⚠ **本行原写「那是人工核验过一次」——已在 §8.7 用 `git log -G` 实测推翻**：那是一个仪式，从 v1.7.0 一直做到 v1.15.40 | 补成门并**在 §8.7 扩成两条**：**`tools/docs-consistency.ts`**（`npm run audit:docs`，已进 `verify`；①三方版本一致 ②`verify` 每一步被「该列它的那一块」点名）+ `.selftest.ts`（spawn 真 CLI，**11 组**）。一般化为「**能推出来的字段要么别手写、要么配一道门**」 |
-| **干扰** | 多处 `文件:行号` 引用在我改代码后**已过期**（如 `core/writer-core.ts` 的 `showInIndex` 取默认那行 / `core/writer-materialize.ts` 的 `episodeShow` 闸门那行） | 见 §8.6：**先按层分，再动手**（归档层 102 处一处不改；当前态 14 处改写成不依赖行号的形态；权威表 10 处手工改符号引用） |
+| **干扰** | 多处 `文件:行号` 引用在我改代码后**已过期**（如 `core/writer/core.ts` 的 `showInIndex` 取默认那行 / `core/writer/materialize.ts` 的 `episodeShow` 闸门那行） | 见 §8.6：**先按层分，再动手**（归档层 102 处一处不改；当前态 14 处改写成不依赖行号的形态；权威表 10 处手工改符号引用） |
 
 **新规则（写进 `dsh-shadow/AGENTS.md`）**：**改完代码必须回头核对引用它的文档行号** ——
 行号是最易腐烂的引用形态，而仓库的三条纪律（每条断言带 `文件:行号`）依赖它。
@@ -189,7 +189,7 @@ DSH 本体的 `src/index.ts`（第 96 行）也算成了本仓 `index.ts` ——
 它实际引的是 **DSH 本体**的文件，与本仓无关 ⇒ 多算 2 处。已写进脚本的说明里当**已知误匹配模式**。
 
 **优先形态**（写进 `AGENTS.md`）：**引符号名**（函数 / 常量 / 配置键），行号只在必要时加。
-一句「`core/writer-core.ts` 的 `episodeShow`」在下次重构后**依然正确**，而 `:77` 不会。
+一句「`core/writer/core.ts` 的 `episodeShow`」在下次重构后**依然正确**，而 `:77` 不会。
 
 ## 8.7 第三轮元审查（v1.15.67）：一处**说错的因果** + 一条**只覆盖半类的门** + 一次**接近数据丢失**
 

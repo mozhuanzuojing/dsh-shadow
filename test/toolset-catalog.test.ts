@@ -11,8 +11,8 @@ import {
   capabilityOf,
   providerCapabilities,
   referenceCapabilities,
-} from "../dist/core/toolset.js";
-import { surveyCapabilities, renderSurvey, installCapability, resolveInstall } from "../dist/core/toolset-exec.js";
+} from "../dist/core/toolset/index.js";
+import { surveyCapabilities, renderSurvey, installCapability, resolveInstall } from "../dist/core/toolset/exec.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DOC = readFileSync(join(repoRoot, "docs", "toolchain-windows.md"), "utf8");

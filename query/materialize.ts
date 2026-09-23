@@ -6,7 +6,7 @@
 // （`query/query.ts` → `topic-recall` / topic 透镜）—— 活跃 Memory Atom 集只经本 seam。
 //
 // T17-B（`adr/0095` 一期，(c1) 落点）：本模块是**唯一**的物化收敛点，所以「候选从哪来」在这里换成
-// `CandidateProvider`（`core/candidate-provider.ts`）：`fs` provider 与今天逐字等价，`sqlite` provider
+// `CandidateProvider`（`core/candidate/provider.ts`）：`fs` provider 与今天逐字等价，`sqlite` provider
 // 从派生索引取候选。**派生 / 门 / 打分 / 渲染全不动** —— 换的只是「字段从哪来」（文件 → 索引列）。
 //
 // 两条纪律：
@@ -15,7 +15,7 @@
 //     全量（结果不变）并经 `opts.note` 留一条横幅；健康路径**一次都不留痕**（输出逐字节不变）。
 import { readMeta } from "../persistence/meta.js";
 import { isForgettable, isCompacted } from "../core/forget.js";
-import { createCandidateProvider, fsCandidateProvider } from "../core/candidate-provider.js";
+import { createCandidateProvider, fsCandidateProvider } from "../core/candidate/provider.js";
 
 export interface MaterializedView {
   memories: any[];          // 过滤后的记忆条目（{date,time,name,rel}）

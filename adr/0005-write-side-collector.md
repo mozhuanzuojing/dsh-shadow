@@ -6,9 +6,9 @@
 ## 1. 目标
 
 把 index.ts 里剩余的**写侧采集基础设施**抽出，使 index.ts 成为名副其实的 ~200 行（实际 **124 行**）Cordis Adapter：
-只保留 config 解析 + 事件接线 + 工具注册 + systemPrompt。写侧领域逻辑整体迁入 `core/writer.ts`。
+只保留 config 解析 + 事件接线 + 工具注册 + systemPrompt。写侧领域逻辑整体迁入 `core/writer/index.ts`。
 
-## 2. 迁移（index.ts 顶层名 → core/writer.ts）
+## 2. 迁移（index.ts 顶层名 → core/writer/index.ts）
 
 | 迁移对象 | 原位置 | 落点 |
 |---|---|---|
@@ -44,8 +44,8 @@
 
 ## 5. 执行与验收
 
-- 步骤：① 建 `core/writer.ts`（createShadowCollector，搬入全部写侧逻辑）→ ② index.ts 改为 Adapter（`getAgentById` + `createShadowCollector` + 事件绑定 + queryDeps + 工具/提示注册）→ ③ `tsc` + `node --check` + mock 1–42 全绿。
-- 验收：`index.ts` **124 LOC**（目标 ~200）；`core/writer.ts` 366 LOC；mock 全部通过；read_shadow 外部行为不变。
+- 步骤：① 建 `core/writer/index.ts`（createShadowCollector，搬入全部写侧逻辑）→ ② index.ts 改为 Adapter（`getAgentById` + `createShadowCollector` + 事件绑定 + queryDeps + 工具/提示注册）→ ③ `tsc` + `node --check` + mock 1–42 全绿。
+- 验收：`index.ts` **124 LOC**（目标 ~200）；`core/writer/index.ts` 366 LOC；mock 全部通过；read_shadow 外部行为不变。
 
 ## 6. 取舍 / 遗留
 

@@ -32,7 +32,7 @@ dsh-shadow **已经立了**同名骨架（ADR-0001 不引向量库；Knowledge E
 
 ### 1. 免向量树检索（PageIndex：relevant ≠ similar）
 
-- dsh-shadow 的 Knowledge Engine（`core/knowledge-engine.ts`，Phase 3）保留**层级树**（规范→章节→条款→约束），**不转 vector/chunk**——这就是 PageIndex 的树索引。
+- dsh-shadow 的 Knowledge Engine（`core/knowledge/engine.ts`，Phase 3）保留**层级树**（规范→章节→条款→约束），**不转 vector/chunk**——这就是 PageIndex 的树索引。
 - **Retrieve = 在树上推理**：给定 query，**走树/选章节**（自然章节），用 **LLM 只做导航/选章节**（同 `recall_shadow` 的 `llmRecall` 边界：LLM 选编号，事实仍派生）。**LLM 绝不创造事实/关系**（Shadow Contract / ADR-0043）。
 - 结果**可追溯**：每个返回节点带显式引用（已是 Evidence Gate 契约）。
 

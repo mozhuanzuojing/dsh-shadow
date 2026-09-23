@@ -2,8 +2,8 @@
 // createShadowCollector 内闭包的状态（pending/comps/goalByAgent/cwdBySession + L2 索引缓存）与配置派生值
 // 抽成一个可注入的 WriterCore，供 capture（事件→pending）与 materialize（pending→文件+索引+meta+摘要）两 seam 共享。
 // 拆分的动机：materialize（fs 重、领域逻辑最密）此前硬编码在 collector 闭包内、不可单测；换成显式 core 后可独立验证。
-import type { ShadowConfig } from "./types.js";
-import { numOr } from "./util.js";
+import type { ShadowConfig } from "../types.js";
+import { numOr } from "../util.js";
 
 /**
  * 一条**能力降级**留痕（T8-A / ADR-0049）。

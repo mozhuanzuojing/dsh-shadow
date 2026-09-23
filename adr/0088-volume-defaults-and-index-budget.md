@@ -59,9 +59,9 @@
 | # | 位置 | 改前 | 改后 |
 |---|---|---|---|
 | 1 | `core/forget.ts` 的 `isForgettable` | `cfg.enabled !== true` → false | `!onByDefault(cfg.enabled)` → false |
-| 2 | `core/writer-materialize.ts` 的 `compact` 闸门 | `core.compactCfg.enabled !== true` | `!onByDefault(core.compactCfg.enabled)` |
-| 3 | `core/writer-materialize.ts` 的 `maxActive` 闸门 | `core.forgetCfg.enabled === true` | `onByDefault(core.forgetCfg.enabled)` |
-| 4 | `core/writer-materialize.ts` 的 `registerMeta` | `core.retentionCfg.enabled === true` | `onByDefault(core.retentionCfg.enabled)` |
+| 2 | `core/writer/materialize.ts` 的 `compact` 闸门 | `core.compactCfg.enabled !== true` | `!onByDefault(core.compactCfg.enabled)` |
+| 3 | `core/writer/materialize.ts` 的 `maxActive` 闸门 | `core.forgetCfg.enabled === true` | `onByDefault(core.forgetCfg.enabled)` |
+| 4 | `core/writer/materialize.ts` 的 `registerMeta` | `core.retentionCfg.enabled === true` | `onByDefault(core.retentionCfg.enabled)` |
 | 5 | `query/query.ts` 的 `retention` 排除分支 | `retentionCfg.enabled === true` | `onByDefault(retentionCfg.enabled)` |
 
 第 3 行值得单独说：它**不在**三个「开关」的名单里，只**读** `forget.enabled`。

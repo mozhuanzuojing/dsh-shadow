@@ -11,8 +11,8 @@
 // 本文件保证「字段口径」与「文本口径」不会再次分叉。
 import assert from "node:assert/strict";
 import { deriveAtomKind, isSessionMetadataAtom, isMetadataMemoryText, parseMemory, type ParsedMemory } from "../dist/core/episode.js";
-import type { AtomKind } from "../dist/core/lineage.js";
-import { validateAtomProjection } from "../dist/core/lineage-validator.js";
+import type { AtomKind } from "../dist/core/lineage/index.js";
+import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 import { deriveShadowNodes } from "../dist/core/node.js";
 
 // ── ① 判据本体：只在「有用户要点 + 无材料 + 无决策 + entry 是兜底字面量」时成立 ──

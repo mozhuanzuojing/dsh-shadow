@@ -1,7 +1,7 @@
 // dsh-shadow —— core/knowledge-retrieval.ts：Knowledge Engine · retrieval seam（ADR-0047）。
 // 从 knowledge-engine.ts 迁出的「检索/渲染/导航」：在保留树上确定性走树检索 + 展示（缩进/命中/引用），
 // 以及把树展平为「候选章节」供 LLM 导航只选编号。只读树，不新建事实。
-import type { KnowNode, KnowledgeTree } from "./knowledge-structure.js";
+import type { KnowNode, KnowledgeTree } from "./structure.js";
 
 /** 渲染知识树（缩进 + 层级）；供 report/查询展示。 */
 export const renderKnowledgeTree = (tree: KnowledgeTree): string => {

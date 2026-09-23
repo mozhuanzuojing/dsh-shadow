@@ -12,7 +12,7 @@
 //   **为什么本轮不删也不接线**：这是 `adr/0048` ①/② 的**目标能力**，是否启用属**产品决策**
 //   （默认路径可能刻意不做成本折叠）⇒ 见 `BACKLOG.md` **T1** 的"待决策"项。
 //   **不要**因为「零调用」就删除 —— 它与 `auditDrift` 那种空壳不同，它是实现完整的功能面。
-import type { KnowNode, KnowledgeTree } from "./knowledge-structure.js";
+import type { KnowNode, KnowledgeTree } from "./structure.js";
 
 /** 子树叶子/内容节点数（≈"页/节"规模，PageIndex 的 S(v)）。 */
 const leafCount = (n: KnowNode): number => (n.children.length ? n.children.reduce((a, c) => a + leafCount(c), 0) : 1);

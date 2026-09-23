@@ -1,7 +1,7 @@
 // dsh-shadow —— v1.8.0 Evidence Gate：Invariant 1(无证据 decision 不进 query) / Invariant 3(projection 无 generate·infer·guess)。
 import assert from "node:assert/strict";
 import { deriveShadowNodes } from "../dist/core/node.js";
-import { validateAtomProjection } from "../dist/core/lineage-validator.js";
+import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 
 const atom = (over) => ({
   rel: ".shadow/2026-09-08/x.md", date: "2026-09-08", time: "000000", entry: "x", project: "p", agent: "a", goal: "",

@@ -3,13 +3,13 @@
 > 时间：2026-09-06 ｜ 状态：已执行 ｜ 版本：v0.14
 > 前置：ADR-0006（P1 语义修正完成）。本 ADR 落地 P1-4（Trace）与四项 P2 语义项。
 
-## 1. P1-4 Trace 中间层（core/trace.ts / core/types.ts / core/writer.ts）
+## 1. P1-4 Trace 中间层（core/trace.ts / core/types.ts / core/writer/index.ts）
 
 ADR-0003 §3-5：新增 Trace 中间层 `World/DSH Events → Trace → Memory → Experience`。
 
 - `core/types.ts`：`Trace` DTO（`seq/at/kind/actor/comp/text/sub/source`）。
 - `core/trace.ts`：`traceOf(records, actorId)` 把 pending 记录归一化为有序、typed 的 `Trace[]`（纯数据、无副作用）。
-- `core/writer.ts`：flush 在塑形正文前先 `traceOf(arr, id)` 生成 Trace，再据 Trace 生成 `- [at] [comp] text` 行（输出与先前一致）。
+- `core/writer/index.ts`：flush 在塑形正文前先 `traceOf(arr, id)` 生成 Trace，再据 Trace 生成 `- [at] [comp] text` 行（输出与先前一致）。
 - 意义：采集源从此有显式的中间表示，Memory 从 Trace 塑形，不再直接吃原始事件；写侧行为不变（mock 写入场景 1–14 全绿）。
 
 ## 2. P2-9 asOf v2（query/query.ts / retrieval/render.ts）

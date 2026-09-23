@@ -6,6 +6,6 @@
 //   - structure：建树（buildTree/createKnowledgeEngine/buildCorpusTree/isBoilerplateLine + 类型）
 //   - retrieval：检索/渲染/导航（retrieveKnowledge/renderKnowledgeTree/renderRetrieved/…/flattenSections）
 //   - cost：成本感知优化 + 渐进披露（refineTree/progressiveDisclosure）
-export * from "./knowledge-structure.js";
-export * from "./knowledge-retrieval.js";
-export * from "./knowledge-cost.js";
+export * from "./structure.js";
+export * from "./retrieval.js";
+export * from "./cost.js";

@@ -192,7 +192,7 @@
 - **既有三段式**：`loadOrBuildProjection`（`projection-store.ts:178-188`）已经就是这三步，连边界都写好了：
   未提供指纹 → 旧行为（命中即用）；指纹一致 → 用缓存；**不一致或任一侧不可判定 → 保守重建**；
   且明写「**缓存是性能特性不是真相**（ADR-0046），宁可重建也不返回陈旧投影」。一期**照这个形状做**，不新造生命周期。
-- **写侧信号已存在**：`core/writer-materialize.ts:368` 已有 `invalidateProjection(fsI, ws)`（门在 `projectionStore.enabled === true`）。
+- **写侧信号已存在**：`core/writer/materialize.ts:368` 已有 `invalidateProjection(fsI, ws)`（门在 `projectionStore.enabled === true`）。
   ⚠ 一期要把它从「仅 store 开启时」解耦（或让 sqlite provider 自己挂），否则**索引开着、失效信号不发**。
 - **增量更新一期不做（有硬证据）**：`core/change-set.ts:8` 明写「**ChangeSet 判为无调用点**；生产走的是**粗粒度清空**」
   ⇒ 一期只做「指纹变了 → 整体重建」，**不做增量**（增量要另立机制，属二期以后）。
@@ -491,7 +491,7 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
 > 以及 T17-B 交付的终态。规格全文见 `../.docs/fix/2026-09-16/t17b/DESIGN.md`（D1–D14），证据与可重放见同目录。
 
 ### 一、T17-B 落地成了什么（一句话）
-**(c1)「换物化载体」落地为一条新边界 `CandidateProvider` / `CandidateSet`（`core/candidate-provider.ts`），
+**(c1)「换物化载体」落地为一条新边界 `CandidateProvider` / `CandidateSet`（`core/candidate/provider.ts`），
 `fs` provider 与今天逐字等价，`sqlite` provider 从 `<ws>/.shadow/index.sqlite` 取候选；
 `IndexEngine` 一字未改（仍是诊断/展示面，`adr/0095` §十、T17-A §3.4）。**
 换的只是「字段从哪来」（文件 → 索引列）：`parseMemory` 的逐字段**派生输入**落库，
@@ -517,7 +517,7 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
 - 但**有**便宜的目录级令牌：`fs.stat(dir).version = dev:ino:size:mtimeNs:ctimeNs`，而且
   **`listDir(.shadow)` 条目上的 `version` 与 `stat(该目录)` 逐字相同** ⇒ **一次 `listDir(.shadow)`（13 项）就拿到全部目录令牌**，
   实测 **4.7–5.7 ms**；对照组「文件级全量指纹」= **3.3–3.6 s** ⇒ **660–720×**。
-- ⇒ 新鲜度由**三道门**组成（实现位置：`core/candidate-sqlite.ts`）：
+- ⇒ 新鲜度由**三道门**组成（实现位置：`core/candidate/sqlite.ts`）：
   **门① 粗信号**（根 `listDir` 的目录令牌，未变即直接用索引）→ **门② 变化目录细比对**
   （只对被令牌改变的目录做一次 `listDir` + 逐文件 `name:size:version` 比对 ⇒ 逐条 upsert/删）→
   **门③ 写侧精确信号**（`WriterCore.derivedDirty`，键 `ws|rel`；`flush` 与 `patchSummary` 标脏，

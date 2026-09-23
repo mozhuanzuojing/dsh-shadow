@@ -71,7 +71,7 @@
 
 | 缺陷 | 修法 |
 |---|---|
-| **flush 顺序反了**：`core/writer-materialize.ts` 先 `pending.delete` / `comps.delete`，**再** `if (!ws \|\| !fs) return` ⇒ 取不到 ws/fs 时**整批记录已被消费掉**：没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空） | 把「取工作区 + 会话 fs」提到消费**之前**；取不到 ⇒ **保留 pending** + 设 `lastFlushError` + `console.error` |
+| **flush 顺序反了**：`core/writer/materialize.ts` 先 `pending.delete` / `comps.delete`，**再** `if (!ws \|\| !fs) return` ⇒ 取不到 ws/fs 时**整批记录已被消费掉**：没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空） | 把「取工作区 + 会话 fs」提到消费**之前**；取不到 ⇒ **保留 pending** + 设 `lastFlushError` + `console.error` |
 | **索引失败后照读陈旧索引**：`rebuildIndex` 吞异常返回 void；`ensureIndex` 无条件 `indexDirty.delete(ws)` ⇒ 一次失败之后**再也不重建**，而调用方照读磁盘旧 `_index.md` | `rebuildIndex` 返回 `boolean`；失败时**不清 dirty**、设 `core.lastIndexError`、`getFlushWarn()` 渲染「索引可能不是最新的」 |
 | **FutureEvidence 落盘失败仍播报 `registered`** | `registerFutureEvidence` 返回 `{ evidence, persisted }`；`mode:evidence` 按 `persisted` 改写播报（未落盘时明说「不会被 validate 读到」） |
 | **hypothesis 落盘失败仍打印 `hypotheses N`** | `writeHypothesis` 返回 `boolean`；`mode:offline` 数出失败条数并在同一条回复里说明「只有 N−k 条可 validate」 |
@@ -333,7 +333,7 @@
 
 ### 13.3 顺带修掉一处**生产侧**类型缺口（探针顺带发现的）
 
-`core/knowledge-retrieval.ts:60` 的声明比**真实契约窄**：实现读 `(h as any).__path`，而生产调用方
+`core/knowledge/retrieval.ts:60` 的声明比**真实契约窄**：实现读 `(h as any).__path`，而生产调用方
 `query/reads.ts:162,167` **确实构造并传入** `__path`（`:168/:171` 喂给本函数）。
 生产没被 `tsc` 拦，是因为 `.map` 回调的返回值**没有上下文类型** ⇒ 不触发 excess property 检查。
 ⇒ 声明补 `__path?: string`、去掉那个 `as any`。
