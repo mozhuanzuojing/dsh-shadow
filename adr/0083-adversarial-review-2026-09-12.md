@@ -21,7 +21,7 @@
 
 | # | 缺陷 | 为什么是真缺陷 | 修法 | 闸 |
 |---|---|---|---|---|
-| 1 | **判据分叉**：正/负结果分类器在**三处**各写一份 | `validation/validate.ts` 与 `dream/compress.ts` 逐字相同，且与 `reflection/patterns/success-rate.ts` **给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false；`"unstable"` 因 `"unstable".includes("stable")` 恰好相反）⇒ **同一份 trace 一处记成功、一处记反例** | 收进 `core/polarity.ts`：词表**并集** + 负向**一票否决**；三个消费方改为 import | `test/review-fixes.test.ts` ① |
+| 1 | **判据分叉**：正/负结果分类器在**三处**各写一份 | `epistemic/validation/validate.ts` 与 `dream/compress.ts` 逐字相同，且与 `reflection/patterns/success-rate.ts` **给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false；`"unstable"` 因 `"unstable".includes("stable")` 恰好相反）⇒ **同一份 trace 一处记成功、一处记反例** | 收进 `core/polarity.ts`：词表**并集** + 负向**一票否决**；三个消费方改为 import | `test/review-fixes.test.ts` ① |
 | 2 | **`_meta.json` 坏件 ≡ 空件** | `readMetaVersioned` 解析失败返回空快照且不报，`mutateMeta` 随后把**空快照整体写回** ⇒ **一条坏字节把全工作区 pinned/archived/compacted/hits 清零** | `MetaSnapshot.corrupt` 显式标记；`mutateMeta` 遇坏件**直接放弃**（不调 mutate、不写） | `review-fixes` ② |
 | 3 | **validation timeline 坏件被覆盖** | 解析失败返回空历史，`appendValidationEvent` 用「1 条新事件」覆盖文件 ⇒ **append-only 历史永久销毁**，从外面看只是「历史变短了」 | 新增 `readTimelineDetailed` 区分「还没有」与「读不出」；坏件**拒绝覆盖**；读路径显式播报 | `review-fixes` ③ |
 | 4 | **写失败报成功** | `writeMetaGuarded` 在非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」⇒ `mutateMeta` 判定事务已提交，`hits`/`compacted` 标记**静默不落盘** | 引入三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false（不重试、**绝不报成功**） | 见 §5 线索（未单列闸） |
@@ -282,11 +282,11 @@
 | 3 | `readRealityEvidence` 同型 | 坏件 ⇒ 静默部分/空列表 ⇒ `mode:"stability"` 报 `isolated` | `readRealityEvidenceDetailed` |
 | 4 | 三处写失败渲染成成功 | `registerObservation` / `writeClaim` / `registerRealityEvidence` 只 `console.log` 就返回 ⇒ 「写入被拒」与「已登记」**逐字不可区分** | 返回 `{…, persisted}` / `boolean`；`mode:"model-observation"` / `"model-claim"` / `"real-evidence"` 输出显式「**未落盘**」段 |
 | 5 | `referenceEvidence` 把「读不出」压成 `null` | 调用方渲染成「（无 reality evidence X）」⇒ **把工具报错/坏件当成「不存在」**（ADR-0049 的反面） | 返回 `{evidence, reason: "not_found" \| "unreadable"}`；出口分开说 |
-| 6 | `world/explain` 两处失真 | ① `Validation History: N supported claim(s)` 数的却是 **claim 条数**（没验证也显示「验证历史」）；② subject 不匹配时**静默换成** `objects[0]` —— 而该函数的用途正是「为什么系统认为**这个**结构存在」 | 标签改为 `basedOnClaims` 并明说「不是验证历史」；回退时**出声** |
+| 6 | `epistemic/world/explain` 两处失真 | ① `Validation History: N supported claim(s)` 数的却是 **claim 条数**（没验证也显示「验证历史」）；② subject 不匹配时**静默换成** `objects[0]` —— 而该函数的用途正是「为什么系统认为**这个**结构存在」 | 标签改为 `basedOnClaims` 并明说「不是验证历史」；回退时**出声** |
 
 ### 12.3 顺带修掉的**判据分叉**（同一个默认值两处两答案）
 
-`query/federation.ts:35` 的 `Number(args?.obsConfidence) || 0.5` 与 `federation/perspective.ts:11` 的 `opts.observationConfidence ?? 0.5`：
+`query/federation.ts:35` 的 `Number(args?.obsConfidence) || 0.5` 与 `epistemic/federation/perspective.ts:11` 的 `opts.observationConfidence ?? 0.5`：
 **显式传 `0`（零确信）被 `||` 静默改成 0.5**。⇒ 默认值收进 `CONFIDENCE_DEFAULT` + `confidenceOfInput`（只认「没传 ⇒ 默认」；显式 `0` 原样保留；非法值归 0 而**不伪装成 0.5**）。
 
 ### 12.4 三份审查的台账（**约 60 条**，本节不重复）
@@ -299,7 +299,7 @@
 1. **工具 schema 与读点不一致**：`validations` / `visible` / `hidden` / `hiddenA` / `hiddenB` / `distortion` 不在 `index.ts:163-295` 里，
    而四处读点在读它们 ⇒ 要么 Representative 层**恒为空**（host 剥离未声明参数），要么**可由参数声明 `outcome:"validated"` 直接造 `supported`**。
    这是**契约缺陷**，修它要同时想清楚 `additionalProperties` 与「谁有权声明已验证」。
-2. **`claimOf` 的 `supported` 只看调用方传入的 `validationOutcomes`**，从不与 `validation/history.ts` 的 ValidationTimeline 交叉核对（全仓无 join）。
+2. **`claimOf` 的 `supported` 只看调用方传入的 `validationOutcomes`**，从不与 `epistemic/validation/history.ts` 的 ValidationTimeline 交叉核对（全仓无 join）。
 3. **`planning` / `sim-action` 的三处守卫永不失败**（被检对象是调用方刚构造的常量、或已把违规字段丢弃后重建的对象）。
 
 **关于报告的可信度**：三名审查者都只读（未写、未 git、未 build、未跑测试），
@@ -341,7 +341,7 @@
 
 ### 13.4 一处**为兼容而保留的旧标签**（诚实标注）
 
-`world/explain/explain.ts` 的 `Validation History:` 前缀我**没有改名**：`test/recall-attribution.test.ts:3230`
+`epistemic/world/explain/explain.ts` 的 `Validation History:` 前缀我**没有改名**：`test/recall-attribution.test.ts:3230`
 断言的正是这个串，而当时有并发编辑在动 `test/`。改用「保留旧前缀 + 追加纠正从句」——
 **读者看到的是准确信息，既有断言不假红**。改名与改断言留待后续一并做。
 

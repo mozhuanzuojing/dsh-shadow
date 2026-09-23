@@ -4,8 +4,8 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runPlanning(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../planning/guard.js";
-import { renderContext, renderEvaluation } from "../planning/render.js";
+import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../stance/planning/guard.js";
+import { renderContext, renderEvaluation } from "../stance/planning/render.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface PlanningCtx { fs: any; ws: string; flushWarn: string }

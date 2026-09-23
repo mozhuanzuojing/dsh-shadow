@@ -17,7 +17,7 @@
 // 本测试用**忠实 mock**（`listDir` 按名字升序，与真机实现一致）+ **真 dist 代码**复现。
 import assert from "node:assert/strict";
 import { readTemporalGraph, writeTemporalGraph } from "../dist/temporal/persistence.js";
-import { readGraph, writeGraph } from "../dist/world/persistence/persist.js";
+import { readGraph, writeGraph } from "../dist/epistemic/world/persistence/persist.js";
 
 /** 忠实 mock：`listDir` 按名字升序（真机是 localeCompare 升序），目录条目带 `target`。 */
 const mkFs = (files: Map<string, string>) => ({

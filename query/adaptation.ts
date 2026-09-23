@@ -4,9 +4,9 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runAdaptation(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../adaptation/render/render.js";
-import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../adaptation/engine/adaptation.js";
-import { writeAdaptationContext } from "../adaptation/persistence/persist.js";
+import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../trajectory/adaptation/render/render.js";
+import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../trajectory/adaptation/engine/adaptation.js";
+import { writeAdaptationContext } from "../trajectory/adaptation/persistence/persist.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface AdaptationCtx { fs: any; ws: string; flushWarn: string }

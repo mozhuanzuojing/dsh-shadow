@@ -5,9 +5,9 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runHorizon(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../long-horizon/render/render.js";
-import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../long-horizon/engine/interaction.js";
-import { writeInteractionContext, writeHistorySummary } from "../long-horizon/persistence/persist.js";
+import { renderContext as renderHorizonContext, renderSummary, renderEvent as renderHorizonEvent, renderLink } from "../trajectory/long-horizon/render/render.js";
+import { buildInteractionContext, buildHistorySummary, buildContinuityEvent, buildInteractionAdaptationLink } from "../trajectory/long-horizon/engine/interaction.js";
+import { writeInteractionContext, writeHistorySummary } from "../trajectory/long-horizon/persistence/persist.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface HorizonCtx { fs: any; ws: string; flushWarn: string }

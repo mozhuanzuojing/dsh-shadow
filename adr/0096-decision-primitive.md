@@ -65,14 +65,14 @@
   ⇒ 它是 T3 的**接线对象**，不是重建对象。
 - 全仓**没有** `decision/` 层；`choice`/`boolean`/`rank`/`threshold` 作为原语**不存在**。
 - **分数与置信度在这一带是被明令禁止的**：
-  `planning/guard.ts:11`（禁 `score`/`best`/`optimal`，理由「**score→optimization→preference→value→identity 入口**」）·
-  `action/guard.ts:5`（禁 `expectedSuccess`/`confidence`，理由「Simulation Outcome 不得升级为行动信念」）·
+  `stance/planning/guard.ts:11`（禁 `score`/`best`/`optimal`，理由「**score→optimization→preference→value→identity 入口**」）·
+  `epistemic/action/guard.ts:5`（禁 `expectedSuccess`/`confidence`，理由「Simulation Outcome 不得升级为行动信念」）·
   `adr/0037:88`（❌ Decision Score / Quality、❌ Confidence）。
 
 ### 1.4 一条能站住的线：**不确定性 = 可 / 成功信念 = 禁**
 
-`action/guard.ts:21` 的 `renderCandidate` **允许** `uncertainty.toFixed(2)`，
-而 `action/guard.ts:5` **禁止**同一结构带 `confidence`。
+`epistemic/action/guard.ts:21` 的 `renderCandidate` **允许** `uncertainty.toFixed(2)`，
+而 `epistemic/action/guard.ts:5` **禁止**同一结构带 `confidence`。
 ⇒ 本仓的判据不是「数字一律不许」，而是 **「认知不确定性」可 / 「对成功或正确性的信念」禁**。
 §3 的删减站在**允许侧**；而 v1.17.0 更进一步：把「**命名**」这一步也取消了 ——
 本层**不再有任何需要命名的数字字段**（§4），于是这条线由「我们怎么给它起名」变成「**它根本装不进来**」。
@@ -98,7 +98,7 @@
 | 提案 | 本 ADR | 理由 |
 |---|---|---|
 | `choice` | ✅ **保留**，唯一有 Jev 依据的原语 | `model.py:81,91-106` |
-| `score` | ❌ **不成原语，也不设字段** —— 引擎自报的数字**只作为 `rawOutput` 逐字留存**（provenance），shadow **不解析、不建类型** | 给它一个字段，就是给 `planning/guard.ts:11` 那条链留了**入口** |
+| `score` | ❌ **不成原语，也不设字段** —— 引擎自报的数字**只作为 `rawOutput` 逐字留存**（provenance），shadow **不解析、不建类型** | 给它一个字段，就是给 `stance/planning/guard.ts:11` 那条链留了**入口** |
 | `boolean` | ❌ **不成独立协议** —— 定义为 `choice` 的**二元退化**（候选集两元） | Jev 也没有；另造题型是发明协议 |
 | `rank` | ❌ **不提供**（v1.17.0 从「视图」再降一级） | 分布字段已删 ⇒ 要排就得**解析 `rawOutput`**，那正是把引擎的置信度**重新建模**成 shadow 的排序。v1.16.0 曾给过 `orderByReported()` 视图，按 §12 取消 |
 | `threshold` | ❌ **不提供** | 见下 |
@@ -117,10 +117,10 @@
 - **禁**（本层**字段名**里不得出现）：`confidence` · `score` · `best` · `optimal` · `correct` ·
   `expectedSuccess` · `precision` · `winner` · `ranking` · `probabilities` · `reportedDistribution`
   ⚠ **作用域是「字段名」，不是「全文」** —— `guard.ts` 在**禁令理由**里点名它们是**允许**的；
-  先例：`planning/guard.ts:11,13,16` 同样在 reason 里点名 `score`/`optimal`/`ranking`。
-- 依据：§1.4（`action/guard.ts:5` 与 `:21` 的对照）· `planning/guard.ts:11,13,16`
+  先例：`stance/planning/guard.ts:11,13,16` 同样在 reason 里点名 `score`/`optimal`/`ranking`。
+- 依据：§1.4（`epistemic/action/guard.ts:5` 与 `:21` 的对照）· `stance/planning/guard.ts:11,13,16`
 
-新层自带守卫 `decision/guard.ts`，与 `action/guard.ts`、`planning/guard.ts` **同形**
+新层自带守卫 `decision/guard.ts`，与 `epistemic/action/guard.ts`、`stance/planning/guard.ts` **同形**
 （`xIsClean` + `assertX` + **非空 reason**）。判据以 `declarationViolations` 为**唯一实现**（**四条**）：
 
 1. `engine` 非空；`candidates` **非空**；
@@ -147,7 +147,7 @@
 
 ## 5. 决定四：候选由**外部**给，引擎只选不造；原始输出**就是证据**
 
-- **候选集由调用方提供**，引擎 selects 而不 invents。同族依据：`planning/guard.ts:4`
+- **候选集由调用方提供**，引擎 selects 而不 invents。同族依据：`stance/planning/guard.ts:4`
   的 `objectiveIsExternal`（「objective 必须外部来源」）。**引擎不得增加、改名或删除候选**。
 - `core/lineage-validator.ts:31`：**decision 无 `lineage.evidence` 不进 context（Atom 保留）**
   ⇒ `produced` 决策要成为可进入上下文的 Atom，**必须带非空 evidence**；

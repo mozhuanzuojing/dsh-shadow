@@ -111,7 +111,10 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   assert.equal(classifySpecifier("@deepseek-ai/cordis"), "package");
   assert.equal(layerOf("index.ts"), "(root)");
   assert.equal(layerOf("core/util.ts"), "core");
-  console.log("✔ ⑥ 说明符分类与层名：裸内建 ≡ node: 内建、包不入结构门、(root) 正确");
+  assert.equal(layerOf("stance/agency/engine.ts"), "agency", "伞下看第二段（ADR-0101）");
+  assert.equal(layerOf("trajectory/long-horizon/engine/x.ts"), "long-horizon");
+  assert.equal(layerOf("epistemic/world/builder/x.ts"), "world");
+  console.log("✔ ⑥ 说明符分类与层名：裸内建 ≡ node: 内建、包不入结构门、(root)/伞下第二段 正确");
 }
 
 // ⑦ 判据表本身的自检：白名单/禁令表不得为空（否则门「通过」只是因为没有判据）

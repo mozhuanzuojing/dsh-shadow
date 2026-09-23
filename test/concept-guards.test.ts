@@ -8,33 +8,33 @@ import {
   isExternalObjectiveSource, objectiveIsExternal, reasonIsConstraintOnly, eventProvenanceOk,
   authorityIsNotIdentity, isNotInternalReason, isNotAgencyExpansion, hasNoOwnership,
   hasNoIdentityClaim, hasNoAutonomousTransition,
-} from "../dist/agency/guards.js";
+} from "../dist/stance/agency/guards.js";
 
 // —— Delegation（v0.36：Delegation ≠ Ownership ≠ Authority Expansion；权源外部/生命周期）——
 import {
   contextHasNoExpansionField, resultNoPermissionUpgrade, resultNoLongRunAuthority, resultNoOwnership, resultNoIdentityClaim,
-} from "../dist/delegation/guard/expansion-guard.js";
-import { lifecycleOf } from "../dist/delegation/guard/lifecycle-guard.js";
-import { notRevoked, notExpired } from "../dist/delegation/guard/revocation-guard.js";
-import { actionWithinScope, permissionNotOwnership } from "../dist/delegation/guard/scope-guard.js";
-import type { DelegationContext } from "../dist/delegation/types/context.js";
+} from "../dist/stance/delegation/guard/expansion-guard.js";
+import { lifecycleOf } from "../dist/stance/delegation/guard/lifecycle-guard.js";
+import { notRevoked, notExpired } from "../dist/stance/delegation/guard/revocation-guard.js";
+import { actionWithinScope, permissionNotOwnership } from "../dist/stance/delegation/guard/scope-guard.js";
+import type { DelegationContext } from "../dist/stance/delegation/types/context.js";
 
 // —— Recall（v0.37：Recall = Access Transition，非 Reality Reconstruction）——
 import {
   forgottenHasNoDeletion, triggerIsExternal, recallLineageComplete, recallNotObservation, recallDoesNotIncreaseCertainty,
-} from "../dist/recall/guard/recall-guard.js";
-import type { ForgottenRecord, RecallEvent } from "../dist/recall/types/index.js";
+} from "../dist/trajectory/recall/guard/recall-guard.js";
+import type { ForgottenRecord, RecallEvent } from "../dist/trajectory/recall/types/index.js";
 
 // —— Adaptation（v0.38：Adaptation ≠ Identity/Authority/Objective/Preference change）——
-import { resultNoEpistemicIncrease, resultNotKnowledge, validationNoCorrectness } from "../dist/adaptation/guard/epistemic-guard.js";
-import { targetNotIdentity, resultNoBetterSelf, resultNoAuthorityIncrease, resultNoAgencyUpgrade } from "../dist/adaptation/guard/identity-guard.js";
-import { targetInScope, resultNoObjectiveChange, resultNoPreference as adaptResultNoPreference } from "../dist/adaptation/guard/scope-guard.js";
+import { resultNoEpistemicIncrease, resultNotKnowledge, validationNoCorrectness } from "../dist/trajectory/adaptation/guard/epistemic-guard.js";
+import { targetNotIdentity, resultNoBetterSelf, resultNoAuthorityIncrease, resultNoAgencyUpgrade } from "../dist/trajectory/adaptation/guard/identity-guard.js";
+import { targetInScope, resultNoObjectiveChange, resultNoPreference as adaptResultNoPreference } from "../dist/trajectory/adaptation/guard/scope-guard.js";
 
 // —— Long-Horizon（v0.39：时间累积 ≠ 权威/偏好/身份/目标）——
-import { resultNoAuthorityGrowth, resultNoSelfConfidence, resultNoPreference, resultNoInferredObjective } from "../dist/long-horizon/guard/authority-guard.js";
-import { summaryNoRealityField } from "../dist/long-horizon/guard/compression-guard.js";
-import type { HistorySummary } from "../dist/long-horizon/types/index.js";
-import { resultNoIdentityChain } from "../dist/long-horizon/guard/identity-guard.js";
+import { resultNoAuthorityGrowth, resultNoSelfConfidence, resultNoPreference, resultNoInferredObjective } from "../dist/trajectory/long-horizon/guard/authority-guard.js";
+import { summaryNoRealityField } from "../dist/trajectory/long-horizon/guard/compression-guard.js";
+import type { HistorySummary } from "../dist/trajectory/long-horizon/types/index.js";
+import { resultNoIdentityChain } from "../dist/trajectory/long-horizon/guard/identity-guard.js";
 
 // ══════ Agency ══════
 assert.equal(isExternalObjectiveSource("human"), true, "human=外部 authoritySource");

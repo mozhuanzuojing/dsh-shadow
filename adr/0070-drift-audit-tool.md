@@ -166,7 +166,7 @@ AssertionError: 通配符 `scripts/*.ps1` 不是「可检查的具体路径」�
 - **形态**：`findPredicateExpressedTwice` 的原正则 `\b([\w$.]+)\s*===` 的字符集**不含 `?`**，
   于是 `c?.status === "supported"` 只从 `status` 起匹配 ⇒ 键退化成 `status=support…`，
   与不带 `?` 的 `c.status=…` **归不到一起**。
-- **后果（实测）**：`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim` —— **判据源自己** ——
+- **后果（实测）**：`epistemic/world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim` —— **判据源自己** ——
   就是这样从 B 段**消失**的。而它恰恰是下面那条真漂移的关键证据：修复前 B 段看不到它，
   于是「两处各自重写、没用唯一判据源」这件事**没有任何线索指向**。
 - **修法**：允许 `?.`，并把键里的 `?` **归一掉**（`a?.b` 与 `a.b` 是同一条访问路径）。
@@ -197,8 +197,8 @@ B 段小计 **11 键/28 处 → 10 键/25 处**。
 
   | 位置 | 形态 | 角色 |
   |---|---|---|
-  | `world/guard/claim-admission.ts:6` | `isAdmissibleClaim = (c) => c?.status === "supported"` | **唯一判据源** |
-  | `world/builder/representation-builder.ts:9` | 手写 `claims.filter((c) => c.status === "supported")` | 重写（**同文件已 import 该模块**） |
+  | `epistemic/world/guard/claim-admission.ts:6` | `isAdmissibleClaim = (c) => c?.status === "supported"` | **唯一判据源** |
+  | `epistemic/world/builder/representation-builder.ts:9` | 手写 `claims.filter((c) => c.status === "supported")` | 重写（**同文件已 import 该模块**） |
   | `query/world.ts:42` | 手写 `claims.find((c) => c.status === "supported" && …)` | 重写 |
 
 - **性质**：与 **ADR-0063 / D5** 同族（「同一条规则多份实现」），而非「接线断了」。

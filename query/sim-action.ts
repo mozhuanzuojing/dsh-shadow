@@ -4,12 +4,12 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runSimAction(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { simulate } from "../simulation/engine/simulator.js";
-import { assertAssumptionAndNotFact } from "../simulation/guard/assumption-guard.js";
-import { assertNoRealityFabrication, outcomeHasLineage } from "../simulation/guard/reality-boundary.js";
-import { renderOutcome } from "../simulation/explain/explain.js";
-import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean, assertExecutionEvent, feedbackIsNeutral } from "../action/guard.js";
-import { writeExecution, writeFeedback } from "../action/persistence.js";
+import { simulate } from "../epistemic/simulation/engine/simulator.js";
+import { assertAssumptionAndNotFact } from "../epistemic/simulation/guard/assumption-guard.js";
+import { assertNoRealityFabrication, outcomeHasLineage } from "../epistemic/simulation/guard/reality-boundary.js";
+import { renderOutcome } from "../epistemic/simulation/explain/explain.js";
+import { renderCandidate, renderExecution, renderFeedback, assertCandidateClean, assertExecutionEvent, feedbackIsNeutral } from "../epistemic/action/guard.js";
+import { writeExecution, writeFeedback } from "../epistemic/action/persistence.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface SimActionCtx { fs: any; ws: string; flushWarn: string }

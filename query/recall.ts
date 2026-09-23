@@ -6,9 +6,9 @@
 //               不是主题召回，不是 config.recall。废止的是旧 mode:"recall"（整串），不是本族。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../recall/render/render.js";
-import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../recall/engine/recall-continuity.js";
-import { writeForgottenRecord } from "../recall/persistence/persist.js";
+import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../trajectory/recall/render/render.js";
+import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../trajectory/recall/engine/recall-continuity.js";
+import { writeForgottenRecord } from "../trajectory/recall/persistence/persist.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface RecallCtx { fs: any; ws: string; flushWarn: string }

@@ -24,8 +24,8 @@
 | `reasoning / why` | ✅ **已冻结**：`DecisionReason` 落盘 `> 决策理由：〔source〕reason`，**且「绝不生成理由」**（原文明确存在才算） | `adr/0037:29-42` |
 | `subject` | ⚠ **未成文**：决策目前挂在 **入口/Episode**（`entry` + 时间）上，**没有 subject 维度** | `core/episode.ts`、`adr/0038` |
 | `alternatives`（当时有哪些选择） | ❌ **缺**。`dream/types.ts:19` 的 `alternatives` 是**假设的替代解释**（`alternativeExplanation`），**不是决策的备选方案** | `dream/types.ts:19`、`dream/compress.ts:55` |
-| `evidence`（当时依据） | 🟡 **半有**：`DecisionReason` 是原文事实，但**没有「这条决策的依据是哪条记忆/证据」的显式引用**（Evidence Lineage 在 reality/validation 域，未接到决策上） | `validation/types.ts:3`、`reality/claim/engine.ts:13` |
-| `outcome.status: pending` | ❌ **缺关键的一半：没有「决策 → 后来结果」这条边**。现有 `outcome` 是两处**别的**东西：`observer/trace.ts:26` 的 `outcome{expected,actual}`（**轨迹**的结果）与 `validation` 的 `ValidationOutcome`（**假设**的验证结论） | `observer/trace.ts:26,62`、`validation/types.ts:23` |
+| `evidence`（当时依据） | 🟡 **半有**：`DecisionReason` 是原文事实，但**没有「这条决策的依据是哪条记忆/证据」的显式引用**（Evidence Lineage 在 epistemic/reality/validation 域，未接到决策上） | `epistemic/validation/types.ts:3`、`epistemic/reality/claim/engine.ts:13` |
+| `outcome.status: pending` | ❌ **缺关键的一半：没有「决策 → 后来结果」这条边**。现有 `outcome` 是两处**别的**东西：`observer/trace.ts:26` 的 `outcome{expected,actual}`（**轨迹**的结果）与 `validation` 的 `ValidationOutcome`（**假设**的验证结论） | `observer/trace.ts:26,62`、`epistemic/validation/types.ts:23` |
 | `lesson` | 🟡 **有但不合格**：`observer/arbitrate.ts:71 lessonOf` 存在，但它派生自**取代/证据存活状态**（「同入口已被更新，引用前先查最新记忆」），**不是**基于「这个决策执行得怎样」 | `observer/arbitrate.ts:71-72`、`query/lenses.ts / topic-recall（`lessonOf` 接线）` |
 
 **⇒ M1 的缺口只有三件（都不推倒已有）：**
@@ -37,7 +37,7 @@
 
 | 现状 | 证据 | 判断 |
 |---|---|---|
-| `validation` 有完整 outcome 状态机 `validated/observed/rejected/expired` + append-only 历史 | `validation/types.ts:23,34,44`；`test/recall-attribution.test.ts:2754`（场景 88：历史保留） | ✅ **可直接借用形态**，但它的对象是 **Hypothesis（假设）**，不是 **Decision（决策）** |
+| `validation` 有完整 outcome 状态机 `validated/observed/rejected/expired` + append-only 历史 | `epistemic/validation/types.ts:23,34,44`；`test/recall-attribution.test.ts:2754`（场景 88：历史保留） | ✅ **可直接借用形态**，但它的对象是 **Hypothesis（假设）**，不是 **Decision（决策）** |
 | `long-horizon` 有 `ActionFeedback`（执行 → 观察变化 → 成功指示 → 意外效应） | v0.39 自陈：`History→Recall→Adaptation→Planning→Action→Success→History`；`long-horizon` 域存在 `Feedback` 概念（`MEMORY.md` 的 v0.39 段） | 🟡 **已经有「行动 → 反馈」**，但同样**没有接到 Decision 上** |
 | `observer/trace.ts` 的 `outcome{expected, actual}` | `observer/trace.ts:26,62` | 🟡 「预期 vs 实际」的形态已在，属**轨迹级** |
 
@@ -87,7 +87,7 @@
 | **stability** | `hard`：`DecisionEvent` / `DecisionReason` 的**分离**与「**绝不生成理由**」（ADR-0037 已冻结）；`soft`：`alternatives` / `outcome` 的具体字段名与落盘行格式 |
 | **allowed changes** | **additive**：新增可选字段（如 `alternatives`）；新增 `mode`；新增渲染行。**不得**改变已有行的语义。 |
 | **forbidden changes** | ① **不得**让系统**推断**结果的优劣或理由（ADR-0037 + ADR-0059）；② **不得**为已有决策**编造** outcome 或 lesson（缺就写「未观察到」）；③ **不得**新建第二个 outcome 概念（必须接到 `DecisionEvent` 上，而不是再造一个平行对象）；④ **不得**用相似度/LLM 做「这条结果属于哪个决策」的归属判断（归属必须**显式**或**同入口+时间窗**的确定性规则）。 |
-| **evidence** | `adr/0037:29-42`（事实/理由分离）· `observer/trace.ts:26,62`（expected/actual 形态）· `validation/types.ts:23`（outcome 状态机形态）· `reflection/types.ts:22`（decision+outcome 齐备才入 Pattern）· `observer/arbitrate.ts:71`（现有 lesson 的派生来源） |
+| **evidence** | `adr/0037:29-42`（事实/理由分离）· `observer/trace.ts:26,62`（expected/actual 形态）· `epistemic/validation/types.ts:23`（outcome 状态机形态）· `reflection/types.ts:22`（decision+outcome 齐备才入 Pattern）· `observer/arbitrate.ts:71`（现有 lesson 的派生来源） |
 | **verification** | 待建：① `DecisionOutcome` 只接受**外部来源**（用户/工具/CI）——负例：无来源的 outcome 必须拒绝；② **无结果时的渲染必须是「未观察到」**（负例：不得输出空串或 0）；③ `alternatives` 只接受原文明确存在的项；④ 归属规则的确定性（同输入同归属）。落 `test/` + 棘轮。 |
 | **ratchet** | 暂用现有 **`audit-wiring` A 段**（新导出必须有生产调用点）+ **`audit-layers`**（结构门）；**待建**：`decision-outcome` 的覆盖计数桶（有决策无结果的条数 ⇒ 应**只降不升**） |
 
@@ -151,7 +151,7 @@ LLM 提议的归属 ──→ 【候选层】proposal（source=model-proposal, c
 ```
 
 - **这不是新发明**：本仓**已有两个同形先例** —— `dream/` 产出的候选**不进主路径**；`world` 的 status 恒为
-  `hypothesis/validated/rejected`、**永不 `fact`**（`world/guard/relation-guard.ts:18`）。
+  `hypothesis/validated/rejected`、**永不 `fact`**（`epistemic/world/guard/relation-guard.ts:18`）。
 - **它给回你要的东西**：模型可以**大规模提议归属**（覆盖率不是问题），人只做「确认」这一下；
   而**事实层保持可复现、可审计**，Pattern/M5/棘轮的读数才不会抖。
 - **代价（诚实说）**：多一层「确认」步骤；若你不确认，候选就一直是候选。

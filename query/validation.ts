@@ -4,10 +4,10 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runValidation(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../validation/evidence.js";
-import { validateHypothesis, toArtifact, renderValidation } from "../validation/validate.js";
-import { writeValidation } from "../validation/persist.js";
-import { appendValidationEvent, readTimelineDetailed, renderTimeline } from "../validation/history.js";
+import { writeHypothesis, readHypothesis, registerFutureEvidence, readFutureEvidence } from "../epistemic/validation/evidence.js";
+import { validateHypothesis, toArtifact, renderValidation } from "../epistemic/validation/validate.js";
+import { writeValidation } from "../epistemic/validation/persist.js";
+import { appendValidationEvent, readTimelineDetailed, renderTimeline } from "../epistemic/validation/history.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface ValidationCtx { fs: any; ws: string; flushWarn: string }

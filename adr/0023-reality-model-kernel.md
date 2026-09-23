@@ -65,7 +65,7 @@ Reality Model 描述**世界对象**，不是**观察者人格**。
 ## 6. 实现范围
 
 - **G1 Reality Observation Layer**：`reality/{types,observation,registry}.ts`——`RealityEvidenceRegistry → RealityObservation`。
-- **G2 Reality Claim Engine**：`reality/claim/`——`Observation[] + ValidationHistory[] → RealityClaim`（只产 candidate/supported）。
+- **G2 Reality Claim Engine**：`epistemic/reality/claim/`——`Observation[] + ValidationHistory[] → RealityClaim`（只产 candidate/supported）。
 - **G3 Reality Query**：`read_shadow({mode:"reality"})`——query entity / claim / evidence lineage，必须支持"**为什么系统认为这个现实描述存在**"（RealityClaim → Observations → Validation → Perspectives）。
 
 ## 7. 测试（102–110）
@@ -91,11 +91,11 @@ v0.30 最重要的能力不是让 Reality Model"更聪明"，而是**让系统�
 
 ## 附录：v0.30 实现说明（Appendix A–D 已落地）
 
-- **A RealityObservation 命名/语义冻结**：`reality/observation.ts` `RealityObservation{id, observedAt, subjectRef?, sourcePerspectives[], observation, temporalContext, validationRefs[]}`；**无 truth/certainty/fact**；`observation`=弱事实"多个 Observer 指向同一被观察事件"。
-- **B RealityClaim 保留 lineage**：`reality/claim/engine.ts` `RealityClaim{subjectRef?, subject, predicate, object, supportingObservations, validationHistory, perspectiveRefs, temporalContext, confidence, status, lineage{observations, validations, perspectives}}`——无 lineage 拒绝生成（仅 Temporal/Federation 不足以生成）。
+- **A RealityObservation 命名/语义冻结**：`epistemic/reality/observation.ts` `RealityObservation{id, observedAt, subjectRef?, sourcePerspectives[], observation, temporalContext, validationRefs[]}`；**无 truth/certainty/fact**；`observation`=弱事实"多个 Observer 指向同一被观察事件"。
+- **B RealityClaim 保留 lineage**：`epistemic/reality/claim/engine.ts` `RealityClaim{subjectRef?, subject, predicate, object, supportingObservations, validationHistory, perspectiveRefs, temporalContext, confidence, status, lineage{observations, validations, perspectives}}`——无 lineage 拒绝生成（仅 Temporal/Federation 不足以生成）。
 - **C ObservedEntityCandidate（克制）**：只记录 `{entity, observation:{exposedApi, version, changedVersions}}`，不写评估（reliable/should）。
 - **D 生命周期冻结**：`candidate → supported → unstable → rejected`，**永不 truth**（World Model 只消费 supported RealityClaim，非 Truth DB）。
 
-实现：`reality/{types, observation, registry}.ts` + `reality/claim/{engine, persist}.ts`。modes：`model-observation` / `model-claim` / `model`（lineage 查询，能答"为什么系统认为它存在"）。`shadow/model/{observations,claims}/`（append-only，不可变历史）。
+实现：`reality/{types, observation, registry}.ts` + `epistemic/reality/claim/{engine, persist}.ts`。modes：`model-observation` / `model-claim` / `model`（lineage 查询，能答"为什么系统认为它存在"）。`shadow/model/{observations,claims}/`（append-only，不可变历史）。
 
 mock 102–110 验证：Observation≠Truth / Temporal&Federation alone 不产 claim / Alternative survives（unstable）/ lineage 重建 / identity leakage blocked / majority vote rejected / Validated≠Knowledge / immutable history。

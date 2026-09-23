@@ -4,12 +4,12 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runFederation(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { packetOf, renderPacket, assertPacketBarrier } from "../federation/contract.js";
-import { compareProjections, renderDistortion } from "../federation/guard.js";
-import { perspectiveOf, renderPerspective, perspectiveIsClean, confidenceOfInput } from "../federation/perspective.js";
-import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../federation/reality.js";
-import { differenceOf, renderDifference } from "../federation/difference.js";
-import { perspectiveStateOf, renderStability } from "../federation/stability.js";
+import { packetOf, renderPacket, assertPacketBarrier } from "../epistemic/federation/contract.js";
+import { compareProjections, renderDistortion } from "../epistemic/federation/guard.js";
+import { perspectiveOf, renderPerspective, perspectiveIsClean, confidenceOfInput } from "../epistemic/federation/perspective.js";
+import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../epistemic/federation/reality.js";
+import { differenceOf, renderDifference } from "../epistemic/federation/difference.js";
+import { perspectiveStateOf, renderStability } from "../epistemic/federation/stability.js";
 import type { ShadowQueryDeps } from "./types.js";
 import type { AgentLike } from "../core/types.js";
 

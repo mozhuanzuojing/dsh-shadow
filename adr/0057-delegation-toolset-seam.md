@@ -49,7 +49,7 @@
 原入口 `capabilityOf(id)` 要求调用方**先知道台账 id**；而派活时手里只有一句「这个活得做全文搜索 / 反编译 APK」。
 匹配面：`id` / `probe[0]`（二进制名）/ `label` / `provides` / `category`，**词边界**匹配 + 别名归一（`fdfind→fd`、`batcat→bat`、`z→zoxide`、`ripgrep→rg`…，与 WSL 棘轮的 ALIAS 同源）。
 
-**它不是能力评分**：只回答「台账里有没有一个叫这个名字的东西」，**不排优劣、不给主体打分、不产 capability level**（inv 179 `Agency ≠ Identity` / inv 184 `Feedback ≠ Permission Upgrade`；`delegation/types/context.ts` 的禁增列 trust/confidence/reputation/capabilityLevel 同源）。
+**它不是能力评分**：只回答「台账里有没有一个叫这个名字的东西」，**不排优劣、不给主体打分、不产 capability level**（inv 179 `Agency ≠ Identity` / inv 184 `Feedback ≠ Permission Upgrade`；`stance/delegation/types/context.ts` 的禁增列 trust/confidence/reputation/capabilityLevel 同源）。
 
 ### 3. 新增**能力预检**：`read_shadow({ mode:"toolset", need:[...] })`
 
@@ -81,7 +81,7 @@
 | 做成**派活硬闸门**（缺件就不许派） | **事实错误**：ADR-0055 §1 明写 reference「不影响插件行为」。把通用工具当依赖会误导 |
 | 预检顺带**先装再派** | 撞 F2（本进程看不见）——装了也用不上，等于白付一次审批 |
 | 让 teammate **自己装** | 撞 F3 + inv 182「scope 不可在执行中隐式扩大」；`adr/0030:30`「被授权执行 ≠ 被授权扩大授权」 |
-| 台账条目加**能力等级 / 按能力给专家打分** | 撞 inv 179 / inv 184；`delegation/types/context.ts:13` 明确禁增 `capabilityLevel` |
+| 台账条目加**能力等级 / 按能力给专家打分** | 撞 inv 179 / inv 184；`stance/delegation/types/context.ts:13` 明确禁增 `capabilityLevel` |
 | 把「装机次数」折成「占用 teammate 名额」 | 量纲不同、无依据；自造配额闸门撞 inv 180（Agency Level 变更须 External Authority + Explicit Protocol Change） |
 | 只改 persona、不动插件 | 反查与预检无处落地，persona 会指向不存在的调用 |
 

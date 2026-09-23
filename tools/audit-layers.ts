@@ -7,7 +7,7 @@
 // 口径（必须打印出来，否则读数不可解释）：
 //   · 语料 = 仓库下所有 `*.ts`（递归），**排除** SOURCE_EXCLUDED_DIRS + `test` + `tools`
 //     —— 测试与工具允许 import 任何东西，把它们算进来会让本条门禁失去意义；
-//   · 「层」= 仓库相对路径的第一段；根下直接的文件（`index.ts`）落为 `(root)`。
+//   · 「层」= `layerOf`（根下文件 = `(root)`；mode-family 伞下取第二段，见 ADR-0101）；
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,7 +67,7 @@ const { violations, fileCycles, layerCycles, unresolved, stats } = report;
 
 console.log("dsh-shadow 结构门（audit-layers）");
 console.log(`根：${ROOT}`);
-console.log(`口径：*.ts 递归，排除 ${[...SKIP].sort().join(" / ")}；层 = 路径第一段，根下文件 = (root)`);
+console.log(`口径：*.ts 递归，排除 ${[...SKIP].sort().join(" / ")}；层 = layerOf（伞下第二段，见 ADR-0101），根下文件 = (root)`);
 console.log(`语料：${stats.files} 文件 / ${stats.edges} 条 import 边`);
 console.log("");
 

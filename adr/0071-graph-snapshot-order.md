@@ -9,7 +9,7 @@
 ## Context
 
 上一版造的 `tools/audit-drift.ts`，其检测 B 报出 `name=graph.json` 出现在两个生产模块
-（`temporal/persistence.ts` + `world/persistence/persist.ts`）。顺着这条线索查下去，
+（`temporal/persistence.ts` + `epistemic/world/persistence/persist.ts`）。顺着这条线索查下去，
 发现两件事叠在一起 —— **一个是 T4 已记的（write-only），一个是新的（顺序错）**。
 
 ### 事实链（全部已核实）
@@ -57,7 +57,7 @@ for (const name of dates) { ... 找到第一个含快照的 ... return JSON.pars
 ```ts
 // temporal/persistence.ts
 export const readTemporalGraph = (fs, ws) => readLatestSnapshot<TemporalGraph>(fs, ws, "temporal", "graph.json");
-// world/persistence/persist.ts
+// epistemic/world/persistence/persist.ts
 export const readGraph = (fs, ws) => readLatestSnapshot<RepresentationGraph>(fs, ws, "world", "graph.json");
 ```
 

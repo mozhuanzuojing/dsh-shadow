@@ -4,13 +4,13 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runWorld(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { createRepresentationFromClaims, renderAdmission, isAdmissibleClaim } from "../world/guard/claim-admission.js";
-import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../world/guard/relation-guard.js";
-import { buildRepresentationGraph } from "../world/builder/representation-builder.js";
-import { writeGraph } from "../world/persistence/persist.js";
-import { explain } from "../world/explain/explain.js";
-import { readClaims, readClaimsDetailed } from "../reality/claim/persist.js";
-import { readObservations } from "../reality/registry.js";
+import { createRepresentationFromClaims, renderAdmission, isAdmissibleClaim } from "../epistemic/world/guard/claim-admission.js";
+import { relationHypothesisOf, isRelationHypothesis, renderRelation } from "../epistemic/world/guard/relation-guard.js";
+import { buildRepresentationGraph } from "../epistemic/world/builder/representation-builder.js";
+import { writeGraph } from "../epistemic/world/persistence/persist.js";
+import { explain } from "../epistemic/world/explain/explain.js";
+import { readClaims, readClaimsDetailed } from "../epistemic/reality/claim/persist.js";
+import { readObservations } from "../epistemic/reality/registry.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface WorldCtx { fs: any; ws: string; flushWarn: string }

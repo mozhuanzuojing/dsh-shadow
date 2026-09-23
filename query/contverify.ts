@@ -4,11 +4,11 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runContVerify(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { DEFAULT_OBSERVER_ROOT, writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord } from "../continuity/persist.js";
-import { buildObserverConfig, buildObserverBoundary, buildRecallIndex, buildLineage, buildWorkspaceRecord, readObserverContext, readWorkspaceContext, readContinuityIndex } from "../continuity/engine.js";
-import { renderObserverContext as renderContinuityObserverContext, renderWorkspaceContext, renderContinuityIndex } from "../continuity/render.js";
-import { runVerification } from "../verification/engine.js";
-import { renderRun, renderReport } from "../verification/render.js";
+import { DEFAULT_OBSERVER_ROOT, writeObserverConfig, writeObserverBoundary, writeRecallIndex, writeLineage, writeWorkspaceRecord } from "../trajectory/continuity/persist.js";
+import { buildObserverConfig, buildObserverBoundary, buildRecallIndex, buildLineage, buildWorkspaceRecord, readObserverContext, readWorkspaceContext, readContinuityIndex } from "../trajectory/continuity/engine.js";
+import { renderObserverContext as renderContinuityObserverContext, renderWorkspaceContext, renderContinuityIndex } from "../trajectory/continuity/render.js";
+import { runVerification } from "../epistemic/verification/engine.js";
+import { renderRun, renderReport } from "../epistemic/verification/render.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface ContVerifyCtx {

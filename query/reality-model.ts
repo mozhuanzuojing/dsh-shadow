@@ -4,10 +4,10 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runRealityModel(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { observationOf, renderObservation } from "../reality/observation.js";
-import { registerObservation, readObservations } from "../reality/registry.js";
-import { claimOf as claimOfReality, renderClaim, isObservablePredicate } from "../reality/claim/engine.js";
-import { writeClaim, readClaims } from "../reality/claim/persist.js";
+import { observationOf, renderObservation } from "../epistemic/reality/observation.js";
+import { registerObservation, readObservations } from "../epistemic/reality/registry.js";
+import { claimOf as claimOfReality, renderClaim, isObservablePredicate } from "../epistemic/reality/claim/engine.js";
+import { writeClaim, readClaims } from "../epistemic/reality/claim/persist.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface RealityCtx { fs: any; ws: string; flushWarn: string }

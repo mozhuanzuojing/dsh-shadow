@@ -3,6 +3,16 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.8] Mode-family 三伞收编（stance / trajectory / epistemic）
+
+导航整理，**无行为变更**（mode 契约 / 召回逻辑 / 层语义不变）。
+
+- **三伞**：`stance/{agency,delegation,planning}` · `trajectory/{continuity,recall,adaptation,long-horizon}` · `epistemic/{federation,reality,world,validation,verification,simulation,action}`。
+- **`layerOf`**：伞下取第二段（叶子仍是层名）⇒ `DIRECTION_RULES` / 所有权报告语义不变；见 ADR-0101。
+- **接线**：`lifecycleOf` 复用 `notRevoked`/`notExpired`（把原先只被测试消费的 `revocation-guard` 拉进发射图）；棘轮测试路径锚点随迁。
+- **文档**：CONTEXT 登记三伞术语；BACKLOG / 未冻结 ADR 活路径更新；**不改** CHANGELOG 历史条目里的旧路径。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` 全绿。
+
 ## [v1.20.7] 主题召回三政策分家 + 已返回 rel 提取
 
 加深 ADR-0067 复发面：`servedRels`（hits）与 `servedDetail`（冷却）不再同居于编排旁路。

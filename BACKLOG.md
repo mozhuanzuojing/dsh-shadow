@@ -268,7 +268,7 @@
 - **仍需核实的少数**（第 8 轮已开始）：
   - **`status=archived`** —— 见 T3；
   - `kind=deleted`（`core/change-set.ts`）—— 与 D1 同源（`ChangeSet` 未实例化）；
-  - `status=compared` / `status=explored`（`simulation/guard/reality-boundary.ts:5`）——
+  - `status=compared` / `status=explored`（`epistemic/simulation/guard/reality-boundary.ts:5`）——
     需确认是不是**外部数据**（模拟结果的形态）；
   - `kind=metadata` / `kind=session`（`core/lineage-validator.ts:18`）—— 需确认 `AtomKind` 的取值来源。
 - **完成判据**：可疑项核准到「外部输入 / 真断线」；真断线进 D 段。
@@ -312,10 +312,10 @@
   完整逐键表见 **`adr/0070`「补记（v1.15.32）」**。
 - **先修了工具自己的漏报**（这是本轮最值得记的一条）：检测 B 的原正则字符集**不含 `?`** ⇒
   `c?.status === "supported"` 只从 `status` 起匹配，键退化成另一个 ⇒ **与不带 `?` 的归不到一起**。
-  后果：**判据源自己**（`world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`）从 B 段**消失**，
+  后果：**判据源自己**（`epistemic/world/guard/claim-admission.ts:6` 的 `isAdmissibleClaim`）从 B 段**消失**，
   于是「两处各自重写、没用唯一判据源」这件事**没有任何线索指向**。已修（允许并归一 `?.`）+ 回归锁 ⑤b。
 - **真漂移**：`c.status=supported` —— 判据源已存在（`isAdmissibleClaim`），却在
-  `world/builder/representation-builder.ts:9`（**同文件已 import 该模块**）与 `query/world.ts:42`
+  `epistemic/world/builder/representation-builder.ts:9`（**同文件已 import 该模块**）与 `query/world.ts:42`
   各手写一遍。性质同 **ADR-0063 / D5**（同一条规则多份实现）。已**收敛**到唯一判据源；
   新锁 `test/claim-admission-single-source.test.ts`（含**源码级棘轮**与**正对照**）。键已消失。
 - **附带项（本轮已做）**：台账「两级边界」不变量（`reference` 的 `degradesTo` 必须表明
@@ -383,12 +383,12 @@
   | `relationForProposal` | **保留并注明**（+ 新风险） | 原文已注「留接口」；**本轮新发现它忽略入参** ⇒ 升 **T7** |
   | `writeMeta` | **保留并注明** | `meta.ts:92` 已声明是「明确要覆盖」的逃生舱；生产写 meta 一律走 `mutateMeta`（ADR-0068） |
   | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
-  | `hasNoUpgradeApi` | **保留（暂不处置）** | `agency/guards.ts` **唯一**未被 `agency/engine.ts:4` import 的导出（同文件另 15 个都被用）；「遗漏接线」还是「有意保留」**本轮未判定**，且删它要动 invariant 面 |
+  | `hasNoUpgradeApi` | **保留（暂不处置）** | `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 15 个都被用）；「遗漏接线」还是「有意保留」**本轮未判定**，且删它要动 invariant 面 |
   | `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的目标能力，实现完整；**是否启用属产品决策**（默认路径可能刻意不做成本折叠）⇒ 见 T1 |
   | 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷；按**家族**加注，不逐条删 |
 
 - **四处代码注释已加**（供后续读者不再重复分诊）：
-  `delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge-cost.ts`、
+  `stance/delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge-cost.ts`、
   `core/intent.ts`、`identity/timeline.ts`。
 - **两个仍未决的产品问题**（**不是「没做」而是「需你拍板」**）：
   ① `progressiveDisclosure` / `refineTree` 该**接线**还是**有意不启用**？
@@ -518,7 +518,7 @@
 ### T10. **传递性死代码**：调用点全在另一段死代码里，工具却说「有接线」（v1.15.36 新发现）
 
 - **依据**：`adr/0062`「补记（v1.15.36）」§4；处理工具盲区①②③时**顺带发现**。
-- **实测事实（`grep notRevoked` 全仓核实）**：`notRevoked`（`delegation/guard/revocation-guard.ts:5`）
+- **实测事实（`grep notRevoked` 全仓核实）**：`notRevoked`（`stance/delegation/guard/revocation-guard.ts:5`）
   **有 2 个调用点**（`:7`、`:8`），故它**不在 A 段**（工具认为它「已接线」）；
   但这 2 个调用点**都在 `assertNotRevoked` 内部**（`:6`），而 `assertNotRevoked` **自己零调用**（落在 A3 桶）。
   ⇒ **`notRevoked` 事实上不可达，工具却报「有接线」**。
@@ -828,7 +828,7 @@
 >
 > ⚠ **「A 段 6 条」到底是哪 6 条（v1.15.75 首次枚举 —— 此前**两处引用都不给内容**）**：
 > 它是 **v1.15.43「A 段残余 18 条逐条分诊」里的「无法判定（6）」桶**（定义在**本文件上方的 ✅ 已结案小节**里，
-> 距此处约 700 行 ⇒ **指针没有目标**）。6 条 = `hasNoUpgradeApi`（`agency/guards.ts`）·
+> 距此处约 700 行 ⇒ **指针没有目标**）。6 条 = `hasNoUpgradeApi`（`stance/agency/guards.ts`）·
 > `renderIntent`（`core/intent.ts`）· `renderIdentityModel`（`identity/timeline.ts`）·
 > `progressiveDisclosure` + `refineTree`（`core/knowledge-cost.ts`，**同一处决定**）·
 > `relationForProposal`（`temporal/edge.ts`）。
@@ -1063,8 +1063,8 @@
   ⇒ 引入真实概率后端时，**另立 ADR**，正面回答 `adr/0037` 理由段那串问题（抽取结果是不是事实？
   source 指原文还是模型？同一段话不同模型是否得到不同 Decision？如何验证无 hallucination？失败怎么办？）。
 - **依据**：`adr/0096` §12（v1.17.0 重写）· `adr/0037` §「明确不做」的理由段 ·
-  `planning/guard.ts:11` 的 `score → optimization → preference → value → identity` 链 ·
-  `action/guard.ts:5`（禁 `confidence`）。
+  `stance/planning/guard.ts:11` 的 `score → optimization → preference → value → identity` 链 ·
+  `epistemic/action/guard.ts:5`（禁 `confidence`）。
 - **残余（未结的部分，另记）**：`rawOutput` 里的数字会**渲染给模型看**，模型是否据此行动
   **不在本层管辖内**（那是 agent 的推理，不是 shadow 的记录）⇒ 见 `adr/0096` §12.5。
 - **证据**：`test/decision-primitive.test.ts` 第 ⑦ 块（`EngineDeclaration` 字段集**恰好**四个 + 标定）；
@@ -1530,7 +1530,7 @@ V/G/T6 真机与外部条件项
 | # | 能力 | 状态 | 现状清点结论（逐条带证据，详见 `adr/0081` §2） |
 |---|---|---|---|
 | **M1** | **Decision Memory**（决策 → 结果 → 经验） | 🟢 **M1-A 已落地（v1.15.51）+ M1-A′ dry run 已跑（v1.15.52）**：确定性归属 + 接进原语**已被真跑验证**；**还剩 M1③（`key` 的显式入口）· 落盘 · 读路径渲染 · M1⑥/M1⑦（dry run 新发现的两个契约缺维度）** | **已有 50%**（`DecisionEvent`/`DecisionReason` 分离由 ADR-0037 冻结，见 `adr/0037:29-42`）。**M1-A（已做）**：`core/decision-outcome.ts` = 归属规则 `same-key-window/v1`（**确定性 + 保守**：同 key·窗内·取最晚前驱·**并列不归属**）+ `toPrimitiveRecords`（**结果事实只能经 `projectFacts` 产生**，内容来源=观察者、确认=`actor:"tool"` 的**确定性规则**且 `reason` 可审计）+ `pending` 读数（**年龄分布 + 最老 + `pendingAgeP90`**；**年龄只暴露风险、不改变状态**）。**闸 11 组**，`verify` **51/51**。**未做（诚实）**：`key` 由调用方显式传入 ⇒ **「key 从哪来」这条链未接**（M1③）；**无落盘**；**未接读路径** ⇒ 目前**没有生产消费者**（棘轮已按规程重录并说明）。**用户拍板**：`subject` 与 `entry` 并存（**只接受显式提供**）· **不设结算窗口**（永远 `pending`）· 结果来源走**两层**（`adr/0082`）。 |
-| **M2** | **Outcome Memory**（记结果 + 评价 + 以后是否继续相信） | ⬜ 待 M1 拍板后 | **不新建对象**：`validation/types.ts:23` 已有完整 outcome 状态机（`validated/observed/rejected/expired`）+ append-only 历史（实测场景 88）；`observer/trace.ts:26` 已有 `outcome{expected,actual}`；`long-horizon` 已有 ActionFeedback。**唯一要做的**：把已有 outcome 形态**接到 Decision 上**（否则就是第二个平行 outcome 概念＝判据分叉）。 |
+| **M2** | **Outcome Memory**（记结果 + 评价 + 以后是否继续相信） | ⬜ 待 M1 拍板后 | **不新建对象**：`epistemic/validation/types.ts:23` 已有完整 outcome 状态机（`validated/observed/rejected/expired`）+ append-only 历史（实测场景 88）；`observer/trace.ts:26` 已有 `outcome{expected,actual}`；`long-horizon` 已有 ActionFeedback。**唯一要做的**：把已有 outcome 形态**接到 Decision 上**（否则就是第二个平行 outcome 概念＝判据分叉）。 |
 | **M1⑥** ⭐ | **决策的 `disposition`**（「刻意不做」≠「忘了做」） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F6**。**已做**：`DecisionRecord.disposition?: "open" \| "deliberate-deferral"`（缺省 `open` ⇒ 向后兼容）；读数分 `pendingOpen` / `pendingDeferred`，**年龄分布 / 最老 / p90 只统计 `open`**；渲染显式标注「刻意推迟 N（不计入积压）」。闸 `test/decision-outcome.test.ts` ⑫。**仍待用户拍板**：`deliberate-deferral` 是否允许设复查期（到期转回 `open`？）——**未替用户决定**。 |
 | **M1⑦** ⭐ | **候选统计按 `actor` 分层**（防 tool 自确认刷分） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F8**。**已做**：新增 `byActor`（`human → tool → ci`，只列实际有裁决的）；**总体 `acceptanceRate`/`rejectionRate` 只认 `human`**，无 human 裁决 ⇒ `null`（不可测不报 0）；`revoke` 独立成桶（**不再与 `reject` 合并**，也不再落进 pending）；口径可机械断言 `candidates = confirmed + rejected + revoked + pendingConfirmation`。闸 `test/proposal-firewall.test.ts` ⑫⑬⑭。 |
 | **M3** | **Pattern Memory**（从 N 个 Episode 产生经验） | ⬜ | **算法内核已存在**：`reflection/patterns/success-rate.ts`（decision→outcome 相关性，纯统计、确定性标记集、无 AI）+ `decision-outcome.ts`（重复决策/结果 tally）+ `dream/compress.ts`（cross-domain 抽象）。**真缺口**：Pattern 不是一等对象，且 `reflection/types.ts:8` 的结构**没有反例字段** —— 用户 schema 要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺）。 |
@@ -1598,7 +1598,7 @@ V/G/T6 真机与外部条件项
 > **这不是「已知问题清单」的完整版，只是一次抽样审查的台账。** 三条纪律见 `adr/0083`。
 > 写法纪律：**每条必须带 `文件:行号` 与后果**；「确证但未修」与「已修」不得混排（已修的 7 类见 `adr/0083` §1）。
 > 审查范围**不完整**：`adaptation/` · `agency/` · `federation/` · `long-horizon/` · `simulation/` · `soul/` · `world/`(部分) ·
-> `delegation/guard/*` · `tools/*.selftest.ts`（全部未读）——**未读 ≠ 无问题**。
+> `stance/delegation/guard/*` · `tools/*.selftest.ts`（全部未读）——**未读 ≠ 无问题**。
 
 ### 6.0 优先级分级（v1.15.63 元审查补；**此前 54 条线索没有优先级、没有归属 ⇒ 不可行动**）
 
@@ -1616,8 +1616,8 @@ V/G/T6 真机与外部条件项
 |---|---|---|
 | `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer-materialize.ts:223-225` + `:311-312`，消费方 `query/index-budget.ts（无参读 `_index.md`）` | serve **陈旧索引**且无告警；下一次也不再重建 |
 | flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer-materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
-| FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
-| hypothesis 落盘失败后仍打印 `hypotheses N` | `validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
+| FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `epistemic/validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
+| hypothesis 落盘失败后仍打印 `hypotheses N` | `epistemic/validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
 | 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/topic-recall.ts（冷却台账消费）` | **已冷却的记忆被重新返回**（召回输出变） |
 | meta 注册失败只 log | `core/memory.ts:77-79`（`writer-materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
 
@@ -1650,7 +1650,7 @@ V/G/T6 真机与外部条件项
 | `status:"compacted"` 在三个谓词里三种答案 | `core/forget.ts` · `query/materialize.ts` 的 `keep` | 审查者**未确证可达性**（compacted 在活跃集过滤时已移除）⇒ 建议**只加注释**，不修 |
 | `successRate` 渲染 `toFixed(2)` 后回读 `/100` | `reflection/engine.ts:29,:79` vs `:93` | 往返误差 ≤0.005，可能跨过 `0.6`/`0.4` 边界 ⇒ 同一反思在生成侧判 principle、消费侧判 anti_pattern（**真语料是否踩过边界未验证**） |
 | 「重复」=2 次 vs 「模式」=3 次 | `reflection/patterns/decision-outcome.ts:12` vs `reflection/engine.ts:27`（+`identity/candidate.ts:27`） | 两个不同统计量各有理由；若要收，提命名常量而**不是**统一成同一个数 |
-| `scope` 校验里 `s.includes(action)` 让任意子串（含空串）通过 | `delegation/guard/scope-guard.ts:6` | 属「校验器不健全（假阴性）」，不是本轮缺陷类；**未确证影响面** |
+| `scope` 校验里 `s.includes(action)` 让任意子串（含空串）通过 | `stance/delegation/guard/scope-guard.ts:6` | 属「校验器不健全（假阴性）」，不是本轮缺陷类；**未确证影响面** |
 | `_index.md`/`authz` 相关的两个默认放行 | `core/index-engine.ts:57,:68` + `core/authorization.ts:23`（`return !scope.workspace`） | `ctx.workspace` 缺失时**授权过滤整体放行**；未追到生产上是否可能为空 |
 
 ### 6.4 测试面类型检查缺口（**已收窄，未收完**）
@@ -1762,7 +1762,7 @@ V/G/T6 真机与外部条件项
 | 批量改测试的**可信性** | ✅ **独立核实**：剥掉类型 cast 后所有断言**逐字相同**；新增的「补必填字段」经**行为核对**（旧/新输入喂同一产物，结果相同）；`@ts-ignore` 0 处 |
 | `core/knowledge-retrieval.ts:60` 声明窄于真实契约（`__path`） | ✅ **已修**：声明补 `__path?: string`、去掉 `as any` |
 | `test/` 中两处手写的 `isProductionPath`（ADR-0070 刻意放测试面） | ⬜ 未改（与 lib 改名后不同名，属**弱重复**） |
-| `world/explain` 的 `Validation History:` 旧标签 | ⏸ **保留 + 纠正从句**（既有断言 `recall-attribution.test.ts:3230` 钉住该串；改名需同时改断言，留待后续） |
+| `epistemic/world/explain` 的 `Validation History:` 旧标签 | ⏸ **保留 + 纠正从句**（既有断言 `recall-attribution.test.ts:3230` 钉住该串；改名需同时改断言，留待后续） |
 
 ## 七、审查线索（第二批：**从未被读过的目录**，2026-09-12，v1.15.61）
 
@@ -1782,25 +1782,25 @@ V/G/T6 真机与外部条件项
 
 `adaptation/` · `agency/` · `continuity/` **三层全部已被生产接线**（`query/adaptation.ts:7-9`、`query/agency.ts:7-9`、`query/contverify.ts:7-9`
 → `query/query.ts` 路由与各 family runner → `index.ts` 的 `read_shadow` 转发）。
-⇒ 此前把它们记成「未接线 / 潜在」是**错的**；这些缺陷按**当前生效**定级。唯一「仅潜在」项是 `agency/guards.ts:22-24` 的 `hasNoUpgradeApi`（恒 `return true`、零调用点）。
+⇒ 此前把它们记成「未接线 / 潜在」是**错的**；这些缺陷按**当前生效**定级。唯一「仅潜在」项是 `stance/agency/guards.ts:22-24` 的 `hasNoUpgradeApi`（恒 `return true`、零调用点）。
 
 ### 7.2 认识论层（`federation/` · `world/` · `reality/`）—— 最贵的几条
 
 | 线索 | 位置 | 后果 |
 |---|---|---|
-| **`supported` 由调用方参数决定**（唯一判据源的上游被绕） | `reality/claim/engine.ts:20-22,35,40` ← `query/reality-model.ts:29` 的 `args?.validations` | `status` 只由 `{id,outcome}` 字符串决定；`validationHistory` 从不与 `validation/history.ts` 交叉核对（全仓无 join） |
+| **`supported` 由调用方参数决定**（唯一判据源的上游被绕） | `epistemic/reality/claim/engine.ts:20-22,35,40` ← `query/reality-model.ts:29` 的 `args?.validations` | `status` 只由 `{id,outcome}` 字符串决定；`validationHistory` 从不与 `epistemic/validation/history.ts` 交叉核对（全仓无 join） |
 | **`validations` / `visible` / `hidden` / `hiddenA/B` / `distortion` 不在工具 schema 里** | `index.ts:163-295`（读点在 `query/reality-model.ts:29`、`query/federation.ts:26,31,35,48-49`） | 分支甲：host 剥离未声明参数 ⇒ validations 恒 `[]` ⇒ **Representation 层恒为空**；分支乙：透传 ⇒ **可声明 `outcome:"validated"` 直接造 supported** |
-| **`mode:"world"` 用残缺图覆盖落盘图** | `query/world.ts:39-40` + `reality/claim/persist.ts` | 一份坏 claim ⇒ 静默少返回 ⇒ **不可逆**覆盖（**本轮已修**：坏件时不覆盖 + 出口披露） |
-| 四处**写失败渲染成成功** | `reality/registry.ts:10`、`reality/claim/persist.ts:10`、`federation/reality.ts:20`、`world/persistence/persist.ts:11-15` | 「写入被拒」与「已登记」逐字不可区分（**本轮已修前三处**，`world` 侧未修） |
-| **谓词两套判据交集为空** | `reality/types.ts:41` 的动词表 vs `reality/claim/engine.ts:10` 的 `OBSERVABLE_PREDICATES` | 正则分支命中的谓词**必然**被 `query/reality-model.ts:32` 拒绝 ⇒ 中文/be 动词写法**注定产不出 claim** |
-| **`Validation History` 标签数的却是 claim 条数** | `world/explain/explain.ts:14` | 没验证也会显示「验证历史」（**本轮已修**：改 `basedOnClaims` + 明说不是验证历史） |
-| subject 未匹配时静默换成无关表示 / 空 subject 时拉全库 observation | `world/explain/explain.ts:9` + `query/world.ts:45` | 错误归属的证据被当成「为什么这个结构存在」（**本轮已修**：回退时出声；**全库 observation 那条未修**） |
-| `hidden` 声明了但从不被读 | `federation/guard.ts:2,11` + `query/federation.ts:31` | 隐藏项对比恒空 |
-| 盲点列表静默截断 `slice(0,4)` | `federation/difference.ts:12` | `unresolved` 是子集而读者无法察觉 |
-| `validated` 由调用方布尔参数授予 | `federation/stability.ts:9-11` + `query/federation.ts:56` | 不核对任何 ValidationResult |
-| 置信度四因子全是常量（`toFixed(2)` 呈现） | `reality/claim/engine.ts:23-26` | `uncertainty` 实际只取 {0.3,0.6} ⇒ **伪造精度** |
-| 装饰性守卫（FAIL 分支不可达） | `world/guard/relation-guard.ts:12`、`federation/contract.ts:10` | 守卫挡不住当前代码，只挡未来回归 |
-| 空主题 claim 折叠成一个对象且不报 | `world/builder/representation-builder.ts:16-18` | 其余 claim 无对象承载 |
+| **`mode:"world"` 用残缺图覆盖落盘图** | `query/world.ts:39-40` + `epistemic/reality/claim/persist.ts` | 一份坏 claim ⇒ 静默少返回 ⇒ **不可逆**覆盖（**本轮已修**：坏件时不覆盖 + 出口披露） |
+| 四处**写失败渲染成成功** | `epistemic/reality/registry.ts:10`、`epistemic/reality/claim/persist.ts:10`、`epistemic/federation/reality.ts:20`、`epistemic/world/persistence/persist.ts:11-15` | 「写入被拒」与「已登记」逐字不可区分（**本轮已修前三处**，`world` 侧未修） |
+| **谓词两套判据交集为空** | `epistemic/reality/types.ts:41` 的动词表 vs `epistemic/reality/claim/engine.ts:10` 的 `OBSERVABLE_PREDICATES` | 正则分支命中的谓词**必然**被 `query/reality-model.ts:32` 拒绝 ⇒ 中文/be 动词写法**注定产不出 claim** |
+| **`Validation History` 标签数的却是 claim 条数** | `epistemic/world/explain/explain.ts:14` | 没验证也会显示「验证历史」（**本轮已修**：改 `basedOnClaims` + 明说不是验证历史） |
+| subject 未匹配时静默换成无关表示 / 空 subject 时拉全库 observation | `epistemic/world/explain/explain.ts:9` + `query/world.ts:45` | 错误归属的证据被当成「为什么这个结构存在」（**本轮已修**：回退时出声；**全库 observation 那条未修**） |
+| `hidden` 声明了但从不被读 | `epistemic/federation/guard.ts:2,11` + `query/federation.ts:31` | 隐藏项对比恒空 |
+| 盲点列表静默截断 `slice(0,4)` | `epistemic/federation/difference.ts:12` | `unresolved` 是子集而读者无法察觉 |
+| `validated` 由调用方布尔参数授予 | `epistemic/federation/stability.ts:9-11` + `query/federation.ts:56` | 不核对任何 ValidationResult |
+| 置信度四因子全是常量（`toFixed(2)` 呈现） | `epistemic/reality/claim/engine.ts:23-26` | `uncertainty` 实际只取 {0.3,0.6} ⇒ **伪造精度** |
+| 装饰性守卫（FAIL 分支不可达） | `epistemic/world/guard/relation-guard.ts:12`、`epistemic/federation/contract.ts:10` | 守卫挡不住当前代码，只挡未来回归 |
+| 空主题 claim 折叠成一个对象且不报 | `epistemic/world/builder/representation-builder.ts:16-18` | 其余 claim 无对象承载 |
 
 **测试假绿（认识论层）**：`test/recall-attribution.test.ts:66` 的 mock `register` **零参数校验** ⇒ 端到端用例跑在**生产 schema 表达不出来**的路径上（这正是上表第 2 条看不见的原因）· `isExchangeable` 改成恒 true 仍全绿（`concept-guards-2.test.ts:27-30`）· `isRelationHypothesis` 换成黑名单实现仍全绿（`:68-70`）· 恒真 `!includes(...)` 群（`:3132/3141/3167/3199/3210/3231`）· 空 store 断言（`:3148/3166/3174`）。
 
@@ -1810,14 +1810,14 @@ V/G/T6 真机与外部条件项
 |---|---|---|
 | **三处守卫永不失败**（被检对象是调用方刚构造的常量／已丢弃违规字段后才重建） | `query/planning.ts:17,25,27`、`query/sim-action.ts:31,38` | `objective(source:external)` 由硬编码写死；`assertCandidateNoScore`/`assertCandidateClean` 的拒绝分支不可达 |
 | `mode:candidate` 的假设**不校验** Assume 措辞且缺省伪造 `"Assume change"` | `query/sim-action.ts:37` | 「假设必须 Assume X」只在 `mode:simulate` 强制 |
-| 未匹配条件落回 `RULES[0]` 并把 `r-latency` 写进 lineage | `simulation/engine/simulator.ts:13` | **伪造匹配** |
-| `result` 不在 `read_shadow` 参数契约里，而措辞守卫依赖它 | `index.ts:274-277` vs `long-horizon/engine/interaction.ts:11-17,43,57` | 模型侧拿不到该文本 ⇒ 224/225/226/228 恒对 `""` 通过 |
-| horizon 四对象**只写不读**（`.shadow/horizon/**` 全仓无读取者） | `long-horizon/persistence/persist.ts` + `persistence/files.ts:38` | 写了也没人读 |
+| 未匹配条件落回 `RULES[0]` 并把 `r-latency` 写进 lineage | `epistemic/simulation/engine/simulator.ts:13` | **伪造匹配** |
+| `result` 不在 `read_shadow` 参数契约里，而措辞守卫依赖它 | `index.ts:274-277` vs `trajectory/long-horizon/engine/interaction.ts:11-17,43,57` | 模型侧拿不到该文本 ⇒ 224/225/226/228 恒对 `""` 通过 |
+| horizon 四对象**只写不读**（`.shadow/horizon/**` 全仓无读取者） | `trajectory/long-horizon/persistence/persist.ts` + `persistence/files.ts:38` | 写了也没人读 |
 | soul 读失败 ≡ 没配置 | `soul/soul.ts:8-11` + `query/lenses.ts 的 soul 透镜` | 损坏被报成「无 Soul 配置」 |
 | `{"identity":"architect"}` 两处两答案 | `soul/identity.ts:10` vs `identity/timeline.ts:16` | 同一配置 `read_shadow({identity:true})` 与 `identity-advance` 得出不同身份 |
-| `satisfiedConstraints` 三套判据 | `planning/render.ts:14`（子串 `"under"`）/ `planning/types.ts:29` / `agency/engine.ts:27` | 同一概念三种算法 |
-| `|| "available"` / `|| "forgotten"` / `Number(x) || 0.5` 把合法 `0` 与缺失混同 | `long-horizon/engine/interaction.ts:32,44`、`query/planning.ts:25`、`query/sim-action.ts:38` | 缺失伪装成有值 |
-| 写失败仍 `ok:true` | `long-horizon/persistence/persist.ts:7,10,13,16` | 磁盘满/EACCES ≡ 记录已存 |
+| `satisfiedConstraints` 三套判据 | `stance/planning/render.ts:14`（子串 `"under"`）/ `stance/planning/types.ts:29` / `stance/agency/engine.ts:27` | 同一概念三种算法 |
+| `|| "available"` / `|| "forgotten"` / `Number(x) || 0.5` 把合法 `0` 与缺失混同 | `trajectory/long-horizon/engine/interaction.ts:32,44`、`query/planning.ts:25`、`query/sim-action.ts:38` | 缺失伪装成有值 |
+| 写失败仍 `ok:true` | `trajectory/long-horizon/persistence/persist.ts:7,10,13,16` | 磁盘满/EACCES ≡ 记录已存 |
 
 **测试假绿**：`assert.ok(true)`（`:3608`）· `applyRule` 改成恒返 `RULES[0]` 仍全绿（场景 131-138）· `planning.ts:27` 守卫整段删掉仍全绿 · `isFactLike` 改成恒 false 仍全绿（`concept-guards-2.test.ts:74`——断言在前缀那步就返回）。
 
@@ -1825,15 +1825,15 @@ V/G/T6 真机与外部条件项
 
 | 线索 | 位置 | 后果 |
 |---|---|---|
-| **五个边界布尔省略即 false = 约束全关**，写入全局 `boundary.json` 并**覆盖**旧记录 | `continuity/engine.ts:24`、`persist.ts:14-15`、`guard.ts:6-15`、`query/contverify.ts:49-50` | 裸调 `mode:"observer-boundary"` 把「五条边界全不存在」写成事实 |
-| `chosen` 算完即弃 ⇒ 违约候选照样被选中且硬回填 `constraint_satisfied` | `agency/engine.ts:27-28,30` | `selectedCandidateId` 与 `candidates[0]` 两条路都绕过约束检查 |
-| 同一句 `"I own this repository"` 两处**相反**答案 | `agency/guards.ts` vs `delegation/guard/expansion-guard.ts` 的 `resultNoOwnership` | 审计结论不一致（逐字正则推演） |
-| `before` 无任何守卫却同级落盘并渲染 | `adaptation/engine/adaptation.ts:32-39` | 未过滤字段进审计文本 |
-| `catch { return null }` / `catch { /* 继续 */ }` 三态压平 | `continuity/persist.ts:28,31,34`、`continuity/engine.ts:62-80` | 损坏 ≡ 为空（ADR-0049） |
-| 写失败仅 `console.log`，seam 直接渲染成功 | `agency/persistence.ts:11,21`、`adaptation/persistence/persist.ts:7,10,13`、`continuity/persist.ts:12-24` | 「记录已建立」与「写盘被拒」不可区分 |
-| `kind` 无白名单（schema 写了枚举，引擎裸 `string`） | `continuity/engine.ts:45` vs `index.ts:285`、`types.ts:14` | 任意 kind 通过并建目录 |
-| `basedOn:"exp-1"`（字符串）满足 `length` 检查 | `adaptation/engine/adaptation.ts:28`、`agency/engine.ts:16,35`、`continuity/engine.ts:31` | 畸形值满足 lineage 闸门，先落盘后在 render 抛 TypeError |
-| 隔离名不符实：写用 `r.workspace`、读用 `args.workspace`，**从不比对会话 ws** | `continuity/engine.ts:45`、`persist.ts:24`、`query/contverify.ts:67,75`、`guard.ts:27` | 唯一围栏是平台 sandbox 档位 |
+| **五个边界布尔省略即 false = 约束全关**，写入全局 `boundary.json` 并**覆盖**旧记录 | `trajectory/continuity/engine.ts:24`、`persist.ts:14-15`、`guard.ts:6-15`、`query/contverify.ts:49-50` | 裸调 `mode:"observer-boundary"` 把「五条边界全不存在」写成事实 |
+| `chosen` 算完即弃 ⇒ 违约候选照样被选中且硬回填 `constraint_satisfied` | `stance/agency/engine.ts:27-28,30` | `selectedCandidateId` 与 `candidates[0]` 两条路都绕过约束检查 |
+| 同一句 `"I own this repository"` 两处**相反**答案 | `stance/agency/guards.ts` vs `stance/delegation/guard/expansion-guard.ts` 的 `resultNoOwnership` | 审计结论不一致（逐字正则推演） |
+| `before` 无任何守卫却同级落盘并渲染 | `trajectory/adaptation/engine/adaptation.ts:32-39` | 未过滤字段进审计文本 |
+| `catch { return null }` / `catch { /* 继续 */ }` 三态压平 | `trajectory/continuity/persist.ts:28,31,34`、`trajectory/continuity/engine.ts:62-80` | 损坏 ≡ 为空（ADR-0049） |
+| 写失败仅 `console.log`，seam 直接渲染成功 | `stance/agency/persistence.ts:11,21`、`trajectory/adaptation/persistence/persist.ts:7,10,13`、`trajectory/continuity/persist.ts:12-24` | 「记录已建立」与「写盘被拒」不可区分 |
+| `kind` 无白名单（schema 写了枚举，引擎裸 `string`） | `trajectory/continuity/engine.ts:45` vs `index.ts:285`、`types.ts:14` | 任意 kind 通过并建目录 |
+| `basedOn:"exp-1"`（字符串）满足 `length` 检查 | `trajectory/adaptation/engine/adaptation.ts:28`、`stance/agency/engine.ts:16,35`、`trajectory/continuity/engine.ts:31` | 畸形值满足 lineage 闸门，先落盘后在 render 抛 TypeError |
+| 隔离名不符实：写用 `r.workspace`、读用 `args.workspace`，**从不比对会话 ws** | `trajectory/continuity/engine.ts:45`、`persist.ts:24`、`query/contverify.ts:67,75`、`guard.ts:27` | 唯一围栏是平台 sandbox 档位 |
 
 **测试假绿**：`concept-guards.test.ts` 只 import `dist` 纯谓词、**零接线**（删正则的英文/中文半边仍全绿）· `recall-attribution.test.ts` 8 处 `store.keys().filter(...includes("autonomy"/"preference"...))` 因键是**固定文件名**而**恒真** · `:3607-3609` 字面 `assert.ok(true)` · `:3655-3659` 把「零候选 + `selectedCandidateId` 仍返回 `constraint_satisfied`」**钉成期望行为**（缺陷被测试固化）。
 

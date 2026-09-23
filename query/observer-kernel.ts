@@ -14,7 +14,7 @@ import { renderNodePerception, renderNodeIdentityContext } from "../temporal/ren
 import { buildSleepWindow, renderSleepWindow } from "../dream/sleep.js";
 import { offlineCompression, buildDreamArtifact, renderDreamResult } from "../dream/compress.js";
 import { writeDream } from "../dream/persist.js";
-import { writeHypothesis } from "../validation/evidence.js";
+import { writeHypothesis } from "../epistemic/validation/evidence.js";
 import type { ShadowQueryDeps } from "./types.js";
 import type { AgentLike } from "../core/types.js";
 

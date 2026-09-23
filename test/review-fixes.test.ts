@@ -25,7 +25,7 @@ import assert from "node:assert/strict";
   assert.equal(isPositiveOutcome(""), false, "空串不算正面（无命中）");
 
   // `validateHypothesis` 必须**真的**走这条判据（否则「收一处」只收了一半）
-  const { validateHypothesis } = await import("../dist/validation/validate.js");
+  const { validateHypothesis } = await import("../dist/epistemic/validation/validate.js");
   const h = { id: "h1", statement: "s", source: "x", createdAt: "2026-01-01", status: "open", alternativeExplanation: [{}] } as any;
   const ev = (id: string, actualOutcome: string) => ({
     id, hypothesisId: "h1", observationType: "t", observedAt: "2026-02-01", actualOutcome, sourceRef: "r",
@@ -126,7 +126,7 @@ import assert from "node:assert/strict";
       async listDir() { return []; },
     };
   };
-  const { appendValidationEvent, readTimeline, readTimelineDetailed } = await import("../dist/validation/history.js");
+  const { appendValidationEvent, readTimeline, readTimelineDetailed } = await import("../dist/epistemic/validation/history.js");
   const WS = "D:/ws";
   const P = `${WS}/.shadow/validation/h1.timeline.json`;
 
@@ -229,7 +229,7 @@ import assert from "node:assert/strict";
 // ── ⑤ 证据/假设落盘失败必须能被上层播报（旧版只 console.log） ──
 {
   const deadFs = { async resolve() { throw new Error("readonly"); } };
-  const { writeHypothesis, registerFutureEvidence } = await import("../dist/validation/evidence.js");
+  const { writeHypothesis, registerFutureEvidence } = await import("../dist/epistemic/validation/evidence.js");
   assert.equal(await writeHypothesis(deadFs as any, "D:/ws", { id: "h1" } as any), false, "★ 假设没写下去就必须报 false");
   const r = await registerFutureEvidence(deadFs as any, "D:/ws", { hypothesisId: "h1", observedAt: "2026-02-01", actualOutcome: "优化", observationType: "t" } as any);
   assert.equal(r.persisted, false, "★ 证据没写下去必须能被调用方看见（否则照样播报 registered）");
@@ -297,7 +297,7 @@ import assert from "node:assert/strict";
 {
   const { isNotFound } = await import("../dist/core/util.js");
   const { fsExists } = await import("../dist/evidence/filesystem.js");
-  const { referenceEvidence } = await import("../dist/federation/reality.js");
+  const { referenceEvidence } = await import("../dist/epistemic/federation/reality.js");
 
   // (a) **正对照：宿主真读缺失** ⇒ 必须 true（形状抄自 `dsh-fs-local/lib/index.js:339`/`:249`）
   assert.equal(isNotFound(Object.assign(new Error('cannot read "D:/ws/x.json": not found'), { code: "FS_NOT_FOUND" })), true);

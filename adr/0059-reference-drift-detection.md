@@ -91,7 +91,7 @@ ws + "D:/project/wslc1/scripts/x.ps1"
 | LLM 自动「解决」冲突 / 改写事实 | 误纠正率 53–94%；无外部反馈时自纠不可靠（三重否定） |
 | 裸用 LLM 检测文档-代码漂移 | flag rate 98%（DocPrism, ISSTA 2026） |
 
-**本仓既有设计被证据正面支持**：`DriftReport` **只答「有无违反边界」且明确不等于现实断言**（`verification/render.ts` 的告白行）、`Mutation = LLM 只能读+总结，永不 create fact/关系`（ADR-0043）——**与证据一致，本轮不改**。
+**本仓既有设计被证据正面支持**：`DriftReport` **只答「有无违反边界」且明确不等于现实断言**（`epistemic/verification/render.ts` 的告白行）、`Mutation = LLM 只能读+总结，永不 create fact/关系`（ADR-0043）——**与证据一致，本轮不改**。
 
 ⇒ **形态**：确定性规则承担判定；LLM 只做「解释与建议」，且建议**必须回到 Atom 由人/工具确认**。
 

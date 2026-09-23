@@ -13,9 +13,9 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAdmissibleClaim } from "../dist/world/guard/claim-admission.js";
-import type { RealityClaim } from "../dist/reality/types.js";
-import { buildRepresentationGraph } from "../dist/world/builder/representation-builder.js";
+import { isAdmissibleClaim } from "../dist/epistemic/world/guard/claim-admission.js";
+import type { RealityClaim } from "../dist/epistemic/reality/types.js";
+import { buildRepresentationGraph } from "../dist/epistemic/world/builder/representation-builder.js";
 // **复用审计工具自己的注释剥离器**，不另写一份。
 // 为什么必须复用（本条是自曝）：本测试第一版自己写了 `line.replace(/\/\/.*$/, "")`，
 //   而仓库的 `.ts` 是 **CRLF** —— JS 的 `.` **不匹配 `\r`**，故 `.*` 在 `\r` 前停住、`$` 匹配不上，
@@ -76,7 +76,7 @@ const prod = walk(repoRoot)
 // ── ② 棘轮：生产源码里 `status === "supported"` 的**唯一**比较点必须是判据源自己 ──
 {
   const hits = scanSupportedComparisons(prod);
-  const SOURCE = "world/guard/claim-admission.ts";
+  const SOURCE = "epistemic/world/guard/claim-admission.ts";
   const offenders = hits.filter((h) => !h.startsWith(SOURCE));
   assert.equal(offenders.length, 0,
     `「只接受 supported」的判据必须只存在于 ${SOURCE}；以下位置又分叉了一份：\n  ${offenders.join("\n  ")}\n` +

@@ -60,7 +60,7 @@ v1.0.2 Observer Runtime Verification Foundation
 ## 边界 / 非目标
 
 - 只加验证边界 + 测试，不新增能力。实现验收：`tsc` + `node --check` + mock（237–240）+ mock 1–240 + 提交/推送。
-- 验证只读、只报；drift report 只答"有无违反边界"，不答"系统变好多少"；无 score/quality/health/DriftScore；无 adaptation/permission/identity mutation；无 RealityClaim 生成。
+- 验证只读、只报；drift report 只答"有无违反边界"，不答"系统变好多少"；无 score/quality/health/DriftScore；无 trajectory/adaptation/permission/identity mutation；无 RealityClaim 生成。
 
 ## 一句话
 

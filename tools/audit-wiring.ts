@@ -42,7 +42,7 @@ const prodPaths = allTs.filter((f) => isCallerCorpusPath(rel(f)));
 /**
  * ⚠ **「测试」这一侧必须显式限定**（v1.15.43 修，来自 T2 分诊的标定发现）：
  * 原写法是 `!isCallerCorpusPath(...)` —— 那会把 `dist/` 下的 `.d.ts` 与 `node_modules/` 下的 `.d.ts` **也算成测试**，
- * 于是「测试引用 N」是**虚高**的（实测：`hasNoUpgradeApi` 的 1 全来自 `dist/agency/guards.d.ts`；
+ * 于是「测试引用 N」是**虚高**的（实测：`hasNoUpgradeApi` 的 1 全来自 `dist/stance/agency/guards.d.ts`；
  * `apply` 的 230 里 15 来自 `node_modules` 里的 `lib.dom.d.ts`）⇒ 分诊时会把「零测试引用」读成「已被测试覆盖」。
  * 现判据改成**只认 `test/` 下的文件**；`dist/` 与 `node_modules/` **两边都不算**（它们是产物/依赖，不是断言）。
  */

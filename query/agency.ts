@@ -4,9 +4,9 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runAgency(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../agency/render.js";
-import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../agency/engine.js";
-import { writeAgencyContext } from "../agency/persistence.js";
+import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../stance/agency/render.js";
+import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../stance/agency/engine.js";
+import { writeAgencyContext } from "../stance/agency/persistence.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface AgencyCtx { fs: any; ws: string; flushWarn: string }

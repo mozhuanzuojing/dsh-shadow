@@ -4,9 +4,9 @@
 // 契约与 query.ts 原实现逐字一致，仅入口改为 runDelegation(deps,args,ctx)；返回 undefined 表示非本族 mode。
 import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
-import { renderContext as renderDelegationContext, renderCheck, renderEvent as renderDelegationEvent } from "../delegation/render/render.js";
-import { buildDelegationContext, checkDelegation, recordDelegationEvent } from "../delegation/engine/delegated-execution.js";
-import { writeDelegationContext } from "../delegation/persistence/persist.js";
+import { renderContext as renderDelegationContext, renderCheck, renderEvent as renderDelegationEvent } from "../stance/delegation/render/render.js";
+import { buildDelegationContext, checkDelegation, recordDelegationEvent } from "../stance/delegation/engine/delegated-execution.js";
+import { writeDelegationContext } from "../stance/delegation/persistence/persist.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface DelegationCtx { fs: any; ws: string; flushWarn: string }

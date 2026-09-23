@@ -67,7 +67,7 @@
 并记入本 ADR。**不臆造接线**（本仓纪律：不引机制除非有据），由后续决策是否接线或删除。
 
 **误报（已识别，不计为缺陷）**：
-- **A 类精度低**：本仓有意导出大量**面向测试的包装 API**。典型：`delegation/guard/*` 的
+- **A 类精度低**：本仓有意导出大量**面向测试的包装 API**。典型：`stance/delegation/guard/*` 的
   `assert*` 包装函数（返回 `{ok, reason}`）只被测试调用，但它们包裹的**判定函数**
   （`contextHasNoExpansionField` / `resultNoPermissionUpgrade` …）在生产里**确有**被
   `delegated-execution.ts` 导入使用 ⇒ 不是断线。
@@ -145,7 +145,7 @@
 
 | 类别 | 条数 | 符号 |
 |---|---|---|
-| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
+| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`trajectory/long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
 | **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge-engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
 | **误报 · 跨层 API** | **1** | `ChangeSet` —— `core/projection-store.ts:85` 的 store 工厂在生产被调用（`:168`），故 `invalidateFor(new ChangeSet(...))` 是**可达消费点**。⚠ **与 D1 的关系**：D1 说「`ChangeSet`/`invalidateFor` 生产中未接线」**仍然成立**（无生产**实例化点**）；两条不矛盾 —— 一条说「接口可达」，一条说「没人实例化」。⇒ **D1 维持原判** |
 | **零引用（生产 + 测试皆无调用）** | **18 符号 / 8 决定** | 见 §4 表 |
@@ -169,8 +169,8 @@
 
 ### 3. 与 T5 同型的第二处真漂移：`isExchangeable` 重写了唯一源（**已修**）
 
-- **事实**：`federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 是这份清单的**唯一源**（且**零引用**），
-  而 `federation/contract.ts:23` 的 `isExchangeable` **再手写一遍**同一三元素数组字面量。
+- **事实**：`epistemic/federation/types.ts:13` 的 `EXCHANGEABLE_KINDS` 是这份清单的**唯一源**（且**零引用**），
+  而 `epistemic/federation/contract.ts:23` 的 `isExchangeable` **再手写一遍**同一三元素数组字面量。
 - **危险点（比 `c.status=supported` 那次更具体）**：`ExchangeableKind` 是联合类型，
   `EXCHANGEABLE_KINDS: ExchangeableKind[]` **会被类型检查**（漏一个编译不过），
   但 `isExchangeable` 的内联字面量**不受该类型约束** ⇒ 将来加第四种可交换种类时，
@@ -191,7 +191,7 @@
 | `renderIntent` / `renderIdentityModel` | **保留并注明** | 二者同型：都是**完整形态的渲染器**，而实际读侧走别的路径（`observer/core.ts:31` 内联 / `soul/identity.ts` 的 `renderIdentity`）。它们承载「完整形态」的唯一落点，删掉会让模型只能以原始 JSON 出现；**接线与否属产品决策** ⇒ T1 待决。已在两处代码加注 |
 | `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的**目标能力**，实现完整；是否启用属产品决策（默认路径可能刻意不做成本折叠）⇒ T1 待决。已在 `core/knowledge-cost.ts` 加注 |
 | 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷。已在 `expansion-guard.ts` 加注（家族级） |
-| `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `agency/guards.ts` **唯一**未被 `agency/engine.ts:4` import 的导出（同文件另 15 个都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
+| `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 15 个都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
 | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
 | 4 个长程 `assert*` | **误报** | `interaction.ts:11-17` 入数组、`:43` 循环调用 |
 

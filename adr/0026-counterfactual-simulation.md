@@ -81,9 +81,9 @@ dsh-shadow 已完成"认识自己→认识现实→表示现实"；v0.32 进入"
 
 ## 附录：v0.32 实现说明（补充 A/B 已落地）
 
-1. **Simulation 是 Representation 的函数（+显式假设+规则），不是 Reality 的函数**：`simulation/engine/simulator.ts`——`SimulationScenario{changedConditions:"Assume X"}` + `SimulationRule{inputPattern, transformation, confidence, source}` → `SimulationOutcome`。`Rule ≠ Reality Relation`（只是模拟器推演规则）。
+1. **Simulation 是 Representation 的函数（+显式假设+规则），不是 Reality 的函数**：`epistemic/simulation/engine/simulator.ts`——`SimulationScenario{changedConditions:"Assume X"}` + `SimulationRule{inputPattern, transformation, confidence, source}` → `SimulationOutcome`。`Rule ≠ Reality Relation`（只是模拟器推演规则）。
 2. **Outcome 携带 epistemicStatus**：`SimulationOutcome{status: hypothetical|explored|compared, derivedFrom, assumptions, rules, stateAfter("suggests ... may occur"), uncertainty}`——**禁 predicted/confirmed/expected**。
-3. 守卫（运行时约束）：`simulation/guard/assumption-guard.ts`（`Assume X` 允许、`X will cause` 拒绝——Assumption ≠ Fact）+ `reality-boundary.ts`（outcome 只 hypothetical、必须 `derivedFrom` lineage、禁 RealityClaim 反写）。
+3. 守卫（运行时约束）：`epistemic/simulation/guard/assumption-guard.ts`（`Assume X` 允许、`X will cause` 拒绝——Assumption ≠ Fact）+ `reality-boundary.ts`（outcome 只 hypothetical、必须 `derivedFrom` lineage、禁 RealityClaim 反写）。
 
 结构：`simulation/{types/{scenario,state,rule,outcome}, engine/simulator, guard/{assumption-guard,reality-boundary}, explain/explain}.ts`。`mode:"simulate"`。
 

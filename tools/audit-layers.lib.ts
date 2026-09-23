@@ -65,10 +65,20 @@ export const DIRECTION_RULES = [
 /** 任何层都不许 import 的层：`(root)` = `index.ts`（Cordis 适配器只许被入口加载）。 */
 export const FORBIDDEN_TARGETS_EVERYWHERE = ["(root)", "presets"];
 
-/** 把相对路径解析成层名；根下直接的文件落为 `(root)`。 */
+/**
+ * Mode-family 导航伞（ADR-0101）：只收编顶层平铺，**不是**结构层。
+ * `layerOf` 在这些伞下取**第二段**（叶子层名），这样 `DIRECTION_RULES` / 所有权报告语义不变。
+ */
+export const MODE_FAMILY_UMBRELLAS = ["stance", "trajectory", "epistemic"] as const;
+
+const UMBRELLA_SET = new Set<string>(MODE_FAMILY_UMBRELLAS);
+
+/** 把相对路径解析成层名；根下直接的文件落为 `(root)`；伞下看第二段。 */
 export const layerOf = (relPath: string): string => {
-  const seg = relPath.split("/");
-  return seg.length === 1 ? "(root)" : seg[0];
+  const seg = relPath.replace(/\\/g, "/").split("/");
+  if (seg.length === 1) return "(root)";
+  if (UMBRELLA_SET.has(seg[0]) && seg[1]) return seg[1];
+  return seg[0];
 };
 
 /** Node 内建模块名（`node:` 前缀可有可无）。 */

@@ -3,31 +3,31 @@
 import assert from "node:assert/strict";
 
 // —— Federation（v0.28.1–v0.29：Federation = Projection Contract，非 Access 权限）——
-import { isExchangeable, assertPacketBarrier, packetOf } from "../dist/federation/contract.js";
-import { compareProjections } from "../dist/federation/guard.js";
-import type { ExchangeableKind, FederatedObservationPacket } from "../dist/federation/types.js";
+import { isExchangeable, assertPacketBarrier, packetOf } from "../dist/epistemic/federation/contract.js";
+import { compareProjections } from "../dist/epistemic/federation/guard.js";
+import type { ExchangeableKind, FederatedObservationPacket } from "../dist/epistemic/federation/types.js";
 
 // —— Reality（v0.30：RealityClaim ≠ EvaluationClaim；predicate 必须属 observable set）——
-import { isObservablePredicate, claimOf } from "../dist/reality/claim/engine.js";
-import type { RealityClaim } from "../dist/reality/types.js";
+import { isObservablePredicate, claimOf } from "../dist/epistemic/reality/claim/engine.js";
+import type { RealityClaim } from "../dist/epistemic/reality/types.js";
 
 // —— World（v0.31：Representation 只接受 supported；RelationHypothesis 恒 hypothesis）——
-import { isAdmissibleClaim, createRepresentationFromClaims } from "../dist/world/guard/claim-admission.js";
-import { isRelationHypothesis } from "../dist/world/guard/relation-guard.js";
-import type { RelationHypothesis } from "../dist/world/types.js";
+import { isAdmissibleClaim, createRepresentationFromClaims } from "../dist/epistemic/world/guard/claim-admission.js";
+import { isRelationHypothesis } from "../dist/epistemic/world/guard/relation-guard.js";
+import type { RelationHypothesis } from "../dist/epistemic/world/types.js";
 
 // —— Simulation（v0.32：Assumption ≠ Fact；Simulation ≠ Reality）——
-import { assertAssumptionAndNotFact } from "../dist/simulation/guard/assumption-guard.js";
-import { outcomeIsHypothetical, outcomeHasLineage, assertNoRealityFabrication } from "../dist/simulation/guard/reality-boundary.js";
-import type { SimulationOutcome } from "../dist/simulation/types/outcome.js";
+import { assertAssumptionAndNotFact } from "../dist/epistemic/simulation/guard/assumption-guard.js";
+import { outcomeIsHypothetical, outcomeHasLineage, assertNoRealityFabrication } from "../dist/epistemic/simulation/guard/reality-boundary.js";
+import type { SimulationOutcome } from "../dist/epistemic/simulation/types/outcome.js";
 
 // —— Planning（v0.34：objective 外部来源、无 score、comparison 非 winner、criteria≠value）——
-import { objectiveIsExternal, candidateHasNoScore, evaluationIsComparison, criteriaNotValue } from "../dist/planning/guard.js";
-import type { PlanCandidate, PlanEvaluation } from "../dist/planning/types.js";
+import { objectiveIsExternal, candidateHasNoScore, evaluationIsComparison, criteriaNotValue } from "../dist/stance/planning/guard.js";
+import type { PlanCandidate, PlanEvaluation } from "../dist/stance/planning/types.js";
 
 // —— Continuity（v0.39/1.0.1：Global=observer 层；workspace 隔离；recall-index=导航）——
-import { observerLayerClean, observerLayerNoWorkspaceFact, configNotPreference, recallIndexIsNav, workspaceIsolated } from "../dist/continuity/guard.js";
-import type { ObserverConfig } from "../dist/continuity/types.js";
+import { observerLayerClean, observerLayerNoWorkspaceFact, configNotPreference, recallIndexIsNav, workspaceIsolated } from "../dist/trajectory/continuity/guard.js";
+import type { ObserverConfig } from "../dist/trajectory/continuity/types.js";
 
 // ══════ Federation ══════
 assert.equal(isExchangeable("ObservationClaim"), true, "ObservationClaim 可交换");
