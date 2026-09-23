@@ -179,7 +179,12 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   `dsh-shadow` / **`preset-projection`**；本会话持续落盘，`recall_shadow` 读得到刚写入的原子。
 - **基线口径**：`engines.dsh` 与 `HOST_BASELINE` 一并抬到 `0.1.7-alpha.2`；`README` / `CONTEXT` /
   `presets/README` 的**当前态取值**同步（即 `v1.20.1`）。
-- **教训（值得记）**：基线是**能推出来的字段**，却被手写在 ≥4 份当前态文档里，而**没有任何门**守
-  「README 的基线表 = `package.json` 的 `engines.dsh`」—— `audit:docs` ① 只比三方**版本号**，
-  `host-probe.test.ts` ⑥ 只比 `HOST_BASELINE` 与 `engines.dsh`。⇒ 下次「抬基线」应当**同时**改
-  README/CONTEXT，**或**给这条一致性配一道门（本补记只记判据，不擅自开门）。
+- **教训 → 已配门（`v1.20.2`）**：基线是**能推出来的字段**，却被手写在多份当前态文档里，而当时**没有任何门**
+  守「README 的基线表 = `package.json` 的 `engines.dsh`」—— `audit:docs` ① 只比三方**版本号**，
+  `host-probe.test.ts` ⑥ 只比 `HOST_BASELINE` 与 `engines.dsh`。⇒ 按本仓那条一般化规则
+  （**能推出来的字段：要么别手写，要么配一道门**）补了 **`audit:docs` ⑦**
+  （`tools/docs-consistency.ts` 的 `checkBaselineConsistency`）：三处（README 基线行 / README 声明行 /
+  CONTEXT 术语行）必须等于 `engines.dsh`；**缺件报结构缺失(2)，不报「通过」**（ADR-0049）。
+  标定在 `tools/docs-consistency.selftest.ts` 的 ㉔–㉘，并**用真缺陷回档复验**过：把 `README.md` 改回
+  `0.1.7-alpha.1`（复现 `0706f4c` 的形态）⇒ ⑦ 变红并点名两份文档；复档即回 0。
+  **边界**：刻意不判正文里对历史基线的追述（那段**本就该**含旧版本号）。

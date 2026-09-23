@@ -12,6 +12,7 @@
 //   ⑬a–c声明行数=实际行数（0 / 1 / 2）  ⑭CRLF 假警报锁  ⑮–⑰检查④（整段复制⇒1 / 短片段放行⇒0 / 缺当前版本行⇒2）
 //   ⑱–㉓检查⑤（已过去的版本齐备⇒0 / 缺一个⇒1 / **仪式起点之前豁免**⇒0 / **当前版本豁免**⇒1 /
 //            packed-refs 也能读到⇒0 / 读不到 `.git`⇒2）
+//   ㉔–㉘检查⑦（三处基线一致⇒0 / README 落后⇒1 / CONTEXT 落后⇒1 / 缺 `engines.dsh`⇒2 / 缺基线表⇒2）
 // ⚠ **不写总组数**（本仓规则：能数出来的别抄；条数随每轮增长，抄了必然腐烂）。
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -40,6 +41,9 @@ interface Fixture {
   tags?: string[];                 // 造出的 tag 名（检查⑤），写进 `.git/refs/tags/`
   packedTags?: boolean;            // 把 tags 写进 `.git/packed-refs` 而不是松散 ref（测第二个来源）
   noGit?: boolean;                 // 不造 `.git`（测检查⑤的结构缺失）
+  engineDsh?: string | null;       // 检查⑦：`package.json` 的 `engines.dsh`；默认 `>=1.2.3`；null ⇒ 不写该字段
+  readmeBaseline?: string | null;  // 检查⑦：README 基线表里声明的版本；默认与 engineDsh 一致；null ⇒ 整表不写
+  contextBaseline?: string | null; // 检查⑦：CONTEXT 术语行里的版本；默认与 engineDsh 一致；null ⇒ 不写 CONTEXT.md
 }
 
 const FULL_VERIFY = "npm run a:x && npm run b:y && npx tsc --noEmit";
@@ -60,15 +64,34 @@ const run = (f: Fixture) => {
       `\n\n` +
       (declared === null ? "" : `**表注** ⓪ **行数**：原表 1 行 ⇒ **现 ${declared} 行**。\n`);
 
+    // **检查⑦的前置**（v1.20.2 立）：新加一条门，就要给**所有** fixture 补它的前置 ——
+    // 否则每个 fixture 都会以「结构缺失(2)」退出，把别的组的断言全短路。
+    // （这是 v1.15.82 加检查⑤ 时记下的同一条纪律，本文件的注释里写着，照做。）
+    const engineDsh = f.engineDsh === undefined ? ">=1.2.3" : f.engineDsh;
+    const baseline = engineDsh === null ? "" : engineDsh.replace(/^[^\d]*/, "");
+    const readmeBaseline = f.readmeBaseline === undefined ? baseline : f.readmeBaseline;
+
+    // 检查⑦的对象之一：README 的验证基线表（readmeBaseline === null ⇒ 整表不写，测锚点消失）
+    const baselineTable = readmeBaseline === null ? "" :
+      `### 兼容性（验证基线）\n\n| 项 | 值 |\n|---|---|\n` +
+      `| 验证基线 | **DSH \`${readmeBaseline}\`**（在这一版上验证并运行） |\n` +
+      `| 声明 | \`package.json\` → \`engines.dsh: ">=${readmeBaseline}"\` |\n`;
+
+    // 检查⑦的第三个对象：CONTEXT 的「验证基线」术语行（contextBaseline === null ⇒ 不写该文件）
+    const contextBaseline = f.contextBaseline === undefined ? baseline : f.contextBaseline;
+    const context = contextBaseline === null ? "" :
+      `# CONTEXT.md — x 术语表\n\n| 术语 | 规范定义 |\n|---|---|\n` +
+      `| 验证基线 | 下限：\`package.json\` → \`engines.dsh: ">=${contextBaseline}"\`。**是声明不是闸门** |\n`;
+
     const decoy = f.decoyAbove ? `> 说明：本仓的「当前版本：\`v0.0.1\`」是举例，不是真的。\n\n` : "";
     // **检查④的前置**（v1.15.92 起）：当前版本行本身 —— 旧前置是「版本历史表里那一行」，
     // 而那张表已按用户指令从 README 删除（`adr/0094`）⇒ 锚点随之挪到这一行。
     const verLine = f.readmeVersion === undefined ? "" : `**当前版本：\`v${f.readmeVersion}\`** —— ${f.rowText ?? "最新几版摘要"}：\n`;
-    let readme = `# x\n\n${table}\n${decoy}${verLine}`;
+    let readme = `# x\n\n${table}\n${baselineTable}\n${decoy}${verLine}`;
     if (f.readmeGateBlock !== null) {
       const block = f.readmeGateBlock ?? verify.split(" && ").map((s) => (s.startsWith("npm run ") ? `+ ${s}` : `+ npx ${s}`)).join("\n");
       // ⚠ 这一支**也要带当前版本行**（检查④的前置），否则 ④ 报结构缺失(2) 会短路别的组。
-      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${decoy}${verLine}`;
+      readme = `# x\n\n### 改代码后先过闸门：\`npm run verify\`\n\n\`\`\`text\nnpm run verify\n=${block}\n\`\`\`\n\n${table}\n${baselineTable}\n${decoy}${verLine}`;
     }
 
     const head = f.changelogVersion === undefined ? "" : `## [v${f.changelogVersion}] 标题\n\n${f.entryBody ?? "正文"}\n`;
@@ -81,10 +104,11 @@ const run = (f: Fixture) => {
     // **CRLF 组**（⑭）：本仓工作副本是 CRLF，而 `$\u0000` 锚定的正则**不匹配 `\r` 之前** ——
     // v1.15.68 的检查③就是因此把分隔行当成数据行、报了「声明 18 / 实际 19」的**假警报**。
     const enc = (s: string) => (f.crlf ? s.replace(/\n/g, "\r\n") : s);
-    writeFileSync(join(dir, "package.json"), enc(JSON.stringify({ name: "x", version: f.pkg ?? "1.2.3", scripts: { verify } })));
+    writeFileSync(join(dir, "package.json"), enc(JSON.stringify({ name: "x", version: f.pkg ?? "1.2.3", ...(engineDsh === null ? {} : { engines: { dsh: engineDsh } }), scripts: { verify } })));
     writeFileSync(join(dir, "README.md"), enc(readme));
     writeFileSync(join(dir, "CHANGELOG.md"), enc(changelog));
     writeFileSync(join(dir, "AGENTS.md"), enc(agents));
+    if (context) writeFileSync(join(dir, "CONTEXT.md"), enc(context));
 
     // **检查⑤的前置**：必须有一个可读的 tag 集（`.git`）—— 否则 ⑤ 以**结构缺失(2)** 退出，
     // 会把别的组的断言全短路。与上面「每个 fixture 都要有默认开关表」是同一条纪律
@@ -344,6 +368,54 @@ const run = (f: Fixture) => {
   assert.match(r.out, /读不到本工作副本的 tag 集/, `报文应说清是缺件：${r.out.slice(0, 300)}`);
   assert.match(r.out, /不是「通过」/, "报文必须显式否认「缺件 = 通过」");
   console.log("✔ ㉓ 负对照：读不到 `.git` ⇒ 2（缺件不静默，不得当成「通过」）");
+}
+
+// ── 检查 7：三处「验证基线」= `engines.dsh` ──
+{
+  // ㉔ 正对照：三处都与 `package.json` 的 `engines.dsh` 一致 ⇒ 0
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", engineDsh: ">=0.9.9-rc.1" });
+  assert.equal(r.code, 0, `三处基线一致必须放行（0）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /三处「验证基线」声明都与/, `应打印已核对的三处与取值：${r.out.slice(0, 300)}`);
+  console.log("✔ ㉔ 正对照：README 基线行/声明行 + CONTEXT 术语行都与 `engines.dsh` 一致 ⇒ 0");
+}
+{
+  // ㉕ 负对照（**本检查存在的理由**）：README 那两行留在旧基线 ⇒ 1，且**要点名 README**。
+  //    这正是 0706f4c 的实际形态：`engines.dsh` 抬了、README 没跟上。
+  const r = run({
+    pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3",
+    engineDsh: ">=0.9.9", readmeBaseline: "0.9.8",
+  });
+  assert.equal(r.code, 1, `README 基线落后必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /README\.md.*验证基线/s, `报文应点名 README 的基线行：${r.out.slice(0, 400)}`);
+  assert.match(r.out, /0706f4c/, "报文应带上由来（那次只改代码、门全绿）");
+  assert.match(r.out, /不判\*\*正文里对历史基线的追述/, `报文应写清能力边界：${r.out.slice(0, 600)}`);
+  console.log("✔ ㉕ 负对照：README 基线与 `engines.dsh` 不一致 ⇒ 1（点名 README，并打印由来与边界）");
+}
+{
+  // ㉖ 负对照：**CONTEXT 那一处** —— 三处里最容易漏的一份（0706f4c 就漏了它）⇒ 1，点名 CONTEXT
+  const r = run({
+    pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3",
+    engineDsh: ">=0.9.9", contextBaseline: "0.9.8",
+  });
+  assert.equal(r.code, 1, `CONTEXT 基线落后必须红（1）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /CONTEXT\.md.*验证基线/s, `报文应点名 CONTEXT：${r.out.slice(0, 400)}`);
+  console.log("✔ ㉖ 负对照：CONTEXT 术语行与 `engines.dsh` 不一致 ⇒ 1（点名 CONTEXT）");
+}
+{
+  // ㉗ 结构缺失：`package.json` 没有 `engines.dsh` ⇒ 2（**不是「通过」**，ADR-0049）
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", engineDsh: null });
+  assert.equal(r.code, 2, `读不到 engines.dsh 应报结构缺失（2）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /读不到 `engines\.dsh`/, `报文应说清是缺件：${r.out.slice(0, 300)}`);
+  assert.match(r.out, /不是「通过」/, "报文必须显式否认「缺件 = 通过」");
+  console.log("✔ ㉗ 负对照：`package.json` 缺 `engines.dsh` ⇒ 2（缺件不静默）");
+}
+{
+  // ㉘ 结构缺失：README 没有基线表（锚点消失）⇒ 2 —— 它**不再回答任何问题**，不是「通过」
+  const r = run({ pkg: "1.2.3", readmeVersion: "1.2.3", changelogVersion: "1.2.3", readmeBaseline: null });
+  assert.equal(r.code, 2, `README 缺基线表应报结构缺失（2）；实际 ${r.code}：${r.out}`);
+  assert.match(r.out, /找不到 `\| 验证基线 \|`/, `报文应说清锚点没了：${r.out.slice(0, 300)}`);
+  assert.match(r.out, /锚点消失/, "报文应写清「锚点消失 ⇒ 不再回答任何问题」");
+  console.log("✔ ㉘ 负对照：README 缺基线表 ⇒ 2（锚点消失 ≠ 通过）");
 }
 
 console.log("ALL PASS ✅");

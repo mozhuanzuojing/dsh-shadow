@@ -456,11 +456,110 @@ export const checkVersionTags = (root: string): { ok: boolean; code: number; lin
   };
 };
 
+// ── 检查 7：三处「验证基线」声明必须等于 `package.json` 的 `engines.dsh` ──────────
+/**
+ * 判据（v1.20.2 立）：**基线是能推出来的字段**（源 = `package.json` 的 `engines.dsh`），
+ * 却被手写在当前态文档里；而此前**没有任何门**守它 —— 检查① 只比三方**版本号**，
+ * `test/host-probe.test.ts` ⑥ 只比 `HOST_BASELINE` 与 `engines.dsh`。
+ *
+ * **由来（实测）**：`0706f4c` 把 `engines.dsh` 抬到 `0.1.7-alpha.2`，却**只改了代码**
+ * （`index.ts` / `package.json` / `dist/index.js`），把 `README` 的基线表与「为什么」段、
+ * `README` 当前版本行、`CONTEXT` 的「验证基线」术语全留在 `0.1.7-alpha.1` —— 而 `npm run verify`
+ * **全绿**。本条就是冲着那次漏改来的。
+ *
+ * **三处**（一律按**行锚点**定位，不做全篇搜索 —— 否则正文里的举例/历史会抢走匹配，
+ * 这正是检查① 在 v1.15.66 收紧过的那个坑）：
+ *   ① `README.md` 的 `| 验证基线 |` 行 —— 必须含 `` `<基线>` `` 内联码
+ *   ② `README.md` 的 `| 声明 |` 行 —— 必须含 `engines.dsh: ">=<基线>"`
+ *   ③ `CONTEXT.md` 的 `| 验证基线…` 行 —— 必须含 `engines.dsh: ">=<基线>"`
+ *
+ * **能力边界（刻意窄 —— 加判据之前先读这段）**：
+ *   · 只判这三处与源**是否相等**；**不判** `presets/README.md` 的「(current as of X)」这类
+ *     **「上游当时状态」**叙述（那不是支持声明，与基线不是同一个问题）；
+ *   · **不判**正文散文里对历史基线的追述（本仓口径：正文可以留历史，只锁**当前态取值**；
+ *     `README` 里「为什么基线从 A 抬到 B」那段**本就该**含旧版本号）；
+ *   · 缺结构（读不到 `engines.dsh`、`README` 没有基线表）报 **2**，**不报「通过」**（ADR-0049）。
+ */
+export const checkBaselineConsistency = (root: string): { ok: boolean; code: number; lines: string[] } => {
+  const engineDsh = (() => {
+    try {
+      const v = JSON.parse(readText(root, "package.json"))?.engines?.dsh;
+      return typeof v === "string" ? v : "";
+    } catch { return ""; }
+  })();
+  // 与 `test/host-probe.test.ts` ⑥ 同一口径：去掉 `>=` 之类的前导非数字
+  const src = engineDsh.replace(/^[^\d]*/, "").trim();
+  if (!src) {
+    return {
+      ok: false, code: 2,
+      lines: [
+        "❌ ⑦ **结构缺失**：`package.json` 里读不到 `engines.dsh`。",
+        "  ⚠ 这**不是「通过」** —— 源都读不到，就无从判三处文档对不对（ADR-0049：缺件必须可见）。",
+      ],
+    };
+  }
+
+  // 行锚点。注意 README 的 `| 验证基线 |` 是**精确单元格**（CONTEXT 那行带括号后缀，故两处正则不同）。
+  const rowOf = (rel: string, re: RegExp): string | null => {
+    for (const line of readLines(root, rel)) if (re.test(line)) return line;
+    return null;
+  };
+  const readmeBaseline = rowOf("README.md", /^\|\s*验证基线\s*\|/);
+  const readmeDecl = rowOf("README.md", /^\|\s*声明\s*\|/);
+  const contextRow = rowOf("CONTEXT.md", /^\|\s*验证基线/);
+
+  if (!readmeBaseline && !readmeDecl) {
+    return {
+      ok: false, code: 2,
+      lines: [
+        "❌ ⑦ **结构缺失**：`README.md` 里找不到 `| 验证基线 |` 或 `| 声明 |` 行（锚点没了）。",
+        `  （源：\`package.json\` → \`engines.dsh: "${engineDsh}"\`）`,
+        "  ⚠ 这**不是「通过」** —— 锚点消失，本门就不再回答任何问题（ADR-0049）。",
+      ],
+    };
+  }
+
+  // ⚠ **正则里绝不能出现裸引号**：`maskStrings` 不认正则字面量，会把 `"` 当成字符串开始 ⇒
+  // 一路错配 ⇒ **把本文件从那一行起的其余部分全部空白化**（实测：连文件尾部的 CLI 都被抹掉，
+  // `countCallSites` 于是数出 0 个调用点，`audit:ratchet` 报 a1 30 → 36）。故此处用 `\x22`。
+  const declVersion = (line: string): string => (line.match(/engines\.dsh:\s*\x22>=([^\x22]+)\x22/)?.[1] ?? "").trim();
+  const bad: string[] = [];
+  if (readmeBaseline && !readmeBaseline.includes("`" + src + "`")) {
+    bad.push("`README.md` 的 `| 验证基线 |` 行未含内联码 `" + src + "`");
+  }
+  if (readmeDecl) {
+    const got = declVersion(readmeDecl);
+    if (got !== src) bad.push("`README.md` 的 `| 声明 |` 行写的是 `" + (got || "（读不到 engines.dsh）") + "`");
+  }
+  if (contextRow) {
+    const got = declVersion(contextRow);
+    if (got !== src) bad.push("`CONTEXT.md` 的 `| 验证基线` 行写的是 `" + (got || "（读不到 engines.dsh）") + "`");
+  }
+
+  if (!bad.length) {
+    return {
+      ok: true, code: 0,
+      lines: [`✔ ⑦ 三处「验证基线」声明都与 \`package.json\` 的 \`engines.dsh\` 一致（\`${src}\`；README 基线行/声明行 + CONTEXT 术语行）`],
+    };
+  }
+  return {
+    ok: false, code: 1,
+    lines: [
+      `❌ ⑦ **文档里的验证基线与 \`engines.dsh\` 不一致**（源 = \`${engineDsh}\` ⇒ \`${src}\`）：`,
+      ...bad.map((b) => `  · ${b}`),
+      "",
+      "  怎么修：把上列各处的版本号改成与 `package.json` 的 `engines.dsh` 一致（抬基线时**三处一起改**）。",
+      "  由来：`0706f4c` 抬了 `engines.dsh` 却只改代码，三处文档留在旧值，而当时**没有任何门**看得见。",
+      "  ⚠ 边界：本门**不判**正文里对历史基线的追述（「为什么从 A 抬到 B」那段本就该含旧版本号）。",
+    ],
+  };
+};
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop()!);
 if (isMain || process.argv[1]?.endsWith("docs-consistency.ts")) {
   const ROOT = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
-  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT), checkVersionTags(ROOT), checkCitations(ROOT)];
+  const results = [checkVersionConsistency(ROOT), checkVerifyChainDocumented(ROOT), checkDeclaredTableRows(ROOT), checkReadmeRowNotDuplicate(ROOT), checkVersionTags(ROOT), checkCitations(ROOT), checkBaselineConsistency(ROOT)];
   for (const r of results) for (const l of r.lines) console.log(l);
   const failed = results.find((r) => !r.ok);
   if (!failed) {

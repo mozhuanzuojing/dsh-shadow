@@ -96,7 +96,7 @@ npm run verify
 + npm run typecheck:tests      测试面类型门（v1.15.62：`test/**/*.ts` 全量，曾报 83 条既存诊断）
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
 + npm run audit:scripts        脚本扩展名门（v1.15.87：仓内不得有**手写** `.js` / `.mjs` / `.cjs`；`.ts` 与 `.py` / `.ps1` 等允许）
-+ npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名）
++ npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名 …… ⑦三处「验证基线」= `engines.dsh`，v1.20.2 补）
 + npm run audit:granularity    记录粒度门（v1.19.0 `adr/0097`：**起点之后**不得再有「纯动作回声」落成记忆文件）
 +                               ⚠ 边界：**起点（2026-09-21）之前的归档豁免**（`adr/0049` 不改写历史）⇒ 它回答的是
 +                                 「起点之后有没有新的纯动作记忆文件」，不是「全仓都不是」；同样要 `.shadow` 语料根（兜底同上）
@@ -650,5 +650,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.20.1`**（**基线抬到 DSH `0.1.7-alpha.2`**：在 `v1.20.0` 的形态迁移（随包预设改声明行、Agent Teams 交给 profile 层 bundle、本预设不再持有委派行）之上，把 `engines.dsh` 与 `HOST_BASELINE` 一并抬到 `0.1.7-alpha.2`，并补全前次只改代码、把当前态文档留在旧基线的那部分口径）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.2`**（**给「基线三处一致」配一道门**：`audit:docs` 新增检查 ⑦ —— `README` 的基线行与声明行、`CONTEXT` 的术语行，都必须逐字等于 `engines.dsh`；缺件报结构缺失而**不报通过**，并用真缺陷回档复验过。插件代码零改动）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 
