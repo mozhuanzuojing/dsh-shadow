@@ -243,7 +243,7 @@
   2. **`renderIntent` 不是「生产有调用点」** —— 它是**零引用**；
      `observer/core.ts:20` 用的是 `intentOf`，渲染在 `:31` 内联 ⇒ 见 ADR-0062 §4。
 - **本节未列、但本轮新报出的 3 个符号**（原文那批 30 条没有它们）：
-  `renderExperience`（**误报**，`query/query.ts:251` 作回调传入）、
+  `renderExperience`（**误报**，`query/lenses.ts 的 experience 路径（`renderExperience`）` 作回调传入）、
   `auditDrift`（**零引用，已删除**）、`countInconsistency`（**真断线，已接线**）。
 - **真断线（唯一一处）**：`countInconsistency` —— 清单自洽检查**生产从未执行**。
   已在 `writeFileSync` **之前**接线 + `process.exit(1)` 拒绝坏清单；
@@ -671,7 +671,7 @@
   | `core` 不得碰 `node:fs` | 1 | `core/toolset-exec.ts:19`（它是**执行器**，不是纯派生） |
   | `core` 不得碰 `node:child_process` | 1 | 同上 `:18` |
   | `core` 不得 import `persistence` | 4 | `core/judgment.ts:3` / `core/memory.ts:4` / `core/writer-materialize.ts,13` |
-  | `query` 不得 import `persistence` | 4 | `query/materialize.ts:4,5` / `query/query.ts:6,7`（读路径**本来就要**读落盘文件） |
+  | `query` 不得 import `persistence` | 4 | `query/materialize.ts` / `query/topic-recall.ts`（读路径**本来就要**读落盘文件） |
   ⇒ **`core/` 不是「纯函数层」，是「脊柱」**（`paths`/`types`/`util` 无依赖；`memory`/`writer-materialize`/`toolset-exec` 有副作用）。
   **照搬目录分层 = 当轮就红的门 = 假闸门** ⇒ **改判据对象**（完成判据 ① 的「先改表」即此）。
 - **② 换成三条实测为真的判据，并接进 `npm run verify`**：
@@ -1043,20 +1043,12 @@
   source changed / rebuild / 8.8k cold build / incremental）**全过之后**才考虑把 `sqlite` 设为默认；
   并发/多进程同读同写、跨平台（WSL/容器）锁与 WAL 也归这一期。
 
-### T18. `decision/` 层**接进读路径与 outcome**（`adr/0096` 里的 T3）
+### T18. `decision/` 层**接进读路径与 outcome**（`adr/0096` 里的 T3）—— 🟡 **outcome 半边已接线（v1.20.6）**
 
-- **内容**：把 Decision 原语接上生产 —— ① 让 `decision/` 的产出真的进入某个读路径或工具
-  （届时按 `adr/0096` §7.1 那张表**逐项登记受保护契约面**）；② 接线**既有** `core/decision-outcome.ts`
-  （`OutcomeObservation` / `Attribution` / `OutcomeReadout`；`ATTRIBUTION_RULE = "same-key-window/v1"`）。
-- **依据**：`adr/0096` §8（outcome 只作**后续独立捕获的事实**，**不自动因果回链**）· `adr/0081` §8.4
-  （`core/decision-outcome.ts` **已完整实现、有门、生产消费者为零** ⇒ 这是**接线**对象，不是重写对象）·
-  `adr/0096` §7（T1 决定不暴露）。
-- **为什么现在没做**：T1 的边界就是「零生产消费者」（`adr/0096` §7）；接线会同时牵动**受保护契约面**
-  与**两处棘轮基线**，属另一个切片。
-- **完成判据**：① `core/decision-outcome.ts` 有**生产调用点**（`audit:wiring` 的 A1 相应下降）；
-  ② 若新增工具名 / `mode` / 配置键，`README` 的受保护契约面**逐项补齐 10 字段**，且 `mode` 面的 **62**
-  在 `test/recall-envelope.test.ts:104` **同步改**（**受门保护的数：改它必须同时改门并说明门为什么错**）；
-  ③ `npm run verify` 全绿。
+- **已做（v1.20.6）**：`mode:"decision"` 调用 `attributeOutcomes` / `outcomeReadout` / `renderOutcomeReadout`
+  （`query/reads.ts`），生产有调用点；**未**新增 mode/工具（62 不动）。观测侧本回合为空时仍渲染读数（pending 可见）。
+- **未做**：`decision/` 的 `choose()` / engines **仍未**进写侧或读侧；不暴露新工具（ADR-0096 §7）。
+- **完成判据（残余）**：① 若要把 `decision/` 原语也接线，另切片；② `npm run verify` 全绿（本半边随 v1.20.6）。
 
 ### T19. **概率型后端（LLM / jev）落地前，必须重审 `adr/0037` 那道门** —— ✅ **已结案（v1.17.0，按「吸收」收口）**
 
@@ -1258,27 +1250,23 @@
   `alpha * embedding + (1-alpha) * parent`，而 **`score_propagation_alpha` 默认 `1.0`**
   ⇒ **默认父分权重为 0**。即：**层级买的是「递归下钻扩大候选」，不是「分数平滑」**。
 
-### D7. `hits` 的范围：其它读入口（`shadow_query` / `recall_shadow` / `episode`…）算不算命中？
+### ✅ D7. `hits` 的范围：其它读入口算不算命中？—— **已结案（v1.20.6，选 ②）**
 
-- **依据**：`adr/0067-hit-accumulation-trigger.md`「备选」表末行（本轮**有意不顺手做**）。
-- **现状（实测）**：`hits` / `confirmedBy` **只在主题召回路径累积**（`query/query.ts`，
-  即 `read_shadow({topic})` 不带 `mode`）。以下入口**都不累积**：
-  - `shadow_query`（`mode:"query"`，走 `read_shadow` 的 `shadowQuery` ReadQuery）；
-  - `recall_shadow`（→ `mode:"recovery"`，**用户最常用的恢复入口**）；
-  - `mode:"episode"` / `"task"` / `"context"` / `"knowledge"`（都走 `materializeAtoms`，不写 meta）。
-- **为什么这是决策而不是缺陷**：`hits` 的语义是「召回**命中**数」。把 `shadow_query` 也算进去，
-  等于把「**跨类型上下文查询**」也算作记忆命中 —— 那会改变 `hotness` 的含义
-  （从「被主题召回」变成「被任何读入口读过」）。**两种语义都自洽，但含义不同**，须拍板。
-- **代价对比**：
+- **决定（用户）**：**② 所有返回 Memory Atom 的读入口都算命中**（接受探测性 `shadow_query` 抬 hotness）。
+- **落地**：`core/served-hits.ts` 的 `recordServedHits` 为唯一写入；主题召回 / recovery / query / episode / decision / task / context 接线；`test/hit-accumulation.test.ts` ⑤⑥ 锁 recovery 与 query。
+- **不选 ③**：不引入 `readHits` 第二计数。
+- **原选项表与代价对比**见本条历史正文（归档在下方，不改正）。
+
+### D7.（归档）原决策表
+
+- **依据**：`adr/0067-hit-accumulation-trigger.md`「备选」表末行。
+- **原现状**：`hits` 只在主题召回路径累积。
+- **原代价对比**：
   | 选项 | 含义 | 风险 |
   |---|---|---|
-  | **① 只主题召回算命中**（现状） | `hits` = 「被主题检索命中」 | `recall_shadow` 是常用入口却不算命中 ⇒ retention 的 hotness 对此类使用**视而不见** |
-  | **② 所有读入口都算** | `hits` = 「被任何读入口读过」 | 语义面扩大；`shadow_query` 常被**探测性**调用（如本轮我做了多次），会把探测也算成「价值」 |
-  | **③ 分两个计数**（`recallHits` / `readHits`） | 语义分开，不混用 | 需要定权（hotness 用哪个？）；`_meta.json` 结构变更 |
-- **建议倾向**：**③**（分计数）最不损失信息；若不愿改结构，**①（维持现状）+ 在文档里写明 `hits` 只统计主题召回**。
-  **不建议 ②**（会把探测性查询当价值信号）。**决策权在用户**。
-- **完成判据**：选定其一；若选 ②/③，须附「`shadow_query` 调用量与实际命中量的比例」实测，
-  并同步改 `test/hit-accumulation.test.ts` 的覆盖范围。
+  | **① 只主题召回算命中** | `hits` = 「被主题检索命中」 | `recall_shadow` 视而不见 |
+  | **② 所有读入口都算**（**已选**） | `hits` = 「被任何读入口读过」 | 探测性查询当价值信号 |
+  | **③ 分两个计数** | 语义分开 | `_meta` 结构变更 |
 
 ### D8. README「默认开关」表缺三列：成熟度 / **降级行为** / **晋级标准**（ADR-0073）
 
@@ -1626,11 +1614,11 @@ V/G/T6 真机与外部条件项
 
 | 线索 | 位置 | 后果 |
 |---|---|---|
-| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer-materialize.ts:223-225` + `:311-312`，消费方 `query/query.ts:141` | serve **陈旧索引**且无告警；下一次也不再重建 |
+| `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer-materialize.ts:223-225` + `:311-312`，消费方 `query/index-budget.ts（无参读 `_index.md`）` | serve **陈旧索引**且无告警；下一次也不再重建 |
 | flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer-materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
 | FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
 | hypothesis 落盘失败后仍打印 `hypotheses N` | `validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
-| 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/query.ts:321-322` | **已冷却的记忆被重新返回**（召回输出变） |
+| 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/topic-recall.ts（冷却台账消费）` | **已冷却的记忆被重新返回**（召回输出变） |
 | meta 注册失败只 log | `core/memory.ts:77-79`（`writer-materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
 
 ### 6.2 中危（报告/统计面偏差，或需先决定语义）
@@ -1638,7 +1626,7 @@ V/G/T6 真机与外部条件项
 | 线索 | 位置 | 后果 |
 |---|---|---|
 | `manifest.failures` **恒为 `[]`**（唯一诊断通道从不传参） | `core/node.ts:49` + `projection-store.ts:70`；`buildManifest("1", nodes)` 少第三参 | `renderManifest` 报「失败项 0」，而约 9% 原子被 reject（该 9% 引自 `core/episode.ts:96-107` 注释，**未复算**）⇒ **两条读路径可见性分歧且无人知** |
-| `_index.md` 内容**不进指纹** | `query/query.ts:141` + `projection-store.ts:135,:139` | 同进程预热后清空 `_index.md` ⇒ 几千条库报「暂无 shadow 索引」 |
+| `_index.md` 内容**不进指纹** | `query/index-budget.ts（无参读 `_index.md`）` + `projection-store.ts:135,:139` | 同进程预热后清空 `_index.md` ⇒ 几千条库报「暂无 shadow 索引」 |
 | query-log 单行坏 JSON 无计数 | `query/observatory.ts:92`，消费方 `:100` | 覆盖率/drift 读数基于**被削样本** |
 | 证据路径上限 `.slice(0, 12)` 无披露 | `observer/arbitrate.ts:92` | 第 13 条起的证据路径静默消失 |
 | 「候选相关」报 `min(命中, 8)`，读失败项连 excluded 都不进 | `observer/projection.ts:19,:34,:48,:63` | 观测报告与主题召回**可见性不一致** |
@@ -1659,7 +1647,7 @@ V/G/T6 真机与外部条件项
 | 线索 | 位置 | 为什么要先决定 |
 |---|---|---|
 | identity 闸门参数两层各有默认值，且 falsy 语义不同 | `query/observer-kernel.ts:37-40`（`\|\| 5` / `\|\| 0.4`）vs `identity/evaluator.ts:20-22`（`?? 5` / `?? 0.4`） | 传 `minRecency: 0` 时 kernel 实际用 **0.4**：是「参数默认」还是「闸门下限」？**先决定语义再改** |
-| `status:"compacted"` 在三个谓词里三种答案 | `core/forget.ts:18` · `:34` · `query/query.ts:279` | 审查者**未确证可达性**（compacted 在 `query.ts:260` 已被移除）⇒ 建议**只加注释**，不修 |
+| `status:"compacted"` 在三个谓词里三种答案 | `core/forget.ts` · `query/materialize.ts` 的 `keep` | 审查者**未确证可达性**（compacted 在活跃集过滤时已移除）⇒ 建议**只加注释**，不修 |
 | `successRate` 渲染 `toFixed(2)` 后回读 `/100` | `reflection/engine.ts:29,:79` vs `:93` | 往返误差 ≤0.005，可能跨过 `0.6`/`0.4` 边界 ⇒ 同一反思在生成侧判 principle、消费侧判 anti_pattern（**真语料是否踩过边界未验证**） |
 | 「重复」=2 次 vs 「模式」=3 次 | `reflection/patterns/decision-outcome.ts:12` vs `reflection/engine.ts:27`（+`identity/candidate.ts:27`） | 两个不同统计量各有理由；若要收，提命名常量而**不是**统一成同一个数 |
 | `scope` 校验里 `s.includes(action)` 让任意子串（含空串）通过 | `delegation/guard/scope-guard.ts:6` | 属「校验器不健全（假阴性）」，不是本轮缺陷类；**未确证影响面** |
@@ -1793,7 +1781,7 @@ V/G/T6 真机与外部条件项
 ### 7.1 一条**推翻既有假设**的结论（重要）
 
 `adaptation/` · `agency/` · `continuity/` **三层全部已被生产接线**（`query/adaptation.ts:7-9`、`query/agency.ts:7-9`、`query/contverify.ts:7-9`
-→ `query/query.ts:20/23/12` 与 `:101/107/112` → `index.ts:32`、`index.ts:297` 的 `read_shadow` 转发）。
+→ `query/query.ts` 路由与各 family runner → `index.ts` 的 `read_shadow` 转发）。
 ⇒ 此前把它们记成「未接线 / 潜在」是**错的**；这些缺陷按**当前生效**定级。唯一「仅潜在」项是 `agency/guards.ts:22-24` 的 `hasNoUpgradeApi`（恒 `return true`、零调用点）。
 
 ### 7.2 认识论层（`federation/` · `world/` · `reality/`）—— 最贵的几条
@@ -1825,7 +1813,7 @@ V/G/T6 真机与外部条件项
 | 未匹配条件落回 `RULES[0]` 并把 `r-latency` 写进 lineage | `simulation/engine/simulator.ts:13` | **伪造匹配** |
 | `result` 不在 `read_shadow` 参数契约里，而措辞守卫依赖它 | `index.ts:274-277` vs `long-horizon/engine/interaction.ts:11-17,43,57` | 模型侧拿不到该文本 ⇒ 224/225/226/228 恒对 `""` 通过 |
 | horizon 四对象**只写不读**（`.shadow/horizon/**` 全仓无读取者） | `long-horizon/persistence/persist.ts` + `persistence/files.ts:38` | 写了也没人读 |
-| soul 读失败 ≡ 没配置 | `soul/soul.ts:8-11` + `query/query.ts:118` | 损坏被报成「无 Soul 配置」 |
+| soul 读失败 ≡ 没配置 | `soul/soul.ts:8-11` + `query/lenses.ts 的 soul 透镜` | 损坏被报成「无 Soul 配置」 |
 | `{"identity":"architect"}` 两处两答案 | `soul/identity.ts:10` vs `identity/timeline.ts:16` | 同一配置 `read_shadow({identity:true})` 与 `identity-advance` 得出不同身份 |
 | `satisfiedConstraints` 三套判据 | `planning/render.ts:14`（子串 `"under"`）/ `planning/types.ts:29` / `agency/engine.ts:27` | 同一概念三种算法 |
 | `|| "available"` / `|| "forgotten"` / `Number(x) || 0.5` 把合法 `0` 与缺失混同 | `long-horizon/engine/interaction.ts:32,44`、`query/planning.ts:25`、`query/sim-action.ts:38` | 缺失伪装成有值 |
@@ -1839,7 +1827,7 @@ V/G/T6 真机与外部条件项
 |---|---|---|
 | **五个边界布尔省略即 false = 约束全关**，写入全局 `boundary.json` 并**覆盖**旧记录 | `continuity/engine.ts:24`、`persist.ts:14-15`、`guard.ts:6-15`、`query/contverify.ts:49-50` | 裸调 `mode:"observer-boundary"` 把「五条边界全不存在」写成事实 |
 | `chosen` 算完即弃 ⇒ 违约候选照样被选中且硬回填 `constraint_satisfied` | `agency/engine.ts:27-28,30` | `selectedCandidateId` 与 `candidates[0]` 两条路都绕过约束检查 |
-| 同一句 `"I own this repository"` 两处**相反**答案 | `agency/guards.ts:47,51` vs `delegation/guard/expansion-guard.ts:41,49` | 审计结论不一致（逐字正则推演） |
+| 同一句 `"I own this repository"` 两处**相反**答案 | `agency/guards.ts` vs `delegation/guard/expansion-guard.ts` 的 `resultNoOwnership` | 审计结论不一致（逐字正则推演） |
 | `before` 无任何守卫却同级落盘并渲染 | `adaptation/engine/adaptation.ts:32-39` | 未过滤字段进审计文本 |
 | `catch { return null }` / `catch { /* 继续 */ }` 三态压平 | `continuity/persist.ts:28,31,34`、`continuity/engine.ts:62-80` | 损坏 ≡ 为空（ADR-0049） |
 | 写失败仅 `console.log`，seam 直接渲染成功 | `agency/persistence.ts:11,21`、`adaptation/persistence/persist.ts:7,10,13`、`continuity/persist.ts:12-24` | 「记录已建立」与「写盘被拒」不可区分 |

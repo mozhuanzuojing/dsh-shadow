@@ -26,7 +26,7 @@
 | 3 | **validation timeline 坏件被覆盖** | 解析失败返回空历史，`appendValidationEvent` 用「1 条新事件」覆盖文件 ⇒ **append-only 历史永久销毁**，从外面看只是「历史变短了」 | 新增 `readTimelineDetailed` 区分「还没有」与「读不出」；坏件**拒绝覆盖**；读路径显式播报 | `review-fixes` ③ |
 | 4 | **写失败报成功** | `writeMetaGuarded` 在非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」⇒ `mutateMeta` 判定事务已提交，`hits`/`compacted` 标记**静默不落盘** | 引入三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false（不重试、**绝不报成功**） | 见 §5 线索（未单列闸） |
 | 5 | **未知枚举落回默认值** | `disposition` 枚举外的值（如少写一个词的 `"deferred"`）会静默落进 `open` 桶 ⇒ 污染 buckets / 最老 / p90。**这是本轮新加的字段，审查当场指出** | 只有明确的 `open`（含缺省）才算在等；非法值单列 `invalidDisposition` 且**不进任何桶** | `decision-outcome.test.ts` ⑯ |
-| 6 | **证据路径漏一道过滤** | `arbitrate`/`judgment`/`core/context` 都有 `isConcreteLocator`，`query/query.ts:220` **漏了** ⇒ glob / git-ref 被当路径去验，必然 `not_found`：同一处证据一处算 `missing=0`、另一处报 not_found | 补 `.filter(isConcreteLocator)` | 未单列闸（需真 host；见 §5） |
+| 6 | **证据路径漏一道过滤** | `arbitrate`/`judgment`/`core/context` 都有 `isConcreteLocator`，`query/lenses.ts（verifyEvidence 路径，已补 `isConcreteLocator`）` **漏了** ⇒ glob / git-ref 被当路径去验，必然 `not_found`：同一处证据一处算 `missing=0`、另一处报 not_found | 补 `.filter(isConcreteLocator)` | 未单列闸（需真 host；见 §5） |
 | 7 | **测试面从不被类型检查** | `test/*.ts` 不被任何 tsconfig 覆盖，而测试用 `node x.ts` 跑 ⇒ **类型错误在测试里完全不可见**。实测代价：v1.15.52 加必填字段后手写 fixture 少了它，测试**静默变成错的语义**却没报错 | 新增 `tsconfig.test.json` + `npm run typecheck:tests`，**接入 `verify`** | 门禁本身 |
 
 ## 2. 由此新增的三条纪律（**要遵守的是这三条**）
@@ -270,7 +270,7 @@
 
 此前把 `adaptation/` · `agency/` · `continuity/` 记成「整目录未读（可能未接线）」。
 审查结论：**三层全部已被生产接线**（`query/adaptation.ts:7-9`、`query/agency.ts:7-9`、`query/contverify.ts:7-9`
-→ `query/query.ts:20/23/12`、`:101/107/112` → `index.ts:32`、`index.ts:297`）。
+→ `query/query.ts` 路由与各 family runner → `index.ts` 的工具转发）。
 ⇒ 那些缺陷按**当前生效**定级，不是「潜在」。**「未读」不等于「未接线」，两者都必须查证而不是假定。**
 
 ### 12.2 已修（6 处，全部属「损坏 ≠ 为空 / 写失败 ≠ 成功」这一族）

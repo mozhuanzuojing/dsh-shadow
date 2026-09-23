@@ -181,7 +181,7 @@ AssertionError: 通配符 `scripts/*.ps1` 不是「可检查的具体路径」�
 | `c.status=supported` | **真漂移（已修 + 已加锁）** | 见下节 3；键**已消失** |
 | `res.status=not_found` | 第 7 处真缺陷 | **v1.15.27 已修**（`observer/judgment.ts` 补 `isConcreteLocator`） |
 | `c.kind=provider` / `c.kind=reference` | **正当分层** | `toolset.ts` **声明** `kind` ↔ `toolset-exec.ts` **消费**；并实测其边界不变量 **107 项全满足**（v1.15.29 已复核） |
-| `r.status=unavailable` | **正当分层** | `core/index-engine.ts:54,66` **产出** `unavailable`（zg/semble 缺件）↔ `query/query.ts:222` **消费**它并渲染缺件提示（`unavailableHint`）。**同一契约的两个角色**；且 `unavailable` 是**宿主声明的类型值**（`core/types.ts:59` `EvidenceStatus`），非本仓自造 |
+| `r.status=unavailable` | **正当分层** | `core/index-engine.ts:54,66` **产出** `unavailable`（zg/semble 缺件）↔ `query/lenses.ts（`unavailableHint` 消费）` **消费**它并渲染缺件提示（`unavailableHint`）。**同一契约的两个角色**；且 `unavailable` 是**宿主声明的类型值**（`core/types.ts:59` `EvidenceStatus`），非本仓自造 |
 | `err.code=ENOENT` | **正当分层** | 两处都是**同一个外部契约**（Node `execFile` 的 `err.code`）在各自 CLI 上的一致性检查：`core/semble.ts:45` → `semble_not_installed`、`evidence/zg.ts:68` → `zg_not_installed`。**口径一致**（都映射到 `unavailable` + provider 专属 reason），非漂移 |
 | `e.kind=user` | **正当分层** | `core/memory.ts` 是**写侧**（构造线索头 / 统计用户消息数）、`core/writer-materialize.ts:203` 是**读侧**（`writeConsent` 门判断本回合是否含用户明说）。两者读的是**同一份 `pending` 事件流**的同一字段，属生产/消费 |
 | `kind=error` | **误报（同形不同义）** | `core/writer-llm.ts:31` 是**宿主流事件**的 `chunk.reason.kind`（外部输入，`dsh-llm` 契约）；`index.ts:61-68` 是本插件 `reportHostGap` 自己的**局部形参** `kind`。二者**接收者与语义都不同**，仅字面量同形 —— 正是工具「无类型分析」的已知噪声 |

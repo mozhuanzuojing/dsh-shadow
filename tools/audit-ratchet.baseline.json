@@ -14,10 +14,10 @@
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
       "dirs": 195,
-      "files": 916,
-      "findingsA": 45,
-      "findingsB": 95,
-      "fingerprint": "39790c370f91cabc944b38ede4a3ae2aa1f6040b7c666a184432141bb30ef3b2"
+      "files": 944,
+      "findingsA": 34,
+      "findingsB": 94,
+      "fingerprint": "49bde1d7b48ae8176639bee111656c1c8121066167660fe4405a765469934bf5"
     }
   },
   "drift": {
@@ -25,11 +25,11 @@
     "drift_sites": 23
   },
   "wiring": {
-    "a1": 30,
+    "a1": 26,
     "a2a": 4,
     "a2b": 0,
-    "a3": 11,
-    "a_total": 45,
-    "b_keys": 95
+    "a3": 4,
+    "a_total": 34,
+    "b_keys": 94
   }
 }

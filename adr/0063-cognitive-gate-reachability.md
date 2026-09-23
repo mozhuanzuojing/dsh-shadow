@@ -61,7 +61,7 @@ const entry = hooks.primaryComp?.(id || "") || "shadow";
 | 全库记忆 | 6960 条 |
 | `kind === "metadata"` | **4137 条（59.4%）**，**entry 全部是 `"shadow"`** |
 | 其中**有实质内容**（有动作行 / 思维行 / 用户话） | **3903 条（94.4%）** |
-| 主题召回路径（`query/query.ts:263-296`，**不做 kind 过滤**）可见 | 6960（全部） |
+| 主题召回路径（`query/topic-recall.ts（主题召回不做 kind 过滤）`，**不做 kind 过滤**）可见 | 6960（全部） |
 | `shadow_query` 路径（`deriveShadowNodes` → `validateAtomProjection`）可见 | **2283（32.8%）** |
 | **两条读路径可见性差** | **4677 条（67.2%）** |
 
@@ -71,7 +71,7 @@ const entry = hooks.primaryComp?.(id || "") || "shadow";
 ### 4. `pinned` / `archived` 两个「人工权威状态」**无任何入口**（T3 结案）
 
 - **`pinned` 恒 false**：生产只写 `pinned: false`（`core/memory.ts:74`、`core/writer-materialize.ts:88`、
-  `query/query.ts:401`），**`pinned: true` 全仓零处**（三路 grep：字面量 / `pinned:` / `pinned =`）。
+  `query/topic-recall.ts（写 `pinned: false`）`），**`pinned: true` 全仓零处**（三路 grep：字面量 / `pinned:` / `pinned =`）。
 - **`archived` 无写入者**：`status: "archived"` 只见于 `core/forget.ts:18`、`core/lifecycle.ts:28`
   两个**读点**与 `retrieval/rank.ts:103` 的权重表。
 - **判定：这是「已文档化但无入口的能力」，不是「接线断了」**。三条依据：

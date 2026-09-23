@@ -13,11 +13,18 @@
 //     顺带让每个测试自己的输出原样可见，失败时能直接看到是哪一行断言。
 //   · 串行而非并行：测试里有共享的 mock 目录/临时文件约定，串行换来确定性，代价是可接受的总时长。
 import { spawnSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// dist/ 不进 git（v1.20.6）：测试 import 的是编译产物。缺件时响亮失败，别让人误读成断言红。
+const distEntry = join(repoRoot, "dist", "index.js");
+if (!existsSync(distEntry)) {
+  console.log("[run-tests] 缺少 dist/index.js —— 先跑 `npm run build`（或 `npm run test:all` / `prepare`）");
+  process.exit(2);
+}
 
 // 两批**确定性**检查，一条命令跑完：
 //   · `test/*.test.ts`        —— 插件行为（跑构建产物）

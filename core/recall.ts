@@ -13,7 +13,7 @@ import type { ContextRef } from "./context.js";
 const D = (s: string, n = 64) => scrubUnsafe(String(s || "")).slice(0, n);
 
 // 确定性地挑"最相关的任务"（按查询 token 命中 title/objective/decisions/evidence/trigger）。
-const bestTask = (tasks: TaskView[], query: string): TaskView | null => {
+export const bestTask = (tasks: TaskView[], query: string): TaskView | null => {
   const q = String(query || "");
   // 查询拆块（顺带按 中/英 断开，避免 "Todo清理" 被当成一个不匹配的 token）
   const chunks = Array.from(new Set([...tokenize(q), ...q.split(/([a-zA-Z0-9]+|[^a-zA-Z0-9]+)/i).map((s) => s.trim()).filter((s) => s && /[a-zA-Z0-9\u4e00-\u9fff]/.test(s))]));

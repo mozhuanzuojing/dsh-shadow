@@ -29,21 +29,21 @@
 
 ## 本仓库常用的构建与验证
 
-- 构建：`npm run build`（= `tsc`）。`dist/` 由构建生成，**改源码后必须重编译并保持 `dist/` 与源码同步提交**。
+- 构建：`npm run build`（= `tsc`）。`dist/` 是**本地 / 发包**产物，**不进 git**（v1.20.6 起）。
+  `prepare` / `prepublishOnly` 会跑 build；Junction / 新克隆后若还没有 `dist/`，先 `npm run build`（或再跑一次 `pnpm install` 触发 `prepare`）。
+  npm 包仍带 `dist`（`package.json` 的 `files`），宿主加载的永远是编译后 JS。
 - **验证只用一条命令：`npm run verify`** —— 它串行跑 `typecheck:tools` → `typecheck:tests` →
   `audit:layers` → `audit:scripts` → `audit:docs` → `audit:granularity` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
   （**检查条数不写在这里**：由 `run-tests` 自己打印，末行应为 `[run-tests] ALL PASS ✅`）。
   ⚠️ **本文件曾写「仓库没有配置 test runner」—— 那是过期信息**（运行器是 `tools/run-tests.ts`）。
 - **跑测试前必须 `npm run build`**：`test/*.test.ts` 与 `tools/*.selftest.ts` **import 的是 `dist/`**。
-  只跑 `npx tsc --noEmit`（**不产出**）就去跑测试，读到的是**旧代码**，
-  会得到「明明改了却没生效」的假象（v1.15.65 实测踩过一次）。
+  `test:all` / `verify` 已含 build；只跑 `npx tsc --noEmit`（**不产出**）就去跑单测，读到的是**旧代码**，
+  会得到「明明改了却没生效」的假象（v1.15.65 实测踩过一次）。缺 `dist/index.js` 时 `run-tests` **exit 2**。
 - **语料根（v1.15.83）**：`eval:retrieval:check` 要一个带 `.shadow` 的**工作区根** —— 默认由 `tools/retrieval-eval.ts` 的位置**往上找**（最多三级，取第一个存在的）。
   一个都没有 ⇒ **exit 2，且后面 3 步（分诊棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。
   兜底：`SHADOW_EVAL_ROOT=<工作区> npm run verify`（本机 = `D:\project\dsh1`）。
-- **`dist/` 不该出现在 `git status` 里（v1.15.83）**：`.gitattributes` 已钉 `dist/** text eol=lf`。
-  此前 `core.autocrlf=true` 把它按 CRLF **检出**、`tsc` 按 LF **重写** ⇒ 每次 build 后 388 个文件报「已修改」，
-  而它们与索引**逐字节相同**（`git diff --numstat -- dist` = 0 行 · `git add --dry-run -- dist` = 0 条）。
-  若它又出现，先用这两条命令判真假，别急着 `git add -A`。
+- **`dist/` 出现在 `git status` 里 ⇒ 说明 ignore 坏了**（v1.20.6 起它应被忽略）。若误 `git add`，
+  `.gitattributes` 仍钉 `dist/** text eol=lf`，避免 Windows 下 CRLF 假脏。
 - 源码入口：`index.ts`（Cordis adapter）→ tsc → `dist/index.js`（DSH 加载编译后 JS）。
 - **改默认值时跑一次 `npm run sweep:timebomb`**（T12 的可复现探针，`tools/timebomb-sweep.ts`）——
   凡改 `forget` / `retention` / `compact` 这类**默认值**（不是改代码）的变更，都要重跑「假日期 × 全部测试」这道判定：

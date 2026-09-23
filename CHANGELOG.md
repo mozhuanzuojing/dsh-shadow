@@ -3,6 +3,36 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.6] `dist/` 不再进 git + 七期架构加深（D7=②）
+
+### A. `dist/` 不再进 git（正常发包模型）
+
+Git 只跟踪源码；`dist/` 由本地 `build` / `prepare` / `prepublishOnly` 产出；npm 包仍通过 `files:["dist"]` 携带编译产物。宿主加载路径不变（`main` → `dist/index.js`）。
+
+- `.gitignore` 忽略 `dist/`；索引卸跟踪（工作树文件保留）。
+- `package.json`：`prepare` + `prepublishOnly` → `npm run build`。
+- `tools/run-tests.ts`：缺 `dist/index.js` → **exit 2**。
+- 当前态文档：`AGENTS.md` / `README.md` / `.gitattributes` 与「同步提交 dist」旧纪律对齐。
+- 不变：测试仍 import `dist/`；`test:all` / `verify` 仍先 build。Junction 开发：装依赖或改码后需有本地 `dist/`，再重启 profile。
+
+### B. 读侧结构（七期）
+
+- **P1**：默认主题召回与 topic 透镜改走 `materializeAtoms`；forget/compact 的 `keep` 真正一份实现（`query/query.ts` 不再 import `isForgettable`/`isCompacted`）。
+- **P2**：抽出 `query/topic-recall.ts`、`query/lenses.ts`、`query/index-budget.ts`；`query/query.ts` 只做路由 + 废止检查。mode 总数 **62** 不变。
+- **P3 / D7=②**：`core/served-hits.ts` 的 `recordServedHits` 为 hits 唯一写入；主题召回 / recovery / query / episode / decision / task / context 均记命中。探测性 `shadow_query` 抬 hotness —— **接受**。`test/hit-accumulation.test.ts` ⑤⑥。
+
+### C. 其它收口
+
+- **P4**：`mode:"identity-advance"` 在 evaluator 后接 `renderIdentityModel`；`args.identity:true` 仍走 soul 形 `renderIdentity`。
+- **P5 / T18 半边**：`mode:"decision"` 接线 `decision-outcome` 读数（无新 mode）；`decision/choose` 仍未进生产。
+- **P6**：删除 `delegation/guard` 零调用 `assert*` 包装，保留谓词；`audit-ratchet` wiring 基线显式重定（A 45→34，删包装导致，非工具故障）。
+- **P7**：`test/fixtures/projection-contract.ts` 供预设棘轮共用锚点；插件运行时不 import presets。
+
+### D. 文档
+
+- CONTEXT：ReadQuery / 召回已返回 hits / identity-advance 读侧；BACKLOG D7 结案；ADR-0067 补记。
+
+
 ## [v1.20.5] 投影模式卡片描述再压缩
 
 用户嫌 `description` 啰嗦。只砍卡片文案，**不动 persona**。

@@ -5,7 +5,7 @@
 import { today, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
 import { reflectOf, renderReflection } from "../reflection/engine.js";
-import { readCurrentIdentity } from "../identity/timeline.js";
+import { readCurrentIdentity, renderIdentityModel } from "../identity/timeline.js";
 import { advanceIdentity, renderEvaluator } from "../identity/evaluator.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
 import { writeTemporalGraph } from "../temporal/persistence.js";
@@ -39,7 +39,11 @@ export async function runObserverKernel(deps: ShadowQueryDeps, args: any, ctx: O
       maxContradiction: Number(args?.maxContradiction) || 0.3,
       halfLifeDays: Math.max(1, Number(args?.halfLifeDays) || 90),
     });
-    return scrubFinal(RECALL_PREFIX + renderEvaluator(decisions, model) + flushWarn);
+    // soft tool-output（ADR-0086）：evaluator 块保留；其后接 IdentityModel 完整渲染（学到的一半）。
+    // `args.identity:true` 仍走 soul/identity 的 renderIdentity —— 两对象不混名。
+    return scrubFinal(
+      RECALL_PREFIX + renderEvaluator(decisions, model) + "\n\n" + renderIdentityModel(model) + flushWarn,
+    );
   }
   if (mode === "temporal") {
     const graph = await buildTemporalGraph(fs, ws, { from: String(args?.from || ""), to: String(args?.to || "") });

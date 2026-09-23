@@ -37,11 +37,11 @@ const SIGNALS: { key: string; field: string; literal?: string; boolTrue?: boolea
   { key: "pinned", field: "pinned", boolTrue: true, producer: "external", why: "生产只写 pinned:false（core/memory.ts:75、core/writer-materialize.ts:125），**真值无写入者**；保留为外部人工信任标记，优先级最高的外部权威状态" },
   { key: "statusArchived", field: "status", literal: "archived", producer: "external", why: "生产只写 status:\"active\"/\"compacted\"，**archived 无写入者**；保留为外部人工归档" },
   { key: "statusSuperseded", field: "status", literal: "superseded", producer: "external", why: "取代是「相对当前可见记忆集」的读时判断，持久化会随可见集失效；只有外部/夹具置位" },
-  { key: "confirmedBy", field: "confirmedBy", producer: "derived", why: "query/query.ts:418 按 observer 回填（保留最后 10 个）" },
-  { key: "hits", field: "hits", producer: "derived", why: "query/query.ts:414 `rec.hits = (rec.hits||0)+1` 累加" },
-  { key: "superseded", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/query.ts:299（`verdictOf` 的读时裁决）" },
-  { key: "conflictCount", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/query.ts:299（证据路径缺失计数）" },
-  { key: "stale", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/query.ts:299（年龄/热度判据）" },
+  { key: "confirmedBy", field: "confirmedBy", producer: "derived", why: "core/served-hits.ts 的 recordServedHits 按 observer 回填（保留最后 10 个）" },
+  { key: "hits", field: "hits", producer: "derived", why: "core/served-hits.ts 的 recordServedHits：`rec.hits = (rec.hits||0)+1`" },
+  { key: "superseded", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-recall.ts（`verdictOf` 的读时裁决）" },
+  { key: "conflictCount", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-recall.ts（证据路径缺失计数）" },
+  { key: "stale", field: "", producer: "derived", why: "**参数**信号，生产者是调用点 query/topic-recall.ts（年龄/热度判据）" },
 ];
 
 /** `lifecycleOf` 可能返回的状态全集 + 可达性分类（`externalOnly` = 只有外部权威能给，不靠派生信号）。 */
@@ -156,10 +156,10 @@ const boolTrueSites = (files: { file: string; text: string }[], field: string): 
   const fake = [{ file: "fake.ts", text: "rec.hits = (rec.hits || 0) + 1;" }];
   assert.equal(assignSites(fake, "hits").length, 1, "正控：真赋值点必须被检出");
   assert.equal(assignSites([{ file: "fake.ts", text: "const h = rec ? rec.hits : 0;" }], "hits").length, 0, "正控：**读**表达式不得被当成赋值点");
-  // 参数信号的生产者是调用点：`query/query.ts` 必须真的把 `v.superseded` 传进 lifecycleOf。
-  const q = prod.find((f) => f.file === "query/query.ts");
-  assert.ok(q, "应存在 query/query.ts");
-  assert.ok(/lifecycleOf\([^;]*v\.superseded/.test(stripComments(q.text)), "query/query.ts 必须把读时裁决 v.superseded 传给 lifecycleOf（参数信号的生产者）");
+  // 参数信号的生产者是调用点：主题召回（迁出后在 topic-recall）必须真的把 `v.superseded` 传进 lifecycleOf。
+  const q = prod.find((f) => f.file === "query/topic-recall.ts");
+  assert.ok(q, "应存在 query/topic-recall.ts");
+  assert.ok(/lifecycleOf\([^;]*v\.superseded/.test(stripComments(q.text)), "query/topic-recall.ts 必须把读时裁决 v.superseded 传给 lifecycleOf（参数信号的生产者）");
   console.log("✔ ③ 派生信号：字段信号有真赋值点（含读/写正控），参数信号有调用点接线");
 }
 
@@ -192,7 +192,7 @@ const boolTrueSites = (files: { file: string; text: string }[], field: string): 
 
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
-console.log("  · `producer` 的『参数信号由 query/query.ts:299 生产』只核到**那行确实传了** `v.superseded`；" +
+console.log("  · `producer` 的『参数信号由 query/topic-recall.ts 生产』只核到**那行确实传了** `v.superseded`；" +
   "`verdictOf` 的裁决语义正确性由 `observer/arbitrate.ts` 自己的测试负责，不在本表范围内；");
 console.log("  · 只核本仓库源码。别的会话/外部工具直接改 `_meta.json` 塞入 `pinned: true` 这类运行时事实**扫不到**" +
   "（⇒ 表说的是「本仓库生产代码写不出」，不是「运行时永不会出现」）；");

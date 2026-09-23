@@ -1,10 +1,3 @@
-# dist/ 是 tsc 产物，**LF**。若不在这里钉住，core.autocrlf=true 会把它按 CRLF 检出
-#（实测 dist/core/util.js：检出后 6258 字节 = 6145 + 113 个 CR，而 tsc 每次按 LF 重写），
-# 于是每次 build 后 `git status` 都报 388 个 dist 文件「已修改」，而它们与索引**逐字节相同**：
-#   git diff --numstat -- dist      → 0 行
-#   git add --dry-run -- dist       → 0 条
-#   git hash-object -- <f> == git rev-parse :<f>
-# ⇒ 这不是「dist 与源码脱同步」，是行尾/尺寸造成的假脏；但它会把**真的** dist 漂移一起淹没
-#（AGENTS.md 要求「改源码后必须重编译并保持 dist/ 与源码同步提交」）。
-# `eol=lf`：仓库里存 LF、检出也写 LF ⇒ 与 tsc 输出一致，假脏不再出现。
+# 本地 tsc 产物保持 LF（与 tsc 输出一致）。dist/ 已不进版本库（见 .gitignore）；
+# 本规则只约束若误 add 或工具读工作树时的行尾，避免 Windows 下再出现 CRLF 假脏。
 dist/** text eol=lf

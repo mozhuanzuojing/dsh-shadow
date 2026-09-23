@@ -22,6 +22,13 @@
 //   `modes.size === 62`）。它**故意**会在上游增删行时变红 —— 那是要人裁决的信号，不是腐烂。
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import {
+  DESCRIPTION_FRONT_WINDOW,
+  DESCRIPTION_MUST_INCLUDE,
+  PERSONA_TEAM_POLICY_ANCHORS,
+  FORBIDDEN_DELEGATION_ID_PREFIX,
+  FORBIDDEN_DELEGATION_IDS,
+} from "./fixtures/projection-contract.ts";
 
 const patchUrl = new URL("../presets/projection.patch.yml", import.meta.url);
 const pkgUrl = new URL("../package.json", import.meta.url);
@@ -113,11 +120,13 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
 
   // ② T1 不变量（在**行 id** 上判，不受注释散文影响）
   assert.equal(
-    ids.filter((id) => id.startsWith("tool-subagent")).length,
+    ids.filter((id) => id.startsWith(FORBIDDEN_DELEGATION_ID_PREFIX)).length,
     0,
     "T1：不得出现任何 tool-subagent* 行（用户 2026-09-16「不得轻易开子代理」，Teams 已是唯一委派机制）",
   );
-  assert.equal(ids.includes("tool-agent-team"), false, "T1：不得出现 tool-agent-team 行 —— Teams 已移到 profile 层 bundle");
+  for (const bad of FORBIDDEN_DELEGATION_IDS) {
+    assert.equal(ids.includes(bad), false, `T1：不得出现 ${bad} 行 —— Teams 已移到 profile 层 bundle`);
+  }
   assert.deepEqual(
     ["workflow-ptc", "tool-workflow", "tool-ralph"].filter((id) => ids.includes(id)),
     ["workflow-ptc", "tool-workflow", "tool-ralph"],
@@ -152,22 +161,15 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
   const desc = src.match(/^\s*description:\s*(.+)$/m)?.[1] ?? "";
   assert.notEqual(desc, "", "config.description 必须存在且是单行 plain scalar（不得含「冒号+空格」，那会让 YAML 解析直接失败）");
   assert.match(
-    desc.slice(0, 90),
-    /Agent Teams/,
-    "④a 描述前 90 字必须出现「Agent Teams」——预设选择器的卡片把描述截到 4 行，写在末尾等于界面上看不见",
+    desc.slice(0, DESCRIPTION_FRONT_WINDOW),
+    new RegExp(DESCRIPTION_MUST_INCLUDE),
+    `④a 描述前 ${DESCRIPTION_FRONT_WINDOW} 字必须出现「${DESCRIPTION_MUST_INCLUDE}」——预设选择器的卡片把描述截到 4 行，写在末尾等于界面上看不见`,
   );
 
   // ④b persona：0.1.7 `team:policy` 的执行口径锚点（上游改口径时要回来核这一份）。
   const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";
   assert.notEqual(persona, "", "④b persona prefix 折叠块必须能取到");
-  for (const needle of [
-    "显式要求",
-    "写作用域必须互不重叠",
-    "blocked_by",
-    "list → get → claim",
-    "任务就绪不会",
-    "FS_STALE_VERSION",
-  ]) {
+  for (const needle of PERSONA_TEAM_POLICY_ANCHORS) {
     assert.ok(persona.includes(needle), `④b persona 必须携带 0.1.7 team:policy 锚点：${needle}`);
   }
   console.log("✔ ④ 描述前置窗口含 Agent Teams；persona 携带 team:policy 六个锚点");

@@ -1,13 +1,28 @@
+# ── 依赖 / OS 杂讯 ──────────────────────────────────────────
 node_modules/
 *.log
 .DS_Store
-# archify 视觉自检产物（可重出，不进版本库）
+Thumbs.db
+
+# ── 构建产物（可重出；不进 git。npm 包仍带 dist：见 package.json files + prepublishOnly）──
+dist/
 docs/*.visual-check.*
-# 本地草稿目录（v1.15.86 立）：不进版本控制 ⇒ 也**不进审计语料**（见 tools/audit-wiring.ts 与 tools/audit-drift.ts 的 SKIP_DIRS）
+
+# ── 本机草稿 / 临时（不进版本控制，也不进审计语料）────────────
+# 本地草稿目录（v1.15.86）：见 tools/audit-wiring.ts / audit-drift.ts 的 SKIP_DIRS
 _research/
-# 派生索引（ADR-0095 · T17-B）：**派生件，可删可重建，不入版本控制**。
-# 落点是「工作区」的 `.shadow/index.sqlite`；写进本仓 .gitignore 是为了「本仓自己当工作区」时也不会误提交。
-.shadow/index.sqlite
-.shadow/index.sqlite.tmp-*
-.shadow/index.sqlite-wal
-.shadow/index.sqlite-shm
+_tmp/
+__pycache__/
+*.pyc
+
+# 仓内误落的取证备份（v1.19.1 实测：默认路径写错 → 仓库内 `.docs/`，5.5 MB 差点进库）
+# 约定落点在仓库外：`../.docs/fix/<日期>/`（见 AGENTS.md）
+.docs/
+
+# 编辑器 / 本机工具目录
+.cursor/
+.yonbuddy/
+
+# ── 本仓当工作区时的运行时面（可删可重建，不入版本控制）──────
+# 记忆树 + 派生索引（ADR-0095 · T17-B：`.shadow/index.sqlite` 及旁路文件）
+.shadow/

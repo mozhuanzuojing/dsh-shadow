@@ -57,8 +57,8 @@ const ROOT = resolve(argVal("--root") || resolveEvalRoot(here));
 const SHADOW = join(ROOT, ".shadow");
 const BACKUP_DIR = resolve(
   // ⚠ 默认必须落在**仓库外**的 `vendor/.docs/fix/<日期>/`（本仓约定：当时取证放那儿）。
-  // v1.19.1 实测踩过：写成 `join(here, "..", ".docs")` 会落到**仓库内**的 `.docs/` ——
-  // 而 `.docs` **不在** `.gitignore` 里（实测 `git status` 直接报 `?? .docs/`）⇒ 5.5 MB 备份差点被提交进仓库。
+  // v1.19.1 实测踩过：写成 `join(here, "..", ".docs")` 会落到**仓库内**的 `.docs/`
+  // （当时还不在 `.gitignore`，`?? .docs/` ⇒ 5.5 MB 差点进库）。现已忽略，但默认仍指向仓外。
   argVal("--backup") || join(here, "..", "..", ".docs", "fix", "2026-09-21"),
 );
 const META = join(SHADOW, "_meta.json");

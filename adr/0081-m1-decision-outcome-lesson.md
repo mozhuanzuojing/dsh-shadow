@@ -26,7 +26,7 @@
 | `alternatives`（当时有哪些选择） | ❌ **缺**。`dream/types.ts:19` 的 `alternatives` 是**假设的替代解释**（`alternativeExplanation`），**不是决策的备选方案** | `dream/types.ts:19`、`dream/compress.ts:55` |
 | `evidence`（当时依据） | 🟡 **半有**：`DecisionReason` 是原文事实，但**没有「这条决策的依据是哪条记忆/证据」的显式引用**（Evidence Lineage 在 reality/validation 域，未接到决策上） | `validation/types.ts:3`、`reality/claim/engine.ts:13` |
 | `outcome.status: pending` | ❌ **缺关键的一半：没有「决策 → 后来结果」这条边**。现有 `outcome` 是两处**别的**东西：`observer/trace.ts:26` 的 `outcome{expected,actual}`（**轨迹**的结果）与 `validation` 的 `ValidationOutcome`（**假设**的验证结论） | `observer/trace.ts:26,62`、`validation/types.ts:23` |
-| `lesson` | 🟡 **有但不合格**：`observer/arbitrate.ts:71 lessonOf` 存在，但它派生自**取代/证据存活状态**（「同入口已被更新，引用前先查最新记忆」），**不是**基于「这个决策执行得怎样」 | `observer/arbitrate.ts:71-72`、`query/query.ts:248` |
+| `lesson` | 🟡 **有但不合格**：`observer/arbitrate.ts:71 lessonOf` 存在，但它派生自**取代/证据存活状态**（「同入口已被更新，引用前先查最新记忆」），**不是**基于「这个决策执行得怎样」 | `observer/arbitrate.ts:71-72`、`query/lenses.ts / topic-recall（`lessonOf` 接线）` |
 
 **⇒ M1 的缺口只有三件（都不推倒已有）：**
 1. **决策 → 结果 的边**（`DecisionOutcome`）：`decisionRef` + `observedAt` + `actual`（外部观察）+ `source`（谁观察的）；

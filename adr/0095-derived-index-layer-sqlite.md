@@ -165,7 +165,7 @@
 ### 1. 等价性怎么证
 
 **对照面**：同一 query，`provider:"fs"`（今天）与 `provider:"sqlite"`（一期）两路，**产物逐字段一致**：
-① 候选集（节点 id 集合）② 排序 ③ 渲染输出。排序口径今天已确定且确定性 —— `query/query.ts:329`
+① 候选集（节点 id 集合）② 排序 ③ 渲染输出。排序口径今天已确定且确定性 —— `query/topic-recall.ts` 的打分排序
 `sorted by (b.score - a.score) || b.mm.date.localeCompare(a.mm.date)`，无随机源。
 
 **三条线一起上**：
@@ -467,7 +467,7 @@ T17-B 必须先证明「失效判据的检查成本是 **O(1) 级**」——候�
 - **(c1) 换物化载体**：**`dist/query/materialize.js:9-25` 是唯一一处「读全部 → `parseMemory`」的收敛点**
   ⇒ 把「`listMemories` + `readRel` + `parseMemory`」换成「查 `source` + 查 `atom`」，
   **`deriveShadowNodes` / `validateAtomProjection` / 打分 / 渲染全不动**。
-  顺手核实：`query/query.ts:145-150` 的**无参** `read_shadow()` 走 `_index.md`（2.25 MB）、**不走 `listMemories`**
+  顺手核实：`query/index-budget.ts` 的**无参** `read_shadow()` 走 `_index.md`（2.25 MB）、**不走 `listMemories`**
   ⇒ 受影响的只是**带 topic 的召回**。
 - **T17-A 倾向「先抽 `CandidateProvider` / `CandidateSet` 边界，`IndexEngine` 保持原样（诊断面）」** ——
   这正是用户 2026-09-16 明确允许的**第三种结论**。

@@ -1,6 +1,7 @@
 // dsh-shadow —— 能力台账的可执行部分：安装 argv 解析（Windows npm 陷阱）+ **审批门**（v1.15.8）
 // 安全核心：**拿不到 `allowed-once` 就绝不能执行安装**。下面把每种非授予结果都钉一遍。
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { probeCapability, resolveInstall, installCapability } from "../dist/core/toolset-exec.js";
 
@@ -8,12 +9,20 @@ import { probeCapability, resolveInstall, installCapability } from "../dist/core
 // ① resolveInstall：把声明式配方解析成真实 argv
 //    关键回归：npm-global 在 Windows 上必须走 `node <npm-cli.js>` —— npm 只是 `npm.cmd`，
 //    execFile 起不了它（ENOENT），显式起 `npm.cmd` 又被 Node 拒（EINVAL）。
+//    探测与 `core/toolset-exec.ts` 同源：`dirname(execPath)/node_modules/npm/bin/npm-cli.js`。
+//    Cursor 自带 node 旁常无 npm-cli ⇒ 生产回退裸 `npm`（Unix 可用；Windows 会如实 ENOENT）。
 // ─────────────────────────────────────────────
 const zg = resolveInstall("zg");
 assert.ok(!("error" in zg), "zg 应能解析出安装 argv");
-assert.equal(zg.cmd, process.execPath, "zg 安装必须用 node 起（不是裸 npm / npm.cmd）");
-assert.ok(/npm-cli\.js$/.test(String(zg.args[0])), `zg 安装的第一个参数应是 npm-cli.js：${zg.args[0]}`);
-assert.deepEqual(zg.args.slice(1), ["install", "-g", "@zvec/zvec-grep"], "zg 安装参数");
+const npmCliBesideNode = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+if (existsSync(npmCliBesideNode)) {
+  assert.equal(zg.cmd, process.execPath, "旁路有 npm-cli 时必须用 node 起（不是裸 npm / npm.cmd）");
+  assert.ok(/npm-cli\.js$/.test(String(zg.args[0])), `zg 安装的第一个参数应是 npm-cli.js：${zg.args[0]}`);
+  assert.deepEqual(zg.args.slice(1), ["install", "-g", "@zvec/zvec-grep"], "zg 安装参数");
+} else {
+  assert.equal(zg.cmd, "npm", "旁路无 npm-cli 时回退裸 npm（与 resolveInstall 契约一致）");
+  assert.deepEqual(zg.args, ["install", "-g", "@zvec/zvec-grep"], "zg 安装参数（裸 npm）");
+}
 assert.equal(zg.display, "npm install -g @zvec/zvec-grep", "展示命令仍是人类可复制的形式");
 
 const sm = resolveInstall("semble");

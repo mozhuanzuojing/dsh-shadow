@@ -145,7 +145,7 @@
 
 | 类别 | 条数 | 符号 |
 |---|---|---|
-| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/query.ts:251` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
+| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
 | **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge-engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
 | **误报 · 跨层 API** | **1** | `ChangeSet` —— `core/projection-store.ts:85` 的 store 工厂在生产被调用（`:168`），故 `invalidateFor(new ChangeSet(...))` 是**可达消费点**。⚠ **与 D1 的关系**：D1 说「`ChangeSet`/`invalidateFor` 生产中未接线」**仍然成立**（无生产**实例化点**）；两条不矛盾 —— 一条说「接口可达」，一条说「没人实例化」。⇒ **D1 维持原判** |
 | **零引用（生产 + 测试皆无调用）** | **18 符号 / 8 决定** | 见 §4 表 |

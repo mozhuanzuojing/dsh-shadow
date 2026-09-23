@@ -17,7 +17,7 @@
 
 本仓**已经有**这个确定性机制：`observer/arbitrate.ts` 的
 `newestByEntryOf(list)` + `verdictOf(...)` —— 按**同 `entry` 是否存在更新的记忆**判定 `superseded`，
-**无 LLM、无相似度阈值**。且它**是活的**：`query/query.ts:301` 对取代的旧记忆 `score × 0.7` 降权，
+**无 LLM、无相似度阈值**。且它**是活的**：`query/topic-recall.ts（取代降权 ×0.7）` 对取代的旧记忆 `score × 0.7` 降权，
 并输出 `裁决 superseded`、`结果 superseded`、`反思 后续已迭代`、`修正链`、`lesson`。
 
 ### 发现的问题（实测）
@@ -31,7 +31,7 @@
 | 写入 `meta.status` 的位置 | 值 |
 |---|---|
 | `core/memory.ts:74` | `"active"` |
-| `query/query.ts:394` | `"active"`（默认） |
+| `query/topic-recall.ts（lifecycle 默认 active）` | `"active"`（默认） |
 | `core/writer-materialize.ts:88` | `"compacted"` |
 | **`"superseded"`** | **无生产写入者** —— 唯一来源是 `test/recall-attribution.test.ts:1319` 的**测试夹具手工塞入** |
 

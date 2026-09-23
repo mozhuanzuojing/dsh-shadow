@@ -75,7 +75,7 @@
 ```text
 把 D:/project/dsh1/vendor/dsh-shadow 以 link: 方式装进 DSH web profile：
 1) profile 的 package.json 加依赖 "dsh-shadow": "link:D:/project/dsh1/vendor/dsh-shadow"，bundles 数组加 "dsh-shadow"；
-2) 在本目录跑 pnpm install（源码是 TypeScript，改过源码先 pnpm run build）；
+2) 在本目录跑 pnpm install（会触发 prepare→build；改过源码再 pnpm run build）；
 3) 重启 profile，跑 dsh --profile web --dump-config 确认没有 Error:；
 4) 新开一个会话做几次工具调用，确认工作区出现 .shadow/<日期>/<时刻>-<主题>.md、.shadow/_index.md 生成、read_shadow 出现在工具列表；
 5) 说一句「回忆一下上次在做什么」，确认 recall_shadow 能返回任务恢复包。
@@ -113,8 +113,8 @@ npm run verify
 ```
 
 **它失败就不要往下走**（跑评测 / 长耗时验证 / 声称「全绿」之前必须先过它）——
-否则一次编译错误会被伪装成一次评测结论。**注意它会写 `dist/`**（含 `build`）：测试 import 的是
-编译产物，不构建就会测到旧 `dist`。
+否则一次编译错误会被伪装成一次评测结论。**注意它会写本地 `dist/`**（含 `build`；**不进 git**）：测试 import 的是
+编译产物，不构建就会测到旧 `dist`；缺件时 `run-tests` exit 2。
 
 **为什么要有这条命令**（ADR-0077 D2）：在此之前「全绿」只能靠人**记得**逐个跑 `node test/*.test.ts`
 —— 于是「便宜且确定性的完整缝合线检查」实际上**没有单一入口**。补上它的**当轮**就抓到两处**既有**失败
@@ -616,7 +616,7 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 pnpm install
 ```
 
-改动 `cordis.patch.yml` 后需重启 profile 生效。源码为 TypeScript：`index.ts` → `tsc`（TypeScript 7.x）→ `dist/index.js`（DSH/Cordis 加载的是编译后 JS，package.json.main 指向 `dist/index.js`）；改源码后需重新 `pnpm run build` 再重启。
+改动 `cordis.patch.yml` 后需重启 profile 生效。源码为 TypeScript：`index.ts` → `tsc`（TypeScript 7.x）→ `dist/index.js`（DSH/Cordis 加载的是编译后 JS，`package.json.main` 指向 `dist/index.js`）；`dist/` **不进 git**（v1.20.6），`prepare` / `prepublishOnly` / 改码后的 `pnpm run build` 负责产出；再重启 profile。
 
 
 ## 验证（重启后）
@@ -652,5 +652,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.20.5`**（**投影模式卡片描述再压缩**：短句点名 Agent Teams，细节归人格；门只钉前置窗口 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)；插件代码零改动）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.6`**（**`dist/` 不再进 git** + 七期架构加深 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

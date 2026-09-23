@@ -78,7 +78,7 @@ assert.equal(badProvider.provenance.reason, "provider_unknown", "应带 reason=p
 assert.equal(badProvider.confidence, 0, "未验证 → confidence 0");
 
 // fs provider 本身仍要工作：存在的路径 verified，不存在的 not_found
-const hostFs = makeHost({ summary: { enabled: false }, recall: {} }, [{ rel: `${WS}/.shadow/2026-09-08/2026-09-08--100000-a.md`, text: "# src/a.ts\n\n> 背景/材料：src/a.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/a.ts] alpha 条目\n" }]);
+const hostFs = makeHost({ summary: { enabled: false }, recall: {}, forget: { enabled: false } }, [{ rel: `${WS}/.shadow/2026-09-08/2026-09-08--100000-a.md`, text: "# src/a.ts\n\n> 背景/材料：src/a.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/a.ts] alpha 条目\n" }]);
 const okRef = await routeVerify({ path: ".shadow/2026-09-08/2026-09-08--100000-a.md" }, { fs: (hostFs as any).ctx.get("fs"), ws: WS }, "fs");
 assert.equal(okRef.status, "verified", "存在的路径应 verified（未把 fs 一起改坏）");
 const missingRef = await routeVerify({ path: "src/does-not-exist.ts" }, { fs: (hostFs as any).ctx.get("fs"), ws: WS }, "fs");
@@ -86,6 +86,8 @@ assert.equal(missingRef.status, "not_found", "不存在的路径应 not_found");
 console.log("✔ ② routeVerify：未知 provider → unavailable(provider_unknown)；fs 仍 verified/not_found");
 
 // ── ③ 全增强打开但 llm 缺失：读侧仍确定性可用、不抛错 ──
+// ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）；
+//    种子日期固定在 2026-09-08，相对「今天」会过期被 keep 滤掉，否则 ④ 假绿成「无可验证证据路径」。
 const host = makeHost(
   {
     summary: { enabled: true, provider: "p", model: "m" },
@@ -93,18 +95,21 @@ const host = makeHost(
     llmRecall: { enabled: true, provider: "p", model: "m" },
     projectionStore: { enabled: true },
     knowledgeEngine: { enabled: true, llmNavigate: { enabled: true, provider: "p", model: "m" } },
+    forget: { enabled: false },
   },
   [{ rel: `${WS}/.shadow/2026-09-08/2026-09-08--100000-a.md`, text: "# src/auth/JwtFilter.java\n\n> 完整线索\n> 背景/材料：D:/ws/src/missing.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/auth/JwtFilter.java] alpha JWT 校验\n" }],
 );
 const rTopic = await host.read({ topic: "JwtFilter", max_tokens: 4096 });
-assert.ok(rTopic.includes("JwtFilter"), `缺 llm 时仍应召回：\n${rTopic}`);
+// 勿只 assert includes("JwtFilter")：无匹配文案也会回显主题词（假绿）。
+assert.ok(rTopic.includes("JwtFilter.java") || rTopic.includes("alpha JWT"), `缺 llm 时仍应召回正文：\n${rTopic}`);
+assert.ok(!/未找到与「JwtFilter」相关的记忆/.test(rTopic), "不得落成无匹配说明");
 assert.ok(!rTopic.startsWith("ERR"), "缺 llm 不应报错");
 const rIndex = await host.read({});
 assert.ok(rIndex.length > 0 && !rIndex.startsWith("ERR"), "缺 llm 时读索引仍可用");
 const rKnowledge = await host.read({ mode: "knowledge", topic: "JwtFilter" });
 assert.ok(!rKnowledge.startsWith("ERR") && rKnowledge.length > 0, "缺 llm 时 knowledge 模式仍走确定性路径");
 const rRecall = await host.read({ mode: "recovery", topic: "JwtFilter" });
-assert.ok(rRecall.includes("JwtFilter"), `缺 llm 时恢复包仍应命中：\n${rRecall}`);
+assert.ok(rRecall.includes("JwtFilter.java") || rRecall.includes("alpha JWT"), `缺 llm 时恢复包仍应命中：\n${rRecall}`);
 console.log("✔ ③ 全增强打开 + llm 缺失：topic/index/knowledge/recall 全部走确定性路径且不抛错");
 
 // ── ④ 证据校验：缺件只报事实（not_found），不冒充 verified ──

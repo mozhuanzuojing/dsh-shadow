@@ -8,7 +8,7 @@
 
 ## Context
 
-ADR-0063 用真语料量出：主题召回路径（`query/query.ts:263-296`，**不做 kind 过滤**）看得见 **100%** 的库，
+ADR-0063 用真语料量出：主题召回路径（`query/topic-recall.ts（主题召回不做 kind 过滤）`，**不做 kind 过滤**）看得见 **100%** 的库，
 而 `shadow_query` 路径（`deriveShadowNodes` → `validateAtomProjection`）只看得见 **32.8%**
 —— **同一份语料，两条读路径可见性相差 67.2%**。根因是 `deriveAtomKind` 拿
 `entry === "shadow"`（**写侧兜底字面量**，语义是「没识别出组件」）当「会话元数据」的代理。

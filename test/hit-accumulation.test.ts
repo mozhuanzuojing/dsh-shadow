@@ -9,8 +9,9 @@
 //   ② 即便 tier 是 L1/L2，还要该次预算够展开片段（`budgetChars >= out.length + 30`）才会进集合。
 // 实测佐证：本机 7000+ 条记忆、多次召回之后 `.shadow/_meta.json` **仍不存在**。
 //
-// 语义：`hits` 在文档里的定义是「召回**命中数**」（README「记忆遗忘」节：hotness = 命中数 × 半衰期衰减），
-// 被返回一条记忆就是一次命中 —— 与「是否展开了片段」无关。故累积应基于 `servedRels`（**每条被返回的**）。
+// 语义：`hits` =「被任何返回 Memory Atom 的读入口读过」（D7=②，v1.20.6）。
+//   写入只经 `core/served-hits.ts` 的 `recordServedHits`；主题召回基于 servedRels，
+//   recovery / mode:"query" 等亦同（见本文件 ⑤⑥）。
 import assert from "node:assert/strict";
 import * as mod from "../dist/index.js";
 const { apply, name, inject } = mod;
@@ -119,6 +120,51 @@ P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false
   assert.equal(meta[".shadow/2026-09-07/2026-09-07--100001-miss.md"], undefined,
     "**未命中/未返回**的记忆不得被记 hits（hits 是「被返回」，不是「被扫描」）");
   console.log("✔ ④ 不变量：只记「被返回」的记忆，未返回者不记（不是「凡候选即命中」）");
+}
+
+// ── ⑤ D7=②：mode:"recovery" 也累积 hits ──
+{
+  toolRegistry.clear();
+  const store = new Map<string, string>();
+  const { m, agent, ctx } = mkCtx(store);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
+  const T = agent("T4");
+  const BODY =
+    "# Todo清理\n\n> 完整线索\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T4\n> 目标：清理 Todo\n\n" +
+    "> 用户提示/决策：〔selection〕采用清理方案\n\n" +
+    "- [10:00:00] 用户：清理 Todo\n" +
+    "- [10:00:01] [Todo清理] 改/读 todo.md\n" +
+    "- [10:00:02] 决定 采用清理方案\n";
+  const rel = ".shadow/2026-09-07/2026-09-07--120000-todo.md";
+  m.set(`${WS}/${rel}`, BODY);
+  const rs = toolRegistry.get("read_shadow");
+  const out = String(await rs.execute({ mode: "recovery", topic: "Todo" }, { agent: T }));
+  assert.ok(out.includes("Todo") || out.includes("记忆恢复"), `recovery 应产出恢复包；实际前 200 字：${out.slice(0, 200)}`);
+  const meta = JSON.parse(store.get(`${WS}/.shadow/_meta.json`) || "{}");
+  assert.ok(meta[rel] && Number(meta[rel].hits) >= 1, `D7=② recovery 应记 hits；实际 ${JSON.stringify(meta[rel])}`);
+  console.log("✔ ⑤ D7=②：mode:\"recovery\" 返回任务记忆后累积 hits");
+}
+
+// ── ⑥ D7=②：mode:"query"（shadow_query）也累积 hits ──
+{
+  toolRegistry.clear();
+  const store = new Map<string, string>();
+  const { m, agent, ctx } = mkCtx(store);
+  const P = { name, inject, apply };
+  P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
+  const T = agent("T5");
+  const BODY =
+    "# oauth-fix\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n" +
+    "- [10:00:00] [oauth-fix] 改/读 oauth.ts\n\n分析 OAuth 刷新边界。\n";
+  const rel = ".shadow/2026-09-07/2026-09-07--130000-oauth.md";
+  m.set(`${WS}/${rel}`, BODY);
+  const rs = toolRegistry.get("read_shadow");
+  const out = String(await rs.execute({ mode: "query", topic: "oauth" }, { agent: T }));
+  assert.ok(out.length > 20, "shadow_query 应有输出");
+  const meta = JSON.parse(store.get(`${WS}/.shadow/_meta.json`) || "{}");
+  assert.ok(meta[rel] && Number(meta[rel].hits) >= 1, `D7=② query 应记 hits；实际 ${JSON.stringify(meta[rel])}`);
+  console.log("✔ ⑥ D7=②：mode:\"query\" 返回 ShadowNode 后累积 hits");
 }
 
 console.log("");

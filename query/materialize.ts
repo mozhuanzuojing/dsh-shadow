@@ -2,13 +2,16 @@
 // 历史摩擦：query.ts 里这段被复制粘贴 7–12 次（listMemories/readMeta/readRel/parseMemory/isForgettable/isCompacted ×N）。
 // 本模块把它集中为一处（locality），供所有「读记忆的查询」复用，消除副本。
 //
+// **消费者**：ReadQuery 各 mode handler（`query/reads.ts`）**以及**默认主题召回
+// （`query/query.ts` → `topic-recall` / topic 透镜）—— 活跃 Memory Atom 集只经本 seam。
+//
 // T17-B（`adr/0095` 一期，(c1) 落点）：本模块是**唯一**的物化收敛点，所以「候选从哪来」在这里换成
 // `CandidateProvider`（`core/candidate-provider.ts`）：`fs` provider 与今天逐字等价，`sqlite` provider
 // 从派生索引取候选。**派生 / 门 / 打分 / 渲染全不动** —— 换的只是「字段从哪来」（文件 → 索引列）。
 //
 // 两条纪律：
 //   · **遗忘/收口的判据只有这一份实现**（下面的 `keep`），provider 只接收它、不复制它（判据收一处）；
-//   · **降级必须可见**（D7）：provider 落到 `unavailable`/`corrupt`/`query-error` ⇒ 本次回退 `fs`
+//   · **降级必须可见**（ADR-0049）：provider 落到 `unavailable`/`corrupt`/`query-error` ⇒ 本次回退 `fs`
 //     全量（结果不变）并经 `opts.note` 留一条横幅；健康路径**一次都不留痕**（输出逐字节不变）。
 import { readMeta } from "../persistence/meta.js";
 import { isForgettable, isCompacted } from "../core/forget.js";

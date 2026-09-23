@@ -36,7 +36,7 @@ if (servedRels.length) {                 // 原为 servedDetail
 }
 ```
 
-`servedRels` 在同一循环里对**每个真正进入输出的记忆**入栈（`query/query.ts:363`），与「是否展开片段」无关。
+`servedRels` 在同一循环里对**每个真正进入输出的记忆**入栈（`query/topic-recall.ts 的 `servedRels``），与「是否展开片段」无关。
 
 ### 2. 语义依据：`hits` 的定义是「召回命中数」，不是「展开片段数」
 
@@ -97,4 +97,12 @@ AssertionError: 被返回的记忆必须在 _meta.json 里有记录（hits 是�
 - [x] `npx tsc --noEmit` clean；全套回归 **33/33**（32 + 新增 1）。
 - [ ] **未验证**：本次改动**尚未在运行进程生效**（插件 `dist/` 不热加载，见 ADR-0057），
       真机上 `.shadow/_meta.json` 是否如期出现须**再重启一次**后复核。
-- [ ] **未做**：`_meta.json` 的增长上限；`hits` 在其它读入口的一致性（D7）。
+- [ ] **未做（当时）**：`_meta.json` 的增长上限；`hits` 在其它读入口的一致性（D7）。
+
+## 补记（v1.20.6）
+
+- **D7 结案**：用户选 **②** —— 凡返回 Memory Atom 的读入口都记 `hits`（含探测性 `shadow_query`）。
+- **写入收敛**：`core/served-hits.ts` 的 `recordServedHits` 为唯一生产写入点；主题召回迁至
+  `query/topic-recall.ts`，ReadQuery 各 handler 在返回具体 rel 后调用。
+- **测试**：`test/hit-accumulation.test.ts` ⑤ recovery · ⑥ query。
+- **不改正文**：上文「只在主题召回路径累积 / 立 D7」是 v1.15.24 的历史口径，保留作归档。

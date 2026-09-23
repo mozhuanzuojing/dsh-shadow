@@ -8,7 +8,7 @@ import {
 import type { ParsedMemory } from "../core/episode.js";
 import { deriveTasks, renderTasks } from "../core/task.js";
 import { deriveContextReferences, renderContextRefs } from "../core/context.js";
-import { renderRecovery, renderRecoveryFor } from "../core/recall.js";
+import { renderRecovery, renderRecoveryFor, bestTask } from "../core/recall.js";
 import { createIndexEngine } from "../core/index-engine.js";
 import { unavailableHint } from "../core/toolset.js";
 import { surveyCapabilities, renderSurvey, installCapability, renderInstall, precheckCapabilities, renderPrecheck, type SurveyOptions } from "../core/toolset-exec.js";
@@ -25,6 +25,11 @@ import { recordQueryObservation, evidenceBreakdownOf } from "./observatory.js";
 import { materializeAtoms } from "./materialize.js";
 import { today, stamp, RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
+import { recordServedHits } from "../core/served-hits.js";
+import {
+  attributeOutcomes, outcomeReadout, renderOutcomeReadout,
+  type DecisionRecord,
+} from "../core/decision-outcome.js";
 
 export interface ReadCtx {
   fs: any;
@@ -45,7 +50,7 @@ export interface ReadQuery {
 
 /**
  * 7 个 `materializeAtoms` 调用点共用的第 4 参（T17-B）：
- *   · `note`  —— D7 降级留痕（`deps.noteDegrade`，写进同一个能力降级台账 ⇒ 由 `getFlushWarn()` 渲染成横幅）；
+ *   · `note`  —— 降级留痕（`deps.noteDegrade`，写进同一个能力降级台账 ⇒ 由 `getFlushWarn()` 渲染成横幅）；
  *   · `writable` / `dirtyRels` / `clearDirty` —— D13 可写吗 + D6 门③ 写侧精确信号。
  * 收敛成一处，免得同一件事在 7 个调用点各写一遍（本仓「判据收一处」）。
  */
@@ -56,6 +61,41 @@ const matOpts = (deps: any, ctx: ReadCtx) => ({
   clearDirty: ctx.clearDirty,
 });
 
+/** D7=②：凡返回具体记忆 rel 的 mode 都记 hits（不计 toolset / index 等无 Atom 出口）。 */
+const noteAtomHits = async (ctx: ReadCtx, rels: readonly string[]) => {
+  await recordServedHits(ctx.fs, ctx.ws, rels, {
+    observerId: ctx.agent?.id ? String(ctx.agent.id) : undefined,
+  });
+};
+
+/** Decision Lineage → DecisionRecord（显式 key=entry；无观测时 readout 仍可见 pending）。 */
+const decisionRecordsOf = (dl: ReturnType<typeof deriveDecisions>): DecisionRecord[] => {
+  const out: DecisionRecord[] = [];
+  for (const key of Object.keys(dl.byEntry)) {
+    for (const d of dl.byEntry[key]) {
+      const at = d.at.includes("T") ? d.at : d.at.replace(" ", "T");
+      out.push({
+        id: `${d.rel}@${d.at}`,
+        key,
+        at,
+        action: d.statement || d.text,
+        rationale: d.reason || undefined,
+      });
+    }
+  }
+  return out;
+};
+
+const appendOutcomeReadout = (dl: ReturnType<typeof deriveDecisions>): string => {
+  const decisions = decisionRecordsOf(dl);
+  if (!decisions.length) return "";
+  const windowDays = 30;
+  const result = attributeOutcomes({ decisions, observations: [], windowDays });
+  const readout = outcomeReadout({ decisions, result }, today());
+  return "\n\n## Outcome（归属读数 · same-key-window/v1）\n> 本回合无外部 OutcomeObservation 输入 ⇒ 观测侧为空；数字只反映决策侧与窗内归属。\n"
+    + renderOutcomeReadout(readout);
+};
+
 // ── episode / decision：连续任务关系层 + 决策血统 ──
 const episodeDecision: ReadQuery = {
   modes: ["episode", "decision"],
@@ -63,14 +103,21 @@ const episodeDecision: ReadQuery = {
     const { fs, ws, flushWarn } = ctx;
     const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
     if (String(args?.mode) === "episode") {
-      // T8-B（v1.15.64）：此处原先自己算了一遍 `Math.max(0, Number(...) || 60)` —— 与
-      // `core/writer-core.ts` 和 `core/episode.ts` 三处口径分叉，且都吞显式 0。
-      // 默认值现只在 `deriveEpisodes` 里落一处，本处**原样传配置**。
       const eps = deriveEpisodes(parsed, { gapMinutes: deps.config.episodes?.gapMinutes });
-      return scrubFinal(RECALL_PREFIX + renderEpisodes(eps, String(args?.topic || "").trim()) + flushWarn);
+      const topic = String(args?.topic || "").trim();
+      const body = renderEpisodes(eps, topic);
+      const needle = topic.toLowerCase();
+      const shown = needle
+        ? eps.filter((e) => [e.title, e.objective, ...e.entries, ...e.materials, ...e.decisions.map((d) => d.text), ...e.actions.map((a) => a.text)].join(" ").toLowerCase().includes(needle))
+        : eps;
+      await noteAtomHits(ctx, shown.flatMap((e) => e.memoryRefs));
+      return scrubFinal(RECALL_PREFIX + body + flushWarn);
     }
     const dl = deriveDecisions(parsed, { topic: String(args?.topic || "").trim(), entry: String(args?.entry || "").trim() });
-    return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + flushWarn);
+    const rels: string[] = [];
+    for (const k of Object.keys(dl.byEntry)) for (const d of dl.byEntry[k]) rels.push(d.rel);
+    await noteAtomHits(ctx, rels);
+    return scrubFinal(RECALL_PREFIX + renderDecisions(dl) + appendOutcomeReadout(dl) + flushWarn);
   },
 };
 
@@ -81,7 +128,14 @@ const task: ReadQuery = {
     const { fs, ws, flushWarn } = ctx;
     const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
     const tasks = deriveTasks(parsed);
-    return scrubFinal(RECALL_PREFIX + renderTasks(tasks, String(args?.topic || "").trim()) + flushWarn);
+    const topic = String(args?.topic || "").trim();
+    const body = renderTasks(tasks, topic);
+    const needle = topic.toLowerCase();
+    const shown = needle
+      ? tasks.filter((t) => [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.outcomes, ...t.evidence].join(" ").toLowerCase().includes(needle))
+      : tasks;
+    await noteAtomHits(ctx, shown.flatMap((t) => t.memoryRefs));
+    return scrubFinal(RECALL_PREFIX + body + flushWarn);
   },
 };
 
@@ -93,7 +147,14 @@ const context: ReadQuery = {
     const { parsed } = await materializeAtoms(fs, ws, deps.config, matOpts(deps, ctx));
     const mappings = (deps.config.context && deps.config.context.mappings) || [];
     const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
-    return scrubFinal(RECALL_PREFIX + renderContextRefs(refs, String(args?.topic || "").trim()) + flushWarn);
+    const topic = String(args?.topic || "").trim();
+    const body = renderContextRefs(refs, topic);
+    const needle = topic.toLowerCase();
+    const shown = needle
+      ? refs.filter((r) => `${r.subject} ${r.value}`.toLowerCase().includes(needle))
+      : refs;
+    await noteAtomHits(ctx, shown.flatMap((r) => r.source));
+    return scrubFinal(RECALL_PREFIX + body + flushWarn);
   },
 };
 
@@ -110,14 +171,22 @@ const recovery: ReadQuery = {
     const mappings = (deps.config.context && deps.config.context.mappings) || [];
     const refs = await deriveContextReferences(parsed, deps.verifyEvidence, { fs, ws }, mappings);
     const llmCfg = deps.config.llmRecall ?? {};
+    const topic = String(args?.topic || "").trim();
     let out: string;
+    let chosen = bestTask(tasks, topic);
     if (llmCfg.enabled === true && deps.recallSelect) {
       const candidates = tasks.map((t, i) => ({ id: String(i), title: t.title, objective: t.objective, summary: (t.decisions[0] && t.decisions[0].text) || t.outcomes[0] || "" }));
-      const idx = await deps.recallSelect(String(args?.topic || "").trim(), candidates);
-      out = (idx.length && idx[0] < tasks.length) ? renderRecoveryFor(String(args?.topic || "").trim(), tasks[idx[0]], refs) : renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+      const idx = await deps.recallSelect(topic, candidates);
+      if (idx.length && idx[0] < tasks.length) {
+        chosen = tasks[idx[0]];
+        out = renderRecoveryFor(topic, chosen, refs);
+      } else {
+        out = renderRecovery(topic, tasks, refs);
+      }
     } else {
-      out = renderRecovery(String(args?.topic || "").trim(), tasks, refs);
+      out = renderRecovery(topic, tasks, refs);
     }
+    await noteAtomHits(ctx, chosen ? chosen.memoryRefs : []);
     return scrubFinal(RECALL_PREFIX + out + flushWarn);
   },
 };
@@ -175,6 +244,8 @@ const shadowQuery: ReadQuery = {
     if (!obs.ok && obs.reason && fs && ws && deps.config?.queryLog?.enabled !== false) {
       deps.noteDegrade?.("queryLog", `观测记录写入失败（${obs.reason}）`, "查询观测数据**丢失**：`mode:\"query-log\"` 的统计建立在被削过的样本上，而它只显示「尚无记录」，与「从没查过」不可区分");
     }
+    // D7=②：返回的 ShadowNode.source（记忆 Atom / 资源卡路径）都记一次 hits。
+    await noteAtomHits(ctx, items.map((it) => it.source).filter(Boolean));
     return scrubFinal(RECALL_PREFIX + renderShadowContext(topicQ, items) + truncNote + flushWarn);
   },
 };

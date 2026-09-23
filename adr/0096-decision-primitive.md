@@ -293,7 +293,7 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
    也不产出 `dist/`**（实测：`outDir: "dist"` + `rootDir: "."`，且**被显式 include 的无消费者文件都有产物**
    —— `dist/core/decision-outcome.js` · `dist/core/polarity.js` 均在）；而 `test:all` = **先 build 再测**、
    测试 import 的是 `dist/` ⇒ **不加 include，测试连 `import` 都失败，且报错指向「文件不存在」而不是「类型错」**
-   （会把人往错方向带）。加完必须提交重建的 `dist/`。
+   （会把人往错方向带）。加完必须本地 `npm run build`（v1.20.6 起 `dist/` **不进 git**，但工作树要有产物）。
    **失败形态已实测**（把 `decision/**/*.ts` 从 `include` 去掉再跑）：`npm run build` → **`exit 0`、零报错**
    （**静默不检查**）、`dist/decision` **不重建**、测试死在
    `ERR_MODULE_NOT_FOUND: Cannot find module '…\dist\decision\guard.js'` ——

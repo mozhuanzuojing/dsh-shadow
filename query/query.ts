@@ -1,14 +1,9 @@
-// dsh-shadow —— query/query.ts：read_shadow 执行主体（多模式分派 + 召回管线）。从 index.ts 迁出。
-// 依赖经 ShadowQueryDeps 注入（闭包型 verifyEvidence/expandTerms + 服务/配置/状态）；领域模块函数直接 import。
-import { SHADOW_ROOT } from "../core/paths.js";
+// dsh-shadow —— query/query.ts：read_shadow 路由（废止检查 + 各 seam 串接）。
+// 领域管线已迁出：ReadQuery / family runners / lenses / topic-recall / index-budget。
+// 活跃 Memory Atom 集只经 materializeAtoms；hits 只经 core/served-hits。
 import type { AgentLike } from "../core/types.js";
 import { resolveWorkspace } from "../core/scope.js";
-import { readRel, listMemories } from "../persistence/files.js";
-import { readMeta, mutateMeta } from "../persistence/meta.js";
-import { readAuditStream, renderAuditStreamDiag } from "../persistence/audit-stream.js";
-import { readLedger, writeLedger, type LedgerRead } from "../retrieval/ledger.js";
-import { tokenize, today, ageDaysOf, RECALL_PREFIX, parseAsOf, onByDefault } from "../core/util.js";
-import { scoreMemory, breakdownOf, tierFor, approxEntries, deprioritizeFactor } from "../retrieval/rank.js";
+import { tokenize, RECALL_PREFIX } from "../core/util.js";
 import { dispatchReadQuery } from "./reads.js";
 import { runContVerify } from "./contverify.js";
 import { runObserverKernel } from "./observer-kernel.js";
@@ -23,29 +18,14 @@ import { runDelegation } from "./delegation.js";
 import { runRecall } from "./recall.js";
 import { runAdaptation } from "./adaptation.js";
 import { runHorizon } from "./horizon.js";
-import { isForgettable, isCompacted } from "../core/forget.js";
-import { renderByTier, noMatchText, truncationNote, renderIndexBudgeted } from "../retrieval/render.js";
-import { excerptWorthwhile, tierLossNote } from "../retrieval/loss.js";
-import { evidenceOf, provenanceText, newestByEntryOf, verdictOf, conflictOf, lessonOf, lineageOf, EVIDENCE_PATH_CAP } from "../observer/arbitrate.js";
-import { evidencePathsOf, isPathLike, isConcreteLocator } from "../evidence/paths.js";
-import { lifecycleOf, hotnessOf } from "../core/lifecycle.js";
-import { unavailableHint } from "../core/toolset.js";
-import { kgTrace } from "../observer/observer.js";
-import { readSoul, soulText } from "../soul/soul.js";
-import { readIdentity, renderIdentity } from "../soul/identity.js";
-import { observerContextOf, renderObserverContext } from "../observer/core.js";
-import { readObserverState } from "../observer/state.js";
-import { recordObservationTrace } from "../observer/trace.js";
-import { tasteOf, renderTaste } from "../soul/taste.js";
-import { experienceOf, renderExperience } from "../core/experience.js";
-import { judgmentOf, renderJudgment } from "../core/judgment.js";
-import { projectContext, renderProjection } from "../observer/projection.js";
-import { judgmentOfClaim, renderJudgments, claimOf } from "../observer/judgment.js";
-import { scrubFinal, scrubUnsafe } from "../security/scrub.js";
+import { runBoolLenses, runTopicLenses } from "./lenses.js";
+import { runTopicRecall } from "./topic-recall.js";
+import { runIndexBudget } from "./index-budget.js";
+import { materializeAtoms } from "./materialize.js";
+import { scrubFinal } from "../security/scrub.js";
 import type { ShadowQueryDeps } from "./types.js";
 
-/** ADR-0050：废止旧名 → 正名。命中则早退，禁止落空进默认召回。
- *  工具名 recall_shadow 仍合法（内部 mode:recovery）；废止的是 mode:"recall" 整串，不是工具。 */
+/** ADR-0050：废止旧名 → 正名。命中则早退，禁止落空进默认召回。 */
 const RETIRED_MODES: Record<string, string> = {
   recall: "recovery",
   identity: "identity-advance",
@@ -67,6 +47,15 @@ export function retiredApiMessage(args: any): string | null {
   return null;
 }
 
+const matOptsFrom = (deps: ShadowQueryDeps, ws: string) => ({
+  note: deps.noteDegrade,
+  writable: deps.derivedIndexWritable !== false,
+  dirtyRels: deps.derivedIndexDirty?.(ws),
+  clearDirty: deps.derivedIndexClearDirty
+    ? (rels: Iterable<string>) => deps.derivedIndexClearDirty!(ws, rels)
+    : undefined,
+});
+
 export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any): Promise<string> {
   const agent: AgentLike | undefined = exec?.agent;
   const ws = resolveWorkspace(agent, deps.cwdBySession, deps.config);
@@ -76,39 +65,33 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   const flushWarn = deps.getFlushWarn();
   const retired = retiredApiMessage(args);
   if (retired) return scrubFinal(RECALL_PREFIX + retired + flushWarn);
-  // 候选 1 深 seam：把「读概念」路由到 query/reads.ts 的 ReadQuery 模块（先接 shadow_query，其余同类继续迁）。
-  // T17-B（D6 门③/D13）：物化还要知道「本会话可写吗」与「写侧已知变更的 rel」——
-  //   · `writable`：只读会话 ⇒ 派生索引不落盘、直接回退 fs（唯一那处绕过围栏的写必须由策略把关）；
-  //   · `dirtyRels`：`patchSummary` 这类**原地改写**目录令牌看不见 ⇒ 只能靠写侧标脏兜住；
-  //   · `clearDirty`：**只有成功并入索引后才允许消费**（回退路径保留 ⇒ 变更不丢）。
-  const viaRead = await dispatchReadQuery(deps, args, exec, {
+
+  const readCtx = {
     fs, ws, flushWarn, agent,
     writable: deps.derivedIndexWritable !== false,
     dirtyRels: deps.derivedIndexDirty?.(ws),
-    clearDirty: deps.derivedIndexClearDirty ? (rels: Iterable<string>) => deps.derivedIndexClearDirty!(ws, rels) : undefined,
-  });
+    clearDirty: deps.derivedIndexClearDirty
+      ? (rels: Iterable<string>) => deps.derivedIndexClearDirty!(ws, rels)
+      : undefined,
+  };
+
+  const viaRead = await dispatchReadQuery(deps, args, exec, readCtx);
   if (viaRead !== undefined) return viaRead;
-  // v0.24–v0.27 observer-kernel（reflection/identity-advance/temporal/offline）与 v0.28 validation
-  // （evidence/validate/timeline）已迁入 query/observer-kernel.ts / query/validation.ts。
+
   const viaObserverKernel = await runObserverKernel(deps, args, { fs, ws, flushWarn, agent });
   if (viaObserverKernel !== undefined) return viaObserverKernel;
   const viaValidation = await runValidation(deps, args, { fs, ws, flushWarn });
   if (viaValidation !== undefined) return viaValidation;
-  // v0.28.1–v0.31 federation（Epistemic Kernel）+ reality-model（Reality Model Kernel）+
-  // world（World Representation Kernel）三族已迁入 query/federation.ts / reality-model.ts / world.ts。
   const viaFederation = await runFederation(deps, args, { fs, ws, flushWarn, agent });
   if (viaFederation !== undefined) return viaFederation;
   const viaRealityModel = await runRealityModel(deps, args, { fs, ws, flushWarn });
   if (viaRealityModel !== undefined) return viaRealityModel;
   const viaWorld = await runWorld(deps, args, { fs, ws, flushWarn });
   if (viaWorld !== undefined) return viaWorld;
-  // v0.32–v0.34 sim-action（Counterfactual Simulation + Action Boundary）与 planning
-  // （Adaptive Planning）已迁入 query/sim-action.ts / planning.ts。
   const viaSimAction = await runSimAction(deps, args, { fs, ws, flushWarn });
   if (viaSimAction !== undefined) return viaSimAction;
   const viaPlanning = await runPlanning(deps, args, { fs, ws, flushWarn });
   if (viaPlanning !== undefined) return viaPlanning;
-  // v0.35–v0.39 agency/delegation/recall/adaptation/horizon 五族已迁入各自 seam 模块。
   const viaAgency = await runAgency(deps, args, { fs, ws, flushWarn });
   if (viaAgency !== undefined) return viaAgency;
   const viaDelegation = await runDelegation(deps, args, { fs, ws, flushWarn });
@@ -119,399 +102,29 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (viaAdaptation !== undefined) return viaAdaptation;
   const viaHorizon = await runHorizon(deps, args, { fs, ws, flushWarn });
   if (viaHorizon !== undefined) return viaHorizon;
-  // v1.0.1/1.0.2 continuity+verify 族已迁入 query/contverify.ts（Observer Continuity + Runtime Verification 双层边界）。
   const viaContVerify = await runContVerify(deps, args, { fs, ws, flushWarn });
   if (viaContVerify !== undefined) return viaContVerify;
-  const recallCfg = deps.config.recall ?? {};
-  const retentionCfg = deps.config.retention ?? {};
-  if (args?.soul) {
-    const soul = await readSoul(fs, ws);
-    if (!soul) return scrubFinal(RECALL_PREFIX + "（无 Soul 配置：可在 .shadow/soul/soul.json 定义 身份/价值观/原则/品味/边界）" + flushWarn);
-    return scrubFinal(RECALL_PREFIX + soulText(soul) + flushWarn);
-  }
-  if (args?.taste) {
-    const soul = await readSoul(fs, ws);
-    const t = await tasteOf(fs, ws, soul);
-    return scrubFinal(RECALL_PREFIX + renderTaste(t) + flushWarn);
-  }
-  // v0.20 Observer Kernel：Identity 主体锚 + ObserverContext（谁在看/为什么看/从哪层看）。
-  if (args?.identity) {
-    const identity = await readIdentity(fs, ws, agent?.id);
-    return scrubFinal(RECALL_PREFIX + renderIdentity(identity) + flushWarn);
-  }
-  if (args?.context) {
-    const identity = await readIdentity(fs, ws, agent?.id);
-    const soul = await readSoul(fs, ws);
-    const state = await readObserverState(fs, ws, soul, args.state);
-    const ctx = observerContextOf(args, String(args?.topic || "").trim(), identity, agent?.id, state);
-    return scrubFinal(RECALL_PREFIX + renderObserverContext(ctx) + flushWarn);
-  }
+
+  const lensCtx = { fs, ws, flushWarn, agent };
+  const viaBool = await runBoolLenses(deps, args, lensCtx);
+  if (viaBool !== undefined) return viaBool;
+
   const topic = String(args?.topic || "").trim();
-  // v1.15.85：`max_tokens` 提到分支**之前** —— 无参（索引）路径与 topic 路径共用**同一份**预算判据。
-  // 此前只有 topic 路径有预算：无参 `read_shadow()` 把 `_index.md` **整篇原样**返回，而真 `.shadow`
-  // 实测该文件 **2199 KB / 24628 行**（8310 条记忆）⇒ 入口路径被自己的索引压死。
   const maxTokens = Math.max(256, Math.min(8000, Number(args?.max_tokens) || 1600));
   const maxChars = maxTokens * 4;
-  if (!topic) {
-    await deps.ensureIndex(ws, agent?.session); // 索引懒构建：flush 只置 dirty，这里真正读索引时才构建/落盘。
-    const idx = await readRel(fs, ws, `${SHADOW_ROOT}/_index.md`);
-    // 预算内 ⇒ 原样返回（零多余文字）；超预算 ⇒ 按 `## ` 小节装 + **按段名披露**丢掉的段。
-    return scrubFinal(RECALL_PREFIX + (renderIndexBudgeted(idx, maxChars) || "（暂无 shadow 索引）") + flushWarn);
-  }
-  const limit = Math.max(1, Math.min(30, Number(args?.limit) || 10));
-  let memories = await listMemories(fs, ws);
-  const debugMode = recallCfg.debug === true || Boolean(args?.debug);
-  const diag: string[] = [];
-  const asOf = parseAsOf(args?.asOf);
-  const observerMode = Boolean(args?.observer);
-  if (asOf) memories = memories.filter((m: any) => m.date <= asOf.date);
-  if (debugMode) diag.push(`候选 ${memories.length}${asOf ? ` · asOf<=${asOf.date}` : ""}`);
-  // v1.19.1（adr/0097 T21）：审计流**只进 debug 诊断**（绝不进召回正文）——
-  // 让「降级进审计流的那些动作与材料」至少可见、可查；读失败时说清**原因**（缺件不静默，ADR-0049）。
-  if (debugMode) diag.push(renderAuditStreamDiag(await readAuditStream(fs, ws)));
-  // v0.23 Observation Trace：旁路记录观察轨迹（不影响 recall/排序/答案）；ObserverState 只读取不自动推断。
-  const obsSoul = await readSoul(fs, ws);
-  const obsIdentity = await readIdentity(fs, ws, agent?.id);
-  const obsState = await readObserverState(fs, ws, obsSoul, args.state);
-  const obsCtx = observerContextOf(args, topic, obsIdentity, agent?.id, obsState);
+  if (!topic) return runIndexBudget(deps, lensCtx, maxChars);
+
+  // 活跃集只物化一次：topic 透镜与默认主题召回共用（forget/compact 只经 keep）。
+  const view = await materializeAtoms(fs, ws, deps.config, matOptsFrom(deps, ws));
   let tokens = tokenize(topic);
   if (!tokens.length) tokens = [String(topic).toLowerCase()];
-  if (recallCfg.enabled === true && recallCfg.provider && recallCfg.model) {
+  if (deps.config.recall?.enabled === true && deps.config.recall?.provider && deps.config.recall?.model) {
     const extra = await deps.expandTerms(topic);
     if (extra.length) tokens = Array.from(new Set([...tokens, ...extra]));
   }
-  if (args?.project) {
-    const soul = await readSoul(fs, ws);
-    const identity = await readIdentity(fs, ws, agent?.id);
-    const state = await readObserverState(fs, ws, soul, args.state);
-    const ctx = observerContextOf(args, topic, identity, agent?.id, state);
-    const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
-    const task = `${ctx.intent.goal} ${ctx.intent.question}`.trim() || topic;
-    const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens, identity, ctx.intent);
-    await recordObservationTrace(fs, ws, {
-      observerId: ctx.observerId,
-      createdAt: today(),
-      realityAnchor: ctx.realityAnchor,
-      intent: ctx.intent,
-      projection: { visible: p.visible || [], hidden: p.hidden || [], distortion: p.distortion?.reason ? [p.distortion.reason] : [] },
-      uncertainty: { level: p.unc.length, reasons: p.unc.slice(0, 3) },
-      metadata: { source: "projection" },
-      state: ctx.state,
-    });
-    return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project, ctx) + flushWarn);
-  }
-  if (args?.judgment) {
-    const js = await judgmentOf(fs, ws, memories, topic);
-    return scrubFinal(RECALL_PREFIX + renderJudgment(js) + flushWarn);
-  }
-  if (args?.claim) {
-    const identity = await readIdentity(fs, ws, agent?.id);
-    const ctx = observerContextOf(args, topic, identity, agent?.id);
-    const tokens = tokenize(topic);
-    const js: any[] = [];
-    for (const mm of memories) {
-      let matched = !topic;
-      if (!matched) {
-        const text = await readRel(fs, ws, mm.rel);
-        matched = !!text && tokens.some((t) => `${claimOf(text)} ${mm.rel}`.toLowerCase().includes(t));
-      }
-      if (!matched) continue;
-      const j = await judgmentOfClaim(fs, ws, mm, { observerId: ctx.observerId, lens: ctx.lens, identity }, deps.verifyEvidence);
-      if (j) js.push(j);
-    }
-    return scrubFinal(RECALL_PREFIX + renderJudgments(js) + flushWarn);
-  }
-  if (args?.verifyEvidence) {
-    const texts: any[] = [];
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      const exp = experienceOf(text, mm);
-      const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence}`.toLowerCase();
-      if (tokens.some((t) => hay.includes(t))) texts.push(text);
-    }
-    const rows: string[] = [];
-    const ctx = { fs, ws };
-    // 记下第一处 unavailable 及其 provider/reason：缺件处置要按 provider 给（ADR-0049 延伸）。
-    let unavailableRef: { provider?: string; reason?: string } | undefined;
-    for (const text of texts.slice(0, 3)) {
-      // `isConcreteLocator`（ADR-0059 的判据）：`arbitrate` / `judgment` / `core/context` 三处都有，
-      // 这里原先**漏了** ⇒ glob / git-ref 这类非具体 locator 会被当路径去验，必然 `not_found`，
-      // 于是「同一处证据」在一处算 missing=0、在另一处报 not_found（**判据收一处**，ADR-0063/0070）。
-      for (const p of evidencePathsOf(text).filter(isPathLike).filter(isConcreteLocator).slice(0, 6)) {
-        const r = await deps.verifyEvidence({ path: p, kind: "path" }, ctx);
-        if (r.status === "unavailable" && !unavailableRef) unavailableRef = { provider: r.source, reason: r.provenance?.reason };
-        // 原因也要露出来（此前被吞：真机只看到一句 unavailable，无从排查）。
-        const why = r.provenance?.reason ? ` · reason=${r.provenance.reason}` : "";
-        rows.push(`${r.status}  ${p}  (provider=${r.source} · freshness=${r.freshness} · conf=${r.confidence.toFixed(2)}${why})`);
-      }
-    }
-    const hint = unavailableRef ? unavailableHint(unavailableRef.provider, unavailableRef.reason) : undefined;
-    const body = rows.length ? "\n" + rows.join("\n") : "\n（无可验证证据路径）";
-    return scrubFinal(RECALL_PREFIX + "[Evidence Verify]" + body + (hint ? "\n" + hint : "") + flushWarn);
-  }
-  if (args?.experience) {
-    const matched: any[] = [];            const entryList: any[] = [];
-    for (const mm of memories) {
-      const text = await readRel(fs, ws, mm.rel);
-      if (!text) continue;
-      const exp = experienceOf(text, mm);
-      entryList.push({ entry: exp.situation, date: mm.date, time: mm.time });
-      const hay = `${exp.situation} ${exp.problem} ${exp.decision} ${exp.evidence}`.toLowerCase();
-      if (tokens.some((t) => hay.includes(t))) matched.push({ exp, mm, text });
-    }
-    if (!matched.length) return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)), reason: "Experience 视图（情境/问题/决策/证据）无匹配项" });
-    const newest = newestByEntryOf(entryList);
-    const exps: any[] = [];
-    let capDropped = 0; // 因 `EVIDENCE_PATH_CAP` **未核验**的具体路径数（必须披露，见下）
-    for (const { exp, mm, text } of matched) {
-      const conflict = await conflictOf(fs, ws, text, deps.verifyEvidence);
-      capDropped += conflict.droppedByCap ?? 0;
-      const v = verdictOf(conflict.missing.length, exp.situation, mm.date, mm.time, newest);
-      exp.verdict = v.verdict; exp.outcome = v.outcome; exp.reflection = v.reflection; exp.lesson = lessonOf(v);
-      exps.push(exp);
-    }
-    // **「没查」不得被读成「没问题」**：超过上限的具体路径没有核验，故 verdict 只能代表**前 N 条**。
-    const capNote = capDropped > 0
-      ? `\n\n> ⚠ 另有 **${capDropped}** 条具体路径**未核验**（单条上限 ${EVIDENCE_PATH_CAP} 条）：上面的裁决只覆盖已核验的那些，**不代表**全部证据都在。\n`
-      : "";
-    return scrubFinal(RECALL_PREFIX + exps.map(renderExperience).join("\n\n") + capNote + flushWarn);
-  }
-  const scored: any[] = [];
-  const entryList: any[] = [];
-  const entryLineage = new Map<string, { date: string; time: string; decision: string }[]>();
-  const meta = await readMeta(fs, ws);
-  // 遗忘/收口：forget.enabled 时剔除可遗忘；compacted（收口归档）原子始终移出活跃召回集。
-  const forgetCfgQ = deps.config.forget ?? {};
-  if (Array.isArray(memories)) {
-    memories = memories.filter((mm: any) => !isForgettable(mm.rel, meta, forgetCfgQ) && !isCompacted(meta, mm.rel));
-  }
-  const halfLife = Math.max(0.01, Number(retentionCfg.halfLifeDays) || 7);
-  for (const mm of memories) {
-    const text = await readRel(fs, ws, mm.rel);
-    if (!text) continue;
-    const entry = (text.match(/^# (.+)$/m) || [])[1] || "";
-    entryList.push({ entry, date: mm.date, time: mm.time });
-    const decisionTxt = (text.match(/^> 用户提示\/决策：(.+)$/m) || [])[1] || "";
-    if (!entryLineage.has(entry)) entryLineage.set(entry, []);
-    entryLineage.get(entry)!.push({ date: mm.date, time: mm.time, decision: decisionTxt });
-    const tier = tierFor(text);
-    let score = scoreMemory(text, mm.rel, entry, tokens);
-    const originM = text.match(/^> 来源会话：(.+)$/m);
-    const origin = originM ? scrubUnsafe(originM[1]).trim() : "";
-    const staleDays = Math.max(1, Number(retentionCfg.staleDays) || 7);
-    let stale = ageDaysOf(mm.rel) >= staleDays;
-    if (onByDefault(retentionCfg.enabled)) {   // v1.15.85「默认全开」
-      const rec = meta[mm.rel];
-      if (rec && rec.status && rec.status !== "active" && !rec.pinned) continue;
-      const h = hotnessOf(rec ? rec.hits : 0, ageDaysOf(mm.rel), halfLife);
-      score = score * (0.5 + h * 2);
-      if (rec && rec.status === "stale") stale = true;
-      if (h < 0.15) stale = true;
-    }
-    const dp = deprioritizeFactor(mm.rel, entry, recallCfg.deprioritize);
-    if (score > 0) {
-      const conflict = await conflictOf(fs, ws, text, deps.verifyEvidence);
-      if (conflict.missing.length) { score = score * 0.5; stale = true; }
-      // 只降权、不移除：被 deprioritize 的树仍可搜到，只是排名靠后（借 codegraph 的三态配置）。
-      if (dp !== 1) score = score * dp;
-      const ev: any = evidenceOf(text, mm, meta, stale);
-      ev.conflict = conflict.missing.length;
-      // 上限之外**未核验**的条数一并带出（否则「没查」会被读成「没问题」）。
-      ev.unverifiedByCap = conflict.droppedByCap ?? 0;
-      ev.lifecycle = lifecycleOf(meta[mm.rel], ageDaysOf(mm.rel), conflict.missing.length, stale);
-      scored.push({ mm, text, entry, tier, score, tokens, origin, stale, currentOrigin: agent?.id, provenance: provenanceText(ev), evidence: ev, breakdown: breakdownOf(text, mm.rel, entry, tokens, dp !== 1), deprioritized: dp !== 1, conflict: conflict.missing, observer: observerMode, asOf });
-    }
-  }
-  const newest = newestByEntryOf(entryList);
-  for (const s of scored) {
-    const v = verdictOf(s.evidence.conflict || 0, s.entry, s.mm.date, s.mm.time, newest);
-    s.superseded = v.superseded; s.verdict = v.verdict; s.outcome = v.outcome; s.reflection = v.reflection;
-    if (v.superseded) s.score = s.score * 0.7;
-    // v1.15.18：把读时裁决**回填进生命周期标签**，使其与 `裁决` 一致。
-    // 根因（实测）：`ev.lifecycle` 在上面的**每记忆**循环里就算好了（第 293 行），而 superseded 裁决
-    //   要到**这里**才算得出 —— 它依赖 `newestByEntryOf(entryList)` 这个**跨记忆**视图。
-    //   ⇒ 标签先定死、之后从不回填；同一条记忆会同时显示 `生命周期 NEW · 裁决 superseded`（自相矛盾）。
-    // 为何不持久化：取代是「相对当前可见记忆集」的判断，写进 `_meta.json` 会随可见集变化而失效
-    //   （且 `meta.status === "superseded"` 在生产中从无写入者，见 `core/lifecycle.ts` 注释）。
-    s.evidence.lifecycle = lifecycleOf(meta[s.mm.rel], ageDaysOf(s.mm.rel), s.evidence.conflict || 0, s.stale, v.superseded);
-    s.evidence.verdict = v.verdict; s.evidence.outcome = v.outcome; s.evidence.reflection = v.reflection;
-    s.evidence.lineage = lineageOf(entryLineage.get(s.entry) || []);
-    s.provenance = provenanceText(s.evidence);
-  }
-  scored.sort((a, b) => b.score - a.score || b.mm.date.localeCompare(a.mm.date));
-  if (debugMode) {
-    diag.push(`命中（打分>0）${scored.length}`);
-    const dpr = scored.filter((s) => s.deprioritized).length;
-    if (dpr) diag.push(`降权·deprioritize ${dpr} 条（recall.deprioritize）`);
-  }
-  if (!scored.length) return noMatchText(topic, flushWarn, { approx: approxEntries(topic, entryList.map((e) => e.entry)) }) + (debugMode ? "\n\n" + diag.join("\n") : "");
-  const cooldownTurns = Math.max(0, Number(recallCfg.cooldownTurns) || 0);
-  // v1.15.94：**没有冷却就别读台账**。
-  //
-  // 判据：台账的唯一用途是冷却 —— 读它的 `served` 做冷却判定（下面的 `:351`）、读它的 `turn`
-  // 供写台账时递进（下面的 `writeLedger`）。而**写**那一步本来就被 `cooldownTurns > 0` 门住
-  // （下面的 `if (cooldownTurns > 0 && servedDetail.length)`）；`recall.cooldownTurns` 默认**未设 = 0**
-  // ⇒ 默认配置下台账**永远不会被写**，却**每回合被读一次**：在真实 fs 上这一次读必然抛
-  // （文件不存在）⇒ 每回合一条假的「读不到」横幅（修完 `retrieval/ledger.ts` 后这条误报消失，
-  // 但「不用的东西不必读」这笔 I/O 仍应省掉，否则读失败在 0 冷却下会被误当成降级）。
-  //
-  // `turn` 在 `cooldownTurns === 0` 时的**全部**消费者核实过（grep `\bturn\b` 本文件）：
-  //   · `:351` 冷却判定 —— 自带 `cooldownTurns > 0 &&` 前缀，门内；
-  //   · `:424`/`:434` 写台账 —— 门内；
-  //   · `:457` `rec.lastSeen = turn` —— **门外的唯一一处**。它写进 `_meta.json`，而该字段
-  //     **全仓只写不读**（`grep lastSeen`：`core/memory.ts:82` 初始化、本处写；无任何读方），
-  //     且 0 冷却下没有任何写方会产生台账文件 ⇒ 该值在本改动前后**同为 1**。
-  //   ⇒ 0 冷却时 `turn` 取 0，与今天实践中读到的值一致。
-  const ledger: LedgerRead = cooldownTurns > 0
-    ? await readLedger(fs, ws)
-    : { turn: 0, served: {} };
-  // T8-A（v1.15.65，T8 第 5 条）：台账坏件/不可读**必须**可见 —— 两者都会把 `turn` 从 0 重算，
-  // 于是冷却窗口整体作废、**已经冷却过的记忆被重新返回**（这正是 T8 列的后果）。
-  // 上一版留了 `corrupt` 标记却**没有消费者**，等价于没留（标记没人看 = 静默）。
-  // 这两条横幅只在**真的会用到台账**时（`cooldownTurns > 0`）才有意义 —— 0 冷却时台账不参与任何判定。
-  if (cooldownTurns > 0) {
-    if (ledger.corrupt) {
-      deps.noteDegrade?.("recallLedger", "_recall_log.json **坏件**（无法解析或结构不对）", "本次按空台账处理 ⇒ **冷却状态可能失效**：已经冷却过的记忆会被重新返回，`recall.cooldownTurns` 事实上没生效。**另注**：本回合若走到写台账那一步，会把这份坏件**覆盖**掉（其内容已无法解析，但手工抢救的机会同时消失）");
-    } else if (ledger.unreadable) {
-      deps.noteDegrade?.("recallLedger", `_recall_log.json **读不到**（${ledger.error || "原因未知"}）`, "本次按空台账处理且 `turn` 从 0 重算 ⇒ 冷却窗口整体作废，与「第一次运行」不可区分");
-    }
-  }
-  const turn = (ledger.turn || 0) + 1;
-  const available: any[] = [];
-  let cooledCount = 0;
-  for (const s of scored) {
-    const rec = ledger.served && ledger.served[s.mm.rel];
-    const cooled = cooldownTurns > 0 && rec && rec.detail && typeof rec.turn === "number" && turn - rec.turn <= cooldownTurns;
-    if (cooled) { if (debugMode) diag.push(`降权·cooldown ${s.mm.rel}`); cooledCount++; continue; }
-    available.push(s);
-  }
-  if (debugMode) diag.push(`可用（未冷却）${available.length}${cooledCount ? ` · 冷却 ${cooledCount}` : ""}`);
-  if (!available.length) {
-    // 全冷却 ≠ 没找到：给的是「就是这些命中，但都在冷却」，不要把它们标成「近似候选」。
-    const cooledEntries = scored.slice(0, 3).map((s) => s.entry || s.mm.rel);
-    return (
-      noMatchText(topic, flushWarn, {
-        reason: `全部命中都在冷却中（recall.cooldownTurns=${cooldownTurns}，${cooledCount} 条）`,
-        approx: cooledEntries,
-        approxLabel: "冷却中的命中（是命中，不是近似）",
-        steps: `> 下一步：① 等 ${cooldownTurns} 回合后再查（冷却按回合计数）；② 或调低 \`recall.cooldownTurns\`；③ \`read_shadow({debug:true})\` 看完整候选。`,
-      }) + (debugMode ? "\n\n" + diag.join("\n") : "")
-    );
-  }
-  const n = available.length;
-  const parts: string[] = [];
-  // v1.15.89（甲-1 / D9）：**本是够长、却被省略**的条目 —— 披露它们，才能与「本来就短」区分开。
-  const withheld: { rel: string; entry?: string }[] = [];
-  // 恢复句柄 = 该条记忆的路径（+ 入口名）。本仓权威源就是文件 ⇒ **零新增存储**；拿不到 ⇒ null，
-  //   调用点据此**拒绝降档**（不许输出看起来可复取、实际不可复取的有损结果）。
-  const recoverHandleOf = (s: any): { file: string; locator?: string } | null => {
-    const rel = s?.mm?.rel;
-    return rel ? { file: String(rel), locator: s?.entry ? String(s.entry) : undefined } : null;
-  };
-  let used = 0;
-  let droppedByLimit = 0;
-  let droppedByBudget = 0;
-  const servedRels: string[] = [];
-  const servedDetail: string[] = [];
-  for (let i = 0; i < available.length; i++) {
-    const s = available[i];
-    if (parts.length >= limit) { droppedByLimit = available.length - i; break; }
-    const sharedPool = Math.max(0, Math.floor((maxChars - used) / Math.max(1, n)));
-    const cap = Math.max(120, Math.floor((maxChars / n) * 2) + sharedPool);
-    let render = renderByTier(s, cap, false, tokens);
-    if (used + render.length > maxChars) {
-      const degraded = renderByTier(s, cap, true, tokens);
-      // 甲-1：**不许**在没有句柄时降档（有损必须可复取）；甲-2：降档必须**真的更短**（否则白损一层）。
-      const handle = recoverHandleOf(s);
-      if (handle && degraded.length <= render.length) render = degraded;
-      if (used + degraded.length > maxChars) { droppedByBudget = available.length - i; break; }
-    }
-    // 「本是够长、却被省略」才记披露：渲染里**没有片段** 且该条正文**本身够长**
-    //   ⇒ 读侧必须能区分「本来就短」与「被省略」，否则二者在输出上不可区分。
-    if (!render.includes("…") && excerptWorthwhile(s.text)) withheld.push({ rel: s.mm.rel, entry: s.entry });
-    parts.push(render);
-    servedRels.push(s.mm.rel);
-    used += render.length;
-    if (debugMode) {
-      const b = s.breakdown || {};
-      const sc = Math.round(s.score * 10) / 10;
-      diag.push(`返回 ${s.mm.rel} · 命中 ${sc} · 入口${b.entry || 0} 主题${b.topic || 0} 路径${b.path || 0} 正文${b.body || 0}${b.deprioritized ? " · 降权(deprioritize)" : ""}${s.evidence ? ` · 状态${s.evidence.status}` : ""}`);
-    }
-    if (s.tier !== "L0" && render.includes("…")) servedDetail.push(s.mm.rel);
-  }
-  if (debugMode) diag.push(`预算 ${maxChars} 字 · 返回 ${parts.length} 条${droppedByLimit ? ` · limit 截断 ${droppedByLimit}` : ""}${droppedByBudget ? ` · 预算截断 ${droppedByBudget}` : ""}`);
-  // 截断披露（借 PageIndex 的 part/total_parts/has_more）：砍掉的命中要自报家门，不静默丢。
-  const returnedSet = new Set(servedRels);
-  const envelope = truncationNote({
-    matched: scored.length,
-    returned: parts.length,
-    limit,
-    maxChars,
-    droppedByLimit,
-    droppedByBudget,
-    droppedByCooldown: cooledCount,
-    dropped: scored.filter((s) => !returnedSet.has(s.mm.rel)).slice(0, 3).map((s) => ({ entry: s.entry, score: Math.round(s.score * 10) / 10 })),
-  });
-  if (cooldownTurns > 0 && servedDetail.length) {
-    const nextServed = Object.assign({}, ledger.served || {});
-    for (const p of servedDetail) nextServed[p] = { turn, detail: true };
-    for (const k of Object.keys(nextServed)) {
-      if (turn - nextServed[k].turn > cooldownTurns * 4) delete nextServed[k];
-    }
-    const keys = Object.keys(nextServed);
-    if (keys.length > 500) {
-      keys.sort((a, b) => (nextServed[a].turn || 0) - (nextServed[b].turn || 0)).slice(0, keys.length - 500).forEach((k) => delete nextServed[k]);
-    }
-    // T8-A（v1.15.65）：写失败此前返回了 `false` 却**没人看**（调用点丢弃返回值），
-    // 于是「冷却状态没保存」与「本次没有冷却」在读者眼里一样。
-    const ledgerWritten = await writeLedger(fs, ws, { turn, served: nextServed });
-    if (!ledgerWritten) {
-      deps.noteDegrade?.("recallLedger", "_recall_log.json **写失败**", "本次的冷却状态**没有保存**：下回合 `turn` 递进会从头再算，同一条记忆可能被反复返回（`recall.cooldownTurns` 失效）");
-    }
-  }
-  // 命中数累积（v1.15.24 修，ADR-0067）：**必须基于 `servedRels`（每条被返回的），不是 `servedDetail`**。
-  // 根因（实测复现）：`servedDetail` 的定义是 `s.tier !== "L0" && render.includes("…")`
-  //   —— 即「渲染里**展开了片段**」的那些记忆，它本来是给上面的**冷却台账**用的（`detail: true`）。
-  //   拿它来累积命中数，会漏掉两类被返回的记忆：
-  //     ① `tierFor` 对「动作行占比 > 60%」的记忆返回 **L0**（真语料实测 **74.3%**，5342/7185）
-  //        ⇒ 这类记忆**永不可能**命中数 +1；
-  //     ② 即便是 L1/L2，还要该次预算够展开片段（`budgetChars >= out.length + 30`）才进集合。
-  //   实测佐证：本机 7000+ 条记忆、多次召回后 `.shadow/_meta.json` **仍不存在**。
-  // 语义依据：`hits` 在文档里的定义是「召回**命中数**」（README「记忆遗忘」节：hotness = 命中数 × 半衰期衰减），
-  //   被返回一条记忆就是一次命中 —— 与「是否展开了片段」无关。
-  // 收敛锁定：`test/hit-accumulation.test.ts`（含「未返回者不得记 hits」的反向不变量）。
-  if (servedRels.length) {
-    const observer = agent?.id ? String(agent.id) : "";
-    // 走事务（ADR-0068）：读-改-写带版本守卫 + 冲突重试 —— 并发会话/子代理同时召回时不丢命中。
-    await mutateMeta(fs, ws, (next) => {
-      for (const p of servedRels) {
-        const rec = next[p] || { created: today(), hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: "", confirmedBy: [] };
-        rec.hits = (rec.hits || 0) + 1;
-        rec.lastSeen = turn;
-        if (observer) {
-          const cb = Array.isArray(rec.confirmedBy) ? rec.confirmedBy : [];
-          if (observer !== (rec.createdBy || "") && !cb.includes(observer)) { cb.push(observer); rec.confirmedBy = cb.slice(-10); }
-        }
-        next[p] = rec;
-      }
-    });
-  }
-  const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
-  // v1.15.89：分层省略披露（**条内**损失）必须在信封（**条级**损失）之前，两者分开说。
-  // v1.15.91（adr/0092）：这条披露**可关**（`recall.lossDisclosure`，默认为开 —— 判据走 `onByDefault`）。
-  //   关掉只影响「说了什么」，**不影响给了什么**（降档与丢条目的判据与开关无关）。
-  const lossNote = onByDefault(recallCfg.lossDisclosure) ? tierLossNote({ withheld, returned: parts.length }) : "";
-  const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
-  await recordObservationTrace(fs, ws, {
-    observerId: obsCtx.observerId,
-    createdAt: today(),
-    realityAnchor: obsCtx.realityAnchor,
-    intent: obsCtx.intent,
-    projection: { visible: available.slice(0, limit).map((s: any) => s.entry || s.mm?.name || ""), hidden: [], distortion: obsCtx.intent.goal ? [obsCtx.intent.goal] : [] },
-    uncertainty: { level: available.length ? 0 : memories.length, reasons: [] },
-    metadata: { source: "read_shadow" },
-    state: obsCtx.state,
-  });
-  return out;
+
+  const viaTopicLens = await runTopicLenses(deps, args, lensCtx, view, topic, tokens);
+  if (viaTopicLens !== undefined) return viaTopicLens;
+
+  return runTopicRecall(deps, args, lensCtx, view, topic, tokens, maxChars);
 }

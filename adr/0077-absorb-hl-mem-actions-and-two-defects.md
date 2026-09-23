@@ -132,7 +132,7 @@ AssertionError: 工具应报出已知的 status=superseded（本轮确证的无�
 - 读侧（重启后磁盘重扫）：`persistence/files.ts` 从**文件名**反解 `^\d{4}-\d{2}-\d{2}--(\d{6})`，
   而 consolidated 文件名是 `ep-<id>-consolidated.md`（**不含时间戳**）⇒ `time = ""`。
 
-**为什么这不是「显示不准」**：`time` 是**取代裁决**的输入（`query/query.ts:299` → `observer/arbitrate.ts:63`），
+**为什么这不是「显示不准」**：`time` 是**取代裁决**的输入（`query/topic-recall.ts（取代裁决输入 `time`）` → `observer/arbitrate.ts:63`），
 裁决决定打分（×0.7，`:301`）与生命周期标签（`:308`）。`arbitrate.ts:63` 是**严格** `t < newest` ⇒
 两个**同日同 `entry`** 的 consolidated 文件在磁盘路径上**并列**，谁都不被判取代 —— 而较早的那个**应当**被取代。
 ⇒ 同一份语料，**本进程与重启后给出不同裁决**。
@@ -151,7 +151,7 @@ AssertionError: 工具应报出已知的 status=superseded（本轮确证的无�
 
 **根因（可核对，非推断）**：
 
-1. `query/query.ts:276`：`stale = ageDaysOf(rel) >= staleDays`，`staleDays` 默认 **7**；
+1. `query/topic-recall.ts（`staleDays` 默认）`：`stale = ageDaysOf(rel) >= staleDays`，`staleDays` 默认 **7**；
 2. `core/lifecycle.ts` 里 `if (stale) return "DECAYING"` **排在** `hits>0 → OBSERVED` /
    `confirms>=1 → VERIFIED` / `confirms>=2 → TRUSTED` **之前**；
 3. fixture 硬编码日期 **`2026-09-05`**；
@@ -209,8 +209,8 @@ AssertionError: 工具应报出已知的 status=superseded（本轮确证的无�
 - **`audit:wiring` / `audit:drift` 的报告本身仍未进门禁**（V6 只**部分**接入：自检进了，分诊报告没进）。
 - **棘轮的边界**（测试内已诚实标注）：只核**本仓库源码** —— 别的会话/外部工具直接改 `_meta.json`
   塞入 `pinned: true` 这类**运行时**事实扫不到；`lifecycleOf` 内部的**优先级顺序**也**未**由表表达。
-- **`verify` 会写 `dist/`**（它含 `build`）。这是刻意的：测试 import 的是 `dist/`，不构建就会测到旧产物；
-  但代价是「跑门禁」会改工作区（需在提交前注意 `dist` 状态）。
+- **`verify` 会写本地 `dist/`**（它含 `build`）。这是刻意的：测试 import 的是 `dist/`，不构建就会测到旧产物。
+  v1.20.6 起 `dist/` **不进 git** ⇒ 跑门禁不再把编译产物推进待提交面（只需保证工作树有 `dist/`）。
 - D4.1 的**端到端**（召回渲染里较早的 consolidated 显示为 `裁决 superseded`）**未单独断言**，
   只断言到「文件名 / 磁盘反解 / 裁决函数」这一层（测试内已标注）。
 - 本轮**未**吸收 `historical_predecessor`、冻结语料、成熟度等级（理由见上表）；0073 / 0076 的**不吸收清单不变**。
