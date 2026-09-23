@@ -53,6 +53,11 @@ a host bundle and is always on; this preset only steers how the agent uses it.
 >    hand here, and this preset is a faithful copy of the shipped `standard` preset except for the
 >    persona. Both facts are locked by `test/preset-projection.test.ts`.
 
+> **Change note — v1.20.5: card description compressed.** The picker still clamps to ~90 characters,
+> so `Agent Teams` must stay in the first window — but the long identity→Teams→discipline sentence was
+> too noisy. Description is now a short sentence (`**委派只走 Agent Teams**`；细节见人格). Gate ④a keeps
+> only the front-window `Agent Teams` check; bundle / `maxMembers` detail stays in persona + this README.
+
 > **Change note — v1.20.4: the description now leads with Agent Teams, and persona ⑤ carries the 0.1.7
 > `team:policy` execution rules.** Three findings, all measured:
 > 1. **The picker clamps the description to 4 lines.** `dsh-client-ui-agent-preset` renders the row

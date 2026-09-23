@@ -12,9 +12,10 @@
 //   ③ **忠实性**：预设是 0.1.7 shipped `standard` 的忠实副本（F1），只允许两处有意偏差
 //      （persona 文本、delegation 组）。行清单被逐字锁住：上游漂移 → 本测试红 → 人裁决，
 //      而不是让预设悄悄落后于宿主。
-//   ④ **描述前置 + Team 纪律锚点（v1.20.4）**：预设选择器的卡片把描述**截到 4 行**
+//   ④ **描述前置 + Team 纪律锚点（v1.20.4 / v1.20.5）**：预设选择器的卡片把描述**截到 4 行**
 //      （`dsh-client-ui-agent-preset` 的 `cardDesc { -webkit-line-clamp: 4 }`）⇒ Agent Teams
 //      必须出现在**前置窗口**里，否则「文件里有、界面看不见」（用户 2026-09-23 报的就是这个）；
+//      v1.20.5 起卡片文案压短，④a **不再**要求 description 点名 bundle / maxMembers；
 //      且 persona 必须携带 0.1.7 `team:policy` 的执行口径锚点，掉了就红。
 //
 // ⚠ 为什么行清单是**写死**的：这正是「棘轮」的形态（同 `test/recall-envelope.test.ts` 的
@@ -147,6 +148,7 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
   const src = readFileSync(patchUrl, "utf8");
 
   // ④a 描述：GUI 卡片只显示约 4 行（≈90 字）⇒ Agent Teams 必须落在前置窗口里。
+  // v1.20.5：卡片文案压短 —— 不再要求 description 点名 bundle / maxMembers（细节在 persona / README）。
   const desc = src.match(/^\s*description:\s*(.+)$/m)?.[1] ?? "";
   assert.notEqual(desc, "", "config.description 必须存在且是单行 plain scalar（不得含「冒号+空格」，那会让 YAML 解析直接失败）");
   assert.match(
@@ -154,8 +156,6 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
     /Agent Teams/,
     "④a 描述前 90 字必须出现「Agent Teams」——预设选择器的卡片把描述截到 4 行，写在末尾等于界面上看不见",
   );
-  assert.match(desc, /dsh-experimental-agent-team-profile/, "④a 描述必须点名提供 Teams 的 profile 层 bundle");
-  assert.match(desc, /maxMembers/, "④a 描述必须写「名额随 bundle 出厂值」，别手写一个会腐烂的上限数");
 
   // ④b persona：0.1.7 `team:policy` 的执行口径锚点（上游改口径时要回来核这一份）。
   const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";

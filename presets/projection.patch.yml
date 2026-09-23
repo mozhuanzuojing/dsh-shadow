@@ -16,26 +16,30 @@
 #      the same process fails registering the duplicate `team:policy` section.
 #
 # v1.20.4 adds a third constraint, and it is a **measured** one:
-#   3. the `description` must carry the Agent Teams facts in its FIRST lines.
+#   3. the `description` must put「Agent Teams」in its FIRST ~90 chars.
 #      The preset picker clamps a card description to 4 CSS lines
 #      (`dsh-client-ui-agent-preset` → `cardDesc { -webkit-line-clamp: 4 }`), so a
 #      trailing Teams sentence is invisible in the GUI even though the file has it.
+#      Bundle / maxMembers detail lives in persona + presets/README — not the card.
 #      The same finding drove the persona ⑤ rewrite: it now carries the 0.1.7
 #      `team:policy` execution rules (only-when-the-user-asks gate, disjoint write
 #      scopes, `blocked_by`, `list → get → claim → complete`, readiness never wakes
 #      an owner, FS_STALE_VERSION) instead of only the v1.15.4 subset. Both are
 #      locked by `test/preset-projection.test.ts` ④ — do not relegate them again.
 #
+# v1.20.5: card `description` compressed to a short sentence (Teams still in the
+# first 90 chars); gate ④a no longer requires bundle/maxMembers in description.
+#
 # `test/preset-projection.test.ts` locks all of it: the declaration identity,
 # the invariant that no `tool-subagent*` row may reappear, and the two
-# v1.20.4 description/persona facts above.
+# description/persona facts above (④a front-window Teams; ④b persona anchors).
 - insert:
     - id: preset-projection
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: projection
         name: 投影模式
-        description: 投影模式（= 0.1.7 的 standard 预设）：完整编码 Agent + 独立思维意识体人格。**委派只走 Agent Teams** —— 本预设不挂任何委派行，Team 由 profile 层 bundle `@deepseek-ai/dsh-experimental-agent-team-profile` 提供（9 个 Team 工具；名额随该 bundle 出厂 `maxMembers` = 8，会话终身累计、不可释放、失败也占名额；本组合无 `subagent` 可回落）。人格负责把思维/上下文/决策自动沉淀进 shadow 记忆树（read_shadow / recall_shadow 回望），并带团队纪律：上游 0.1.7 `team:policy` 的「只有用户显式要求才建 teammate」+ 本预设的「默认不派 / 复用优先 / 一次委派一条消息 / ≤2 轮」，加写作用域互不重叠、`blocked_by` 依赖、任务板 list→get→claim→complete、wait_agent 前先 list_agents；另有 ⑥ 契约与根因卫生、⑦ 创意与资源。
+        description: 投影模式：完整编码 Agent + shadow 沉淀。**委派只走 Agent Teams**。细节见人格。
         order: 20
         plugins:
           - id: persona

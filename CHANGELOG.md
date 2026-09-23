@@ -3,6 +3,15 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.5] 投影模式卡片描述再压缩
+
+用户嫌 `description` 啰嗦。只砍卡片文案，**不动 persona**。
+
+- **定稿**：`投影模式：完整编码 Agent + shadow 沉淀。**委派只走 Agent Teams**。细节见人格。`（约 55 字；`Agent Teams` 在第 35 字，仍落在 4 行≈90 字可见窗口内）
+- **改门**：`test/preset-projection.test.ts` ④a 只保留「前 90 字含 Agent Teams」；不再要求 description 点名 `dsh-experimental-agent-team-profile` / `maxMembers`（细节仍在 persona / `presets/README` / ADR-0100）
+- **边界**：ADR-0100 正文不改（可见窗口决策仍成立）；插件运行时零改动
+
+
 ## [v1.20.4] 投影模式的描述前置 Agent Teams + persona 补 0.1.7 `team:policy` 执行口径 + 本机旧副本退役（ADR-0100）
 
 用户指令：「dsh-shadow 里面的投影模式的描述没有更新 agent Team相关内容」。先摆证据再定范围（用户三选全选）：
