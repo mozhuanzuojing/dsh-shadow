@@ -3,6 +3,14 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.10] Node ≥26 + 两类「js」口径钉死
+
+运行时与脚本纪律，**无行为变更**。
+
+- **`engines.node`**：`>=20` → **`>=26`**；新增 [`mise.toml`](./mise.toml) 钉 `node = "26"`。
+- **AGENTS**：区分手写 `.js`/`.mjs`（禁，门抓）与产品面 `from "./foo.js"` 说明符（TS ESM 发射约定，保留）；`tools/` 直跑互引写 `.ts`。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`（Node v26）。
+
 ## [v1.20.9] `core/` 前缀簇收编（writer / knowledge / lineage / candidate / toolset）
 
 导航整理，**无行为变更**（`layerOf` 仍 = `core`；mode / 召回不变）。

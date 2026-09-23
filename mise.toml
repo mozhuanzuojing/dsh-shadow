@@ -1,0 +1,4 @@
+# dsh-shadow —— 本仓运行时钉 Node 26（mise）
+# Cursor 自带的 helper node 可能是更旧的小版本；在本目录开发/跑 verify 请走 mise shim。
+[tools]
+node = "26"
