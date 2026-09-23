@@ -1,4 +1,4 @@
-// dsh-shadow —— temporal/render.ts：Epistemic Render（Temporal 只报观察状态，不报人格）。
+// dsh-shadow —— selfhood/temporal/render.ts：Epistemic Render（Temporal 只报观察状态，不报人格）。
 import type { TemporalNode } from "./types.js";
 
 // 默认：event/perception（可见/隐藏/透镜）。永不输出人格结论（"所以我是怎样的人"）。

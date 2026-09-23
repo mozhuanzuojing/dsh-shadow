@@ -28,13 +28,13 @@ const MANIFEST = join(here, "toolset-authority.json");
 const checkOnly = process.argv.includes("--check");
 
 // 台账从**编译产物**读（与 `tools/winget-verify.ts` 同一做法）：源码是 `.ts`，运行时可加载的是 `dist/`。
-const { CAPABILITIES } = await import("../dist/core/toolset.js");
+const { CAPABILITIES } = await import("../dist/core/toolset/index.js");
 
 type Row = AuthorityRow;
 
 
 const targets = (CAPABILITIES as any[]).filter((c) => c.winget);
-const { probeCapability } = await import("../dist/core/toolset-exec.js");
+const { probeCapability } = await import("../dist/core/toolset/exec.js");
 const rows: Row[] = [];
 const started = new Date().toISOString().slice(0, 10);
 

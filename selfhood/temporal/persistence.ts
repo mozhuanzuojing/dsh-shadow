@@ -1,13 +1,13 @@
-// dsh-shadow —— temporal/persistence.ts：TemporalGraph 持久化（派生索引，可重建）。
+// dsh-shadow —— selfhood/temporal/persistence.ts：TemporalGraph 持久化（派生索引，可重建）。
 //
 // 读取收敛到 `persistence/snapshots.ts` 的 `readLatestSnapshot`（ADR-0071）：
 // 原先本文件与 `world/persistence/persist.ts` 各有一份**逐字近重复**的读取逻辑，且**同带一个顺序 bug**
 // —— 直接取 `listDir` 的**第一个**日期（契约与真机实现都是升序 ⇒ 取到**最旧**的快照）。
 // 收敛后顺序纪律只有一处实现，不会再分叉。
-import { SHADOW_ROOT } from "../core/paths.js";
-import { readLatestSnapshot } from "../persistence/snapshots.js";
+import { SHADOW_ROOT } from "../../core/paths.js";
+import { readLatestSnapshot } from "../../persistence/snapshots.js";
 import type { TemporalGraph } from "./types.js";
-import { today } from "../core/util.js";
+import { today } from "../../core/util.js";
 
 export const writeTemporalGraph = async (fs: any, ws: string, graph: TemporalGraph) => {
   try {

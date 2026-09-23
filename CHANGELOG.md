@@ -3,6 +3,17 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.11] 第四伞 `selfhood` + emit 前必须 clean
+
+导航整理 + 构建纪律，**无行为变更**（mode / 召回 / `.shadow/` 落盘不变）。
+
+- **第四伞**：`selfhood/{identity,dream,temporal}`；`MODE_FAMILY_UMBRELLAS` 含 `selfhood`，`layerOf` 取第二段（与 ADR-0101 同形）。见 ADR-0103。
+- **不收**：`soul` / `observer` / `reflection` 等仍在根上。
+- **`npm run clean` + `build`/`build:watch` 内含 clean**：`tsc` 不删搬家后的旧 `dist/` 幽灵产物；AGENTS 钉「凡会写出 `dist/` 的 tsc 之前必须 clean」。
+  `verify` **开头**先 `build` 一次（工具面/测试面类型门都 import `dist/`，要看见当前产物）。
+- **文档**：CONTEXT 术语；BACKLOG T13 进度 B 勾第四伞已做；当前态活路径随迁；**不改** CHANGELOG 历史条目里的旧路径。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`（或本机带 `.shadow` 的根）。
+
 ## [v1.20.10] Node ≥26 + 两类「js」口径钉死
 
 运行时与脚本纪律，**无行为变更**。

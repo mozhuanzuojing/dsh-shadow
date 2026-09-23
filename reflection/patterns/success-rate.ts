@@ -3,7 +3,7 @@
 import type { ObservationTrace } from "../../core/types.js";
 import type { ReflectionDecisionOutcome } from "../types.js";
 // 「正/负结果」判据**收一处**（ADR-0063/0070）：本文件原有自己的 `POS`/`NEG`，与
-// `validation/validate.ts` / `dream/compress.ts` 的版本**给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false、
+// `validation/validate.ts` / `selfhood/dream/compress.ts` 的版本**给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false、
 // `"unstable"` 因 `includes("stable")` 恰好相反）⇒ 同一份 trace 一处记成功、一处记反例。现统一走 `core/polarity.ts`。
 import { isPositiveOutcome } from "../../core/polarity.js";
 

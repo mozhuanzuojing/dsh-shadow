@@ -66,10 +66,10 @@ export const DIRECTION_RULES = [
 export const FORBIDDEN_TARGETS_EVERYWHERE = ["(root)", "presets"];
 
 /**
- * Mode-family 导航伞（ADR-0101）：只收编顶层平铺，**不是**结构层。
+ * Mode-family / 域导航伞（ADR-0101 · ADR-0103）：只收编顶层平铺，**不是**结构层。
  * `layerOf` 在这些伞下取**第二段**（叶子层名），这样 `DIRECTION_RULES` / 所有权报告语义不变。
  */
-export const MODE_FAMILY_UMBRELLAS = ["stance", "trajectory", "epistemic"] as const;
+export const MODE_FAMILY_UMBRELLAS = ["stance", "trajectory", "epistemic", "selfhood"] as const;
 
 const UMBRELLA_SET = new Set<string>(MODE_FAMILY_UMBRELLAS);
 

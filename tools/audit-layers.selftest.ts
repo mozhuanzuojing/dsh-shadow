@@ -114,6 +114,9 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   assert.equal(layerOf("stance/agency/engine.ts"), "agency", "伞下看第二段（ADR-0101）");
   assert.equal(layerOf("trajectory/long-horizon/engine/x.ts"), "long-horizon");
   assert.equal(layerOf("epistemic/world/builder/x.ts"), "world");
+  assert.equal(layerOf("selfhood/identity/evaluator.ts"), "identity", "第四伞同形（ADR-0103）");
+  assert.equal(layerOf("selfhood/dream/sleep.ts"), "dream");
+  assert.equal(layerOf("selfhood/temporal/builder.ts"), "temporal");
   console.log("✔ ⑥ 说明符分类与层名：裸内建 ≡ node: 内建、包不入结构门、(root)/伞下第二段 正确");
 }
 

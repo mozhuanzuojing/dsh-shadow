@@ -1,7 +1,7 @@
 // dsh-shadow —— world/persistence/persist.ts：RepresentationGraph 持久化（可重建索引，存 sourceClaims/sourceValidations）。
 //
 // 读取收敛到 `persistence/snapshots.ts` 的 `readLatestSnapshot`（ADR-0071）：
-// 原先本文件与 `temporal/persistence.ts` 各有一份**逐字近重复**的读取逻辑，且**同带一个顺序 bug**
+// 原先本文件与 `selfhood/temporal/persistence.ts` 各有一份**逐字近重复**的读取逻辑，且**同带一个顺序 bug**
 // —— 直接取 `listDir` 的**第一个**日期（契约与真机实现都是升序 ⇒ 取到**最旧**的快照）。
 import { SHADOW_ROOT } from "../../../core/paths.js";
 import { readLatestSnapshot } from "../../../persistence/snapshots.js";

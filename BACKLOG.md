@@ -389,7 +389,7 @@
 
 - **四处代码注释已加**（供后续读者不再重复分诊）：
   `stance/delegation/guard/expansion-guard.ts`（家族级）、`core/knowledge/cost.ts`、
-  `core/intent.ts`、`identity/timeline.ts`。
+  `core/intent.ts`、`selfhood/identity/timeline.ts`。
 - **两个仍未决的产品问题**（**不是「没做」而是「需你拍板」**）：
   ① `progressiveDisclosure` / `refineTree` 该**接线**还是**有意不启用**？
   ② `renderIntent` / `renderIdentityModel` 该**并入某条读路径**还是长期作为备用渲染器？
@@ -419,7 +419,7 @@
 ### T7. `relationForProposal` **忽略入参**（本轮新发现，零引用所以当前无害）
 
 - **依据**：`adr/0062-wiring-audit.md`「补记（v1.15.33）」§5；T4 分诊时顺带发现。
-- **现状（读源码核实）**：`temporal/edge.ts:30`
+- **现状（读源码核实）**：`selfhood/temporal/edge.ts:30`
   `export const relationForProposal = (_n: any): TemporalEdge["relation"] => "evolved_into";`
   —— 形参名带下划线前缀 = **有意不用**，恒返回常量。
 - **为什么现在无害、将来有害**：它当前是**零引用**（`adr/0062` 补记 §4 已登记「保留并注明」），
@@ -429,7 +429,7 @@
   那两族的危险是「**口径分叉**」（同一判据多处表达，其中一处漂移）；
   这一处的危险是「**掉参数**」（签名收了参数却不用）。**两种都要修，但测法不同** ——
   口径分叉可加「唯一源」棘轮；掉参数只能靠**行为断言**（传不同节点必须得到不同关系，或明确删掉形参）。
-- **现有注释的不完整处**：`temporal/edge.ts:29` 已写「保留：…v0.26 不跑 reflection，留接口」，
+- **现有注释的不完整处**：`selfhood/temporal/edge.ts:29` 已写「保留：…v0.26 不跑 reflection，留接口」，
   但**没写**「它忽略入参」这一点 ⇒ 本轮已在代码注明。
 - **完成判据**：三选一 —— ① 接线并让 relation 真正由入参决定（附行为断言）；
   ② 删除（并确认 `TemporalEdge.relation` 的取值不依赖它）；③ 保留并**改签名去掉未用形参**
@@ -594,13 +594,13 @@
 - **判定方法（可复现）**：① 逐文件读断言，看是否依赖「今天」与某阈值之差（`ageDays`/`staleDays`/`hotness`/`halfLife`/
   `recency`/`today()`/`Date`）；② **行为探针**：把 `new Date()`/`Date.now()` 钉到假日期后逐文件 import 运行，
   在 **2027-06-01 / 2027-10-01 / 2028-06-01 / 2030-01-01** 各跑一遍（约 60 次，零文件写入）；
-  ③ 机制探针直接 import `dist/identity/evaluator.js` 打印 `days/recency/status/reasons`。
+  ③ 机制探针直接 import `dist/selfhood/identity/evaluator.js` 打印 `days/recency/status/reasons`。
 - **逐条结论**：**耦合（炸弹）1 个**，其余 **21 个文件全部不耦合**，理由逐文件记在
   `CHANGELOG.md` v1.15.43 的表里。357 处的成分：**路径/文件名 264（74%）** + 记忆正文文本 25（7%）+
   assert 期望串 15（4%）= **304 处（85%）不参与任何阈值运算**；余 53 处（15%）是 fixture 元数据，
   **其中只有 `periodTo` 的默认值这 1 处被「今天」消费 —— 那就是这颗炸弹**。
 - **真炸弹（已修）**：`test/recall-attribution.test.ts` 场景 58（`:2153`）与场景 60（`:2196`），**同一根因**：
-  `putReflection` 的默认 `period.to = "2026-09-05"`（`:2068`）被 `identity/evaluator.ts:48` 当作 `lastSeen`，
+  `putReflection` 的默认 `period.to = "2026-09-05"`（`:2068`）被 `selfhood/identity/evaluator.ts:48` 当作 `lastSeen`，
   `recency = exp(-ln2·days/90)`，闸门 `recency >= 0.4` ⇒ **本地日期 ≥ 2027-01-02 时 days=119 →
   recency=0.39992 < 0.4 ⇒ status 由 `accepted` 变 `candidate` ⇒ 不提 v2 / `learned` 不增**。
   实测 bisect：`2026-12-31`/`2027-01-01` **PASS**、`2027-01-02`/`01-03`/`01-10` **FAIL**。
@@ -694,7 +694,7 @@
   包根 `.` **只导出 `version`**（连 `ScriptTarget` 都没有），AST API 在 `typescript/unstable/ast` 这类 unstable 子路径
   ⇒ 说明符抽取是**剥注释后的正则**，不是 AST。**已知边界**：字符串里形如 `from "./x"` 的文本会误命中，命中项须人工复核。
 
-#### ⬜ 进度 B（部分）：复杂度预算仍未做 · `core/` 导航收编已做一刀 · 第四伞待开
+#### ⬜ 进度 B（部分）：复杂度预算仍未做 · `core/` 前缀簇已做 · 第四伞已做 · 下一刀待烤
 
 - **复杂度预算**：hl_mem 靠 AST 量「行数 / 参数数 / 函数体行数」+ 棘轮只降不升。本仓无可用 AST（见 ⑤）
   ⇒ 要么用「文件行数 / 导出数」当代理（**弱判据**，须先说明它与哪种风险对应），要么等 `unstable/ast` 稳定。
@@ -702,8 +702,8 @@
 - **`core/` 前缀簇（v1.20.9，ADR-0102）**：**不是**「拆纯度层」——只把已有前缀簇收进
   `writer/` · `knowledge/` · `lineage/` · `candidate/` · `toolset/`；`layerOf` 仍 = `core`。
   消掉 `{core, evidence, persistence}` 层间环仍要真拆混合脊柱，**另开架构决策**，不在本刀。
-- **下一刀（grill 候选 B，待开）**：根上剩余小域 `identity` / `dream` / `temporal`（+ 可选 `soul`/`observer`）
-  收进第四导航伞；顶层目录数再降，与 ADR-0101 同口径（伞 ≠ 层）。
+- **第四伞 `selfhood`（v1.20.11，ADR-0103）**：已收 `identity` / `dream` / `temporal`；`layerOf` 同形 ADR-0101。
+  **下一刀候选**（未烤）：根上 `soul` / `observer`，或 G2 `core/` 职责粗桶 —— 开刀前再 grill。
 - **进度 C（v1.15.40 第 4 轮，hl_mem 门禁面深读的形状清单；全文 `references.md` §6.6）**：
   三个可照抄形状 —— ① **「生成器 + 签入产物 + 门禁逐字比对」三件套**（同形 6 次，唯一更新入口 `--update`/`--write`，
   **缺件即非零** + 失败文案自带更新指引）；② **allowlist 腐化自检**（白名单里的路径/函数**不存在也算违规**）
@@ -832,9 +832,9 @@
 > ⚠ **「A 段 6 条」到底是哪 6 条（v1.15.75 首次枚举 —— 此前**两处引用都不给内容**）**：
 > 它是 **v1.15.43「A 段残余 18 条逐条分诊」里的「无法判定（6）」桶**（定义在**本文件上方的 ✅ 已结案小节**里，
 > 距此处约 700 行 ⇒ **指针没有目标**）。6 条 = `hasNoUpgradeApi`（`stance/agency/guards.ts`）·
-> `renderIntent`（`core/intent.ts`）· `renderIdentityModel`（`identity/timeline.ts`）·
+> `renderIntent`（`core/intent.ts`）· `renderIdentityModel`（`selfhood/identity/timeline.ts`）·
 > `progressiveDisclosure` + `refineTree`（`core/knowledge/cost.ts`，**同一处决定**）·
-> `relationForProposal`（`temporal/edge.ts`）。
+> `relationForProposal`（`selfhood/temporal/edge.ts`）。
 > **被排在 T15 之后的唯一原因**：它们缺的是**产品决策**（「哪些东西算受保护契约」），不是代码证据。
 > **v1.15.75 的判定落点与登记册缺口见 `adr/0086` §8.10**（#1/#2 不涉及兼容性；#6 **归 T7**）；
 > **#3/#4/#5 已于 v1.15.76 读码后收敛为「同一个阻塞」「同一个缺口」**（见 `adr/0086` **§8.11**）——
@@ -1536,7 +1536,7 @@ V/G/T6 真机与外部条件项
 | **M2** | **Outcome Memory**（记结果 + 评价 + 以后是否继续相信） | ⬜ 待 M1 拍板后 | **不新建对象**：`epistemic/validation/types.ts:23` 已有完整 outcome 状态机（`validated/observed/rejected/expired`）+ append-only 历史（实测场景 88）；`observer/trace.ts:26` 已有 `outcome{expected,actual}`；`long-horizon` 已有 ActionFeedback。**唯一要做的**：把已有 outcome 形态**接到 Decision 上**（否则就是第二个平行 outcome 概念＝判据分叉）。 |
 | **M1⑥** ⭐ | **决策的 `disposition`**（「刻意不做」≠「忘了做」） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F6**。**已做**：`DecisionRecord.disposition?: "open" \| "deliberate-deferral"`（缺省 `open` ⇒ 向后兼容）；读数分 `pendingOpen` / `pendingDeferred`，**年龄分布 / 最老 / p90 只统计 `open`**；渲染显式标注「刻意推迟 N（不计入积压）」。闸 `test/decision-outcome.test.ts` ⑫。**仍待用户拍板**：`deliberate-deferral` 是否允许设复查期（到期转回 `open`？）——**未替用户决定**。 |
 | **M1⑦** ⭐ | **候选统计按 `actor` 分层**（防 tool 自确认刷分） | ✅ **已结案（v1.15.53）** | **来源 = M1-A′ dry run 的 F8**。**已做**：新增 `byActor`（`human → tool → ci`，只列实际有裁决的）；**总体 `acceptanceRate`/`rejectionRate` 只认 `human`**，无 human 裁决 ⇒ `null`（不可测不报 0）；`revoke` 独立成桶（**不再与 `reject` 合并**，也不再落进 pending）；口径可机械断言 `candidates = confirmed + rejected + revoked + pendingConfirmation`。闸 `test/proposal-firewall.test.ts` ⑫⑬⑭。 |
-| **M3** | **Pattern Memory**（从 N 个 Episode 产生经验） | ⬜ | **算法内核已存在**：`reflection/patterns/success-rate.ts`（decision→outcome 相关性，纯统计、确定性标记集、无 AI）+ `decision-outcome.ts`（重复决策/结果 tally）+ `dream/compress.ts`（cross-domain 抽象）。**真缺口**：Pattern 不是一等对象，且 `reflection/types.ts:8` 的结构**没有反例字段** —— 用户 schema 要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺）。 |
+| **M3** | **Pattern Memory**（从 N 个 Episode 产生经验） | ⬜ | **算法内核已存在**：`reflection/patterns/success-rate.ts`（decision→outcome 相关性，纯统计、确定性标记集、无 AI）+ `decision-outcome.ts`（重复决策/结果 tally）+ `selfhood/dream/compress.ts`（cross-domain 抽象）。**真缺口**：Pattern 不是一等对象，且 `reflection/types.ts:8` 的结构**没有反例字段** —— 用户 schema 要的 `counter_examples` **必须补**（只报 support 不报反例＝自欺）。 |
 | **M4** | **Memory Revision**（记忆自己纠错，保留时间连续性） | ⬜ | **机制已有**：`Forget ≠ Delete`（ADR-0031）、`superseded` 生命周期（`core/lifecycle.ts`、ADR-0061）、append-only 历史、取代的确定性（ADR-0059/0061，`adr/0080` 给了「阈值不可达」的证明）。**真缺口**：`revision` 不是一等对象 —— **没有留下「因哪条证据而改判」的可追溯对象**（裁决只给 verdict/outcome/reflection，不改写原记忆，这是对的）。 |
 | **M5** | **Memory Utility**（让系统知道什么值得记） | ⬜ | **只有 `recall_count` 的雏形**（`hits` 累积，见 D7；`queryLog`）+ 衰减（MemoryBank hotness）。`useful_count` / `influenced_decision` / `prevented_duplicate_work` / `caused_rework` **全缺**。**前提是 M1**：没有「决策→结果」就无从判断某条记忆**是否影响了决策**。 |
 
@@ -1620,7 +1620,7 @@ V/G/T6 真机与外部条件项
 | `rebuildIndex` 失败后调用方照读旧 `_index.md`，且 `indexDirty` 无条件清除 | `core/writer/materialize.ts:223-225` + `:311-312`，消费方 `query/index-budget.ts（无参读 `_index.md`）` | serve **陈旧索引**且无告警；下一次也不再重建 |
 | flush 早退**晚于**消费 pending ⇒ 整批待落盘记录被丢弃 | `core/writer/materialize.ts:256` vs `:264` | 记忆**整批静默丢失**；`getFlushWarn()` 因未设 `lastFlushError` 恒空 ⇒ 读侧「可能是旧记忆」的告警失效 |
 | FutureEvidence 落盘失败后仍播报 `[Evidence] registered` | `epistemic/validation/evidence.ts:30-31` + `query/validation.ts:23-24` | 之后 `mode:validate` 读不到它 ⇒ 结论从 validated 掉回 observed/rejected，且**没人知道为什么** |
-| hypothesis 落盘失败后仍打印 `hypotheses N` | `epistemic/validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
+| hypothesis 落盘失败后仍打印 `hypotheses N` | `epistemic/validation/evidence.ts:13` + `query/observer-kernel.ts:61-62`，消费方 `selfhood/dream/compress.ts:112` | 用户被告知生成 N 条假设，磁盘 0 条 |
 | 召回冷却台账坏 JSON ⇒ 静默归零 | `retrieval/ledger.ts:10-12` + `:21-23`，消费方 `query/topic-recall.ts（冷却台账消费）` | **已冷却的记忆被重新返回**（召回输出变） |
 | meta 注册失败只 log | `core/memory.ts:77-79`（`core/writer/materialize.ts:280` 调用） | 记忆在索引里活跃、`_meta.json` 无该条 ⇒ `hits` 永远不计、生命周期恒 NEW |
 
@@ -1649,10 +1649,10 @@ V/G/T6 真机与外部条件项
 
 | 线索 | 位置 | 为什么要先决定 |
 |---|---|---|
-| identity 闸门参数两层各有默认值，且 falsy 语义不同 | `query/observer-kernel.ts:37-40`（`\|\| 5` / `\|\| 0.4`）vs `identity/evaluator.ts:20-22`（`?? 5` / `?? 0.4`） | 传 `minRecency: 0` 时 kernel 实际用 **0.4**：是「参数默认」还是「闸门下限」？**先决定语义再改** |
+| identity 闸门参数两层各有默认值，且 falsy 语义不同 | `query/observer-kernel.ts:37-40`（`\|\| 5` / `\|\| 0.4`）vs `selfhood/identity/evaluator.ts:20-22`（`?? 5` / `?? 0.4`） | 传 `minRecency: 0` 时 kernel 实际用 **0.4**：是「参数默认」还是「闸门下限」？**先决定语义再改** |
 | `status:"compacted"` 在三个谓词里三种答案 | `core/forget.ts` · `query/materialize.ts` 的 `keep` | 审查者**未确证可达性**（compacted 在活跃集过滤时已移除）⇒ 建议**只加注释**，不修 |
 | `successRate` 渲染 `toFixed(2)` 后回读 `/100` | `reflection/engine.ts:29,:79` vs `:93` | 往返误差 ≤0.005，可能跨过 `0.6`/`0.4` 边界 ⇒ 同一反思在生成侧判 principle、消费侧判 anti_pattern（**真语料是否踩过边界未验证**） |
-| 「重复」=2 次 vs 「模式」=3 次 | `reflection/patterns/decision-outcome.ts:12` vs `reflection/engine.ts:27`（+`identity/candidate.ts:27`） | 两个不同统计量各有理由；若要收，提命名常量而**不是**统一成同一个数 |
+| 「重复」=2 次 vs 「模式」=3 次 | `reflection/patterns/decision-outcome.ts:12` vs `reflection/engine.ts:27`（+`selfhood/identity/candidate.ts:27`） | 两个不同统计量各有理由；若要收，提命名常量而**不是**统一成同一个数 |
 | `scope` 校验里 `s.includes(action)` 让任意子串（含空串）通过 | `stance/delegation/guard/scope-guard.ts:6` | 属「校验器不健全（假阴性）」，不是本轮缺陷类；**未确证影响面** |
 | `_index.md`/`authz` 相关的两个默认放行 | `core/index-engine.ts:57,:68` + `core/authorization.ts:23`（`return !scope.workspace`） | `ctx.workspace` 缺失时**授权过滤整体放行**；未追到生产上是否可能为空 |
 
@@ -1817,7 +1817,7 @@ V/G/T6 真机与外部条件项
 | `result` 不在 `read_shadow` 参数契约里，而措辞守卫依赖它 | `index.ts:274-277` vs `trajectory/long-horizon/engine/interaction.ts:11-17,43,57` | 模型侧拿不到该文本 ⇒ 224/225/226/228 恒对 `""` 通过 |
 | horizon 四对象**只写不读**（`.shadow/horizon/**` 全仓无读取者） | `trajectory/long-horizon/persistence/persist.ts` + `persistence/files.ts:38` | 写了也没人读 |
 | soul 读失败 ≡ 没配置 | `soul/soul.ts:8-11` + `query/lenses.ts 的 soul 透镜` | 损坏被报成「无 Soul 配置」 |
-| `{"identity":"architect"}` 两处两答案 | `soul/identity.ts:10` vs `identity/timeline.ts:16` | 同一配置 `read_shadow({identity:true})` 与 `identity-advance` 得出不同身份 |
+| `{"identity":"architect"}` 两处两答案 | `soul/identity.ts:10` vs `selfhood/identity/timeline.ts:16` | 同一配置 `read_shadow({identity:true})` 与 `identity-advance` 得出不同身份 |
 | `satisfiedConstraints` 三套判据 | `stance/planning/render.ts:14`（子串 `"under"`）/ `stance/planning/types.ts:29` / `stance/agency/engine.ts:27` | 同一概念三种算法 |
 | `|| "available"` / `|| "forgotten"` / `Number(x) || 0.5` 把合法 `0` 与缺失混同 | `trajectory/long-horizon/engine/interaction.ts:32,44`、`query/planning.ts:25`、`query/sim-action.ts:38` | 缺失伪装成有值 |
 | 写失败仍 `ok:true` | `trajectory/long-horizon/persistence/persist.ts:7,10,13,16` | 磁盘满/EACCES ≡ 记录已存 |

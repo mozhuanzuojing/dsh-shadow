@@ -1,10 +1,10 @@
-// dsh-shadow —— identity/candidate.ts：CandidateIdentityChange（Reflection → Candidate，独立对象）。
+// dsh-shadow —— selfhood/identity/candidate.ts：CandidateIdentityChange（Reflection → Candidate，独立对象）。
 // 禁止：proposal 里出现 personality/人格结论（"用户喜欢复杂架构"）。只允许：重复行为 → 决策规律 → 原则/边界。
 // 只读取 Reflection；见不得 ObservationTrace → Identity 直通。
-import type { Reflection } from "../reflection/types.js";
+import type { Reflection } from "../../reflection/types.js";
 import { proposalTypeOfLearning, type CandidateIdentityChange, type IdentityConfidence } from "./types.js";
-import { today } from "../core/util.js";
-import { scrubUnsafe } from "../security/scrub.js";
+import { today } from "../../core/util.js";
+import { scrubUnsafe } from "../../security/scrub.js";
 
 const clamp = (x: number) => Math.max(0.05, Math.min(0.98, x));
 

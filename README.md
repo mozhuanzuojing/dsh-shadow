@@ -92,7 +92,8 @@
 
 ```text
 npm run verify
-= npm run typecheck:tools      工具面类型门
+= npm run build                clean + tsc（写出当前 `dist/`；工具面/测试面类型门与单测都 import `dist/`）
++ npm run typecheck:tools      工具面类型门
 + npm run typecheck:tests      测试面类型门（v1.15.62：`test/**/*.ts` 全量，曾报 83 条既存诊断）
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
 + npm run audit:scripts        脚本扩展名门（v1.15.87：仓内不得有**手写** `.js` / `.mjs` / `.cjs`；`.ts` 与 `.py` / `.ps1` 等允许）
@@ -106,6 +107,7 @@ npm run verify
 + npm run audit:ratchet        分诊棘轮（v1.15.45：线索数只能降不能升；桶消失或新桶即红）
 + npx tsc --noEmit             插件面类型门
 + npm run test:all             = npm run build && node tools/run-tests.ts
+                               （`build` = `clean` + `tsc`：先删 `dist/` 再 emit，避免搬家后的幽灵产物）
                                （行为测试 + 工具自检；**串行、每文件一个子进程**）
                                ⚠ **检查条数不抄在这里** —— 它由 `run-tests` 自己打印。
                                本块曾抄「43 个行为测试 + 5 个工具自检 = 48 项」，
@@ -113,7 +115,7 @@ npm run verify
 ```
 
 **它失败就不要往下走**（跑评测 / 长耗时验证 / 声称「全绿」之前必须先过它）——
-否则一次编译错误会被伪装成一次评测结论。**注意它会写本地 `dist/`**（含 `build`；**不进 git**）：测试 import 的是
+否则一次编译错误会被伪装成一次评测结论。**注意它会先 `clean` 再写本地 `dist/`**（含 `build`；**不进 git**）：测试 import 的是
 编译产物，不构建就会测到旧 `dist`；缺件时 `run-tests` exit 2。
 
 **为什么要有这条命令**（ADR-0077 D2）：在此之前「全绿」只能靠人**记得**逐个跑 `node test/*.test.ts`
@@ -616,7 +618,7 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 pnpm install
 ```
 
-改动 `cordis.patch.yml` 后需重启 profile 生效。源码为 TypeScript：`index.ts` → `tsc`（TypeScript 7.x）→ `dist/index.js`（DSH/Cordis 加载的是编译后 JS，`package.json.main` 指向 `dist/index.js`）；`dist/` **不进 git**（v1.20.6），`prepare` / `prepublishOnly` / 改码后的 `pnpm run build` 负责产出；再重启 profile。
+改动 `cordis.patch.yml` 后需重启 profile 生效。源码为 TypeScript：`index.ts` → `tsc`（TypeScript 7.x）→ `dist/index.js`（DSH/Cordis 加载的是编译后 JS，`package.json.main` 指向 `dist/index.js`）；`dist/` **不进 git**（v1.20.6），`prepare` / `prepublishOnly` / 改码后的 `pnpm run build`（**先 clean 再 tsc**）负责产出；再重启 profile。
 
 
 ## 验证（重启后）
@@ -652,5 +654,5 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.20.10`**（Node ≥26 + 两类 js 口径 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.20.11`**（第四伞 `selfhood` + build 前 clean —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
 

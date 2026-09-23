@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "1.20.10",
+  "version": "1.20.11",
   "description": "agent 思维/上下文/灵魂的投影——每条记忆一个文件，记录「完整线索链」（背景/材料 + 用户提示/决策 + 概况）；read_shadow 分层召回 + 记忆遗忘(retention) + 护栏(数据非指令)；shadow_query 另有 resource 类型（`.shadow/resources/` 资源卡的派生投影）。TypeScript 源码 index.ts → tsc → dist/index.js（DSH 加载编译后 JS；dist 不进 git，随 npm 包发布）。验证基线 DSH 0.1.7-alpha.2（engines.dsh，是验证基线声明而非强制闸门；挂载时靠能力探测报告缺件）。",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,12 +20,13 @@
     "package.json"
   ],
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc -w",
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "npm run clean && tsc",
+    "build:watch": "npm run clean && tsc -w",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "typecheck:tools": "tsc -p tsconfig.tools.json",
-    "verify": "npm run typecheck:tools && npm run typecheck:tests && npm run audit:layers && npm run audit:scripts && npm run audit:docs && npm run audit:granularity && npm run eval:retrieval:check && npm run audit:ratchet && npx tsc --noEmit && npm run test:all",
+    "verify": "npm run build && npm run typecheck:tools && npm run typecheck:tests && npm run audit:layers && npm run audit:scripts && npm run audit:docs && npm run audit:granularity && npm run eval:retrieval:check && npm run audit:ratchet && npx tsc --noEmit && npm run test:all",
     "test:all": "npm run build && node tools/run-tests.ts",
     "verify:toolset": "node tools/winget-verify.ts",
     "verify:seed": "node tools/winget-verify-seed.ts",

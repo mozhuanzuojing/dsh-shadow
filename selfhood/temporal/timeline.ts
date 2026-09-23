@@ -1,4 +1,4 @@
-// dsh-shadow —— temporal/timeline.ts：Identity Timeline resolution（读取时解析，不回写历史）。
+// dsh-shadow —— selfhood/temporal/timeline.ts：Identity Timeline resolution（读取时解析，不回写历史）。
 export interface IdentityVersionEntry { version: string; at: string; }
 
 export const resolveIdentityAt = (versions: IdentityVersionEntry[], timestamp: string): IdentityVersionEntry | null => {

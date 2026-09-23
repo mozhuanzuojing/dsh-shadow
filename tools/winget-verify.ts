@@ -102,7 +102,7 @@ const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].repla
 if (isMain) {
   const asJson = process.argv.includes("--json");
   const idAt = process.argv.indexOf("--id");
-  const { CAPABILITIES } = await import("../dist/core/toolset.js");
+  const { CAPABILITIES } = await import("../dist/core/toolset/index.js");
   if (idAt >= 0) {
     const one = await verifyOne(process.argv[idAt + 1]);
     console.log(JSON.stringify(one, null, 2));

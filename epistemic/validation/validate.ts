@@ -2,10 +2,10 @@
 // Future Evidence 单向（过去不能验证未来）；不覆盖 Hypothesis（生成 Artifact，保留历史）；不产生 Knowledge/修改 Identity。
 import type { FutureEvidence, ValidationArtifact, ValidationResult, ValidationConfidence, AlternativeEvaluation } from "./types.js";
 import { MAX_EVIDENCE_N } from "./types.js";
-import type { Hypothesis } from "../../dream/types.js";
+import type { Hypothesis } from "../../selfhood/dream/types.js";
 import { today } from "../../core/util.js";
 // 「正/负结果」的判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
-// 本文件原有一份**与 `dream/compress.ts` 逐字相同**的 `POS`/`NEG`/`isPositive`，且与
+// 本文件原有一份**与 `selfhood/dream/compress.ts` 逐字相同**的 `POS`/`NEG`/`isPositive`，且与
 // `reflection/patterns/success-rate.ts` 的 `isPositiveOutcome` **给出不同答案**（实测，见该文件注释）。
 import { isPositiveOutcome as isPositive } from "../../core/polarity.js";
 

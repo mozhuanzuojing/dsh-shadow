@@ -1,11 +1,11 @@
-// dsh-shadow —— identity/timeline.ts：Identity Timeline（一等对象，time-sliced；不覆盖 soul.json）。
+// dsh-shadow —— selfhood/identity/timeline.ts：Identity Timeline（一等对象，time-sliced；不覆盖 soul.json）。
 // 核心思想：未来和现在同在，灵魂知道，但体验每一步 → Identity 也是时间切片 Identity(t0)/t1/t2，不是 mutable row。
 // 存储：.shadow/identity/<at>-v<N>.json（不可变版本）+ .shadow/identity/timeline.md（索引）。Core 来自 soul.json（curated 稳定锚）。
-import { SHADOW_ROOT } from "../core/paths.js";
+import { SHADOW_ROOT } from "../../core/paths.js";
 import type { IdentityModel } from "./types.js";
-import { readSoul } from "../soul/soul.js";
-import { today } from "../core/util.js";
-import { scrubUnsafe } from "../security/scrub.js";
+import { readSoul } from "../../soul/soul.js";
+import { today } from "../../core/util.js";
+import { scrubUnsafe } from "../../security/scrub.js";
 
 // 从 soul.json 造 v1（当前数据模型里 identity/principles/boundaries + values/anti_patterns/decision_style）。
 export const identityV1Of = async (fs: any, ws: string, agentId?: string): Promise<IdentityModel> => {

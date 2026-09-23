@@ -1,6 +1,6 @@
-// dsh-shadow —— dream/persist.ts：DreamArtifact 持久化（.shadow/dream/<date>/dream.json，非 memory）。
-import { SHADOW_ROOT } from "../core/paths.js";
-import { today } from "../core/util.js";
+// dsh-shadow —— selfhood/dream/persist.ts：DreamArtifact 持久化（.shadow/dream/<date>/dream.json，非 memory）。
+import { SHADOW_ROOT } from "../../core/paths.js";
+import { today } from "../../core/util.js";
 
 export const writeDream = async (fs: any, ws: string, artifact: any) => {
   try {

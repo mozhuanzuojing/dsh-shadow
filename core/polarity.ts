@@ -1,7 +1,7 @@
 // dsh-shadow —— core/polarity.ts：**「正/负结果」这条判据的唯一来源**（ADR-0063 / ADR-0070「判据收一处」）。
 //
 // 为什么要有这个文件：同一条判据曾在**三处**各写一份，且**给出不同答案**（实测）：
-//   · `validation/validate.ts`   的 `POS`/`NEG`/`isPositive`（与 `dream/compress.ts` **逐字相同**）
+//   · `validation/validate.ts`   的 `POS`/`NEG`/`isPositive`（与 `selfhood/dream/compress.ts` **逐字相同**）
 //   · `reflection/patterns/success-rate.ts` 的 `POS`/`NEG`/`isPositiveOutcome`（词表不同）
 // 差异例（已实测，非推断）：
 //   · `"依赖降低"` → validate **false**（POS 无「降低」）／ reflection **true**（POS 有「依赖降低」）

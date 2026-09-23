@@ -1,7 +1,7 @@
 // dsh-shadow —— validation/types.ts：v0.28 Hypothesis Validation 类型。
 // Reality Feedback Loop：Future Evidence（未来事实）→ Validation Artifact（不覆盖 Hypothesis）。
 // Memory ≠ Evidence；Hypothesis ≠ Evidence。Validation 生成 Artifact，保留历史（同一假设可 observed 再 rejected）。
-import type { Hypothesis } from "../../dream/types.js";
+import type { Hypothesis } from "../../selfhood/dream/types.js";
 
 export interface FutureEvidence {
   id: string;

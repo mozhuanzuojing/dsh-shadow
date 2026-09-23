@@ -1,7 +1,7 @@
-// dsh-shadow —— temporal/edge.ts：TemporalEdge 构建（时间结构关系，不声明世界因果）。
+// dsh-shadow —— selfhood/temporal/edge.ts：TemporalEdge 构建（时间结构关系，不声明世界因果）。
 // derivation{rule, sourceIds} 必须保留，供未来追问"为什么认为存在这个结构"。
 import type { TemporalEdge, TemporalNode } from "./types.js";
-import type { ObservationTrace } from "../core/types.js";
+import type { ObservationTrace } from "../../core/types.js";
 
 export const buildEdges = (nodes: TemporalNode[], traces: Partial<ObservationTrace>[]): TemporalEdge[] => {
   const edges: TemporalEdge[] = [];

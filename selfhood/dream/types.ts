@@ -1,4 +1,4 @@
-// dsh-shadow —— dream/types.ts：v0.27 Observer Sleep Kernel 类型。
+// dsh-shadow —— selfhood/dream/types.ts：v0.27 Observer Sleep Kernel 类型。
 // Dream = 内部 Observer Offline Compression（外部 alias Dream），不是生成器。只产候选结构，不产 Knowledge/Principle。
 export type DreamTrigger = "scheduled" | "resource_idle" | "manual";
 export type HypothesisStatus = "pending" | "observed" | "validated" | "rejected";

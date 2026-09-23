@@ -1,6 +1,6 @@
 // dsh-shadow —— persistence/snapshots.ts：按日期目录存图的**快照读取**（单一来源）。
 //
-// **为什么收敛成一处**（ADR-0071）：`temporal/persistence.ts` 与 `world/persistence/persist.ts`
+// **为什么收敛成一处**（ADR-0071）：`selfhood/temporal/persistence.ts` 与 `world/persistence/persist.ts`
 // 原本各有一份**逐字近重复**的读取逻辑（连 bug 都一样），正是 `tools/audit-drift.ts` 的**检测 B**
 // 报出的那两个模块（键 `name=graph.json`）。本仓这几轮的教训是「同一逻辑在多处表达，
 // 其中一处会漂移」——故把这份逻辑收敛到此，两个 reader 只做参数化调用。

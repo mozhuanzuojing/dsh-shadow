@@ -1,6 +1,6 @@
-// dsh-shadow —— dream/sleep.ts：SleepWindow（不可变输入；防观察污染——不碰当前会话/外部输入）。
+// dsh-shadow —— selfhood/dream/sleep.ts：SleepWindow（不可变输入；防观察污染——不碰当前会话/外部输入）。
 import type { SleepWindow, DreamTrigger } from "./types.js";
-import { today } from "../core/util.js";
+import { today } from "../../core/util.js";
 
 export const buildSleepWindow = (opts: { observerId: string; from?: string; to?: string; trigger?: DreamTrigger; id?: string }): SleepWindow => ({
   id: opts.id || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

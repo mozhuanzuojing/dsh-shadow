@@ -10,7 +10,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 
 | 术语 | 规范定义 |
 |------|----------|
-| 投影 | **有向的**：agent 的**灵魂**（身份 / 价值观 / 原则 / 品味 / 边界）**投出思维**（判断与决策），思维再**落盘**成文件树 —— 三者合称「投影」，落点即记忆树 `.shadow/`。⚠ **不是三样并列**：机制见 `query/query.ts` 的 `projectContext(..., soul, identity.observerLens, …)`（**把灵魂当透镜**）与 `identity/evaluator.ts` 的「读反思 → 生成候选 → 三道闸门 → 推进 identity；**不自动改 `soul.json`**」（回流必须过闸，源头只有人能改） |
+| 投影 | **有向的**：agent 的**灵魂**（身份 / 价值观 / 原则 / 品味 / 边界）**投出思维**（判断与决策），思维再**落盘**成文件树 —— 三者合称「投影」，落点即记忆树 `.shadow/`。⚠ **不是三样并列**：机制见 `query/query.ts` 的 `projectContext(..., soul, identity.observerLens, …)`（**把灵魂当透镜**）与 `selfhood/identity/evaluator.ts` 的「读反思 → 生成候选 → 三道闸门 → 推进 identity；**不自动改 `soul.json`**」（回流必须过闸，源头只有人能改） |
 | 一条记忆 = 一个文件 | 记忆的落盘形态：`.shadow/<日期>/<时刻>-<入口slug>.md` |
 | 记忆树 | 投影所在的目录，即 `.shadow/` |
 | 记忆 | 一个「交互 + 决策 + 思维落点 + 所用背景/材料 + 用户提示」压成的投影文件，含入口点、时间、决定/结论、动作背景——目标是还原该任务的**完整线索** |
@@ -66,6 +66,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Agent Teams 的平面（v1.20.0，ADR-0098） | 0.1.7 起 Teams 由**一个 profile 层 bundle** 提供（`@deepseek-ai/dsh-experimental-agent-team-profile`：插 `agent-team` 服务 + `tool-agent-team` + `ui-agent-team`，并 disable `tool-subagent*`）—— 不再是「host 插服务行 + **预设**插工具行」两半。⇒ 预设里**不应**再挂 `tool-agent-team`（同一进程第二次挂载会因 `team:policy` 重复注册而失败）；改预设的 Team 名额走 profile 层按 id override，且**必须重述该行全部 config 键**（patch 替换整份 `config`） |
 | stance / trajectory / epistemic（v1.20.8，ADR-0101） | Mode-family **导航伞**（不是 mode、不是结构层）。叶子仍是契约/层名单位（`agency`/`recall`/`world`…）；`layerOf` 在伞下取第二段。`query/*.ts` 仍是 mode 分派面 |
 | `core/` 前缀簇（v1.20.9，ADR-0102） | `core/` 内**导航**子目录：`writer/` · `knowledge/` · `lineage/` · `candidate/` · `toolset/`（去前缀命名）。**不是**纯度层；`layerOf` 仍 = `core`。`collect`/`memory`/`forget` 等仍平铺在 `core/` 根 |
+| selfhood（v1.20.11，ADR-0103） | 第四**导航伞**（不是 mode、不是结构层）：叶子 `identity` · `dream` · `temporal`。`layerOf` 在伞下取第二段。**≠** personality；**≠** `soul` curated 锚（`soul/` / `observer/` 仍在根上） |
 
 ## mode 参考（`read_shadow` 的 mode 串）
 

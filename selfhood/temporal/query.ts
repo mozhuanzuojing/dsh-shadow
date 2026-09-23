@@ -1,4 +1,4 @@
-// dsh-shadow —— temporal/query.ts：queryTemporal（一等能力：replay / compare）。
+// dsh-shadow —— selfhood/temporal/query.ts：queryTemporal（一等能力：replay / compare）。
 // replay = 那个时间点我是谁、我看到什么、隐去了什么、有什么证据；compare = 两个时间点自我/投影/判断/模式变化。
 import type { TemporalGraph, TemporalNode, TemporalQuery } from "./types.js";
 

@@ -2,7 +2,7 @@
 // .shadow/future-evidence/<id>.json；.shadow/hypothesis/<id>.json（dream 产出的假设，读侧供 validate）。
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { FutureEvidence } from "./types.js";
-import type { Hypothesis } from "../../dream/types.js";
+import type { Hypothesis } from "../../selfhood/dream/types.js";
 import { today } from "../../core/util.js";
 
 /**

@@ -1,7 +1,7 @@
-// dsh-shadow —— identity/types.ts：v0.25 Identity Continuity 领域类型。
+// dsh-shadow —— selfhood/identity/types.ts：v0.25 Identity Continuity 领域类型。
 // Identity 不是"总结出来的人格"，而是 Observer 在时间轴上的稳定约束；变的是"当前时间切片的自我认识"，不是灵魂。
 // Identity ≠ Assertion：confidence 用多维（frequency/recency/consistency/contradiction/overall），保可解释。
-import type { ReflectionLearningType } from "../reflection/types.js";
+import type { ReflectionLearningType } from "../../reflection/types.js";
 
 export interface IdentityCore { observerId: string; values: string[]; }
 export interface IdentityLearned { text: string; confidence: number; source: string; }

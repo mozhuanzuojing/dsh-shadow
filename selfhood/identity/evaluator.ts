@@ -1,12 +1,12 @@
-// dsh-shadow —— identity/evaluator.ts：Identity Evolution Evaluator（三道闸门 → IdentityChangeDecision）。
+// dsh-shadow —— selfhood/identity/evaluator.ts：Identity Evolution Evaluator（三道闸门 → IdentityChangeDecision）。
 // 不是权限 Gate，而是 Evaluator：Candidate → evaluator → accepted|candidate|rejected。
 // 三道闸门：重复性（N 次同向）/ 时间稳定（half-life 衰减）/ 反证（contradiction 上限）。全部确定性，无 LLM。
 import type { CandidateIdentityChange, EvaluatorStatus, IdentityChangeDecision, IdentityModel } from "./types.js";
 import { nextVersion, writeIdentityVersion } from "./timeline.js";
-import { readReflections } from "../reflection/engine.js";
+import { readReflections } from "../../reflection/engine.js";
 import { candidateOf } from "./candidate.js";
-import { today } from "../core/util.js";
-import { scrubUnsafe } from "../security/scrub.js";
+import { today } from "../../core/util.js";
+import { scrubUnsafe } from "../../security/scrub.js";
 
 export interface EvalGates {
   minCount?: number;       // 重复性：同向轨迹最小次数

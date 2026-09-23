@@ -29,15 +29,21 @@
 
 ## 本仓库常用的构建与验证
 
-- 构建：`npm run build`（= `tsc`）。`dist/` 是**本地 / 发包**产物，**不进 git**（v1.20.6 起）。
+- 构建：`npm run build`（= **`clean` + `tsc`**）。`dist/` 是**本地 / 发包**产物，**不进 git**（v1.20.6 起）。
   `prepare` / `prepublishOnly` 会跑 build；Junction / 新克隆后若还没有 `dist/`，先 `npm run build`（或再跑一次 `pnpm install` 触发 `prepare`）。
   npm 包仍带 `dist`（`package.json` 的 `files`），宿主加载的永远是编译后 JS。
-- **验证只用一条命令：`npm run verify`** —— 它串行跑 `typecheck:tools` → `typecheck:tests` →
+- **凡会写出 `dist/` 的 `tsc`，之前必须先 `clean`**（v1.20.11 立）：`tsc` **不删**已搬家/已删源文件留下的旧 `.js`/`.d.ts`
+  （例：`identity/` → `selfhood/identity/` 后，`dist/identity/` 会一直躺着）⇒ 测试 / 宿主可能仍 import 到**幽灵产物**。
+  **口径**：`npm run clean` 删整个 `dist/`；`npm run build` / `build:watch` **已内含** clean。
+  手写 `tsc` / `tsc -w`（会 emit）之前也要先 `npm run clean`。
+  `tsc --noEmit` / `typecheck:tools` / `typecheck:tests`（`noEmit: true`）**不写盘**，不必 clean。
+- **验证只用一条命令：`npm run verify`** —— 它串行跑 `build`（clean+tsc，工具面/测试面类型门都 import `dist/`）→ `typecheck:tools` → `typecheck:tests` →
   `audit:layers` → `audit:scripts` → `audit:docs` → `audit:granularity` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
   （**检查条数不写在这里**：由 `run-tests` 自己打印，末行应为 `[run-tests] ALL PASS ✅`）。
   ⚠️ **本文件曾写「仓库没有配置 test runner」—— 那是过期信息**（运行器是 `tools/run-tests.ts`）。
 - **跑测试前必须 `npm run build`**：`test/*.test.ts` 与 `tools/*.selftest.ts` **import 的是 `dist/`**。
-  `test:all` / `verify` 已含 build；只跑 `npx tsc --noEmit`（**不产出**）就去跑单测，读到的是**旧代码**，
+  `verify` 开头已 build 一次；`test:all` 再 build 一次（含 clean，防中途脏）。
+  只跑 `npx tsc --noEmit`（**不产出**）就去跑单测，读到的是**旧代码**，
   会得到「明明改了却没生效」的假象（v1.15.65 实测踩过一次）。缺 `dist/index.js` 时 `run-tests` **exit 2**。
 - **语料根（v1.15.83）**：`eval:retrieval:check` 要一个带 `.shadow` 的**工作区根** —— 默认由 `tools/retrieval-eval.ts` 的位置**往上找**（最多三级，取第一个存在的）。
   一个都没有 ⇒ **exit 2，且后面 3 步（分诊棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。

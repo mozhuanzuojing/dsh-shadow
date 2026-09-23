@@ -1,6 +1,6 @@
-// dsh-shadow —— temporal/types.ts：v0.26 Observer Temporal Kernel 类型。
+// dsh-shadow —— selfhood/temporal/types.ts：v0.26 Observer Temporal Kernel 类型。
 // Temporal = 宇宙时间层（不是意识功能层）；独立于 Dream。Graph 是派生索引（可重建，保持 Memory ≠ Evidence）。
-import type { Intent, ObserverState } from "../core/types.js";
+import type { Intent, ObserverState } from "../../core/types.js";
 
 export type TemporalRelation = "followed_by" | "learned_from" | "evolved_into" | "contradicted_by" | "possible_causal_link";
 

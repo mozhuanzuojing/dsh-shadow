@@ -1,12 +1,12 @@
-// dsh-shadow —— dream/compress.ts：Offline Compression Cycle（读 TemporalGraph 的来源轨迹 → Pattern Engine + Alternative Engine → DreamResult）。
+// dsh-shadow —— selfhood/dream/compress.ts：Offline Compression Cycle（读 TemporalGraph 的来源轨迹 → Pattern Engine + Alternative Engine → DreamResult）。
 // Pattern 输出是 Observation（结构 + 频率 + 候选解释），不是 Conclusion/Principle；causality 归 v0.28。
 import type { DreamPattern, Hypothesis, DreamResult, AlternativeExplanation } from "./types.js";
-import { readObservationTraces } from "../observer/trace.js";
+import { readObservationTraces } from "../../observer/trace.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
-import { today } from "../core/util.js";
+import { today } from "../../core/util.js";
 // 「正/负结果」判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
 // 本文件原有的一份与 `validation/validate.ts` **逐字相同**，且与 `reflection/patterns/success-rate.ts` 答案不同（实测）。
-import { isPositiveOutcome as isPositive } from "../core/polarity.js";
+import { isPositiveOutcome as isPositive } from "../../core/polarity.js";
 
 // A) Recuorrence + B) Expectation Gap + C) Cross Domain 的确定性聚合（Observation output）。
 export const detectPatterns = (traces: any[]): DreamPattern[] => {

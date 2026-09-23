@@ -1,7 +1,7 @@
 // dsh-shadow —— 图快照读取必须取**最新**，不是**最旧**（ADR-0071）。
 //
 // 由来：`tools/audit-drift.ts` 的检测 B 报出 `name=graph.json` 在两个模块被比较
-// （`temporal/persistence.ts` + `world/persistence/persist.ts`）。顺着查，两个 `read*Graph`
+// （`selfhood/temporal/persistence.ts` + `world/persistence/persist.ts`）。顺着查，两个 `read*Graph`
 // 都是**逐字近重复**，且都是 **write-only**（T4：生产者 + 测试引用皆为零）；再查发现**顺序地雷**：
 //
 //   `listDir` 的契约是「List direct children of a directory in **stable name order**」，
@@ -16,7 +16,7 @@
 //
 // 本测试用**忠实 mock**（`listDir` 按名字升序，与真机实现一致）+ **真 dist 代码**复现。
 import assert from "node:assert/strict";
-import { readTemporalGraph, writeTemporalGraph } from "../dist/temporal/persistence.js";
+import { readTemporalGraph, writeTemporalGraph } from "../dist/selfhood/temporal/persistence.js";
 import { readGraph, writeGraph } from "../dist/epistemic/world/persistence/persist.js";
 
 /** 忠实 mock：`listDir` 按名字升序（真机是 localeCompare 升序），目录条目带 `target`。 */

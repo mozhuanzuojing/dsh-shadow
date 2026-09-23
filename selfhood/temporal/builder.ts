@@ -1,12 +1,12 @@
-// dsh-shadow —— temporal/builder.ts：TemporalGraph 构建（从 ObservationTrace 派生，可重建）。
+// dsh-shadow —— selfhood/temporal/builder.ts：TemporalGraph 构建（从 ObservationTrace 派生，可重建）。
 import type { TemporalGraph } from "./types.js";
 import { GRAPH_VERSION } from "./types.js";
-import { readObservationTraces } from "../observer/trace.js";
+import { readObservationTraces } from "../../observer/trace.js";
 import { readIdentityVersions } from "../identity/timeline.js";
 import { buildNode } from "./node.js";
 import { buildEdges } from "./edge.js";
 import { resolvedVersionOf } from "./timeline.js";
-import { today } from "../core/util.js";
+import { today } from "../../core/util.js";
 
 export interface TemporalRange { from?: string; to?: string; }
 
