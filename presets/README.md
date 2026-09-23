@@ -53,6 +53,18 @@ a host bundle and is always on; this preset only steers how the agent uses it.
 >    hand here, and this preset is a faithful copy of the shipped `standard` preset except for the
 >    persona. Both facts are locked by `test/preset-projection.test.ts`.
 
+> **Change note — v1.20.3 / ADR-0099: the roster cap is back to the bundle default, and the Agent Team
+> text is re-aligned to the 0.1.7 line.** Two things were wrong for a while:
+> 1. **The cap.** This deployment used to override `maxMembers` to `4` (ADR-0056 §1). That value **never bound
+>    anything** — over 23 local sessions (51.7 M characters) there were **zero** real `spawn_teammate` calls —
+>    while it had no headroom for failed spawns and existed only in the `web` profile (`headless` never set it).
+>    The override is **gone**: the roster follows the profile bundle's shipped **`maxMembers: 8`**.
+> 2. **The description.** The numbers cited here for the upstream defaults and line numbers were read off
+>    **`0.1.5-rc.2`** package bodies and were never re-read when the baseline moved to the 0.1.7 line. They are
+>    now quoted **by symbol**, with the package version they were checked on. **`0.1.7-alpha.2` itself changed
+>    one thing**: `spawn_teammate`'s first message now tells the teammate its own name, that the Lead is named
+>    `lead`, and how to use `list_agents` / `send_message`.
+
 > **Change note — v1.15.96+: Agent Team only, and「默认不派」.** 用户 2026-09-16 定调
 > 「子代理特别耗时、消耗 token；如非必要，不得轻易开子代理」⇒ this preset **removed every
 > `tool-subagent*` row** (`subagent`, `subagent_fork`, `subagent_codex`, `subagent_claude_code`,
@@ -146,24 +158,39 @@ genuinely needed); **for a single one-shot, do it yourself** — since v1.15.96 
 **no** `subagent` / `subagent_fork` row at all (see the change note at the top of this file).
 
 **The budget is a per-session lifetime cap, not a concurrency limit.** This is read off upstream
-code (`dsh-experimental-agent-team/lib/index.js`), not documentation:
+code (`dsh-experimental-agent-team/lib/index.js`), not documentation. Quoted **by symbol** because the
+line numbers rot — see `adr/0099` §2 for the three that already did. Checked on the `0.1.7-alpha.1` /
+`0.1.7-alpha.2` installed bodies (byte-identical to each other):
 
 | Evidence | Consequence |
 |---|---|
-| `L564` checks `state.members.length >= this.maxMembers` at **create** time (`TEAM_MEMBER_LIMIT`) | counts every teammate **ever created** |
-| `L1244` only `push`es; `L1244/1245` push-or-update in place | — |
-| **`members.splice/pop/shift/filter/delete` → 0 hits** | **no removal path at all** — the roster only grows |
-| `L563` rejects duplicate names + README「即使创建失败的 teammate 也保留其名字」 | **a failed spawn keeps its name AND consumes its slot** |
+| `state.members.length >= this.maxMembers` is checked **at create** time inside the journal transaction (`TEAM_MEMBER_LIMIT`) | counts every teammate **ever created** |
+| the roster's only write is `state.members.push(member)` | it grows in place; nothing is ever replaced wholesale |
+| **`members.splice/pop/shift/delete` → 0 hits** (the single `members.filter(...)` is a **read-only** scan for members still `provisioning`) | **no removal path at all** |
+| a duplicate name throws `TEAM_MEMBER_NAME_TAKEN`; `memberName()` rejects `name === "lead"` | **a failed spawn keeps its name AND consumes its slot**; `lead` is a reserved name |
+| the failed path calls `settleProvisioning()`, which **appends a new version** with `phase: "failed"` | a failed creation permanently occupies a slot, not merely a name |
 
-The host row is configured to **`maxMembers: 4`** (upstream default is 8). Four covers this
-preset's own largest explicit demand — two reviewers with different lenses (①) + one implementer +
-one researcher — and beyond that the Lead should do the work itself or serialize it.
-**Residual risk:** 4 leaves no headroom for failed spawns; raise to 6 if that proves too tight.
+**Three values, never to be conflated:**
+
+| Value | Where it comes from |
+|---|---|
+| **16** | the package's own `DEFAULT_MAX_MEMBERS` (what you get with no config at all) |
+| **8** | the `@deepseek-ai/dsh-experimental-agent-team-profile` bundle's shipped `agent-team.config` |
+| **8 (this deployment)** | v1.20.3 / ADR-0099: the profile override was **deleted**, so the bundle's 8 applies. The `headless` profile never had an override either — the two are now consistent. |
+
+Why 4 was withdrawn: over **23 local sessions / 51 715 325 characters** of recorded transcript there were
+**zero** real `spawn_teammate` calls (counted as `type == "tool/call"` with `data.name == "spawn_teammate"` —
+*not* string matches, which count the per-request tool schema 205 times in the largest session), and **zero**
+runtime `TEAM_MEMBER_LIMIT` throws. So 4 never bound anything, while ADR-0056 §1 itself recorded its only
+defect: **no headroom for failed spawns**. Raising the fallback to the bundle's 8 relaxes **no** dispatch
+threshold — the real spend control is the discipline below, not this cap.
 
 **Exhausting the budget is not a dead end.** `workflow`, `workflow-worker-thread` and `ralph`
 contain **zero** references to `agentTeams`, so they do **not** consume slots: the Lead can always
 fall back to doing it itself, or to `workflow` fan-out. (After v1.15.96 there is no one-shot
-`subagent` fallback left — those rows were removed.)
+`subagent` fallback left in this preset — and on the 0.1.7 line the profile bundle disables
+`tool-subagent-control` / `tool-subagent-list-agents` / `tool-subagent` / `tool-subagent-fork`
+**upstream** as well, so in this composition there is no `subagent` to fall back to at all.)
 
 **Round-trip discipline** (the compounding half — there is no hard gate for this one): every peer
 message **permanently appends to the target's history** and is re-sent on every later request. So:
@@ -175,7 +202,7 @@ whole persisted conversation**.
 > **Cost note, stated honestly:** the v1.15.11 discipline added **+235 characters** of always-on
 > persona (2394 → 2629, YAML-parsed length — what actually enters the prompt). That is a real, permanent cost paid to prevent unbounded delegation spend —
 > the trade is only worth it because the failure mode it guards against is a compounding one.
-> ⚠ **Current length (measured 2026-09-16, after the Team-only rewrite): `2915` characters.**
+> ⚠ **Current length (measured 2026-09-23, after the v1.20.3 re-alignment): `3047` characters.**
 > Re-measure with a YAML parse of `persona.config.prefix` whenever this persona changes — do not
 > carry the old number forward.
 
@@ -199,10 +226,14 @@ which is what makes Agent Teams the only delegation mechanism.
 dsh plugin --profile <profile> add @deepseek-ai/dsh-experimental-agent-team-profile
 ```
 
-To cap the roster, override the `agent-team` row **by id** in the profile's `cordis.patch.yml` —
+To change the roster cap, override the `agent-team` row **by id** in the profile's `cordis.patch.yml` —
 and restate **every** config key, because a patch replaces the whole `config`:
-`maxMembers`, `maxTasks`, `maxPendingMessagesPerMember`, `maxMessageBytes`, `disposalTimeoutMs`.
-⚠ The bundle defaults to `maxMembers: 8`; this deployment caps it at 4 (ADR-0056).
+`maxMembers`, `maxTasks`, `maxPendingMessagesPerMember`, `maxMessageBytes`, `disposalTimeoutMs`
+(a missing key silently falls back to the schema default).
+⚠ **This deployment no longer does that** (v1.20.3 / ADR-0099): it follows the bundle's shipped
+`maxMembers: 8`. The override used to exist only here and only in the `web` profile; deleting it also
+deleted that "restate all five keys" maintenance burden. Package default vs bundle default vs this
+deployment: **16 / 8 / 8** (see the budget table above).
 
 Without the bundle the preset still mounts and `standingKeyFor` still reports success, but the
 Team tools never appear — that is the ADR-0049「缺件不静默」gap. Since v1.20.0 what you must check
@@ -219,12 +250,16 @@ non-Team children kept their controls.
 **Mount only once per process.** Mounting `tool-agent-team` a second time in the same process
 fails with `prompt section "team:policy" is already registered in this scope`. The package
 (`dsh-experimental-tool-agent-team/lib/index.js`) dedupes with an **instance-level**
-`installed = new Map()` (line 531) while registering into the **member Agent's own scope**
-(`const scoped = agent.ctx`, line 232 → `scoped.systemPrompt.section({ name: "team:policy" })`,
-line 238). So a second mount sees an empty Map and re-registers the same section name on the same
-live Agent. Consequences: two presets both mounting this row collide on the second, and a
-same-process remount (HMR / loader reload) carries the same risk. A cold start mounts once and is
-unaffected.
+`installed = new Map()` while registering into the **member Agent's own scope**
+(`const scoped = agent.ctx` → `scoped.systemPrompt.section({ name: "team:policy" })`). So a second
+mount sees an empty Map and re-registers the same section name on the same live Agent. Consequences:
+two presets both mounting this row collide on the second, and a same-process remount (HMR / loader
+reload) carries the same risk. A cold start mounts once and is unaffected.
+
+> Quoted **by symbol, not by line**: `installed` sat at `530` in `0.1.7-alpha.1` and `538` in
+> `0.1.7-alpha.2` (the teammate-reminder insertion shifted it by 8), while `const scoped = agent.ctx`
+> and `team:policy` did not move. Older revisions of this file cited `531` / `232` — those were
+> `0.1.5-rc.2` readings (see `adr/0099` §2).
 
 ### Persona row key (v1.14.1 fix)
 

@@ -1,6 +1,14 @@
 # ADR-0056: 委派规模与复用优先（teammate 名额硬上限 4 + 往返纪律）
 
 - 状态：**已接受（2026-09-10）**
+- **状态指针（v1.20.3 补）**：本文 **§1 的 `maxMembers: 4` 已被 `adr/0099` 撤回** —— 名额回落 profile 层 bundle 的出厂值
+  `8`，部署面那条 override 整条删除；**§2 的「只用一次用 `subagent`」自 v1.15.96 起在本预设不再成立**
+  （0.1.7 的 `agent-team-profile` bundle 自己 disable 了 `tool-subagent*`，本预设也不挂任何委派行 ⇒ 降级链是
+  **自己做 / `workflow`**）。**§2 的「复用优先」判据与 §3 的往返纪律继续有效**；**§1–§5 的决定与行号按「当时」保留、不改写**
+  （理由见 `adr/0099` §4.2）。
+- 包版本 pin（v1.20.3 补）：**本文所有包内行号 pin 在 `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2`**
+  （即 v1.15.17 那次独立复核所用的安装体）。该包在 `0.1.7-alpha.1/2` 上已变：`DEFAULT_MAX_MEMBERS` 为 **16**、
+  限额检查仍在创建时、`state.members.push` 的位置亦已移位 ⇒ **引用本文行号之前先读这一行**。
 - 决定日期：2026-09-10
 - 关联 ADR：ADR-0049（缺件不静默——不是本轮）、inv 178 `Authority ≠ Ownership`、inv 182 `Delegation Scope 不可扩大`；**修订 v1.15.4 的「team 优先」口径**
 - 关联术语：`../CONTEXT.md`（`toolset` / teammate 名额）

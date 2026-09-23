@@ -3,6 +3,103 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.20.3] 名额上限回落 bundle 出厂 8 + Agent Teams 描述对齐 0.1.7 线（ADR-0099）
+
+用户指令：「dsh-shadow插件中关于 Agent Team 的描述需要更新 对应 dsh@v0.1.7-alpha.2」。
+按 `/grill-with-docs` 逐层追问定案（先查代码再问、一次一个问题）：**范围**（描述对齐 **+** 决策复核）→
+**上限值**（改成 8 并删掉部署面 override）→ **ADR 形态**（新立 `adr/0099`，不改 `adr/0056` 正文）。
+**插件代码零改动** —— 本轮改的是描述、ADR 与部署面那一行配置。
+
+### ① 先量：alpha.1 → alpha.2 到底变了什么（逐字节，不读 CHANGELOG）
+
+两代包在本机同时存在（`dlx/3452292f…` = `0.1.7-alpha.1`，`dlx/e1472f28…` = `0.1.7-alpha.2`），逐文件比 MD5：
+
+| 面 | 结果 |
+|---|---|
+| `agent-team` 服务 `lib/index.js` | **SAME**（`BBA2DB3A…`，1834 行） |
+| `agent-team-profile` 的 `cordis.patch.yml` | **SAME**（仍 disable 4 条 `tool-subagent*`；仍插 `agent-team`(`maxMembers: 8`+4 键) / `tool-agent-team` / `ui-agent-team`） |
+| `client-ui-agent-team` `lib/index.js` | **SAME** |
+| `dsh-web-app` 的 4 个 shipped `presets/*.patch.yml` | **全 SAME** ⇒ 本预设的 F1 忠实性基线未动 |
+| **`tool-agent-team` `lib/index.js`** | **DIFF**：549 → 557 行（`6C426893…` → `7B817E51…`） |
+
+**唯一语义变化**：`spawn_teammate` 首条 user 消息的 `<system-reminder>` 由 `You are teammate "<name>".`
+扩为「自己的名字 + `Your Team Lead is named "lead".` + `list_agents` / `send_message` 的用法」。
+⇒ 这解释了 `lead` 是**保留名**（该包 `memberName()` 对 `name === "lead"` 抛 `TEAM_INVALID_MEMBER_NAME`）。
+其余差异全是依赖号上抬（`^0.1.7-alpha.1` → `0.1.7-alpha.2`、cordis `~4.0.4`、schemastery `~3.18.4`）。
+
+### ② 再量：本仓的「Agent Team 描述」有六处与**装着的** 0.1.7 对不上
+
+| # | 原写法 | 实测 | 性质 |
+|---|---|---|---|
+| 1 | 「上游默认 **8**」+ `L1594 DEFAULT_MAX_MEMBERS` | **包默认 16**；bundle 自己插的是 **8** ⇒ 两个「默认」是两回事 | 事实错 + 读数过期 |
+| 2 | 「只用一次用 `subagent`」「`workflow` / `subagent` 不吃名额」 | 0.1.7 的 bundle disable 了 `tool-subagent*`，本预设也不挂委派行 ⇒ **本组合没有 `subagent`** | 结论过期 |
+| 3 | alpha.2 的 teammate 身份提示 | 本仓**全库 0 处** | 漏描述 |
+| 4 | 「`members.splice/pop/shift/filter/delete` → 0 hits」 | 唯一命中是 `members.filter(... provisioning)`，**只读**筛选 ⇒ 结论不变、断言口径过宽 | 口径 |
+| 5 | `installed`「第 531 行」、`const scoped`「第 232 行」 | 都是 **0.1.5-rc.2** 读数；alpha.1 为 `530`/`231`，alpha.2 为 `538`/`231` | 行号腐烂 |
+| 6 | `L1244` 作「只 `push`」的证据 | push 已在 `state.members.push(member)` 处，`L1244` 是另一句 | 行号腐烂 |
+
+⚠ **时间线必须说清**：第 1 / 5 / 6 处**不是 alpha.2 造成的** —— `DEFAULT_MAX_MEMBERS = 16` 与 push 的新位置在
+**alpha.1 就已经如此**（两版 `agent-team` lib 逐字节相同）。它们是 **0.1.5-rc.2 时代的读数**（`adr/0056` v1.15.17
+那次复核的包版本），v1.20.0「适配 alpha.1」时**没有重新读一遍**。⇒ 这次「对应 alpha.2」实际是把**整条 0.1.7 线**补齐。
+
+### ③ 决定：名额 4 → 8，并删掉部署面那条 override
+
+- 撤回 `adr/0056` §1 的 `maxMembers: 4`；名额**随 profile 层 bundle 出厂值 8**；
+  `~/.dsh/profiles/web/cordis.patch.yml` 里那条按 id override **整条删除**（先备份 `.bak-<时间戳>`）。
+- **依据（按强度）**：① **实测 4 从未生效**（见 ④）；② 4 的唯一已知缺陷（无余量给失败的 spawn，
+  `adr/0056` §1 自己写的）正好落在它最可能被触发的路径上；③ `headless` 从来没设过 ⇒ 同包两制；
+  ④ 删掉后 `adr/0098` §2.2 那条「override 必须重述全部 5 个 config 键、漏一个 = 静默回落」的**长期维护面消失**。
+- **判据一个字不动**：「复用优先（会复用 ≥2 次才用 teammate）」与 persona「默认不派人」**全部保留** ——
+  真正控制花费的是这一层，4 → 8 只把**从未生效的兜底**对齐上游。
+- **不采**：仍 4（留着持续维护面换一道 0 次触发的闸门）· 16（偏离更大且无实测支撑）·
+  4 + 加仪表（roster 结构由上游包定义，本插件改不了它的输出）。
+
+### ④ 实测：名额从未被触达（这次把它量化了）
+
+- 语料：`~/.dsh/sessions` 现存 **23 个会话 / 51 715 325 字符**。
+- ⚠ **方法学（可复现前提）**：会话体是**多帧 zstd**（追加写）—— `zlib.zstdDecompressSync` 与
+  `createZstdDecompress` **只解第一帧且不报错**（直接解得到 197 字节的会话头，并**静默给出 0 计数**）；
+  必须用支持多帧的流式解压（本次用 `py-zstandard` 的 `stream_reader`）。
+- 判据**必须按事件**：`spawn_teammate` 字符串在最大那个会话里出现 205 次，**全部是每请求都带一遍的工具 schema**；
+  按 `type == "tool/call"` 且 `data.name == "spawn_teammate"` 数才是真调用。
+- 读数：`spawn_teammate` **0** · `team_task_*` **0** · `wait_agent` **0** · `interrupt_agent` **0** ·
+  `send_message` **3**（三个 `origin:"subagent"` 子会话各 1 条回话）· `subagent` **3** ｜
+  **运行时 `TEAM_MEMBER_LIMIT` = 0**。交叉来源：`~/.dsh/.shadow` 全树对 teammate 仅 3 条命中且全是分析文字。
+- ⇒ `BACKLOG` 的 **V3 仍不结案**（闸门确实没触发过），但**已量化**：离 8 还差 8 个成员；并写明结案代价
+  （要真机结案就得在一个会话里永久耗掉 8 个名额）⇒ **允许长期不结案**。
+
+### ⑤ 顺带修掉一颗 YAML 雷（自查抓到）
+
+改 `presets/projection.patch.yml` 的 `description` 时，我写了 `` `maxMembers: 8` `` —— 单行 **plain scalar 里出现
+「冒号 + 空格」是非法 YAML**，`yaml.safe_load` 直接报 `mapping values are not allowed here`。
+⇒ 改成 `` `maxMembers` = 8 ``。**判据（写进本文，供后来者）**：该文件的 `description` 是 plain scalar，
+**不得含 `: `**；而 persona 的 `prefix: >-` 是折叠块，块内冒号安全。落盘前用真 YAML 解析器验过一次
+（同时得到 persona 长度，见 ⑥）。
+
+### ⑥ 描述对齐的落点（全部含实测）
+
+| 文件 | 改了什么 |
+|---|---|
+| `adr/0099`（新） | 决策修订 + 描述对齐 + 实测（本文的正式面） |
+| `adr/0056` | **只加两行头注**：状态指针（§1 的 4 已被 0099 撤回；§2 的 `subagent` 自 v1.15.96 起不成立）+ **包版本 pin**（本文行号 pin 在 `0.1.5-rc.2`）——**正文决定与行号一字不动** |
+| `adr/0098` | §6 补一条：§2.2 那条 override 的具体值已撤回，其「重述全部键」的维护面在本部署消失 |
+| `CONTEXT.md` | 「teammate 名额」术语行重写：**三值口径**（包默认 16 / bundle 出厂 8 / 本部署 8）+ 实测 + 降级链更正 + alpha.2 身份提示 + `lead` 保留名 |
+| `presets/projection.patch.yml` | persona ② 「上限 4」→「上限 8 = profile bundle 出厂值」；③ 加一句「回话方式不用交代」（alpha.2 自带）；声明行 `description` 口径同步；F1 注释基线改 `0.1.7-alpha.2` |
+| `presets/README.md` | 预算表**改符号引用**（并写明 alpha.1/alpha.2 上各符号的实际位置）+ 三值表 + 实测读数；override 段改成「本部署不再 override」；新增 v1.20.3 change note；**persona 长度重测** |
+| `README.md` | 投影模式两处（上限 8 / 不再自行设上限）+ **当前版本行** |
+| `BACKLOG.md` | V3 重写（仍不结案但已量化，并写明结案代价） |
+
+**persona 长度重测**（`yaml.safe_load` 真解析 `persona.config.prefix`）：**2915 → 3047 字符**
+（+132：② 的 `4`→`8` 附近改写 + ③ 的身份提示括注）。按 `presets/README` 的口径**回填实测值、不沿用旧数**。
+
+### ⑦ 验证
+
+见 `adr/0099` §5.4。本轮的门：`npm run verify`（含 `audit:docs` ①②③④⑤⑥⑦）、
+`dsh --profile web --dump-config`（`agent-team` 的 config 回到 bundle 的 5 键、`maxMembers: 8`）、
+部署面两 profile 一致。**未复核**：改 profile `cordis.patch.yml` 的 `agent-team` config 是否**热生效**
+（`--dump-config` 只证明**组合**正确；运行时以宿主下次启动为准）；alpha.2 的身份提示**未在本机真跑过**
+一台 teammate（本部署从未创建过 teammate）。
+
 ## [v1.20.2] 给「基线三处一致」配一道门（`audit:docs` 检查 ⑦）
 
 **由来**：`0706f4c` 抬了 `engines.dsh` 却**只改代码**，把三处当前态文档留在旧基线，而 `verify` **全绿** ——

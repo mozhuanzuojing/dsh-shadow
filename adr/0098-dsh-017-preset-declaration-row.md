@@ -188,3 +188,8 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   标定在 `tools/docs-consistency.selftest.ts` 的 ㉔–㉘，并**用真缺陷回档复验**过：把 `README.md` 改回
   `0.1.7-alpha.1`（复现 `0706f4c` 的形态）⇒ ⑦ 变红并点名两份文档；复档即回 0。
   **边界**：刻意不判正文里对历史基线的追述（那段**本就该**含旧版本号）。
+- **名额 override 已撤回（`v1.20.3`，`adr/0099` 补记）**：§2.2 那条「在 profile 里按 id override `agent-team`、**必须重述该行全部
+  config 键**」的**具体取值 `maxMembers: 4` 已撤回** —— 名额回落 bundle 出厂值 `8`，部署面（`web` profile 的
+  `cordis.patch.yml`）里整条 override 删除，`headless` 本来就没设过 ⇒ 两 profile 一致。§2.2 正文按「决策当时」保留，
+  **但那条「漏写一个键 = 静默回落」的长期维护面在本部署已不存在**。同名事实的另一半（`0.1.7` 线的包读数已变、
+  alpha.2 新增 teammate 身份提示）见 `adr/0099` §2。
