@@ -3,7 +3,75 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
-## [v1.20.3] 名额上限回落 bundle 出厂 8 + Agent Teams 描述对齐 0.1.7 线（ADR-0099）
+## [v1.20.4] 投影模式的描述前置 Agent Teams + persona 补 0.1.7 `team:policy` 执行口径 + 本机旧副本退役（ADR-0100）
+
+用户指令：「dsh-shadow 里面的投影模式的描述没有更新 agent Team相关内容」。先摆证据再定范围（用户三选全选）：
+① **GUI 卡片上看到的描述**；② 仓库 `presets/projection.patch.yml` 的 `description` 与 persona「工作方式」；
+③ **本机遗留副本** `~/.dsh/.agent-presets/projection/`（处置定为「备份后删除」）。**插件代码零改动**
+（`core/` / `query/` 一行未动，`dist/` 未重编译），本轮改的是描述、persona 文本、门与文档。
+
+### ① 先量：为什么「文件里有」却「界面上没有」
+
+- **GUI 的卡片把描述截掉**（实测源码，不是猜）：`@deepseek-ai/dsh-client-ui-agent-preset` 的 `lib/client.js`
+  里 `cardDesc` 用 `-webkit-line-clamp: 4`；卡片列宽 `minmax(268px,1fr)`、字号 13px ⇒ 可见窗口约 **4 行
+  ≈ 90 字**。而 v1.20.3 的 `description` 把 Agent Teams 那句写在**最后** ⇒ **卡片上根本看不到**。
+  这就是用户报的「描述没有更新 Agent Team 内容」：**不是文件里没有，是可见窗口里没有**。
+- **0.1.7 上游的 `team:policy` 才是权威**（本轮把它整段读出来逐条对）：段文本在
+  `dsh-experimental-tool-agent-team` 的 `lib/index.js`（`const POLICY`），随工具装配注入。它写着预设
+  persona 从没有过的规则：**只有用户显式要求才建 teammate**、成员共享同一文件系统 ⇒ **写作用域必须互不
+  重叠**（写进共享任务的 `write_scopes`）、要排序用 `blocked_by`、共享任务板 **list → get → claim（带
+  revision）→ complete**、**任务就绪不会启动执行者**、`FS_STALE_VERSION` 重读 + rebase 重试。
+  ⇒ persona ⑤ 一直是 **v1.15.4 时代的子集**（只写了并行批派 + revision CAS + wait_agent 前置）。
+- **本机那份遗留副本是最典型的「旧口径」**：`~/.dsh/.agent-presets/projection/preset.yml`（2026-09-11 起未动）
+  仍写「上限 **4** / 只用一次用 **`subagent`**（`subagent_fork` 带上下文）/ **前置**须挂
+  `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.1` 且 `maxMembers` 设为 4」。**0.1.7 对它没有任何
+  读取者**：在装着的 `@deepseek-ai/*` 包体里 grep `\.agent-presets` **0 命中**（旧形态自 v1.20.0 / ADR-0098
+  起退役）。
+
+### ② 决定与落点
+
+| 面 | 改动 |
+|---|---|
+| `presets/projection.patch.yml` 的 `description` | 重排为「身份 → **Agent Teams** → 纪律」：`Agent Teams` 落在**前 90 字**内（实测第 58 字附近），并点名 profile 层 bundle 与「名额随 bundle 出厂 `maxMembers`」；文件头的 delta 注释补第 3 条（描述前置的理由 = 上面那条实测） |
+| 同文件 persona ② | 补**上游硬门**：「只有用户显式要求才建」；本预设的「复用 ≥2 次」明确降级为**过了门之后的第二道成本判据** |
+| 同文件 persona ⑤ | 重写为 0.1.7 `team:policy` 的执行口径（写作用域 / `blocked_by` / 任务板五步 / readiness / `FS_STALE_VERSION` / `inactive` 语义），**压紧**以控制常驻成本 |
+| 同文件 persona ⑦ | 补「两个创意角色**默认由你自己先后担任**」——否则与 ② 的硬门自相矛盾 |
+| `test/preset-projection.test.ts` | 新增 **④**：④a 描述前 90 字必须含 `Agent Teams`（防它再被写回末尾）；④b persona 必须带六个 `team:policy` 锚点。**这是本轮唯一的门**（描述腐烂过一次，就得留一道） |
+| `presets/README.md` | v1.20.4 change note（三条实测）+ 「Reuse first」节补上游门 + ⑦ 节补默认角色 + **persona 长度重测**与代价记账 |
+| `README.md` | §投影模式补两条（描述前置与 persona 纪律、遗留副本退役）+ **当前版本行** |
+| `CONTEXT.md` | 新增术语关联条「团队协作纪律与描述可见窗口（ADR-0100）」+ 遗留副本退役事实 |
+| `adr/0100`（新） | 决策与理由（描述可见窗口这道约束、persona 与上游 policy 的边界与代价、旧副本退役） |
+| 用户级规则（跨仓） | `~/.agents/rules/moe-subagent-dispatch.md` 与手工聚合 `~/.dsh/AGENTS.md` 同步这段团队纪律（**规则为源**，两侧各自改、不跨侧复制）；本机 `~/.dsh/.agent-presets/projection/` **备份后删除** |
+
+**persona 长度重测**（`yaml.safe_load` 真解析 `persona.config.prefix`，探针剥 `!!js` 后解析）：**3047 → 3583**
+字符（**+536**：⑤ 的 `team:policy` 执行口径 + ② 的硬门 + ⑦ 的角色默认）。按预设 README 的口径**回填实测值**。
+⚠ 边界写清：上游 `team:policy` **本身就是权威且每会话自动注入**，persona 这一份买的是「**决定要不要开 Team
+那一刻**」的口径一致，不是新能力 ⇒ 若哪天判定不值这 536 字符，要**同时**放松测试 ④b 再退回 v1.15.4 子集。
+
+### ③ 验证
+
+- **真 YAML 解析器**（一次性探针，放 `%TEMP%`、用完即删）：文件合法、`description` 仍是**单行 plain scalar**
+  （无「冒号 + 空格」这颗 v1.20.3 踩过的雷）、声明行 id 仍 `preset-projection`、行清单仍 **27 项**、
+  `tool-subagent*` **0**、`tool-agent-team` **不在**、`Agent Teams` 在**前 90 字**内。
+- `node test/preset-projection.test.ts` → ①①b②③④ **全绿**（exit 0）。
+- `npm run verify`（含 `audit:docs` ①②③④⑤⑥⑦、`audit:layers` / `audit:scripts` / `audit:granularity` /
+  `eval:retrieval:check` / `audit:ratchet` / `tsc --noEmit` / 全部测试）；`dsh --profile web --dump-config`
+  复核组合面。
+- **本机遗留副本**：备份到 `~/.dsh/.agent-presets/projection.bak-<时间戳>/`（3 个文件，SHA256 与原件一致）后删除原目录 ⇒
+  `.agent-presets/` 下不再有可被误读成「现行投影模式描述」的文件。
+- **顺带：`audit:docs` ④ 在本轮抓到一次真缺陷** —— 第一版的 README 当前版本行与本文条目几乎同文（≥40 字连续重复），
+  门直接报红并点名「本缺陷已复发 5 次」⇒ 改成「摘要 + 指向 `adr/0100` / `CHANGELOG`」。这正是那道门存在的用途。
+
+### ④ 未复核 / 遗留
+
+- **GUI 实机没截图**：4 行截断是从装着的客户端源码（`-webkit-line-clamp: 4`）读出来的，**不是**从浏览器
+  实拍量出来的；可见窗口「≈90 字」是按卡片列宽与字号估的，**未做像素级标定**。
+- **上游 `team:policy` 的后续漂移没有门**：预设只锁了六个锚点；上游改口径时**仍要靠人回来核对**这一份
+  （ADR-0100 已把它写成「重核触发条件」）。
+- **未跑真 teammate**：本部署至今 **0 次**真 `spawn_teammate`（v1.20.3 实测），所以本轮新增的写作用域 /
+  任务板口径**只有文档与测试证据，没有运行证据**。
+
+
 
 用户指令：「dsh-shadow插件中关于 Agent Team 的描述需要更新 对应 dsh@v0.1.7-alpha.2」。
 按 `/grill-with-docs` 逐层追问定案（先查代码再问、一次一个问题）：**范围**（描述对齐 **+** 决策复核）→

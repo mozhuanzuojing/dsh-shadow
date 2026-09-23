@@ -53,6 +53,29 @@ a host bundle and is always on; this preset only steers how the agent uses it.
 >    hand here, and this preset is a faithful copy of the shipped `standard` preset except for the
 >    persona. Both facts are locked by `test/preset-projection.test.ts`.
 
+> **Change note — v1.20.4: the description now leads with Agent Teams, and persona ⑤ carries the 0.1.7
+> `team:policy` execution rules.** Three findings, all measured:
+> 1. **The picker clamps the description to 4 lines.** `dsh-client-ui-agent-preset` renders the row
+>    through `cardDesc { -webkit-line-clamp: 4 }` — roughly **90 characters** at the picker's card
+>    width — so the Agent Teams sentence (previously the *last* one) was **invisible in the GUI even
+>    though the file carried it**（用户 2026-09-23 报的「投影模式的描述没有更新 Agent Team 内容」正是这个）。
+>    The description is now ordered identity → **Agent Teams** → discipline, and ④a of
+>    `test/preset-projection.test.ts` fails if `Agent Teams` drifts out of the first 90 characters.
+> 2. **persona ⑤ was still the v1.15.4-era subset.** 0.1.7's `team:policy` section (injected by
+>    `@deepseek-ai/dsh-experimental-tool-agent-team` into every Team-capable session) states rules this
+>    preset never carried: the **only-when-the-user-explicitly-asks** creation gate, **disjoint write
+>    scopes recorded on shared tasks**, `blocked_by` ordering, the **`list → get → claim → complete`**
+>    board workflow, *task readiness never starts an owner*, and the `FS_STALE_VERSION` rebase rule.
+>    ⑤ now carries them compressed; ④b locks six anchors. ⚠ The upstream policy stays **authoritative
+>    and auto-injected** — this copy exists so a projection session that is deciding *whether* to
+>    involve Teams at all reads the same rules. When upstream changes that section, re-check this one.
+> 3. **The legacy deployment copy is retired** (2026-09-23): `$DSH_HOME/.agent-presets/projection/`
+>    still advertised「上限 **4** / 只用一次用 `subagent` / 前置挂 `dsh-experimental-agent-team@0.1.5-rc.1`」.
+>    0.1.7 has **no reader** for that directory (grep `\.agent-presets` across the installed
+>    `@deepseek-ai/*` bodies: **0 hits**), so it was backed up to `projection.bak-<timestamp>/` and
+>    deleted — a frozen description that keeps advertising a withdrawn cap and a removed fallback
+>    misleads worse than no copy at all.
+
 > **Change note — v1.20.3 / ADR-0099: the roster cap is back to the bundle default, and the Agent Team
 > text is re-aligned to the 0.1.7 line.** Two things were wrong for a while:
 > 1. **The cap.** This deployment used to override `maxMembers` to `4` (ADR-0056 §1). That value **never bound
@@ -119,7 +142,9 @@ AGENTS「memory 存档」habit, so it stays executable in projection mode.
 
 From v1.14.1 the persona also carries **⑦ 创意与资源** (open-ended / creative work). The agent
 dispatches a **resource scout** first and a **creative expert** second, and neither may take
-over the other's job:
+over the other's job. **As of v1.20.4 the agent plays both roles itself by default** — handing
+either role to a teammate requires clearing the two gates above (upstream: the user asked for
+Teams; preset: ≥ 2 reuses).
 
 - **Resource scout — material only.** Check the library first (`shadow_query` with
   `scope: ["resource"]`; a hit skips external search), identify the kind of source needed
@@ -156,6 +181,10 @@ loss when the member is used once**. The corrected rule is:
 **Judgement:** use a teammate only when it will serve **≥ 2 dispatches** (or the shared task board is
 genuinely needed); **for a single one-shot, do it yourself** — since v1.15.96 this preset mounts
 **no** `subagent` / `subagent_fork` row at all (see the change note at the top of this file).
+⚠ **The creation gate itself is upstream** (v1.20.4): 0.1.7's `team:policy` says teammates are created
+**only when the user explicitly asks** to use Agent Teams / teammates. The ≥ 2-reuse rule is the
+*second*, cost-side gate — it decides how much to spend **once that gate is passed**, not whether to
+open a Team at all.
 
 **The budget is a per-session lifetime cap, not a concurrency limit.** This is read off upstream
 code (`dsh-experimental-agent-team/lib/index.js`), not documentation. Quoted **by symbol** because the
@@ -202,7 +231,14 @@ whole persisted conversation**.
 > **Cost note, stated honestly:** the v1.15.11 discipline added **+235 characters** of always-on
 > persona (2394 → 2629, YAML-parsed length — what actually enters the prompt). That is a real, permanent cost paid to prevent unbounded delegation spend —
 > the trade is only worth it because the failure mode it guards against is a compounding one.
-> ⚠ **Current length (measured 2026-09-23, after the v1.20.3 re-alignment): `3047` characters.**
+> ⚠ **Current length (measured 2026-09-23, after the v1.20.4 `team:policy` alignment): `3583`
+> characters** — v1.20.3 measured **3047**, so this round costs **+536**: ⑤ carries the 0.1.7
+> `team:policy` execution rules (write scopes / `blocked_by` / board workflow / readiness /
+> `FS_STALE_VERSION`), ② the upstream creation gate, and ⑦ says both creative roles default to the
+> agent itself. The upstream policy is auto-injected anyway, so this copy buys **decision-time
+> coherence** (the preset is what the agent reads while deciding *whether* to open a Team), not new
+> capability — if that is ever judged not worth 536 characters, drop ⑤ back to the v1.15.4 subset
+> **and** relax ④b together.
 > Re-measure with a YAML parse of `persona.config.prefix` whenever this persona changes — do not
 > carry the old number forward.
 

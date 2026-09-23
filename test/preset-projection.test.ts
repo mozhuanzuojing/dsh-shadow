@@ -1,6 +1,6 @@
 // dsh-shadow —— 投影预设的迁移与纪律棘轮（v1.20.0 / ADR-0098）。
 //
-// 锁三件事：
+// 锁四件事：
 //   ① **形态**：0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行，随 bundle 的
 //      `dsh.bundle.patch`（**数组**）里的 patch 文件发布。旧形态是 `$DSH_HOME/.agent-presets/<id>/`
 //      目录（`preset.yml` + `agent.cordis.yml`）—— **0.1.7 上没有任何读取者**（官方 shipped skill
@@ -12,6 +12,10 @@
 //   ③ **忠实性**：预设是 0.1.7 shipped `standard` 的忠实副本（F1），只允许两处有意偏差
 //      （persona 文本、delegation 组）。行清单被逐字锁住：上游漂移 → 本测试红 → 人裁决，
 //      而不是让预设悄悄落后于宿主。
+//   ④ **描述前置 + Team 纪律锚点（v1.20.4）**：预设选择器的卡片把描述**截到 4 行**
+//      （`dsh-client-ui-agent-preset` 的 `cardDesc { -webkit-line-clamp: 4 }`）⇒ Agent Teams
+//      必须出现在**前置窗口**里，否则「文件里有、界面看不见」（用户 2026-09-23 报的就是这个）；
+//      且 persona 必须携带 0.1.7 `team:policy` 的执行口径锚点，掉了就红。
 //
 // ⚠ 为什么行清单是**写死**的：这正是「棘轮」的形态（同 `test/recall-envelope.test.ts` 的
 //   `modes.size === 62`）。它**故意**会在上游增删行时变红 —— 那是要人裁决的信号，不是腐烂。
@@ -136,4 +140,35 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
   assert.match(src, /你处于「投影模式」/, "persona 必须携带投影模式那段文本（这是本预设存在的全部理由）");
 
   console.log(`✔ ②③ 声明行身份 OK；行清单 ${ids.length} 项棘轮锁住；T1/F1 不变量全过`);
+}
+
+// ── ④ 描述前置窗口 + persona 的 Team 纪律锚点（v1.20.4） ──────────────────────
+{
+  const src = readFileSync(patchUrl, "utf8");
+
+  // ④a 描述：GUI 卡片只显示约 4 行（≈90 字）⇒ Agent Teams 必须落在前置窗口里。
+  const desc = src.match(/^\s*description:\s*(.+)$/m)?.[1] ?? "";
+  assert.notEqual(desc, "", "config.description 必须存在且是单行 plain scalar（不得含「冒号+空格」，那会让 YAML 解析直接失败）");
+  assert.match(
+    desc.slice(0, 90),
+    /Agent Teams/,
+    "④a 描述前 90 字必须出现「Agent Teams」——预设选择器的卡片把描述截到 4 行，写在末尾等于界面上看不见",
+  );
+  assert.match(desc, /dsh-experimental-agent-team-profile/, "④a 描述必须点名提供 Teams 的 profile 层 bundle");
+  assert.match(desc, /maxMembers/, "④a 描述必须写「名额随 bundle 出厂值」，别手写一个会腐烂的上限数");
+
+  // ④b persona：0.1.7 `team:policy` 的执行口径锚点（上游改口径时要回来核这一份）。
+  const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";
+  assert.notEqual(persona, "", "④b persona prefix 折叠块必须能取到");
+  for (const needle of [
+    "显式要求",
+    "写作用域必须互不重叠",
+    "blocked_by",
+    "list → get → claim",
+    "任务就绪不会",
+    "FS_STALE_VERSION",
+  ]) {
+    assert.ok(persona.includes(needle), `④b persona 必须携带 0.1.7 team:policy 锚点：${needle}`);
+  }
+  console.log("✔ ④ 描述前置窗口含 Agent Teams；persona 携带 team:policy 六个锚点");
 }
