@@ -3,15 +3,15 @@
 // rebuildIndex（L2 增量索引→_index.md）、runCompact（Episode 收口归档）、patchSummary、ensureIndex。
 // fs 重、领域逻辑最密；用显式 WriterCore 注入（状态 + 配置派生），便于无 harness 验证。
 // 与 writer.ts 原实现逐字一致；flush 经 hooks.primaryComp 取主入口（composition root 注入，解 cycle）。
-import { SHADOW_ROOT } from "../paths.js";
+import { atomsRel, indexesRel } from "../paths.js";
 import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../view/abstract.js";
 import type { AgentLike } from "../types.js";
 import { resolveWorkspace } from "../scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
 import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
-import { readRel, listMemories, memoryFileName, timeFromName } from "../../persistence/files.js";
+import { readRel, listMemories, memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";
 import { readMeta, mutateMeta } from "../../persistence/meta.js";
-import { buildClueHeader, registerMeta } from "../retention/memory.js";
+import { buildClueHeader, registerMeta, type AtomAxes } from "../retention/memory.js";
 import { traceOf } from "../retention/trace.js";
 import { streamText, textMessage } from "./llm.js";
 import { buildIndexText, consolidateText } from "./render.js";
@@ -22,6 +22,9 @@ import { routeFor, noteDegrade, markDerivedDirty, rememberAuditMaterials, takeAu
 import { isAuditBatch, echoToAudit, auditStreamRel, auditLinesOf, bodyLinesOf, actionMaterials } from "../retention/capture-granularity.js";
 import { appendJsonlLine } from "../../persistence/jsonl-append.js";
 import { invalidateProjection, shadowSourcesFingerprint } from "../view/projection-store.js";
+import { writeProjectionView, bodyHashOf } from "../space/view-file.js";
+import { atomTokenOf, invalidateProjectionSpace, soulTokenOf } from "../space/world.js";
+import { readSoul } from "../../subject/soul/soul.js";
 import type { WriterCore } from "./core.js";
 import type { WriterHooks } from "./capture.js";
 
@@ -109,21 +112,16 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     // 拿开头读到的 meta 全量覆盖回去会丢掉期间别人的写入。故只收集 delta，最后在
     // `mutateMeta` 的**新鲜快照**上应用。
     const marks: string[] = [];
-    const dateOf = (rel: string) => (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || today();
+    const dateOf = (rel: string) => dateFromName(String(rel).split("/").pop() || "") || today();
     for (const ep of eps.slice(0, -1)) {
       const atoms = (ep.memoryRefs || []).map((rel: string) => cache.get(rel)?.parsed).filter(Boolean);
       if (!atoms.length) continue;
-      // 时间戳必须**从 `episode.startedAt` 同时产出「文件名里的」与「缓存里的」**（v1.15.38 修复）：
-      //   原来文件名不带时间戳、缓存里放 `startedAt.slice(11,17).replace(/:/g,"")`
-      //   （`YYYY-MM-DD HH:MM:SS` 下 = `"09:00:"` → `"0900"`，**4 位、不是 HHMMSS**）⇒
-      //   重启后读侧从文件名反解得到 `""`，同一 consolidated 文件的 `time` 两套值，
-      //   而 `time` 是取代裁决的输入（`query/query.ts:299`）⇒ 跨重启裁决会变（ADR-0069 同族）。
-      //   现在：文件名带 6 位 HHMMSS，缓存 `time` **由文件名反解**（`timeFromName`），两侧同源。
+      // 时间戳必须**从 `episode.startedAt` 同时产出「文件名里的」与「缓存里的」**（v1.15.38 修复）
       const stamp = String(ep.startedAt || "").match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):?(\d{2}):?(\d{2})/);
       const rdate = stamp ? stamp[1] : dateOf((ep.memoryRefs || [])[0]);
       const rtime = stamp ? `${stamp[2]}${stamp[3]}${stamp[4]}` : "";
       const name = memoryFileName(rdate, rtime, `ep-${compactSlug(ep.id)}-consolidated.md`);
-      const rel = `${SHADOW_ROOT}/${rdate}/${name}`;
+      const rel = `${atomsRel()}/${name}`;
       const text = consolidateText(ep, atoms);
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       await fs.writeText(t, text);
@@ -144,7 +142,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
   };
 
   // ── 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）────────────────────────────
-  //  每条记忆一份摘要是 O(N) 写；**每个日期目录一份**是 O(#dates) 写，故代价有界（见 types.ts 的注释）。
+  //  每条记忆一份摘要是 O(N) 写；**每个 when 日期桶一份**是 O(#dates) 写，故代价有界（见 types.ts 的注释）。
   //  层次：记忆（source）→ L1 → L0，**每层只从它下面那层派生**（`core/view/abstract.ts` 的唯一纪律）。
   //  返回「最近 N 个目录的 L0」供 `_index.md` 引用 —— 这条读路径让 sidecar **不是死代码**。
   const writeAbstracts = async (fs: any, ws: string, recs: any[]): Promise<string> => {
@@ -173,12 +171,12 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       } catch (e: any) {
         console.log("[dsh-shadow] abstract sidecar write failed:", e && e.message);
         // T8-A 漏项（v1.15.65 补）：这一条**不是**「正当静默」那一类（判据见 `core/view/projection-store.ts`）——
-        // 下面的 `continue` 会让该日期目录的 L0 **不再被写进 `_index.md`**（`sections.push` 被跳过）
+        // 下面的 `continue` 会让该 when 桶的 L0 **不再被写进 `indexes/_index.md`**（`sections.push` 被跳过）
         // ⇒ **读者拿到的内容变了**（索引里少一行），且 sidecar 文件也不存在。
         // 我上一轮修 T8-A 时就站在这个 `catch` 旁边，却没给它加信号 —— 而这正是
         // `README` 自己标的「**部分可见**：索引里看不到它，但无显式 warn」。
-        noteDegrade(core, "abstracts", `目录摘要 sidecar 写失败（${e && e.message}）`, `该日期目录的 L0 **不会出现在 \`_index.md\` 里**（索引少一行），且 sidecar 文件不存在 ⇒ 「这个目录没有摘要」与「写失败了」在读数上不可区分`);
-        continue;   // 一个目录写失败不影响其余；也不把它列进 `_index.md`（避免指向不存在的摘要）
+        noteDegrade(core, "abstracts", `目录摘要 sidecar 写失败（${e && e.message}）`, `该 when 桶的 L0 **不会出现在 \`indexes/_index.md\` 里**（索引少一行），且 sidecar 文件不存在 ⇒ 「这个桶没有摘要」与「写失败了」在读数上不可区分`);
+        continue;   // 一个桶写失败不影响其余；也不把它列进索引（避免指向不存在的摘要）
       }
       sections.push(`- ${date}（${faces.length} 条）${deriveL0(l1)}`);
     }
@@ -243,7 +241,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
           noteDegrade(core, "episodes", `Episodes 派生失败（${(e && e.message) || String(e)}）`, "`_index.md` 不列 Episodes 段，且与「暂无连续任务片段」**渲染结果相同** ⇒ 分不清是「没有」还是「坏了」");
         }
       }
-      const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/_index.md`, { cwd: ws });
+      const t = await fs.resolve(`${ws}/${indexesRel("_index.md")}`, { cwd: ws });
       await fs.writeText(t, idx);
       // 落盘成功后才记指纹（失败时不记，下次仍会重建）。只在可判定时记。
       if (fpBefore !== undefined) core.indexFingerprint.set(ws, fpBefore);
@@ -335,23 +333,54 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     if (id) core.pending.delete(id);
     if (id) core.comps.delete(id);
     try {
-      const rel = `${SHADOW_ROOT}/${today()}/${compact()}-${slug(entry)}.md`;
+      const stamp = compact(); // YYYY-MM-DD--HHMMSS
+      const rdate = today();
+      const rtime = stamp.split("--")[1]?.slice(0, 6) || "";
+      const name = memoryFileName(rdate, rtime, `${slug(entry)}.md`);
+      const rel = `${atomsRel()}/${name}`;
       const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
       const head = `# ${entry}\n\n`;
       // 先前那些**已降级进审计流**的批读过的文件，并入本条记忆的「背景/材料」（即取即清）。
       const extra = { project, agent: id ? String(id) : undefined, goal: core.goalByAgent.get(String(id || "")), foldedMaterials: takeAuditMaterials(core, id) };
-      const clue = buildClueHeader(entry, arr, id, extra);
+      const axes: AtomAxes = {
+        // R2 临时轴：填满结构使「缺轴不上投影」闸门可通过；不等于真实 Role/Soul 卡存在（ADR-0106 §2.7）。
+        locus: project || ws,
+        when: `${rdate} ${rtime.slice(0, 2)}:${rtime.slice(2, 4)}:${rtime.slice(4, 6)}`,
+        soul: "default",
+        role: "default",
+        intent: String(extra.goal || entry || "capture").slice(0, 80),
+      };
+      const clue = buildClueHeader(entry, arr, id, { ...extra, axes });
       const bodyLines = bodyLinesOf(traces, entry);
       const body = bodyLines.length ? bodyLines.join("\n") : "- （本回合无可安全记录的正文）";
       await fs.writeText(t, `${head}${clue}${body}\n`);
       // L2 增量索引：把刚落盘的文件立即并入进程内缓存（避免重复读盘）；索引直接由缓存生成。
-      cacheFor(ws).set(rel, recOf({ date: today(), time: compact().split("--")[1]?.slice(0, 6), name: rel.split("/").pop(), rel }, `${head}${clue}${body}\n`));
+      cacheFor(ws).set(rel, recOf({ date: rdate, time: rtime, name, rel }, `${head}${clue}${body}\n`));
       core.indexDirty.add(ws); // 索引懒构建：不在此处重建，待 read_shadow 读索引时再 ensureIndex。
       // T17-B（D6 门③）：刚落盘的这条 rel 也必须标脏 —— 供派生索引做**单条 upsert**。
-      // 注意它**不依赖** `projectionStore.enabled`（那是另一件事：`nodes.jsonl` 投影缓存）。
       markDerivedDirty(core, ws, rel);
-      // 记忆文件与索引缓存已写入；**元数据登记失败必须留痕**（否则这条记忆在索引里活跃、
-      // 而 `_meta.json` 里没有它 ⇒ hits 永远不计、生命周期恒 NEW、遗忘判据落回默认值）。
+      // ADR-0107：原文成功后 best-effort 写投影视图便利贴（失败不回滚原文）。
+      // 带 `bodyHash`：这条便利贴之后会被 `patchSummary` **原地改写**同一个文件（令牌可能不变）
+      // ⇒ 没有哈希锚点时读侧会「假新鲜」，拿旧正文顶替新正文。
+      try {
+        const soul = await readSoul(fs, ws);
+        const atomToken = await atomTokenOf(fs, ws, name);
+        const soulToken = await soulTokenOf(fs, ws);
+        const ctxHint = String(extra.goal || entry || "").slice(0, 80);
+        // ⚠ 这一行刻意保留 `${head}${clue}${body}` 的原样构造：`test/capture-granularity.test.ts` ⑤
+        // 用源码字符串钉住「记忆落盘那一行仍在、且排在审计判据之后」——别为了好看把它改成中间变量。
+        const atomText = `${head}${clue}${body}\n`;
+        const vw = await writeProjectionView(fs, ws, rel, atomText, soul, {
+          atomToken, soulToken, bodyHash: bodyHashOf(atomText), context: ctxHint,
+        });
+        if (!vw.ok) {
+          noteDegrade(core, "projectionView", `投影视图写失败（${vw.rel}）：${vw.reason}`, "便利贴可重建；原文已落盘");
+        }
+        invalidateProjectionSpace(ws);
+      } catch (e: any) {
+        noteDegrade(core, "projectionView", `投影视图写异常：${(e && e.message) || e}`, "便利贴可重建；原文已落盘");
+      }
+      // 记忆文件与索引缓存已写入；**元数据登记失败必须留痕**
       if (!(await registerMeta(fs, ws, rel, id, onByDefault(core.retentionCfg.enabled)))) {
         core.lastMetaError = { at: Date.now(), err: `元数据未登记（${rel}）：hits/生命周期/遗忘判据都看不到这条记忆` };
         console.error("[dsh-shadow][error]", core.lastMetaError.err);

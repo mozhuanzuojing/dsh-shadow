@@ -35,8 +35,8 @@ const mkFs = (memText: string): any => ({
 });
 
 const mem = (evidence: string) =>
-  `# comp-a\n\n> 完整线索\n> 摘要：改了 comp-a\n> 背景/材料：${evidence}\n> 决策：〔user〕做 A\n> 概况：1 动作 · 0 用户消息 · 1 决策\n\n- [10:00:00] [comp-a] 改/读 src/real.ts\n`;
-const mm = { rel: ".shadow/2026-09-11/2026-09-11--100000-comp-a.md", date: "2026-09-11", time: "100000", name: "2026-09-11--100000-comp-a.md" };
+  `# comp-a\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 摘要：改了 comp-a\n> 背景/材料：${evidence}\n> 决策：〔user〕做 A\n> 概况：1 动作 · 0 用户消息 · 1 决策\n\n- [10:00:00] [comp-a] 改/读 src/real.ts\n`;
+const mm = { rel: ".shadow/atoms/2026-09-11--100000-comp-a.md", date: "2026-09-11", time: "100000", name: "2026-09-11--100000-comp-a.md" };
 const observer = { observerId: "ob-1" };
 
 // ── ① 通配符引用：**不得**被判「证据缺失」（这是本测试要锁的核心） ──

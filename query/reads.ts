@@ -32,6 +32,8 @@ import {
   attributeOutcomes, outcomeReadout, renderOutcomeReadout,
   type DecisionRecord,
 } from "../core/admission/decision-outcome.js";
+import { loadProjectionSpace } from "../core/space/world.js";
+import { missingSoulBanner } from "../core/space/soft-lens.js";
 
 export interface ReadCtx {
   fs: any;
@@ -189,7 +191,12 @@ const recovery: ReadQuery = {
       out = renderRecovery(topic, tasks, refs);
     }
     await noteAtomHits(ctx, chosen ? relsFromMemoryRefs([chosen]) : []);
-    return scrubFinal(RECALL_PREFIX + out + flushWarn);
+    let banner = "";
+    if (!args?.raw) {
+      const world = await loadProjectionSpace(fs, ws, deps.config);
+      if (world.missingSoul) banner = missingSoulBanner();
+    }
+    return scrubFinal(RECALL_PREFIX + banner + out + flushWarn);
   },
 };
 

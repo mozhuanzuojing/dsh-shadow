@@ -224,11 +224,11 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 | 落点 | 位置 | 有门吗 |
 |---|---|---|
-| 工具名 + 参数 | `index.ts`（`README.md:312` 称「三处 `name:`」） | **有**（`tool-name-v1` 在 `README.md:335` 的**有强门**行 —— `test/host-probe.test.ts:104` 断言三个名字都在注册表里。⚠ **但那个断言把三个名字写死了** ⇒ **新增**工具名**不会**被它覆盖，得手动把新名加进那一行；`tool-schema-v1` 则**只守参数名**。本行早先写作「部分」—— 那**低估**了门，自审时改正。**已读源码核实**：`:104` 就是
+| 工具名 + 参数 | `index.ts`（`docs/maintainers.md` 契约表 A 的 `tool-name-v1` 称「三处 `name:`」） | **有**（`tool-name-v1` 在 `docs/maintainers.md` 完成度表的**有强门**行 —— `test/host-probe.test.ts:104` 断言三个名字都在注册表里。⚠ **但那个断言把三个名字写死了** ⇒ **新增**工具名**不会**被它覆盖，得手动把新名加进那一行；`tool-schema-v1` 则**只守参数名**。本行早先写作「部分」—— 那**低估**了门，自审时改正。**已读源码核实**：`:104` 就是
 `for (const t of ["read_shadow", "recall_shadow", "shadow_query"]) assert.ok(tools.reg.has(t), …)` ——
 **纯名字存在性**断言，不涉 schema / 参数 / 默认值） |
 | 冻结清单 | `tools/contract-surface.selftest.ts:24`（`TOOLS`）· `:50`（`TOOL_PARAM_FROZEN`） | **有**（`missing` 红；清单可由 `:223-224` 的打印重新生成） |
-| 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `README.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见 `README.md:333-337`；⚠ **该分组本身已腐烂**：9 个 id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而 `:337` 又写「8 条全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
+| 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `docs/maintainers.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见该文完成度表；⚠ **该分组本身曾腐烂**：9 个 id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而旧文又写「8 条全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
 | 若加配置键 | `tools/contract-surface.selftest.ts` 的 `CONFIG_KEY_FROZEN` + README 默认开关表 | ⚠ **加键本身没有任何门挡着**（**实测**：往 `ShadowConfig` 加一个键 ⇒ 该 selftest 明说「**新增顶层键 N 个（allowed，只报告）**」并 `exit 0`；`audit:docs` ③ **完全不受影响**，仍是 `20 = 20`）。③ 守的是 **README 表自洽**（**实测**：把声明数改成 21 而表里仍 20 行 ⇒ **红，`exit 1`**）⇒ **「新键要登记进 README 那 10 个字段」这件事无门可守**，只有**删键 / 改名**才红。※ 本 ADR 早先在此写「表计数**有**（`audit:docs` ③）」—— **错了**，自审时用正反两个实验改正 |
 | 若加 `mode` | `test/recall-envelope.test.ts:104`（62→63）+ `CONTEXT.md`「mode 参考」 | **有**（`:104` 计数断言 + `:111` 覆盖断言） |
 
@@ -311,16 +311,15 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
    （`观测与基线都是空表` 也不算通过，`:47`）；且语料 EMPTY / PARTIAL 时工具**拒绝**
    `--update-ratchet` 并 `exit 2`（`audit-wiring.ts:193` / `audit-drift.ts:134`），
    以防「工具坏了」被录成新基线；
-6. ⚠ **模块归属表按 README 自己的指示**没法**重生成**（本次实测）：
-   `README.md:344` 说该表「是**生成**的，不是手写的」，生成器指令在 `README.md:349` 与 `BACKLOG.md:808` =
-   `node ../.docs/fix/2026-09-12/t15-module-ownership.ts`；而该目录**已不在本机** ——
-   `../.docs/fix/` 现存 `2026-09-14` / `-15` / `-16` 三个日期，**没有 `2026-09-12`**，
-   且整个 `.docs` 下**无任何 `t15*` 文件**。同一句还写着「**别在别处手写**」——
-   于是加一层之后**既不能重生成、按指示又不许手写**。两条出路，T1 **选 (a)**：
+6. ⚠ **模块归属表按维护者文档自己的指示**没法**重生成**（本次实测；生成器其后已重建）：
+   `docs/maintainers.md` 说该表「是**生成**的，不是手写的」，生成器指令为
+   `node tools/module-ownership.ts`（旧路径曾指向已不存在的 `../.docs/fix/2026-09-12/t15-module-ownership.ts`）；
+   重建前：`../.docs/fix/` 现存日期目录**没有 `2026-09-12`**，且整个 `.docs` 下**无任何 `t15*`**。
+   同一句还写着「**别在别处手写**」——于是加一层之后**既不能重生成、按指示又不许手写**。两条出路，T1 **选 (a)**：
    - **(a) 把生成器重建进 `tools/`** —— 这正是本仓 `AGENTS.md` 自己的结论
      （「**能复现的东西放 `tools/`**」：进版本控制、可被门守），再由它打印行数与批数；
    - (b) 手改，并**当场写明生成器缺失**（不静默）。
-   ⇒ 无论走哪条，**不要在别的文档里手写这个数**（`README.md:349` 的口径）；
+   ⇒ 无论走哪条，**不要在别的文档里手写这个数**（`docs/maintainers.md` / `node tools/module-ownership.ts` 的口径）；
 7. 发版三处一起改（`package.json.version` / README「当前版本」行 / `CHANGELOG` 新条目）
    + **打 tag 并推送**（本仓纪律：提交后必须推 `origin/main`）；
 8. `SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` ——

@@ -19,7 +19,7 @@ const SPEC = `# spec/u8-openapi-biz-sa.md
 ## OAuth2
 - 用 e-Builder openApi
 `;
-const parsed = parseMemory(SPEC, ".shadow/2026-09-08/2026-09-08--111111-spec.md", "2026-09-08--111111-spec.md");
+const parsed = parseMemory(SPEC, ".shadow/atoms/2026-09-08--111111-spec.md", "2026-09-08--111111-spec.md");
 // v1.15.34（D8）：`createKnowledgeEngine` 的死形参 `config` 已删 —— 它从来不被使用，
 // 而它的存在会让人以为「知识引擎受 config 驱动」（进而以为 `knowledgeEngine.enabled` 是闸门）。
 const engine = createKnowledgeEngine();
@@ -74,7 +74,7 @@ const code = parseMemory(`# io/backend/src/main/java/com/openapi/io/DeptMapServi
 > 背景/材料：io/backend/DeptMapService.java
 > 概况：1 动作 · 0 用户消息 · 0 决策
 - [09:00:00] [io/backend] 改/读 io/backend/DeptMapService.java
-`, ".shadow/2026-09-08/2026-09-08--090000-code.md", "2026-09-08--090000-code.md");
+`, ".shadow/atoms/2026-09-08--090000-code.md", "2026-09-08--090000-code.md");
 const codeTree = buildTree(code);
 assert.equal(codeTree.title, "io", "code 包树根=首路径段");
 assert.ok(codeTree.children.some((c) => c.title === "backend"), "code 包树含模块层");

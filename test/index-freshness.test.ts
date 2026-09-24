@@ -64,7 +64,7 @@ const mkCtx = (m: Map<string, string>) => {
 };
 
 const mem = (entry: string, line: string) =>
-  `# ${entry}\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [${entry}] ${line}\n`;
+  `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [${entry}] ${line}\n`;
 
 const store = new Map<string, string>();
 const { m, agent, ctx } = mkCtx(store);
@@ -76,7 +76,7 @@ const rs = toolRegistry.get("read_shadow");
 assert.ok(rs, "read_shadow 应已注册");
 
 // ── ① 首次读索引：预热缓存 + 落盘 _index.md ──
-m.set(`${WS}/.shadow/2026-09-10/2026-09-10--100000-alpha.md`, mem("alpha", "改/读 alpha.ts"));
+m.set(`${WS}/.shadow/atoms/2026-09-10--100000-alpha.md`, mem("alpha", "改/读 alpha.ts"));
 const out1 = String(await rs.execute({}, { agent: T }));
 assert.ok(out1.includes("alpha"), "首次读索引应含已存在的记忆");
 const writesAfter1 = idxWrites.length;
@@ -85,14 +85,14 @@ console.log(`✔ ① 首次读索引：含 alpha，落盘 ${writesAfter1} 次`);
 
 // ── ② **核心**：别的会话写入新记忆（**不经过本进程 flush**）⇒ 必须出现在索引里 ──
 // 这正是「indexDirty 是进程内 Set」看不见的那一类写入。
-m.set(`${WS}/.shadow/2026-09-11/2026-09-11--090000-beta.md`, mem("beta", "改/读 beta.ts"));
+m.set(`${WS}/.shadow/atoms/2026-09-11--090000-beta.md`, mem("beta", "改/读 beta.ts"));
 const out2 = String(await rs.execute({}, { agent: T }));
 assert.ok(out2.includes("beta"),
   "**别的会话写入的记忆必须出现在 _index.md**（旧实现在缓存预热后永远看不到它）");
 console.log("✔ ② 别的会话写入的新记忆（绕过本进程 flush）已出现在索引里 —— 漂移被消除");
 
 // ── ③ 源头删除 ⇒ 索引里不得留幽灵条目 ──
-m.delete(`${WS}/.shadow/2026-09-10/2026-09-10--100000-alpha.md`);
+m.delete(`${WS}/.shadow/atoms/2026-09-10--100000-alpha.md`);
 const out3 = String(await rs.execute({}, { agent: T }));
 assert.ok(!out3.includes("alpha"), "源头已删除的记忆不得仍出现在索引里（幽灵条目）");
 assert.ok(out3.includes("beta"), "未删除的记忆仍应在索引里");

@@ -3,7 +3,7 @@
 // 定位（ADR-0046）：这是 **Performance Feature，不是 Storage Feature**——不存事实，只缓投影，rm -rf 可重建。
 // 接口先行（save/load/invalidate/rebuild），首版 JsonlProjectionStore；将来可换 SQLite / EmbeddedGraph（不改调用方）。
 // 触发（ADR-0046）：只在「Node 稳定 + query 稳定 + rebuild 成本明显」时才启用；默认关（config.projectionStore.enabled）。
-import { SHADOW_ROOT } from "../paths.js";
+import { SHADOW_ROOT, ATOMS_DIR, ROLES_DIR, AFFAIRES_DIR, indexesRel } from "../paths.js";
 import { isDirEntry } from "../util.js";
 import type { ShadowNode } from "./node.js";
 import type { ChangeSet } from "../retention/change-set.js";
@@ -31,9 +31,9 @@ export interface ShadowProjectionStore {
   invalidateFor?(set: ChangeSet): Promise<void>;
 }
 
-export const projectionIndexRel = () => `${SHADOW_ROOT}/shadow-index/nodes.jsonl`;
+export const projectionIndexRel = () => indexesRel("shadow-index", "nodes.jsonl");
 
-/** JsonlProjectionStore：把 ShadowNode 投影持久化到 `.shadow/shadow-index/nodes.jsonl`（逐行 JSON，可重建）。 */
+/** JsonlProjectionStore：把 ShadowNode 投影持久化到 `.shadow/indexes/shadow-index/nodes.jsonl`（逐行 JSON，可重建）。 */
 export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectionStore => {
   // v1.15.12 修既有 bug：这里原先返回 `.displayPath`（**字符串**），却被当作 `FsTarget` 传给
   // `writeText` / `readText` —— 契约要求的是 `resolve()` 产出的 target 对象（key 才是 branded 值）。
@@ -119,7 +119,7 @@ export const getProjectionStore = (fs: any, ws: string): ShadowProjectionStore =
  *
  * 修复的缺陷（v1.15.12）：`invalidate` / `invalidateFor` 此前**零调用点** —— 接口与实现都在，
  * 但没人调，于是「开了 `projectionStore` 之后，记忆变了、`shadow_query` 仍读陈旧投影」，
- * 实际只能靠手动删 `.shadow/shadow-index/nodes.jsonl` 才能刷新。
+ * 实际只能靠手动删 `.shadow/indexes/shadow-index/nodes.jsonl` 才能刷新。
  *
  * 触发时机：**写侧索引重建后**（`core/writer/materialize.ts` 的 `ensureIndex`）——那是「记忆集已变」的
  * 权威信号（记忆是插件自己写的）。资源卡是人/agent 手写的，不在插件写路径上，
@@ -132,34 +132,41 @@ export const invalidateProjection = async (fs: any, ws: string): Promise<void> =
 };
 
 /** 源指纹落盘位置（与缓存同目录，同属可重建派生）。 */
-export const fingerprintRel = () => `${SHADOW_ROOT}/shadow-index/sources.fingerprint`;
+export const fingerprintRel = () => indexesRel("shadow-index", "sources.fingerprint");
 
-/** 记忆日期目录名（`.shadow/<YYYY-MM-DD>/`）—— **名字判据的唯一一份**。 */
+/** @deprecated ADR-0106：日期树已废；保留符号以免外部误引用编译失败，恒不匹配。 */
 export const DATE_DIR_NAME = /^\d{4}-\d{2}-\d{2}$/;
 /** 资源卡目录名（`.shadow/resources/`）。 */
 export const RESOURCES_DIR_NAME = "resources";
+/** 投影空间 Atom 目录名（`.shadow/atoms/`，ADR-0106）。 */
+export const ATOMS_DIR_NAME = ATOMS_DIR;
+/** Role 卡目录名。 */
+export const ROLES_DIR_NAME = ROLES_DIR;
+/** Affaire 容器卡目录名。 */
+export const AFFAIRES_DIR_NAME = AFFAIRES_DIR;
 
 /**
- * 一个 `.shadow/` 下的 `FsDirEntry` 是不是**权威源目录**（`<date>/` 或 `resources/`）。
+ * 一个 `.shadow/` 下的 `FsDirEntry` 是不是**权威源目录**
+ * （`atoms/` · `roles/` · `affaires/` · `resources/`）。
  *
- * **判据收一处**（T17-B）：`shadowSourcesFingerprint`（投影缓存指纹）与 `candidate-sqlite`（派生索引的
- * 目录粗信号）判断的是**同一件事**，必须同判 —— 两处若分叉，就会出现「指纹说源没变、索引说变了」
- * 这类无从发现的漂移（`tools/audit-drift.ts` 的 B 段正是抓这种「同一 `字段=字面量` 出现在多个模块」）。
+ * **判据收一处**（T17-B）：指纹与 sqlite 粗信号必须同判。
+ * sqlite 的 `source` 表仍只收录 `atoms/`（见 candidate/sqlite 的二次过滤）。
  */
 export const isSourceDirEntry = (e: any): boolean =>
-  isDirEntry(e) && (DATE_DIR_NAME.test(String(e.name || "")) || e.name === RESOURCES_DIR_NAME);
+  isDirEntry(e) &&
+  (e.name === ATOMS_DIR_NAME ||
+    e.name === ROLES_DIR_NAME ||
+    e.name === AFFAIRES_DIR_NAME ||
+    e.name === RESOURCES_DIR_NAME);
 
 /**
- * 计算投影**权威源**的指纹：`.shadow/<date>/*.md`（记忆原子）+ `.shadow/resources/*.md`（资源卡）。
+ * 计算投影**权威源**的指纹：`atoms/` · `roles/` · `affaires/**` · `resources/`（ADR-0106）。
  *
  * 两条纪律：
- *   1. **只覆盖权威源**：刻意**不**纳入 `_meta.json` / `_index.md` / `query-log/` / `shadow-index/` ——
- *      读操作会写 meta（hits）与 query-log，纳入它们会让「读一次就失效」自激，缓存永不命中。
- *   2. **用 FsDirEntry 的官方字段**：`target` 是 resolve 产出的子 target（用它 listDir），
- *      `size` / `version` 是后端给的廉价元数据（`version` 是 freshness token，可能不提供 → 记 `?`）。
- *      同尺寸内容修改若后端不给 `version`，则指纹相同、缓存不失效 —— 这是**已知降级**，
- *      与「缓存是性能特性不是真相」一致（需要绝对新鲜时删 `nodes.jsonl` 或关 `projectionStore`）。
- * 返回 undefined = 源目录不可读（调用方据此保守重建）。
+ *   1. **只覆盖权威源**：不纳入 `_meta.json` / `indexes/` / `query-log/` ——
+ *      读操作会写 meta 与 query-log，纳入会自激失效。
+ *   2. **用 FsDirEntry 官方字段**（size/version）；无 version 时同尺寸改内容不触发失效（已知降级）。
+ * 返回 undefined = 源目录不可读。
  */
 export const shadowSourcesFingerprint = async (fs: any, ws: string): Promise<string | undefined> => {
   if (!fs || !ws) return undefined;
@@ -167,13 +174,23 @@ export const shadowSourcesFingerprint = async (fs: any, ws: string): Promise<str
     const root = await fs.resolve(`${ws}/${SHADOW_ROOT}`, { cwd: ws });
     const entries = (await fs.listDir(root)) || [];
     const parts: string[] = [];
+    const pushFile = (prefix: string, f: any) => {
+      if (f?.type !== "file") return;
+      parts.push(`${prefix}/${f.name}:${f.size ?? "?"}:${f.version ?? "?"}`);
+    };
     for (const e of entries) {
       if (!isSourceDirEntry(e)) continue;
       const sub = (await fs.listDir(e.target)) || [];
-      for (const f of sub) {
-        if (f.type !== "file") continue;
-        parts.push(`${e.name}/${f.name}:${f.size ?? "?"}:${f.version ?? "?"}`);
+      if (e.name === AFFAIRES_DIR_NAME) {
+        // Affaire = `.shadow/affaires/<roleId>/<id>.md` —— 多一层。
+        for (const roleDir of sub) {
+          if (roleDir?.type !== "directory") continue;
+          const files = (await fs.listDir(roleDir.target)) || [];
+          for (const f of files) pushFile(`${e.name}/${roleDir.name}`, f);
+        }
+        continue;
       }
+      for (const f of sub) pushFile(String(e.name), f);
     }
     return parts.sort().join("\n");
   } catch { return undefined; }

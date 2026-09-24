@@ -89,13 +89,19 @@ if (!existsSync(SHADOW)) {
 const mulberry = (a) => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
 // ───────────────────────── 语料 ─────────────────────────
+// 语料 = **记忆原子**，不是「`.shadow` 下所有 .md」：
+//   · 派生物（`_` 前缀：`_index.md` / `_abstract.md`）不算记忆（与 `persistence/files.ts` 同判据）；
+//   · `indexes/` 整棵是派生层（ADR-0106），其中 `indexes/projections/<原子名>` 是**每个原子一份的便利贴** ⇒
+//     不排除就会把同一条记忆数两遍（v1.21.0 修）。
 const files = [];
+const DERIVED_DIRS = new Set(["indexes"]);
 (function walk(d) {
   let es; try { es = readdirSync(d, { withFileTypes: true }); } catch { return; }
   for (const e of es) {
     const p = join(d, e.name);
-    if (e.isDirectory()) walk(p);
-    else if (e.name.endsWith(".md") && e.name !== "_index.md") files.push(p);
+    if (e.isDirectory()) {
+      if (!DERIVED_DIRS.has(e.name)) walk(p);
+    } else if (e.name.endsWith(".md") && !e.name.startsWith("_")) files.push(p);
   }
 })(SHADOW);
 files.sort();

@@ -1,7 +1,7 @@
 // dsh-shadow —— core/candidate-sqlite.ts：SQLite 派生索引 provider（T17-B / D3 / D5 / D6 / D13 / D14）。
 //
-// 载体：`<ws>/.shadow/index.sqlite`（`adr/0095` Decision 1）。**它永远是派生件**：删掉它必须能仅凭
-// `.shadow/*.md` 重建出等价索引（第一原则：**加速层不得新增真相、不得新增丢数据的路径**）。
+// 载体：`<ws>/.shadow/indexes/index.sqlite`（ADR-0106；原 adr/0095 Decision 1）。**它永远是派生件**：
+// 删掉它必须能仅凭 `.shadow/atoms/*.md` 重建出等价索引（第一原则：**加速层不得新增真相**）。
 //
 // ── 四条硬纪律（每条都有实测/裁决依据，写在这里防后来者改坏）────────────────────────────────
 // ① **D14 取模块**：动态 import + **计算型说明符**。`@types/node@20` 没有 `sqlite.d.ts` ⇒ 静态 import 会
@@ -28,7 +28,7 @@
 // ── 据实登记的剩余漏洞（必须写进 ADR 补记，不许写成「复用即可」）──────────────────────────
 //   **外部进程**（另一个会话 / 子代理 / 手工编辑器）对一个**已存在**的记忆文件**原地改内容**时，
 //   目录令牌看不见、写侧 dirty 也不知道 ⇒ 索引会陈旧，直到那个目录发生增/删/改名。
-//   缓解句柄：`derivedIndex.verifySources: "full"`、删掉 `.shadow/index.sqlite`、或把 provider 设回 `fs`。
+//   缓解句柄：`derivedIndex.verifySources: "full"`、删掉 `.shadow/indexes/index.sqlite`、或把 provider 设回 `fs`。
 //
 // ── 与 `fs` 路的一处**已知差异**（登记，不改行为）──────────────────────────────────────────
 //   `fs` 路对**读不出的文件**是**静默跳过**（`persistence/files.ts` 的 `readRel` 有 `catch { return "" }`，
@@ -36,15 +36,16 @@
 //   ⇒ 文件此刻读失败时，sqlite 路会返回**更多**（是「多」，不是漏召回）。
 //   口径：既不新增丢数据的路径，也不把「读失败」当成「不存在」；两者都属既有 read 侧 swallow 的族
 //   （`../.docs/fix/2026-09-16/INDEX.md` §3.5 已登记的同类）。写进 ADR 补记，不在 provider 层私自修补。
-import { existsSync, renameSync, unlinkSync } from "node:fs";
-import { isAbsolute } from "node:path";
-import { readRel, timeFromName } from "../../persistence/files.js";
+import { existsSync, renameSync, unlinkSync, mkdirSync } from "node:fs";
+import { isAbsolute, dirname } from "node:path";
+import { readRel, timeFromName, dateFromName } from "../../persistence/files.js";
 import { isMemoryFileName } from "../../persistence/files.js"; // 记忆文件判据的唯一实现（判据收一处）
 import { parseMemory } from "../view/episode.js";
-import { SHADOW_ROOT } from "../paths.js";
+import { parseAxes } from "../retention/memory.js";
+import { SHADOW_ROOT, ATOMS_DIR, INDEXES_DIR } from "../paths.js";
 import { isNotFound } from "../util.js"; // 「读侧目标不存在」的唯一判据（判据收一处；不许再各写一份）
 // 权威源目录的判据与投影指纹**同源**（判据收一处）：见 `shadowSourcesFingerprint` 的注释。
-import { DATE_DIR_NAME, RESOURCES_DIR_NAME, isSourceDirEntry } from "../view/projection-store.js";
+import { ATOMS_DIR_NAME, RESOURCES_DIR_NAME, isSourceDirEntry } from "../view/projection-store.js";
 import type { CandidateProvider, CandidateSet, CandidateState, MemorySource } from "../types.js";
 
 /** 索引器 / 表结构的令牌（`adr/0095` §五「必须做」）。不匹配 = `corrupt`（D5）；升级这里即触发整体重建。 */
@@ -52,7 +53,8 @@ export const INDEX_SCHEMA_VERSION = "1";
 
 /** 变量说明符：`tsc` 不做模块解析（`@types/node` 太老），运行期才探测能力（D14）。 */
 const SQLITE_SPEC = "node:sqlite";
-const INDEX_FILE = "index.sqlite";
+/** 相对 `.shadow/` 的索引路径（ADR-0106 → indexes/）。 */
+const INDEX_FILE = `${INDEXES_DIR}/index.sqlite`;
 /** dirty rel 积压超过这个数 ⇒ 整批转「走全量细比对」（保守；集合必须有界，见 D6 门③）。 */
 const DIRTY_FULL_SCAN_THRESHOLD = 500;
 /** 整体重建时每多少条让出一次事件循环（纪律④）。 */
@@ -97,6 +99,7 @@ CREATE TABLE IF NOT EXISTS atom (
 export const atomFromRow = (row: any): any => {
   const decisions: string[] = JSON.parse(row.decisions_json || "[]");
   const materials: string[] = JSON.parse(row.materials_json || "[]");
+  const body = row.body;
   return {
     rel: row.rel,
     date: row.date,
@@ -111,7 +114,8 @@ export const atomFromRow = (row: any): any => {
     materials,
     actions: JSON.parse(row.actions_json || "[]"),
     thinkLines: JSON.parse(row.think_lines_json || "[]"),
-    body: row.body,
+    body,
+    axes: parseAxes(String(body || "")),
     kind: row.kind,
     lineage: JSON.parse(row.lineage_json || "{}"),
   };
@@ -124,10 +128,11 @@ const okSet = (sources: MemorySource[], atoms: any[]): CandidateSet => ({ provid
 const failSet = (state: CandidateState, reason: string): CandidateSet =>
   ({ provider: "sqlite", state, unavailable: true, reason, sources: [], atoms: [] });
 
-/** `.shadow/<date>/<file>.md` → `<date>`；取不到返回 `""`。 */
+/** `.shadow/atoms/<file>.md` → `atoms`；取不到返回 `""`。 */
 const dirOfRel = (rel: string): string => {
-  const parts = String(rel).split("/");
-  return parts.length >= 3 ? parts[parts.length - 2] : "";
+  const parts = String(rel).replace(/\\/g, "/").split("/");
+  const i = parts.indexOf(".shadow");
+  return i >= 0 && parts[i + 1] ? parts[i + 1] : "";
 };
 
 /**
@@ -138,7 +143,7 @@ const dirOfRel = (rel: string): string => {
 const coarseOf = (entries: any[]): string | undefined => {
   const parts: string[] = [];
   for (const e of entries || []) {
-    if (!isSourceDirEntry(e)) continue; // 与投影指纹同一判据（日期目录 + resources）
+    if (!isSourceDirEntry(e)) continue; // 与投影指纹同一判据（atoms/roles/affaires/resources）
     const v = e.version;
     if (typeof v !== "string" || !v) return undefined;
     parts.push(`${String(e.name)}:${v}`);
@@ -160,6 +165,8 @@ const processPathOf = async (fs: any, ws: string, name: string): Promise<string>
   const target = await fs.resolve(`${ws}/${SHADOW_ROOT}/${name}`, { cwd: ws });
   const p = fs.processPath(target);
   if (typeof p !== "string" || !p) throw new Error("processPath 返回空路径");
+  // ADR-0106：索引在 `indexes/` 下 —— 首次落盘前父目录可能不存在。
+  try { mkdirSync(dirname(p), { recursive: true }); } catch { /* 已存在 / 无权限时由后续 open 报错 */ }
   return p;
 };
 
@@ -193,15 +200,14 @@ const prepared = (db: any) => ({
 
 const writeMeta = (st: any, key: string, value: string): void => { st.metaSet.run(key, value); };
 
-/** 记忆文件判据与 `listMemories` **同判据**（`.md`、非 `_index.md`、非 `_` 前缀）—— 判据收一处：
- *  唯一实现在 `persistence/files.ts` 的 `isMemoryFileName`（两处各写一遍就会漂移，见它的注释）。 */
-const enumDateDir = async (fs: any, ws: string, date: string): Promise<{ rel: string; name: string; size: number; version: string }[]> => {
-  const files = (await fs.listDir(await fs.resolve(`${ws}/${SHADOW_ROOT}/${date}`, { cwd: ws }))) || [];
+/** 记忆文件判据与 `listMemories` **同判据** —— 枚举 `.shadow/atoms/`（ADR-0106）。 */
+const enumAtomsDir = async (fs: any, ws: string): Promise<{ rel: string; name: string; size: number; version: string }[]> => {
+  const files = (await fs.listDir(await fs.resolve(`${ws}/${SHADOW_ROOT}/${ATOMS_DIR}`, { cwd: ws }))) || [];
   const out: { rel: string; name: string; size: number; version: string }[] = [];
   for (const f of files) {
     const n = String(f?.name || "");
     if (!isMemoryFileName(n)) continue;
-    out.push({ rel: `${SHADOW_ROOT}/${date}/${n}`, name: n, size: Number.isFinite(Number(f.size)) ? Number(f.size) : -1, version: String(f.version ?? "") });
+    out.push({ rel: `${SHADOW_ROOT}/${ATOMS_DIR}/${n}`, name: n, size: Number.isFinite(Number(f.size)) ? Number(f.size) : -1, version: String(f.version ?? "") });
   }
   return out;
 };
@@ -251,7 +257,12 @@ const querySet = (db: any, keep: (rel: string) => boolean): CandidateSet => {
     const rel = String(r.rel);
     if (!keep(rel)) continue;
     kept.add(rel);
-    sources.push({ date: String(r.date), name: String(r.name), rel, time: timeFromName(String(r.name)) });
+    sources.push({
+      date: dateFromName(String(r.name)) || String(r.date),
+      name: String(r.name),
+      rel,
+      time: timeFromName(String(r.name)),
+    });
   }
   if (!kept.size) return okSet([], []);
   const atoms: any[] = [];
@@ -298,11 +309,10 @@ const syncDirs = async (
       forceByDir.get(d)!.add(r);
     }
     for (const dir of dirs) {
-      const files = await enumDateDir(fs, ws, dir);
+      const files = dir === ATOMS_DIR_NAME ? await enumAtomsDir(fs, ws) : [];
       const byRel = new Set(files.map((f) => f.rel));
       const force = forceByDir.get(dir) || new Set<string>();
-      // **一次 O(n) 建索引**（日期目录最大 2,410 条，实测）：早先写成 `rows.find(...)` 是每文件一次线性查找
-      // ⇒ 单目录 O(n²)，会把「细比对只值一次 listDir」这笔收益吃掉。
+      // **一次 O(n) 建索引**
       const prevByRel = new Map<string, { size: number; version: string }>();
       for (const r of st.rowsByDate.all(dir)) {
         prevByRel.set(String(r.rel), { size: Number(r.size), version: String(r.version ?? "") });
@@ -396,7 +406,7 @@ export const createSqliteCandidateProvider = (opts?: SqliteProviderOpts): Candid
       const dateDirs = (rootEntries || [])
         .filter(isSourceDirEntry)
         .map((e) => String(e.name))
-        .filter((n) => DATE_DIR_NAME.test(n)); // `resources` 只进粗信号、不进 `source` 表（D2）
+        .filter((n) => n === ATOMS_DIR_NAME); // `resources` 只进粗信号、不进 `source` 表（D2）
 
       const rebuildAndQuery = async (): Promise<CandidateSet> => {
         let tmpHost: string;
@@ -412,7 +422,7 @@ export const createSqliteCandidateProvider = (opts?: SqliteProviderOpts): Candid
           let n = 0;
           // 整体重建也遵守纪律③：`coarseNow` 是本函数调用**之前**取的版本快照，落库的就是它。
           for (const dir of dateDirs) {
-            for (const f of await enumDateDir(fs, ws, dir)) {
+            for (const f of await enumAtomsDir(fs, ws)) {
               const text = await readRel(fs, ws, f.rel);
               if (!text) continue;
               let p: any;
@@ -492,7 +502,7 @@ export const createSqliteCandidateProvider = (opts?: SqliteProviderOpts): Candid
           // 门③：dirty 的 rel **不能只更新那一行** —— 还要对它所在目录做一次 listDir + 比对，
           // 这样同时兜住「同一窗口里别的进程也写了同一目录」（并且不依赖后端是否报 version）。
           if (!mismatch && dirty.length) {
-            const recheck = [...new Set(dirty.map(dirOfRel))].filter((d) => d && dateDirs.includes(d));
+            const recheck = [...new Set(dirty.map(dirOfRel))].filter((d) => d && (dateDirs as string[]).includes(d));
             if (recheck.length) mismatch = await syncDirs(db, fs, ws, recheck, dirty, false);
           }
         }

@@ -56,7 +56,7 @@
 4. **SQLite + gzip 的 recall 实现** —— ADR-0001 不引重服务。**吸契约不吸实现**（内容寻址 / 字节保真 / 按 hash 取回 / 老化上限），且用文件重做时必须自己重定义去重与老化语义。
 5. **`insta` 快照测试** —— 它在 rtk 里**根本不存在**（`Cargo.toml` 无 `[dev-dependencies]`，`cmds/jvm/mvn_cmd.rs:3769-3774` 反而写明 *"no snapshot-testing crate"*）；`docs/contributing/CODING_PRACTICES.md:140,149` 要求 `use insta::assert_snapshot;` 是**文档虚构**。以此为理由引入快照库属于「照文档吸收」。
 6. **`scripts/validate-docs.sh` / `update-readme-metrics.sh`** —— 前者只 grep 5 个命令名、打印计数却**从不断言**、且**不在任何 CI 里**；后者自述是占位实现。本仓 `tools/docs-consistency.ts` 已明显强于它。
-7. **telemetry**（默认开启的每日 ping + `ureq` 出网）—— 隐私与出网取向无关本仓；且它把**估算的 token** 再换算成**估算的美元**（`README.md:490,497`「基于固定内部常数」）= **把估算叠成估算**，与甲-8 相反。
+7. **telemetry**（默认开启的每日 ping + `ureq` 出网）—— 隐私与出网取向无关本仓；且它把**估算的 token** 再换算成**估算的美元**（`vendor/_src/rtk/README.md:490,497`「基于固定内部常数」）= **把估算叠成估算**，与甲-8 相反。
 8. **`--ultra-compact` 这类「再压一档」开关** —— 无独立判据，只是同一批格式器的第三档输出；本仓 L0/L1/L2 是**语义分层**，再加符号化档只会稀释「每档代表什么」。
 
 ### B. langextract 的判定：**卖点是真的，纪律是软的；可吸收的判据形态在本仓大多没有消费方**

@@ -70,15 +70,15 @@ console.log("✔ ③ 绑定是**有向**的：kind=metadata ⟹ 判据成立；`
 // 只写头、不写正文的文本会让两份分叉。真语料不会那样 ⇒ 记为**已知边界**（见 ④b），不是缺陷。
 const CASES: Array<[string, boolean, string]> = [
   // [文本, 判据期望（两个口径都必须同答）, kind 期望]
-  ["# shadow\n\n> 完整线索\n> 用户要点：「先记录这条」\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 用户：先记录这条\n", true, "metadata"],
-  ["# shadow\n\n> 完整线索\n> 用户要点：「x」\n> 背景/材料：a.ts\n\n- [10:00:00] [shadow] 用户：x\n", false, "experience"],
-  ["# src/a.ts\n\n> 完整线索\n> 用户要点：「x」\n\n- [10:00:00] [src/a.ts] 用户：x\n", false, "experience"],
-  ["# shadow\n\n> 完整线索\n> 用户要点：「x」\n> 决策：〔user〕做 A\n\n- [10:00:00] [shadow] 用户：x\n", false, "experience"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「先记录这条」\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 用户：先记录这条\n", true, "metadata"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「x」\n> 背景/材料：a.ts\n\n- [10:00:00] [shadow] 用户：x\n", false, "experience"],
+  ["# src/a.ts\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「x」\n\n- [10:00:00] [src/a.ts] 用户：x\n", false, "experience"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「x」\n> 决策：〔user〕做 A\n\n- [10:00:00] [shadow] 用户：x\n", false, "experience"],
   // 关键回归：**有工作痕迹但无用户要点** —— 旧判准把它当 metadata（精度 9.8% 的来源），新判准不是
-  ["# shadow\n\n> 完整线索\n> 概况：0 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 改/读 core/x.ts\n", false, "experience"],
-  ["# shadow\n\n> 完整线索\n> 概况：0 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 我在想这件事\n", false, "experience"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 改/读 core/x.ts\n", false, "experience"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [shadow] 我在想这件事\n", false, "experience"],
   // 分支优先级：判据成立（有用户要点、无工作），但 kind 是 task（用户话里含待办词）
-  ["# shadow\n\n> 完整线索\n> 用户要点：「记下待办」\n\n- [10:00:00] [shadow] 用户：记下待办\n", true, "task"],
+  ["# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「记下待办」\n\n- [10:00:00] [shadow] 用户：记下待办\n", true, "task"],
 ];
 for (const [text, wantMeta, wantKind] of CASES) {
   const parsed = parseMemory(text, "2026-09-11/2026-09-11--100000-shadow.md", "2026-09-11--100000-shadow.md");
@@ -92,7 +92,7 @@ for (const [text, wantMeta, wantKind] of CASES) {
 console.log(`✔ ④ 跨实现一致性：两个口径 + kind 在 ${CASES.length} 例上同答（含 2 例旧误判回归 + 1 例 task 优先级）`);
 
 // ④b **已知边界**（钉住表层差异，不是缺陷）：只写线索头、不写正文行的文本，两份会分叉。
-const headerOnly = "# shadow\n\n> 完整线索\n> 用户要点：「只有头，没有正文行」\n";
+const headerOnly = "# shadow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户要点：「只有头，没有正文行」\n";
 const parsedHeaderOnly = parseMemory(headerOnly, "2026-09-11/2026-09-11--100000-shadow.md", "2026-09-11--100000-shadow.md");
 assert.equal(parsedHeaderOnly.userMessages.length, 0, "parseMemory 的用户话只来自正文行 ⇒ 头里的用户要点不进 userMessages");
 assert.equal(isMetadataMemoryText(headerOnly), true, "文本口径读头 ⇒ 判为元数据");
@@ -110,6 +110,7 @@ console.log("✔ ④b 已知边界已钉住：头口径 vs 正文口径（真记
 const asAtom = (kind: any, userMessages: string[] = ["x"]): ParsedMemory => ({
   rel: "x", date: "2026-09-11", time: "100000", entry: "shadow", project: "", agent: "", goal: "",
   decisions: [], decisionEvents: [], userMessages, materials: [], actions: [], thinkLines: [], body: "",
+  axes: { locus: "ws", when: "2026-09-11 10:00:00", soul: "default", role: "default", intent: "test" },
   kind, lineage: { source: "s", createdBy: "agent", evidence: [], createdAt: "2026-09-11 10:00:00" },
 });
 assert.equal(deriveShadowNodes([asAtom("metadata")]).length, 0, "会话元数据不产出节点");

@@ -37,8 +37,8 @@ const makeHost = (seeds: { rel: string; text: string }[]) => {
   return { files, read: (args: any) => registry.get("read_shadow").execute(args, { agent: A }) };
 };
 
-const mem = (date: string, time: string, slug: string) => `${WS}/.shadow/${date}/${date}--${time}-${slug}.md`;
-const memText = (entry: string, line: string) => `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] ${line}\n`;
+const mem = (date: string, time: string, slug: string) => `${WS}/.shadow/atoms/${date}--${time}-${slug}.md`;
+const memText = (entry: string, line: string) => `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] ${line}\n`;
 
 // ── 评测语料：10 条一手记忆，入口键唯一 ──
 const CORPUS: { rel: string; entry: string; line: string }[] = [

@@ -68,11 +68,11 @@ const NODE = (id): ShadowNode => ({ id, type: "code", source: `.shadow/x/${id}.m
   const { fs } = makeFs();
   const store = createJsonlProjectionStore(fs, WS);
   await store.save([
-    { id: "a", type: "code", source: ".shadow/2026-09-08/a.md", title: "a", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
-    { id: "b", type: "code", source: ".shadow/2026-09-08/b.md", title: "b", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
+    { id: "a", type: "code", source: ".shadow/atoms/a.md", title: "a", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
+    { id: "b", type: "code", source: ".shadow/atoms/b.md", title: "b", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
   ]);
   const set = new ChangeSet({ root: WS });
-  set.add(".shadow/2026-09-08/a.md", "changed");
+  set.add(".shadow/atoms/a.md", "changed");
   await store.invalidateFor!(set);
   const left = await store.load();
   assert.equal(left.length, 1, "只移除变更 rel 的节点");

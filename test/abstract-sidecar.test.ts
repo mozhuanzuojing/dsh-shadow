@@ -96,13 +96,15 @@ const face = (name: string, time: string, entry: string, topics: string[] = []):
 }
 
 // ── ⑤ 结构边界：`_` 前缀文件**不得**被 `listMemories` 当成记忆 ──
-//    这条是「sidecar 放日期目录里」这一决定的**前提**（见 `persistence/files.ts` 的注释）。
+//    ⚠ 夹具必须放在**枚举器真正扫的目录**（`.shadow/atoms/`），否则这条负对照是恒真：
+//    v1.21.0 的 `listMemories` 只扫 atoms/，把 sidecar 夹具摆在 `indexes/` 里等于没测。
 {
   const store = new Map<string, string>([
-    ["D:/ws/.shadow/2026-09-08/2026-09-08--100000-a.md", "# a\n"],
-    ["D:/ws/.shadow/2026-09-08/_index.md", "# idx\n"],
-    [`D:/ws/.shadow/2026-09-08/${SIDECAR_NAME}`, "# sidecar\n"],
-    ["D:/ws/.shadow/2026-09-08/_meta.json", "{}"],
+    ["D:/ws/.shadow/atoms/2026-09-08--100000-a.md", "# a\n"],
+    ["D:/ws/.shadow/atoms/_index.md", "# idx\n"],
+    [`D:/ws/.shadow/atoms/${SIDECAR_NAME}`, "# sidecar\n"],
+    ["D:/ws/.shadow/atoms/_meta.json", "{}"],
+    ["D:/ws/.shadow/indexes/abstracts/2026-09-08/_abstract.md", "# sidecar 的真实落点（派生层）\n"],
   ]);
   const fs: any = {
     async resolve(p: string) { return { targetKey: p, displayPath: p }; },
@@ -119,9 +121,9 @@ const face = (name: string, time: string, entry: string, topics: string[] = []):
   assert.deepEqual(names, ["2026-09-08--100000-a.md"],
     `只有真记忆该被枚举；实际 ${JSON.stringify(names)}（sidecar / _index.md / _meta.json 都不是记忆）`);
   assert.ok(!names.includes(SIDECAR_NAME), "sidecar 绝不能变成一条「记忆」（否则它会被索引、被召回、被计数）");
-  assert.equal(sidecarRel("2026-09-08"), ".shadow/2026-09-08/_abstract.md", "sidecar 路径必须是 `_` 前缀");
+  assert.equal(sidecarRel("2026-09-08"), ".shadow/indexes/abstracts/2026-09-08/_abstract.md", "sidecar 路径必须是 `_` 前缀");
   assert.ok(SIDECAR_NAME.startsWith("_"), "sidecar 名字必须 `_` 前缀（枚举器按前缀分类）");
-  console.log("✔ ⑤ 结构边界：`_` 前缀文件被枚举器排除（sidecar / _index.md / _meta.json 都不是记忆）");
+  console.log("✔ ⑤ 结构边界：`_` 前缀文件被枚举器排除（夹具在 atoms/ 内，负对照非恒真）");
 }
 
 // ── ⑥ 端到端：真跑一次索引重建 ⇒ sidecar 落盘 + `_index.md` 引用其 L0 ──
@@ -172,11 +174,11 @@ const face = (name: string, time: string, entry: string, topics: string[] = []):
   // ⚠ 本场景与遗忘无关 ⇒ 显式关掉 forget（v1.15.85 起默认全开、staleDays 14）：
 //   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
 mod.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
-  store.set("D:/ws/.shadow/2026-09-08/2026-09-08--100000-alpha.md",
-    "# alpha\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-08--100000-alpha.md",
+    "# alpha\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
   const rs = toolRegistry.get("read_shadow");
   await rs.execute({}, { agent });
-  const sidecarPath = "D:/ws/.shadow/2026-09-08/_abstract.md";
+  const sidecarPath = "D:/ws/.shadow/indexes/abstracts/2026-09-08/_abstract.md";
   assert.ok(store.has(sidecarPath), `索引重建应产出目录级 sidecar；实际写入 ${JSON.stringify([...store.keys()])}`);
   const errs = sidecarDrift(
     [{ name: "2026-09-08--100000-alpha.md", time: "100000", entry: "alpha", topics: ["alpha"] }],
@@ -186,7 +188,7 @@ mod.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: fal
   // 完整覆盖率的端到端对账由 ③/④ 用构造的输入精确覆盖（避免把 `topics` 的派生细节写进断言）。
   assert.ok(parseSidecar(store.get(sidecarPath)!) !== undefined, "落盘的 sidecar 必须可解析");
   assert.ok(!errs.some((e) => e.includes("L0 被单独改过")), `落盘 sidecar 的 L0 必须等于由 L1 抽取的结果；实际 ${JSON.stringify(errs)}`);
-  const idx = store.get("D:/ws/.shadow/_index.md") || "";
+  const idx = store.get("D:/ws/.shadow/indexes/_index.md") || "";
   assert.ok(idx.includes("目录摘要"), "`_index.md` 应引用目录级 L0（这条读路径让 sidecar 不是死代码）");
   assert.ok(idx.includes("2026-09-08"), "`_index.md` 的目录摘要段应列出该目录");
   console.log("✔ ⑥ 端到端：索引重建产出 `_abstract.md`，且 `_index.md` 引用其 L0（读路径存在，非死代码）");

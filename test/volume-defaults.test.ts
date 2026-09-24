@@ -53,7 +53,7 @@ const makeHost = (config: any) => {
 };
 
 const seed = (h: any, rel: string, entry: string, text: string) =>
-  h.files.set(`${WS}/.shadow/${rel}`, `# ${entry}\\n\\n> 完整线索\\n> 概况：0 动作 · 1 用户消息 · 0 决策\\n\\n- [10:00:00] [${entry}] ${text}\\n`);
+  h.files.set(`${WS}/.shadow/atoms/${String(rel).split('/').pop()}`, `# ${entry}\\n\\n> 完整线索\\n> 概况：0 动作 · 1 用户消息 · 0 决策\\n\\n- [10:00:00] [${entry}] ${text}\\n`);
 
 const writeTurn = async (h: any) => {
   h.fire("session/event", { id: "T", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m1", role: "user", content: [{ type: "text", text: "记住：默认全开" }], source: { kind: "user" } } });
@@ -82,7 +82,7 @@ seed(hF, `${D0}/${D0}--100000-new-entry.md`, "new-entry", "今天的新记忆");
 const rDefault = String(await hF.read({ topic: "记忆", max_tokens: 8000 }));
 assert.ok(!rDefault.includes("old-entry"), `forget 默认开 ⇒ 旧记忆不应进召回：\\n${rDefault.slice(0, 300)}`);
 assert.ok(rDefault.includes("new-entry"), "今天的记忆仍应召回");
-assert.ok(hF.files.has(`${WS}/.shadow/${DOLD}/${DOLD}--100000-old-entry.md`), "**Forget ≠ Delete**：被遗忘的记忆**文件仍在**（这正是「默认全开」不减磁盘占用的边界）");
+assert.ok(hF.files.has(`${WS}/.shadow/atoms/${DOLD}--100000-old-entry.md`), "**Forget ≠ Delete**：被遗忘的记忆**文件仍在**（这正是「默认全开」不减磁盘占用的边界）");
 const rIdxF = String(await hF.read({ max_tokens: 8000 }));
 assert.ok(!rIdxF.includes("old-entry"), "索引也只剩活跃集（`_index.md` 会随遗忘变瘦）");
 const hKeep = makeHost({ summary: { enabled: false }, compact: { enabled: false }, forget: { enabled: false } });
@@ -99,7 +99,7 @@ seed(hC, `${D0}/${D0}--113000-ep-b.md`, "ep-entry", "另一个任务（间隔 > 
 await hC.read({});
 const madeC = [...hC.files.keys()].filter((k) => k.endsWith("-consolidated.md"));
 assert.ok(madeC.length >= 1, `compact 默认开 ⇒ 应收口出 consolidated 文件（现有：${[...hC.files.keys()].join(",")}）`);
-assert.ok(hC.files.has(`${WS}/.shadow/${D0}/${D0}--090000-ep-a.md`), "收口后**原原子仍在**（可回放 —— 合并同样不减文件数）");
+assert.ok(hC.files.has(`${WS}/.shadow/atoms/${D0}--090000-ep-a.md`), "收口后**原原子仍在**（可回放 —— 合并同样不减文件数）");
 const hNoC = makeHost({ summary: { enabled: false }, forget: { enabled: false }, compact: { enabled: false } });
 seed(hNoC, `${D0}/${D0}--090000-ep-a.md`, "ep-entry", "同任务第一步");
 seed(hNoC, `${D0}/${D0}--113000-ep-b.md`, "ep-entry", "另一个任务（间隔 > gapMinutes=60）");

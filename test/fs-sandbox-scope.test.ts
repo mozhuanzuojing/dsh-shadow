@@ -124,7 +124,7 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   userMsgOf(listeners, T); // adr/0097 D1：含线索才落记忆文件（纯动作批走审计流）
   await flushOf(listeners, T);
 
-  const written = [...m.keys()].filter((k) => k.includes("/.shadow/") && k.endsWith(".md"));
+  const written = [...m.keys()].filter((k) => k.includes("/.shadow/atoms/") && k.endsWith(".md"));
   assert.ok(written.length >= 1,
     `会话工作区 ≠ 服务启动目录时，记忆仍必须落盘（旧版省略 sandboxPolicy ⇒ 被围栏拒绝）；` +
     `实际写入 ${JSON.stringify([...m.keys()])}`);
@@ -190,11 +190,11 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   const { m, agent, listeners, ctx } = mkCtx(store, mkSandboxPolicy(() => "workspace-write"));
   apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T5");
-  m.set(`${WS}/.shadow/2026-09-11/2026-09-11--100000-alpha.md`,
-    "# alpha\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：proj\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
+  m.set(`${WS}/.shadow/atoms/2026-09-11--100000-alpha.md`,
+    "# alpha\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：proj\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
   const rs = toolRegistry.get("read_shadow");
   const out = String(await rs.execute({}, { agent: T }));
-  assert.ok(m.has(`${WS}/.shadow/_index.md`),
+  assert.ok(m.has(`${WS}/.shadow/indexes/_index.md`),
     `读路径重建索引时 _index.md 必须落盘（旧版同样被围栏拒绝）；实际 ${JSON.stringify([...m.keys()])}`);
   assert.ok(out.includes("alpha"), "索引内容应含已存在的记忆");
   console.log("✔ ⑤ 读路径（无参 read_shadow → ensureIndex）同样带上会话策略，_index.md 落盘");

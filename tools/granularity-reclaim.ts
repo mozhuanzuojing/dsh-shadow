@@ -25,6 +25,10 @@
  *
  * ## 安全边界
  *
+ * - **只服务旧布局**（v1.21.0 补写）：它按 `DATE_DIR_RE` 扫 `.shadow/<date>/` —— ADR-0106 之后语料在
+ *   `.shadow/atoms/`，本工具对那种工作区**天然是空操作**（会在输出里显式说一行，不是静默）。
+ *   新布局若真需要回收，先按 `atoms/` 改写本工具，**不要**把 `relOf` 改成恒指 atoms/ 了事
+ *   （那会让审计流的 `from` 变成假来源，见 `granularity.lib.ts` 的 `relOf` 注释）。
  * - **幂等**：已进审计流的 `from` 会被跳过；跑完之后没有目标文件 ⇒ 再跑是空操作。
  * - **要求没有活着的 dsh-shadow 在写这个工作区**（否则它可能同时写 `_meta.json`）——本机实测未挂载。
  * - **不碰**：`_index.md`（派生件；目录令牌变了，下一次读会自动重建）、合并件（`ep-`）、
@@ -138,6 +142,9 @@ const totalRecords = plans.reduce((n, p) => n + p.records.length, 0);
 const totalBytes = plans.reduce((n, p) => n + Buffer.byteLength(p.text, "utf8"), 0);
 
 console.log(`工作区：${ROOT}`);
+if (!dateDirs.length) {
+  console.log("  · 旧日期树：**0 个目录** —— 本工具只服务 ADR-0106 之前的 `.shadow/<date>/` 布局（新布局在 `atoms/`，不归它管）");
+}
 console.log(`回收集合：**${plans.length} 个文件 / ${(totalBytes / 1024).toFixed(1)} KB / ${totalRecords} 条动作记录**（起点 ${GRANULARITY_FROM} 之前、来源只有「动作」）`);
 if (skippedUnknown) console.log(`  · 跳过（无来源行，未判定）：${skippedUnknown} 个`);
 if (skippedAfterCutover) console.log(`  ⚠ 跳过（**起点之后**的纯动作记忆文件 —— 那是违规，先修生产侧再回收）：${skippedAfterCutover} 个`);

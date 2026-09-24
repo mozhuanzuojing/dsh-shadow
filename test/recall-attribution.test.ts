@@ -129,14 +129,13 @@ const fireObserved = (sid, path) => {
 const flushAgent = async (sid) =>
   fire("agent/turn-stopping", { agent: agentsById.get(sid), turn: 1, signal: undefined });
 
-const listMemoryPaths = () =>
-  // v1.15.85：`retention` 默认开后，影子根下会多出 `_meta.json` 等**派生件** ⇒ 只数真记忆
-  //（判据与 `persistence/files.ts` 同源：`_` 前缀 = 派生件，不是记忆）。
-  [...files.keys()].filter((k) => {
-    const n = k.replace(/\\/g, "/");
-    const name = n.split("/").pop() || "";
-    return n.includes("/.shadow/") && !name.startsWith("_");
-  });
+/** v1.21.0：真记忆只在 `.shadow/atoms/`；`indexes/projections` 便利贴同名 .md 不算。 */
+const isAtomMemoryPath = (k: string) => {
+  const n = String(k || "").replace(/\\/g, "/");
+  const name = n.split("/").pop() || "";
+  return n.includes("/.shadow/atoms/") && name.endsWith(".md") && !name.startsWith("_");
+};
+const listMemoryPaths = () => [...files.keys()].filter(isAtomMemoryPath);
 
 // ─────────────────────────────────────────────
 // 场景 1：归属 —— 先让"全局 initiator"指向 PARENT，再触发 CHILD 的会话事件。
@@ -265,7 +264,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   await listeners5.get("agent/turn-stopping")({ agent: agentsById.get("SUMMARY_AGENT"), turn: 1, signal: undefined });
   // patchSummary 是 detached（void），给一 tick 让它回填。
   await new Promise((r) => setTimeout(r, 30));
-  const sumPath = [...files.keys()].find((k) => k.includes(".shadow/") && files.get(k)?.includes("总结一下这轮"));
+  const sumPath = [...files.keys()].find((k) => isAtomMemoryPath(k) && files.get(k)?.includes("总结一下这轮"));
   assert.ok(sumPath, "SUMMARY_AGENT 的记忆应已落盘");
   const sumText = files.get(sumPath);
   assert.ok(sumText.includes("> 摘要：这是测试摘要"), `应有摘要回填：\n${sumText.slice(0, 120)}`);
@@ -288,7 +287,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   );
   await listeners6.get("agent/turn-stopping")({ agent: agentsById.get("NO_LLM_AGENT"), turn: 1, signal: undefined });
   await new Promise((r) => setTimeout(r, 10));
-  const noLlmPath = [...files.keys()].find((k) => k.includes(".shadow/") && files.get(k)?.includes("无模型也要能落盘"));
+  const noLlmPath = [...files.keys()].find((k) => isAtomMemoryPath(k) && files.get(k)?.includes("无模型也要能落盘"));
   assert.ok(noLlmPath, "无 llm 时记忆仍应落盘");
   console.log("✔ 场景6 无模型降级：无 llm 时落盘不抛错、无摘要但不影响正文");
 }
@@ -397,7 +396,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   fire8("session/event", { id: "T8", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-8", role: "user", content: [{ type: "text", text: "就这么定了，按这个方案做。" }], source: { kind: "user" } } });
   fire8("goal/changed", { agent: { id: "T8" }, change: { operation: "complete", ref: { id: "g1", revision: 1 }, goal: { objective: "测试完整线索头" } } });
   await fire8("agent/turn-stopping", { agent: agentsById.get("T8"), turn: 1, signal: undefined });
-  const mem8 = [...files8.keys()].find((k) => k.includes(".shadow/") && files8.get(k)?.includes("就这么定了"));
+  const mem8 = [...files8.keys()].find((k) => isAtomMemoryPath(k) && files8.get(k)?.includes("就这么定了"));
   assert.ok(mem8, "T8 记忆应落盘");
   const t8 = files8.get(mem8);
   assert.ok(t8.includes("> 完整线索"), `应有完整线索头：\n${t8}`);
@@ -439,7 +438,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   fire9("session/event", { id: "T9", header: { cwd: WS } }, { type: "user/message", seq: Date.now(), time: Date.now(), data: { id: "m-9", role: "user", content: [{ type: "text", text: "参考 `docs/ref.md` 的方案，密钥 sk-abcdef1234567890 别入库。" }], source: { kind: "user" } } });
   await fire9("agent/turn-stopping", { agent: agentsById.get("T9"), turn: 1, signal: undefined });
   await new Promise((r) => setTimeout(r, 10));
-  const mem9 = [...files9.keys()].find((k) => k.includes(".shadow/") && files9.get(k)?.includes("参考"));
+  const mem9 = [...files9.keys()].find((k) => isAtomMemoryPath(k) && files9.get(k)?.includes("参考"));
   assert.ok(mem9, "T9 记忆应落盘");
   const t9 = files9.get(mem9);
   assert.ok(t9.includes("> 背景/材料：docs/ref.md"), `应从用户消息抽出背景/材料：\n${t9}`);
@@ -473,11 +472,11 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
       return [...names].map((n) => ({ name: n }));
     },
   };
-  files10.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-aaa.md", "# aaa\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [aaa] 用户：热点话题\n");
-  files10.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-bbb.md", "# bbb\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [bbb] 用户：冷门话题\n");
+  files10.set("D:/ws/.shadow/atoms/2026-09-05--100000-aaa.md", "# aaa\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [aaa] 用户：热点话题\n");
+  files10.set("D:/ws/.shadow/atoms/2026-09-05--090000-bbb.md", "# bbb\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [..] [bbb] 用户：冷门话题\n");
   files10.set("D:/ws/.shadow/_meta.json", JSON.stringify({
-    ".shadow/2026-09-05/2026-09-05--100000-aaa.md": { created: "2026-09-05", hits: 0, status: "active", confidence: 0.5, pinned: false },
-    ".shadow/2026-09-05/2026-09-05--090000-bbb.md": { created: "2026-09-05", hits: 0, status: "stale", confidence: 0.4, pinned: false },
+    ".shadow/atoms/2026-09-05--100000-aaa.md": { created: "2026-09-05", hits: 0, status: "active", confidence: 0.5, pinned: false },
+    ".shadow/atoms/2026-09-05--090000-bbb.md": { created: "2026-09-05", hits: 0, status: "stale", confidence: 0.4, pinned: false },
   }));
   agentsById.set("T10", { id: "T10", session: { header: { cwd: WS } } });
   const services10 = { fs: fs10, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
@@ -538,7 +537,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   const raA = await rs11.execute({}, { agent: agentFA });
   assert.ok(String(raA).includes("shadow 目录说明与索引"), `①write A/read A 应见索引：\n${String(raA).slice(0, 80)}`);
   // 索引只列记忆文件名，正文放在主题召回里验证
-  assert.ok([...files11.keys()].some((k) => k.includes("C:/wsA/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "①A 工作区应已落盘记忆文件");
+  assert.ok([...files11.keys()].some((k) => k.includes("C:/wsA/") && isAtomMemoryPath(k)), "①A 工作区应已落盘记忆文件");
   const raTopic = await rs11.execute({ topic: "工作区" }, { agent: agentFA });
   assert.ok(String(raTopic).includes("A 工作区的记录"), `①A 主题召回应命中：\n${String(raTopic).slice(0, 120)}`);
   console.log("✔ 场景11-① 正：write A / read A 同索引可见 + 主题召回");
@@ -608,7 +607,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
     await fire("agent/turn-stopping", { agent: ag, turn: 1, signal: undefined });
     const r = await toolRegistry.get("read_shadow").execute({ topic: "沙箱" }, { agent: ag });
     assert.ok(String(r).includes("沙箱项目记忆"), `④a 显式 shadowRoot 应落 sandbox：\n${String(r).slice(0, 120)}`);
-    assert.ok([...store.keys()].some((k) => k.includes("C:/sandbox/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "④a 记忆落在 sandbox/shadow");
+    assert.ok([...store.keys()].some((k) => k.includes("C:/sandbox/") && isAtomMemoryPath(k)), "④a 记忆落在 sandbox/shadow");
     console.log("✔ 场景12-④a 显式 shadowRoot 落 sandbox，覆盖 session cwd");
   }
   {
@@ -690,7 +689,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   f14("session/event", { id: "F14", header: { cwd: "D:/project" } }, { type: "user/message", data: { content: [{ type: "text", text: "记一下这次改动" }] } });
   // 关键：不触发 turn-stopping，仅靠 session/flush 兜底落盘
   await f14("session/flush", { id: "F14" });
-  assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md")), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
+  assert.ok([...store14.keys()].some((k) => k.includes("C:/sandbox14/") && isAtomMemoryPath(k)), "session/flush 兜底应在无 turn-stopping 时落盘记忆");
   console.log("✔ 场景14 session/flush 兜底：无 turn-stopping 也落盘（防采集积压）");
 }
 
@@ -732,7 +731,7 @@ console.log("✔ 场景3 扩词降级：无 llm 时退化为纯关键词召回�
   // 纯动作批现在进审计流、一条记忆都不生成。user 记录的 `comp` 为空 ⇒ 不影响入口选择本身。
   f15("session/event", { id: "T15", header: { cwd: "C:/ws15" } }, { type: "user/message", data: { content: [{ type: "text", text: "看一下这个文件" }] } });
   await f15("session/flush", { id: "T15" });
-  const keys15 = [...store15.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const keys15 = [...store15.keys()].filter(isAtomMemoryPath);
   assert.ok(keys15.length === 1, `应生成 1 条记忆：${keys15.join(",")}`);
   const fname15 = keys15[0].replace(/\\/g, "/");
   assert.ok(!fname15.includes("pwsh") && !fname15.includes("edit"), `entry 不应是工具名（防串线）：${fname15}`);
@@ -780,8 +779,8 @@ const todayStr = todayLocal();
   // 直接种 220 条记忆（不经事件，模拟已存在的记忆树）；日期用今天，便于今日摘要统计
   for (let i = 0; i < N; i++) {
     const base = `2026-01-01--${String(i).padStart(6, "0")}-ent${i}.md`;
-    store16.set(`D:/ws16/.shadow/${todayStr}/${base}`,
-      `# ent${i}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [widget-${i}] 记忆条目 ${i}\n`);
+    store16.set(`D:/ws16/.shadow/atoms/${base}`,
+      `# ent${i}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [widget-${i}] 记忆条目 ${i}\n`);
   }
   const listeners16 = new Map<string, Function>();
   const services16 = { fs: fs16, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
@@ -794,7 +793,7 @@ const todayStr = todayLocal();
   await f16("agent/turn-stopping", { agent: agentsById.get("T16"), turn: 1, signal: undefined });
   // 索引懒构建：read_shadow 无参时才会真正构建/落盘 _index.md。
   await toolRegistry.get("read_shadow").execute({}, { agent: agentsById.get("T16") });
-  const idx16 = store16.get("D:/ws16/.shadow/_index.md");
+  const idx16 = store16.get("D:/ws16/.shadow/indexes/_index.md");
   assert.ok(idx16 && idx16.includes("shadow 目录说明与索引"), "索引应生成且含目录说明");
   // 完整性：每条记忆的文件名都出现在索引里
   for (let i = 0; i < N; i++) {
@@ -822,9 +821,9 @@ const todayStr = todayLocal();
   agentsById.set("T17", { id: "T17", session: { header: { cwd: WS } } });
   for (let i = 0; i < 4; i++) {
     const base = `2026-09-05--${String(i + 1).padStart(6, "0")}-alpha${i}.md`;
-    store17.set(`D:/ws/.shadow/2026-09-05/${base}`, `# alpha${i}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [alpha] alpha 条目 ${i}\n`);
+    store17.set(`D:/ws/.shadow/atoms/${base}`, `# alpha${i}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [alpha] alpha 条目 ${i}\n`);
   }
-  store17.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-beta.md", `# beta\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [beta] beta 条目\n`);
+  store17.set("D:/ws/.shadow/atoms/2026-09-05--090000-beta.md", `# beta\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [beta] beta 条目\n`);
   const listeners17 = new Map<string, Function>();
   const services17 = { fs: fs17, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
   const ctx17: any = { get: (k: string) => services17[k], on: (e: string, fn: Function) => listeners17.set(e, fn), inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services17[k] }) };
@@ -871,11 +870,11 @@ const todayStr = todayLocal();
   const fs18 = mkFs(store18);
   agentsById.set("T18", { id: "T18", session: { header: { cwd: WS } } });
   // L2：含用户消息（决策）→ 应出片段+骨架
-  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-decision.md",
-    `# plugin-entry\n\n> 完整线索\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [plugin-entry] 用户：决定采用 bundle 模式，因为要模块化。\n- [10:00:01] [plugin-entry] 决定 改造入口为 bundle 模式。\n`);
+  store18.set("D:/ws/.shadow/atoms/2026-09-05--100000-decision.md",
+    `# plugin-entry\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [plugin-entry] 用户：决定采用 bundle 模式，因为要模块化。\n- [10:00:01] [plugin-entry] 决定 改造入口为 bundle 模式。\n`);
   // L0：纯动作 → 只给摘要、无片段
-  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-actions.md",
-    `# plugin-a\n\n> 完整线索\n> 概况：3 动作 · 0 用户消息 · 0 决策\n\n- [10:00:02] [plugin-a] 改/读 plugin-a/util.js\n- [10:00:03] [plugin-a] 改/读 plugin-a/util2.js\n- [10:00:04] [plugin-a] 调用 pwsh\n`);
+  store18.set("D:/ws/.shadow/atoms/2026-09-05--110000-actions.md",
+    `# plugin-a\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：3 动作 · 0 用户消息 · 0 决策\n\n- [10:00:02] [plugin-a] 改/读 plugin-a/util.js\n- [10:00:03] [plugin-a] 改/读 plugin-a/util2.js\n- [10:00:04] [plugin-a] 调用 pwsh\n`);
   const listeners18 = new Map<string, Function>();
   const services18 = { fs: fs18, agents, systemPrompt, tools, llm: undefined, agentDefaultModel: undefined };
   const ctx18: any = { get: (k: string) => services18[k], on: (e: string, fn: Function) => listeners18.set(e, fn), inject: (deps: string[], cb: Function) => cb({ get: (k: string) => services18[k] }) };
@@ -890,8 +889,8 @@ const todayStr = todayLocal();
   const rL0big = await rs18.execute({ topic: "plugin-a", max_tokens: 8000 }, exec18);
   assert.ok(!String(rL0big).includes("…"), "L0 大预算只给摘要、无片段");
   // 追加两个 L2，使同一主题下多个 L2 共享小预算 → 校验降级 + 不溢出
-  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--130000-decision2.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:00] [plugin-entry] 用户：决定同步这两个入口。\n- [11:00:01] [plugin-entry] 决定 同步入口。\n`);
-  store18.set("D:/ws/.shadow/2026-09-05/2026-09-05--140000-decision3.md", `# plugin-entry\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:02] [plugin-entry] 用户：决定重构 resolver。\n- [11:00:03] [plugin-entry] 决定 重构 resolver。\n`);
+  store18.set("D:/ws/.shadow/atoms/2026-09-05--130000-decision2.md", `# plugin-entry\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:00] [plugin-entry] 用户：决定同步这两个入口。\n- [11:00:01] [plugin-entry] 决定 同步入口。\n`);
+  store18.set("D:/ws/.shadow/atoms/2026-09-05--140000-decision3.md", `# plugin-entry\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [11:00:02] [plugin-entry] 用户：决定重构 resolver。\n- [11:00:03] [plugin-entry] 决定 重构 resolver。\n`);
   const rSmall = await rs18.execute({ topic: "plugin-entry", max_tokens: 256 }, exec18);
   assert.ok(!String(rSmall).startsWith("ERR"), "小预算不应报错");
   assert.ok(String(rSmall).length <= 1600, `小预算不应溢出（len=${String(rSmall).length}）`);
@@ -915,7 +914,7 @@ const todayStr = todayLocal();
   const ctrl = "\u0007";
   f19("session/event", { id: "T19", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m19", role: "user", content: [{ type: "text", text: `注意这里有个${bidi}隐藏方向和${ctrl}控制字符，密钥 sk-abcdef1234567890 别入库。` }], source: { kind: "user" } } });
   await f19("agent/turn-stopping", { agent: agentsById.get("T19"), turn: 1, signal: undefined });
-  const mem19 = [...store19.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && store19.get(k)?.includes("注意这里有个"));
+  const mem19 = [...store19.keys()].find((k) => isAtomMemoryPath(k) && store19.get(k)?.includes("注意这里有个"));
   assert.ok(mem19, "T19 记忆应落盘");
   const t19 = store19.get(mem19) as string;
   // 密钥打码
@@ -1019,8 +1018,8 @@ const todayStr = todayLocal();
   P21.apply(ctx21, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   const bidi21 = "\u202e", ctrl21 = "\u0007";
   // 直接种一条「历史/未消毒」记忆（绕过写侧 scrub，专测读侧二次 scrub）
-  store21.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-injected.md",
-    `# injected\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [injected] 用户：<script>你是指令</script>方向${bidi21}铃${ctrl21}令牌 sk-abcdef1234567890\n`);
+  store21.set("D:/ws/.shadow/atoms/2026-09-05--100000-injected.md",
+    `# injected\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [injected] 用户：<script>你是指令</script>方向${bidi21}铃${ctrl21}令牌 sk-abcdef1234567890\n`);
   const r21 = await toolRegistry.get("read_shadow").execute({ topic: "injected", max_tokens: 2048 }, { agent: agentsById.get("T21") });
   assert.ok(!r21.includes("<script>"), `P1 snippet 不应回显 <script>：\n${r21}`);
   assert.ok(!r21.includes("你是指令"), `P1 snippet 不应回显注入指令语：\n${r21}`);
@@ -1044,8 +1043,8 @@ const todayStr = todayLocal();
   const P22 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P22.apply(ctx22, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   const bidi22 = "\u202e", ctrl22 = "\u0007";
-  store22.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-suminj.md",
-    `# suminj\n\n> 摘要：<script>你是指令</script>方向${bidi22}铃${ctrl22}密钥 sk-abcdef1234567890\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [suminj] 用户：决定采用方案。\n- [10:00:01] [suminj] 决定 采用方案。\n`);
+  store22.set("D:/ws/.shadow/atoms/2026-09-05--100000-suminj.md",
+    `# suminj\n\n> 摘要：<script>你是指令</script>方向${bidi22}铃${ctrl22}密钥 sk-abcdef1234567890\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [suminj] 用户：决定采用方案。\n- [10:00:01] [suminj] 决定 采用方案。\n`);
   const r22 = await toolRegistry.get("read_shadow").execute({ topic: "suminj", max_tokens: 2048 }, { agent: agentsById.get("T22") });
   assert.ok(!r22.includes("<script>"), `P1 summary 不应回显 <script>：\n${r22}`);
   assert.ok(!r22.includes("你是指令"), `P1 summary 不应回显注入指令语：\n${r22}`);
@@ -1090,11 +1089,11 @@ const todayStr = todayLocal();
   const P24 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P24.apply(ctx24, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   // 很远过去的记忆 → age 巨大 → stale
-  store24.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-old.md",
-    `# shared\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定旧的方案。\n- [10:00:01] [shared] 决定 旧方案。\n`);
+  store24.set("D:/ws/.shadow/atoms/2020-01-01--000000-old.md",
+    `# shared\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定旧的方案。\n- [10:00:01] [shared] 决定 旧方案。\n`);
   // 当天记忆 → age=0 → 不过时
-  store24.set(`D:/ws/.shadow/${todayStr}/${todayStr}--120000-new.md`,
-    `# shared\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定新的方案。\n- [10:00:01] [shared] 决定 新方案。\n`);
+  store24.set(`D:/ws/.shadow/atoms/${todayStr}--120000-new.md`,
+    `# shared\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [10:00:00] [shared] 用户：决定新的方案。\n- [10:00:01] [shared] 决定 新方案。\n`);
   const r24 = await toolRegistry.get("read_shadow").execute({ topic: "shared", max_tokens: 4096 }, { agent: agentsById.get("T24") });
   assert.ok(r24.includes("旧方案"), "过时记忆应被召回");
   assert.ok(r24.includes("新方案"), "新记忆应被召回");
@@ -1161,7 +1160,7 @@ const todayStr = todayLocal();
     await fire26(l, "agent/turn-stopping", { agent: agentsById.get(sid), turn: 1, signal: undefined });
   };
   const hasMemory = (store: Map<string, string>) =>
-    [...store.keys()].some((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+    [...store.keys()].some(isAtomMemoryPath);
 
   // (a) writeConsent=false（默认采集流）→ 照常落盘
   const a26 = mkCtx26();
@@ -1220,7 +1219,7 @@ const todayStr = todayLocal();
   userMsg27("关于这段，Current runtime context is what we care about, 请按方案 A 处理。");
 
   await f27("agent/turn-stopping", { agent: agentsById.get("T27"), turn: 1, signal: undefined });
-  const mem27 = [...store27.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const mem27 = [...store27.keys()].filter(isAtomMemoryPath);
   assert.ok(mem27.length >= 1, "T27 应至少落一条（含真实文本）的记忆");
   const joined27 = mem27.map((k) => store27.get(k)).join("\n");
   // 真实用户文本保留
@@ -1257,7 +1256,7 @@ const todayStr = todayLocal();
   f28("fs/observed", { targetKey: `${WS}/src/vxeTableDragFix.js`, displayPath: `${WS}/src/vxeTableDragFix.js` }, { kind: "present", version: "v1" }, { agent: { id: "T28" } });
   f28("session/event", { id: "T28", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m28", role: "user", content: [{ type: "text", text: "C9：vxe-table 拖选与行点击竞争，改用全局 capture 拦截。" }], source: { kind: "user" } } });
   await f28("agent/turn-stopping", { agent: agentsById.get("T28"), turn: 1, signal: undefined });
-  const mem28 = [...store28.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md"));
+  const mem28 = [...store28.keys()].filter(isAtomMemoryPath);
   assert.ok(mem28.length >= 1, "T28 应落盘一条记忆");
   const t28 = store28.get(mem28[0]);
   // 写侧：记忆文件自带 `> 证据链：`（来源种类·日期·证据路径）
@@ -1288,12 +1287,12 @@ const todayStr = todayLocal();
   const P29 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P29.apply(ctx29, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   // 种 3 条候选记忆：alpha/gamma 含 bundle（命中），beta 不含（打分0）
-  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-alpha.md",
-    `# plugin-alpha\n\n> 完整线索\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(alpha.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [plugin-alpha] 用户：决定把 alpha 入口 bundle 化。\n`);
-  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-beta.md",
-    `# plugin-beta\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(beta.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [plugin-beta] 改/读 plugin-beta/beta.js\n`);
-  store29.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-gamma.md",
-    `# plugin-gamma\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(gamma.js)\n> 概况：1 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [plugin-gamma] 用户：gamma 也要 bundle 化。\n`);
+  store29.set("D:/ws/.shadow/atoms/2026-09-05--090000-alpha.md",
+    `# plugin-alpha\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(alpha.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [plugin-alpha] 用户：决定把 alpha 入口 bundle 化。\n`);
+  store29.set("D:/ws/.shadow/atoms/2026-09-05--100000-beta.md",
+    `# plugin-beta\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(beta.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [10:00:00] [plugin-beta] 改/读 plugin-beta/beta.js\n`);
+  store29.set("D:/ws/.shadow/atoms/2026-09-05--110000-gamma.md",
+    `# plugin-gamma\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(gamma.js)\n> 概况：1 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [plugin-gamma] 用户：gamma 也要 bundle 化。\n`);
   const r29 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", debug: true, max_tokens: 4096 }, { agent: agentsById.get("T29") });
   assert.ok(!String(r29).startsWith("ERR"), "debug 模式不应报错");
   assert.ok(r29.includes("候选 3"), `debug trace 应含候选计数：\n${r29}`);
@@ -1331,22 +1330,22 @@ const todayStr = todayLocal();
   // v1.15.85：本场景要暴露 NEW…DECAYING **全部**生命周期标签（含 SUPERSEDED/ARCHIVED）⇒ 显式关掉 retention：
   // 它默认开后会把「非 active」的记忆**排除出召回**（`query/query.ts` 里那条唯一的排除语义），标签就露不出来了。
   P30.apply(ctx30, { summary: { enabled: false }, recall: {}, retention: { enabled: false, staleDays: 7 } });
-  const body30 = (entry: string, note: string) => `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] 生命周期：${note}\n`;
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090000-lc-new.md`, body30("lc-new", "新记忆"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090001-lc-obs.md`, body30("lc-obs", "被观察"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090002-lc-ver.md`, body30("lc-ver", "单源确认"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090003-lc-tru.md`, body30("lc-tru", "多源确认"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090004-lc-sup.md`, body30("lc-sup", "被取代"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090005-lc-arc.md`, body30("lc-arc", "已归档"));
-  store30.set(`D:/ws/.shadow/${D0}/${D0}--090006-lc-pin.md`, body30("lc-pin", "固定"));
-  store30.set(`D:/ws/.shadow/${DOLD}/${DOLD}--000000-lc-dec.md`, body30("lc-dec", "衰减"));
+  const body30 = (entry: string, note: string) => `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] 生命周期：${note}\n`;
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090000-lc-new.md`, body30("lc-new", "新记忆"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090001-lc-obs.md`, body30("lc-obs", "被观察"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090002-lc-ver.md`, body30("lc-ver", "单源确认"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090003-lc-tru.md`, body30("lc-tru", "多源确认"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090004-lc-sup.md`, body30("lc-sup", "被取代"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090005-lc-arc.md`, body30("lc-arc", "已归档"));
+  store30.set(`D:/ws/.shadow/atoms/${D0}--090006-lc-pin.md`, body30("lc-pin", "固定"));
+  store30.set(`D:/ws/.shadow/atoms/${DOLD}--000000-lc-dec.md`, body30("lc-dec", "衰减"));
   store30.set("D:/ws/.shadow/_meta.json", JSON.stringify({
-    [`.shadow/${D0}/${D0}--090001-lc-obs.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: [] },
-    [`.shadow/${D0}/${D0}--090002-lc-ver.md`]: { created: D0, hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
-    [`.shadow/${D0}/${D0}--090003-lc-tru.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
-    [`.shadow/${D0}/${D0}--090004-lc-sup.md`]: { created: D0, hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
-    [`.shadow/${D0}/${D0}--090005-lc-arc.md`]: { created: D0, hits: 1, status: "archived", pinned: false, confirmedBy: [] },
-    [`.shadow/${D0}/${D0}--090006-lc-pin.md`]: { created: D0, hits: 1, status: "active", pinned: true, confirmedBy: [] },
+    [`.shadow/atoms/${D0}--090001-lc-obs.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: [] },
+    [`.shadow/atoms/${D0}--090002-lc-ver.md`]: { created: D0, hits: 1, status: "active", pinned: false, confirmedBy: ["s1"] },
+    [`.shadow/atoms/${D0}--090003-lc-tru.md`]: { created: D0, hits: 2, status: "active", pinned: false, confirmedBy: ["s1", "s2"] },
+    [`.shadow/atoms/${D0}--090004-lc-sup.md`]: { created: D0, hits: 1, status: "superseded", pinned: false, confirmedBy: [] },
+    [`.shadow/atoms/${D0}--090005-lc-arc.md`]: { created: D0, hits: 1, status: "archived", pinned: false, confirmedBy: [] },
+    [`.shadow/atoms/${D0}--090006-lc-pin.md`]: { created: D0, hits: 1, status: "active", pinned: true, confirmedBy: [] },
   }));
   const r30 = await toolRegistry.get("read_shadow").execute({ topic: "生命周期", max_tokens: 8000 }, { agent: agentsById.get("T30") });
   assert.ok(!String(r30).startsWith("ERR"), "生命周期召回不应报错");
@@ -1391,10 +1390,10 @@ const todayStr = todayLocal();
   const P31 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P31.apply(ctx31, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   // src/gone.js 缺失（不放进 map）→ 冲突；src/exists.js 存在（放进 map）→ 无冲突。
-  store31.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-conflict.md",
-    `# conflict-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [conflict-entry] 改/读 src/gone.js\n`);
-  store31.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-good.md",
-    `# good-entry\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/exists.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [good-entry] 改/读 src/exists.js\n`);
+  store31.set("D:/ws/.shadow/atoms/2026-09-05--090000-conflict.md",
+    `# conflict-entry\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [conflict-entry] 改/读 src/gone.js\n`);
+  store31.set("D:/ws/.shadow/atoms/2026-09-05--090001-good.md",
+    `# good-entry\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(src/exists.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [good-entry] 改/读 src/exists.js\n`);
   store31.set("D:/ws/src/exists.js", "export {}");
   const r31 = await toolRegistry.get("read_shadow").execute({ topic: "src", max_tokens: 4096 }, { agent: agentsById.get("T31") });
   assert.ok(!String(r31).startsWith("ERR"), "冲突检测不应报错");
@@ -1425,7 +1424,7 @@ const todayStr = todayLocal();
   f32("session/event", { id: "T32", header: { cwd: WS } }, { type: "user/message", seq: 1, time: Date.now(), data: { id: "m32", role: "user", content: [{ type: "text", text: "统一 API 错误处理。" }], source: { kind: "user" } } });
   store32.set("D:/ws/src/api.js", "export {}"); // 证据路径存在，避免误判冲突
   await f32("agent/turn-stopping", { agent: agentsById.get("T32"), turn: 1, signal: undefined });
-  const mem32 = [...store32.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.endsWith(".md") && !k.endsWith("_index.md") && store32.get(k)?.includes("统一 API"));
+  const mem32 = [...store32.keys()].find((k) => isAtomMemoryPath(k) && store32.get(k)?.includes("统一 API"));
   assert.ok(mem32, "T32 记忆应落盘");
   const t32 = store32.get(mem32);
   assert.ok(t32.includes("> 项目：ws"), `记忆应含 项目：\n${t32.slice(0, 200)}`);
@@ -1452,10 +1451,10 @@ const todayStr = todayLocal();
   const P33 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P33.apply(ctx33, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
   // 两条同域「acshObject」的记忆 + 一条共同证据路径（放进 map 避免误判冲突）
-  store33.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-pageselect.md",
-    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
-  store33.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-projectselect.md",
-    "# acshObject/acshProjectSelect\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [acshObject/acshProjectSelect] 改/读 acshObject/projectSelect.js\n");
+  store33.set("D:/ws/.shadow/atoms/2026-09-05--090000-pageselect.md",
+    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
+  store33.set("D:/ws/.shadow/atoms/2026-09-05--090001-projectselect.md",
+    "# acshObject/acshProjectSelect\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:01:00] [acshObject/acshProjectSelect] 改/读 acshObject/projectSelect.js\n");
   store33.set("D:/ws/acshObject/projectSelect.js", "export {}");
   const r33 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", kg: true, max_tokens: 4096 }, { agent: agentsById.get("T33") });
   assert.ok(!String(r33).startsWith("ERR"), "KG 查询不应报错");
@@ -1518,8 +1517,8 @@ const todayStr = todayLocal();
   const ctx35 = { get: (k) => services35[k], on: (e, fn) => listeners35.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services35[k] }) };
   const P35 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P35.apply(ctx35, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store35.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-exp.md",
-    "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 背景/材料：acshObject/projectSelect.js\n> 决策：〔user〕对象页选择器直接选择\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
+  store35.set("D:/ws/.shadow/atoms/2026-09-05--090000-exp.md",
+    "# acshObject/acshObjectPageSelect\n\n> 摘要：对象页选择器改直接选择，简化交互。\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：acshObject/projectSelect.js\n> 决策：〔user〕对象页选择器直接选择\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(acshObject/projectSelect.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 来源会话：T35\n> 项目：ws\n> 目标：OpenAPI 改造\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：对象页选择器直接选择。\n");
   store35.set("D:/ws/acshObject/projectSelect.js", "export {}"); // 证据存在 → 裁决 fresh
   const r35 = await toolRegistry.get("read_shadow").execute({ topic: "对象页", experience: true, max_tokens: 4096 }, { agent: agentsById.get("T35") });
   assert.ok(!String(r35).startsWith("ERR"), "Experience 查询不应报错");
@@ -1548,9 +1547,9 @@ const todayStr = todayLocal();
   const ctx36 = { get: (k) => services36[k], on: (e, fn) => listeners36.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services36[k] }) };
   const P36 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P36.apply(ctx36, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  const b36 = (time: string) => `# xyz/compA\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [${time}] [xyz/compA] 改/读 xyz/a.js\n`;
-  store36.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-c1.md", b36("09:00:00"));
-  store36.set("D:/ws/.shadow/2026-09-05/2026-09-05--120000-c2.md", b36("12:00:00"));
+  const b36 = (time: string) => `# xyz/compA\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [${time}] [xyz/compA] 改/读 xyz/a.js\n`;
+  store36.set("D:/ws/.shadow/atoms/2026-09-05--090000-c1.md", b36("09:00:00"));
+  store36.set("D:/ws/.shadow/atoms/2026-09-05--120000-c2.md", b36("12:00:00"));
   store36.set("D:/ws/xyz/a.js", "export {}"); // 证据存在
   const r36 = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T36") });
   assert.ok(String(r36).startsWith("ERR") === false, "supersede 裁决不应报错");
@@ -1581,10 +1580,10 @@ const todayStr = todayLocal();
   const ctx37 = { get: (k) => services37[k], on: (e, fn) => listeners37.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services37[k] }) };
   const P37 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P37.apply(ctx37, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store37.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-c1.md",
-    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 决策：〔user〕先确认调用方再判断兼容成本\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
-  store37.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-c2.md",
-    "# xyz/compA\n\n> 完整线索\n> 背景/材料：xyz/a.js\n> 用户提示/决策：兼容层已被移除。\n> 证据链：来源(动作·用户) · 日期(2026-09-06) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：兼容层已移除。\n");
+  store37.set("D:/ws/.shadow/atoms/2026-09-05--090000-c1.md",
+    "# xyz/compA\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：xyz/a.js\n> 决策：〔user〕先确认调用方再判断兼容成本\n> 证据链：来源(动作·用户) · 日期(2026-09-05) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：先确认调用方。\n");
+  store37.set("D:/ws/.shadow/atoms/2026-09-06--090000-c2.md",
+    "# xyz/compA\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：xyz/a.js\n> 用户提示/决策：兼容层已被移除。\n> 证据链：来源(动作·用户) · 日期(2026-09-06) · 证据(xyz/a.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [xyz/compA] 用户：兼容层已移除。\n");
   store37.set("D:/ws/xyz/a.js", "export {}");
   // 默认（非 observer）会看到新记忆（2026-09-06）
   const r37norm = await toolRegistry.get("read_shadow").execute({ topic: "compA", max_tokens: 4096 }, { agent: agentsById.get("T37") });
@@ -1620,10 +1619,10 @@ const todayStr = todayLocal();
     observer: { what_matters: ["bundle"], what_to_ignore: ["遗留"] },
   }));
   // M1：匹配任务 + what_matters 命中 → relevant（显著加权）
-  store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-flow.md",
-    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 决策：〔user〕决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
-  store38.set("D:/ws/.shadow/2026-09-05/2026-09-05--090002-compat.md",
-    "# 遗留/bundle兼容\n\n> 完整线索\n> 背景/材料：legacy/compat.js\n> 用户提示/决策：遗留 bundle 兼容层。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:01:00] [遗留/bundle兼容] 用户：遗留 bundle 兼容层。\n");
+  store38.set("D:/ws/.shadow/atoms/2026-09-05--090000-flow.md",
+    "# acshModel/acshFlow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：acshModel/entry.js\n> 决策：〔user〕决定把入口 bundle 化。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：决定把入口 bundle 化。\n");
+  store38.set("D:/ws/.shadow/atoms/2026-09-05--090002-compat.md",
+    "# 遗留/bundle兼容\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：legacy/compat.js\n> 用户提示/决策：遗留 bundle 兼容层。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:01:00] [遗留/bundle兼容] 用户：遗留 bundle 兼容层。\n");
   store38.set("D:/ws/acshModel/entry.js", "export {}");
   const r38 = await toolRegistry.get("read_shadow").execute({ topic: "bundle", project: true, max_tokens: 4096 }, { agent: agentsById.get("T38") });
   assert.ok(!String(r38).startsWith("ERR"), "Projection 不应报错");
@@ -1648,8 +1647,8 @@ const todayStr = todayLocal();
   const ctx39 = { get: (k) => services39[k], on: (e, fn) => listeners39.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services39[k] }) };
   const P39 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P39.apply(ctx39, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store39.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-j.md",
-    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 决策：〔user〕先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
+  store39.set("D:/ws/.shadow/atoms/2026-09-05--090000-j.md",
+    "# acshObject/acshObjectPageSelect\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕先确认调用方再判断兼容成本。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshObject/acshObjectPageSelect] 用户：先确认调用方。\n");
   const r39 = await toolRegistry.get("read_shadow").execute({ topic: "acshObject", judgment: true, max_tokens: 4096 }, { agent: agentsById.get("T39") });
   assert.ok(!String(r39).startsWith("ERR"), "Judgment 不应报错");
   assert.ok(r39.includes("[Judgment]"), "应输出 Judgment 段");
@@ -1706,8 +1705,8 @@ const todayStr = todayLocal();
   const ctx41 = { get: (k) => services41[k], on: (e, fn) => listeners41.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services41[k] }) };
   const P41 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P41.apply(ctx41, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store41.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-verify.md",
-    "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js、acshModel/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
+  store41.set("D:/ws/.shadow/atoms/2026-09-05--090000-verify.md",
+    "# acshModel/comp\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js、acshModel/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store41.set("D:/ws/acshModel/entry.js", "export {}"); // 现存
   // acshModel/gone.js 缺失 → not_found
   const r41 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verifyEvidence: true, max_tokens: 4096 }, { agent: agentsById.get("T41") });
@@ -1732,8 +1731,8 @@ const todayStr = todayLocal();
   const ctx42 = { get: (k) => services42[k], on: (e, fn) => listeners42.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services42[k] }) };
   const P42 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P42.apply(ctx42, { summary: { enabled: false }, recall: {}, evidenceProvider: "zg" }); // 强制走 zg
-  store42.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-zg.md",
-    "# acshModel/comp\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
+  store42.set("D:/ws/.shadow/atoms/2026-09-05--090000-zg.md",
+    "# acshModel/comp\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n\n- [09:00:00] [acshModel/comp] 改/读 acshModel/entry.js\n");
   store42.set("D:/ws/acshModel/entry.js", "export {}"); // 磁盘存在，但 zg provider 不查 fs
   const r42 = await toolRegistry.get("read_shadow").execute({ topic: "acshModel", verifyEvidence: true, max_tokens: 4096 }, { agent: agentsById.get("T42") });
   assert.ok(!String(r42).startsWith("ERR"), "zg unavailable 不应报错");
@@ -1812,10 +1811,10 @@ const todayStr = todayLocal();
   const ctx45 = { get: (k) => services45[k], on: (e, fn) => listeners45.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services45[k] }) };
   const P45 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P45.apply(ctx45, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store45.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
-    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+  store45.set("D:/ws/.shadow/atoms/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store45.set("D:/ws/.shadow/atoms/2026-09-05--090001-ux.md",
+    "# 产品/体验\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store45.set("D:/ws/arch/x.js", "export {}");
   store45.set("D:/ws/product/ux.js", "export {}");
   const r45a = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T45") });
@@ -1845,10 +1844,10 @@ const todayStr = todayLocal();
     identity: { name: "architect" },
     decision_style: ["architecture_first", "verify_before_modify"],
   }));
-  store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-rel.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store46.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-other.md",
-    "# other/thing\n\n> 完整线索\n> 用户提示/决策：无关条目。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [other/thing] 用户：无关条目。\n");
+  store46.set("D:/ws/.shadow/atoms/2026-09-05--090000-rel.md",
+    "# 架构/重构\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store46.set("D:/ws/.shadow/atoms/2026-09-05--090001-other.md",
+    "# other/thing\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户提示/决策：无关条目。\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [09:00:00] [other/thing] 用户：无关条目。\n");
   store46.set("D:/ws/arch/x.js", "export {}");
   const r46 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, goal: "降低 P99" }, { agent: agentsById.get("T46") });
   assert.ok(!String(r46).startsWith("ERR"), "RealityProjection 不应报错");
@@ -1878,8 +1877,8 @@ const todayStr = todayLocal();
     identity: { name: "architect" },
     decision_style: ["architecture_first", "verify_before_modify"],
   }));
-  store47.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-claim.md",
-    "# acshModel/acshFlow\n\n> 完整线索\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：重构系统入口。\n");
+  store47.set("D:/ws/.shadow/atoms/2026-09-05--090000-claim.md",
+    "# acshModel/acshFlow\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：acshModel/entry.js\n> 用户提示/决策：重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(acshModel/entry.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [acshModel/acshFlow] 用户：重构系统入口。\n");
   store47.set("D:/ws/acshModel/entry.js", "export {}"); // 证据存在 → evidence_live
   const r47 = await toolRegistry.get("read_shadow").execute({ topic: "系统", claim: true, max_tokens: 4096 }, { agent: agentsById.get("T47") });
   assert.ok(!String(r47).startsWith("ERR"), "Judgment(claim) 不应报错");
@@ -1911,10 +1910,10 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx48 = { get: (k) => services48[k], on: (e, fn) => listeners48.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services48[k] }) };
   const P48 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P48.apply(ctx48, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store48.set("D:/ws/.shadow/2026-09-05/2026-09-05--090001-ux.md",
-    "# 产品/体验\n\n> 完整线索\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
+  store48.set("D:/ws/.shadow/atoms/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store48.set("D:/ws/.shadow/atoms/2026-09-05--090001-ux.md",
+    "# 产品/体验\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：product/ux.js\n> 决策：〔user〕优化系统体验。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(product/ux.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [产品/体验] 用户：优化系统体验。\n");
   store48.set("D:/ws/arch/x.js", "export {}");
   store48.set("D:/ws/product/ux.js", "export {}");
   await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, lens: { preferred: ["重构"], avoided: ["体验"] } }, { agent: agentsById.get("T48") });
@@ -1938,10 +1937,10 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx49 = { get: (k) => services49[k], on: (e, fn) => listeners49.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services49[k] }) };
   const P49 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P49.apply(ctx49, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store49.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-past.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
-  store49.set("D:/ws/.shadow/2026-09-06/2026-09-06--090000-future.md",
-    "# 架构/新方案\n\n> 完整线索\n> 用户提示/决策：最终方案已确定。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/新方案] 用户：最终方案已确定。\n");
+  store49.set("D:/ws/.shadow/atoms/2026-09-05--090000-past.md",
+    "# 架构/重构\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store49.set("D:/ws/.shadow/atoms/2026-09-06--090000-future.md",
+    "# 架构/新方案\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 用户提示/决策：最终方案已确定。\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/新方案] 用户：最终方案已确定。\n");
   store49.set("D:/ws/arch/x.js", "export {}");
   const r49 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, asOf: "2026-09-05" }, { agent: agentsById.get("T49") });
   assert.ok(!String(r49).includes("架构/新方案"), `asOf=09-05 不应看到未来(09-06)信息：\n${r49}`);
@@ -1963,8 +1962,8 @@ const obsTexts = (store: Map<string, string>) =>
   const ctx50 = { get: (k) => services50[k], on: (e, fn) => listeners50.set(e, fn), inject: (deps, cb) => cb({ get: (k) => services50[k] }) };
   const P50 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P50.apply(ctx50, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: { enabled: false } }   /* v1.15.85：本文件的场景用**合成旧日期**断言索引/召回内容 ⇒ 把「默认全开」的量控三件套显式钉住；新默认的正面覆盖在 test/volume-defaults.test.ts */);
-  store50.set("D:/ws/.shadow/2026-09-05/2026-09-05--090000-refactor.md",
-    "# 架构/重构\n\n> 完整线索\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
+  store50.set("D:/ws/.shadow/atoms/2026-09-05--090000-refactor.md",
+    "# 架构/重构\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：arch/x.js\n> 决策：〔user〕重构系统入口。\n> 证据链：来源(用户) · 日期(2026-09-05) · 证据(arch/x.js)\n> 概况：0 动作 · 1 用户消息 · 1 决策\n\n- [09:00:00] [架构/重构] 用户：重构系统入口。\n");
   store50.set("D:/ws/arch/x.js", "export {}");
   const r50 = await toolRegistry.get("read_shadow").execute({ topic: "系统", project: true, max_tokens: 4096, state: { focus: "deep", goalStage: "exploration" } }, { agent: agentsById.get("T50") });
   const obs = obsTexts(store50);

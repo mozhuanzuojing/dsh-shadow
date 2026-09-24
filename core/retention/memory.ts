@@ -1,10 +1,50 @@
 // dsh-shadow —— core/retention/memory.ts：记忆记录塑形（完整线索头）+ meta 注册。从 index.ts 迁出。
+// ADR-0106：线索头必含五轴坐标（locus/when/soul/role/intent）；缺轴 ⇒ 不上投影。
 import { today } from "../util.js";
 import { scrubUnsafe, referencedMaterials } from "../../security/scrub.js";
 import { mutateMeta } from "../../persistence/meta.js";
 import { materialOfAction } from "./capture-granularity.js";
 
-export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra?: { project?: string; agent?: string; goal?: string; foldedMaterials?: string[] }) => {
+/** 投影空间五轴（ADR-0106 / X2）。每条 Atom 必须非空。 */
+export interface AtomAxes {
+  locus: string;
+  when: string;
+  soul: string;
+  role: string;
+  intent: string;
+}
+
+export const AXIS_KEYS = ["locus", "when", "soul", "role", "intent"] as const;
+
+/** 五轴是否齐全（任一空串 = 缺轴）。 */
+export const axesComplete = (a: Partial<AtomAxes> | null | undefined): a is AtomAxes =>
+  !!a && AXIS_KEYS.every((k) => String(a[k] || "").trim().length > 0);
+
+/** 渲染坐标行（写进线索头）。 */
+export const formatAxesLine = (a: AtomAxes): string =>
+  `> 坐标：locus(${scrubUnsafe(a.locus).slice(0, 80)}) · when(${scrubUnsafe(a.when).slice(0, 32)}) · soul(${scrubUnsafe(a.soul).slice(0, 40)}) · role(${scrubUnsafe(a.role).slice(0, 40)}) · intent(${scrubUnsafe(a.intent).slice(0, 80)})`;
+
+/** 从正文解析五轴；缺任一 ⇒ 返回 null（不上投影，不猜）。 */
+export const parseAxes = (body: string): AtomAxes | null => {
+  const line = (String(body || "").match(/^>\s*坐标：(.+)$/m) || [])[1] || "";
+  if (!line) return null;
+  const pick = (k: string) => {
+    const m = line.match(new RegExp(`${k}\\(([^)]*)\\)`));
+    return m ? String(m[1] || "").trim() : "";
+  };
+  const a: AtomAxes = {
+    locus: pick("locus"),
+    when: pick("when"),
+    soul: pick("soul"),
+    role: pick("role"),
+    intent: pick("intent"),
+  };
+  return axesComplete(a) ? a : null;
+};
+
+export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra?: {
+  project?: string; agent?: string; goal?: string; foldedMaterials?: string[]; axes?: AtomAxes;
+}) => {
   const mats: string[] = [];
   const prompts: string[] = [];
   const userPoints: string[] = [];
@@ -15,7 +55,6 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
   };
   for (const e of arr) {
     if (e.kind === "action") {
-      // 判据收一处（v1.19.0 / adr/0097）：与审计流的材料折叠共用同一份「哪种 action 算材料」。
       const m = materialOfAction(e.text);
       if (m) addMat(m);
     }
@@ -27,15 +66,9 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
       userPoints.push(`「${raw.slice(0, 48)}」`);
     }
   }
-  // v1.19.0（adr/0097 D4）：并入**先前那些已降级进审计流**的批读过的文件 —— 否则「纯动作批读过的文件」
-  // 会从记忆的「背景/材料」里消失（审计流里的路径**读侧不消费**；边界见 adr/0097 §5）。
   for (const m of extra?.foldedMaterials || []) addMat(m);
   const acts = arr.filter((x) => x.kind === "action").length;
   const usr = arr.filter((x) => x.kind === "user").length;
-  // ── Decision Capture（v1.1.1）：决策作为一等事件进入 Memory。 ──
-  // 只捕获「明确存在的决策表达」：goal 事件 / 用户拍板（classifyUser==decision）/ assistant 明确决策。
-  // 决策事实（statement）与决策理由（reason）分离：reason 只在原文明确表达时才挂，绝不推测
-  // （Evidence≠Interpretation；有 Decision ≠ 一定有 Reason，缺则不补）。
   const decs: { text: string; source: string; reason: string }[] = [];
   const stmtSeen = new Set<string>();
   for (const e of arr) {
@@ -59,6 +92,8 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
   const kindsSeen = Array.from(new Set(arr.map((e) => e.kind).filter(Boolean))).map((k) => kindLabel[k] || k).join("·") || "—";
   const evPaths = mats.slice(0, 6).join("、") || "—";
   const lines = ["> 完整线索"];
+  // ADR-0106：五轴坐标（缺则调用方应已补默认；此处仍写出，供读侧校验）
+  if (extra?.axes && axesComplete(extra.axes)) lines.push(formatAxesLine(extra.axes));
   if (mats.length) lines.push(`> 背景/材料：${mats.slice(0, 8).join("、")}`);
   if (prompts.length) lines.push(`> 用户提示/决策：${prompts.slice(0, 6).join("；")}`);
   if (decs.length) lines.push(`> 决策：${decs.slice(0, 8).map((d) => `〔${d.source}〕${d.text}`).join("；")}`);
@@ -76,15 +111,10 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
 
 /**
  * 登记 `_meta.json` 里的一条。**返回是否登记成功**（v1.15.56）。
- *
- * 旧版把失败吞成一行 `console.log` ⇒ 记忆文件与索引缓存**早已写入**，于是这条记忆在索引/召回里
- * 是「活跃」的，而 `_meta.json` 里没有它 ⇒ `hits` 永远不计、生命周期恒判 NEW、遗忘判据落回默认值。
- * 调用方（`flush`）据此留痕，读侧才能提示「元数据未登记」。
  */
 export const registerMeta = async (fs: any, ws: string, rel: string, actorId: string | undefined, retentionEnabled: boolean): Promise<boolean> => {
-  if (!retentionEnabled) return true; // 未开启保留策略 ⇒ 本来就不需要 meta（不是失败）
+  if (!retentionEnabled) return true;
   try {
-    // 事务（ADR-0068）：读-改-写带版本守卫，并发下不丢更新；`false` = 已存在，无需写。
     const ok = await mutateMeta(fs, ws, (meta) => {
       if (meta[rel]) return false;
       meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };

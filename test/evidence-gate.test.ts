@@ -4,7 +4,7 @@ import { deriveShadowNodes } from "../dist/core/view/node.js";
 import { validateAtomProjection } from "../dist/core/lineage/validator.js";
 
 const atom = (over) => ({
-  rel: ".shadow/2026-09-08/x.md", date: "2026-09-08", time: "000000", entry: "x", project: "p", agent: "a", goal: "",
+  rel: ".shadow/atoms/x.md", date: "2026-09-08", time: "000000", entry: "x", project: "p", agent: "a", goal: "",
   decisions: [], decisionEvents: [], userMessages: [], materials: [], actions: [], thinkLines: [], body: "",
   ...over,
 });

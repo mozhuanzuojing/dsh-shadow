@@ -31,7 +31,7 @@ const O = (over: Partial<OutcomeObservation> = {}): OutcomeObservation => ({
   at: "2026-01-10T00:00:00Z",
   actual: "返工下降",
   source: "user",
-  inputRefs: [{ file: ".shadow/2026-01-01/x.md", line: 3 }],
+  inputRefs: [{ file: ".shadow/atoms/x.md", line: 3 }],
   ...over,
 });
 

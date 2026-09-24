@@ -3,6 +3,33 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.0] 投影空间绿地切权威 + 小世界 hydrate（ADR-0106 / 0107）
+
+行为变更：记忆语料权威从日期树改为多轴投影空间；有 topic 的**默认主题召回**套灵魂规避滤（`raw: true` 看原文；`project: true` 仍为完整 RealityProjection 且短路不经规避滤）。
+
+⚠ **升级**：旧 `.shadow/<YYYY-MM-DD>/` 日期树**不迁、不双读** ⇒ 残留文件变为**静默不可见死数据**（须人工处理或接受丢失可读性）。
+
+- **布局**：`.shadow/atoms/` · `roles/` · `affaires/<roleId>/` · `indexes/`（含 `_index.md` · `index.sqlite` · `shadow-index/` · `abstracts/` · **`projections/`**）。
+- **五轴**：线索头须结构齐全；flush 对 `soul`/`role` 等填 **`"default"`** 临时轴（≠ 真实 Role 卡存在，ADR-0106 §2.7）。
+- **Role/Affaire**：写 API + 磁盘位 + 源指纹；小世界 **枚举**（装载≠进排序；ADR-0107）。
+- **小世界 / 规避滤**：`projectionSpace.cache` 默认开（**只**控缓存）；flush 双写便利贴；F2 缺灵魂明示；recovery 只 F2、不套滤。
+- **Soul**：`writeSoulCore` + `SOUL_CORE_WRITE_GATE`（H2∥H3gate）；identity-advance 仍不写核心。
+- **文档**：ADR-0106/0107；CONTEXT；README 档案 vs 滤 / `project` / `raw`；**README 瘦身为使用者面** + 新建 `docs/maintainers.md`（契约台账 / Owns / 能力长节）；检查⑥ 把 `docs/*.md` 纳入当前态引用扫描。
+- **审查修复（同日第二轮，全部有会红的判据）**：
+  - **读回截断**（必修）：`parseViewVisible` 的正则 `/m` 下 `\n*$` 在**首个行尾**即成立 ⇒ 多行正文只读回第一行，
+    而调用方拿它直接顶替召回正文 ⇒ 有 `soul.json` 的工作区每次 `read_shadow(topic)` 只送模型一行。改成按 `## visible`/`## hidden` 显式分段（正文自己含 `## ` 行也安全）。
+  - **便利贴新鲜度加 `bodyHash`**（正确性锚点）：令牌（`size:version`）只当廉价前置闸；后端不给 `version` 时
+    「同尺寸原地改内容」不再让旧便利贴顶替刚读到的正文（`patchSummary` 正是原地改同一个文件）。
+  - **读路径写失败不再无声**：`query/topic-recall.ts` 的 `void writeProjectionView(...)` → `await` + `noteDegrade`（T8-A 口径）。
+  - **粒度门**（`tools/granularity-audit.ts`）：① `atoms/` 不存在**且有旧日期树** ⇒ exit 2「迁移未做」（此前判 0 ⇒ 旧语料静默全绿）；
+    ② 文件名不含日期时改按线索头自报的 `· 日期(...)` 判（此前记成「历史豁免」⇒ 改个名就能洗掉违规）；两处都没日期 ⇒ 未判定。
+  - **`relOf` 恢复真值**：它曾恒返回 `.shadow/atoms/<name>`（忽略目录参数），而唯一调用方 `tools/granularity-reclaim.ts` 仍扫旧日期树
+    ⇒ 审计流写假来源、幂等守卫永不命中、`_meta.json` 剪枝恒 0。
+  - **恒真的负对照补夹具**：`granularity-audit.selftest.ts` ⑤（`_abstract.md` 搬进 `atoms/`）、`test/abstract-sidecar.test.ts` ⑤（同）。
+  - **`tools/retrieval-eval.ts`** 语料 walker 排除 `indexes/` 与 `_` 前缀文件（否则把每原子一份的便利贴当语料、同一条记忆数两遍）。
+  - 顺手：过期注释里的 `.shadow/shadow-index/…` 改口到 `indexes/shadow-index/…`。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+
 ## [v1.20.12] 第五伞 `subject` + `core/` G2 职责粗桶
 
 导航整理，**无行为变更**（mode / 召回 / `.shadow/` 落盘不变；`layerOf` 伞下取第二段，`core/*` 子目录仍 = `core`）。

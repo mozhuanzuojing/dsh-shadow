@@ -73,6 +73,13 @@ export const currentStateDocs = (root: string): string[] => {
     if (e.name === CHANGELOG_DOC) continue;
     docs.push(join(root, e.name));
   }
+  // `docs/*.md` 属当前态（如 `docs/maintainers.md`，v1.21.0 README 拆分后）；HTML/JSON 不扫。
+  const docsDir = join(root, "docs");
+  if (existsSync(docsDir)) {
+    for (const f of readdirSync(docsDir).filter((f) => f.endsWith(".md"))) {
+      docs.push(join(docsDir, f));
+    }
+  }
   const adrDir = join(root, "adr");
   if (existsSync(adrDir)) {
     for (const f of readdirSync(adrDir).filter((f) => f.endsWith(".md"))) {

@@ -37,7 +37,8 @@ export const evaluateCandidate = (c: CandidateIdentityChange, gates: EvalGates):
   return { status, reasons, chosen: c };
 };
 
-// 读反思 → 生成候选 → 三道闸门 → 接受者推进 identity(t0)->t1 ->timeline。不自动改 soul.json（只推进派生切片）。
+// 读反思 → 生成候选 → 三道闸门 → 接受者推进 identity(t0)->t1 ->timeline。
+// 不自动改 soul.json（只推进派生切片；核心写须 H3gate，见 subject/soul/write.ts / ADR-0106）。
 export const advanceIdentity = async (fs: any, ws: string, current: IdentityModel, gates: EvalGates = {}) => {
   const reflections = await readReflections(fs, ws);
   const decisions: IdentityChangeDecision[] = [];

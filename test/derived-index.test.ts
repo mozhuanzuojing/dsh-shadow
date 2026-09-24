@@ -30,7 +30,7 @@ const mkRoot = (): string => { const r = mkdtempSync(join(tmpdir(), "dsh-derived
 const dayStr = (offset: number): string => new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10);
 const memName = (date: string, time: string, slug: string): string => `${date}--${time}-${slug}.md`;
 const metaPath = (root: string) => join(root, ".shadow", "_meta.json");
-const indexPath = (root: string) => join(root, ".shadow", "index.sqlite");
+const indexPath = (root: string) => join(root, ".shadow", "indexes", "index.sqlite");
 
 const NOT_FOUND = (p: string) => Object.assign(new Error(`cannot read "${p}": not found`), { code: "FS_NOT_FOUND" });
 
@@ -91,13 +91,25 @@ const makeStrictFs = (root: string, opts: { processPath?: boolean } = {}) => {
   return f;
 };
 
-const put = (root: string, date: string, name: string, text: string) => {
-  mkdirSync(join(root, ".shadow", date), { recursive: true });
-  writeFileSync(join(root, ".shadow", date, name), text, "utf8");
+const put = (root: string, dir: string, name: string, text: string) => {
+  // ADR-0106：记忆 → atoms/；派生 → indexes/；其它平行子树（如 resources/）保持原目录名。
+  if (dir === "resources" || dir === "soul" || dir === "taste") {
+    mkdirSync(join(root, ".shadow", dir), { recursive: true });
+    writeFileSync(join(root, ".shadow", dir, name), text, "utf8");
+    return;
+  }
+  if (name.startsWith("_") || name === "_index.md") {
+    mkdirSync(join(root, ".shadow", "indexes"), { recursive: true });
+    writeFileSync(join(root, ".shadow", "indexes", name), text, "utf8");
+    return;
+  }
+  mkdirSync(join(root, ".shadow", "atoms"), { recursive: true });
+  writeFileSync(join(root, ".shadow", "atoms", name), text, "utf8");
 };
 
 const memoryText = (entry: string) =>
-  `# ${entry}\n\n> 项目：dsh1\n> Agent：a1\n> 目标：把 ${entry} 做出来\n> 背景/材料：spec/a.md、spec/b.md\n\n` +
+  `# ${entry}\n\n> 坐标：locus(dsh1) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(${entry})\n` +
+  `> 项目：dsh1\n> Agent：a1\n> 目标：把 ${entry} 做出来\n> 背景/材料：spec/a.md、spec/b.md\n\n` +
   `- [10:00:00] [${entry}] 用户：请记住 ${entry}\n- [10:01:00] [${entry}] 决定 采用 ${entry} 方案\n- [10:02:00] [${entry}] 改/读 src/${entry}.ts\n`;
 
 const cfgFs = { derivedIndex: { provider: "fs" } };
@@ -112,7 +124,7 @@ const entryOf = (v: any, rel: string) => ((v.parsed.find((p: any) => p.rel === r
 const coarseStringOf = async (fs: any, root: string): Promise<string> => {
   const es = (await fs.listDir(await fs.resolve(join(root, ".shadow")))) || [];
   return es
-    .filter((e: any) => e.type === "directory" && (/^\d{4}-\d{2}-\d{2}$/.test(e.name) || e.name === "resources"))
+    .filter((e: any) => e.type === "directory" && (e.name === "atoms" || e.name === "resources"))
     .map((e: any) => `${e.name}:${e.version}`)
     .sort()
     .join("|");
@@ -270,7 +282,7 @@ let baseline: any; // 供后续组复用（fs 路输出）
   assert.match(String(notes[0][1]), /schema/, `reason 必须点明 schema 版本不符；实际 ${JSON.stringify(notes[0])}`);
   assert.deepEqual(sortedRel(out.parsed), sortedRel(baseline.parsed), "corrupt 本次回退 fs ⇒ 结果不变");
   assert.equal(existsSync(indexPath(root)), false, "corrupt 必须把坏索引**挪走**（留在原地 = 每次都坏、每次都重建失败）");
-  assert.ok(readdirSync(join(root, ".shadow")).some((n) => n.startsWith("index.sqlite.corrupt-")), "坏件应被改名留档（不是静默删掉）");
+  assert.ok(readdirSync(join(root, ".shadow", "indexes")).some((n) => n.startsWith("index.sqlite.corrupt-")), "坏件应被改名留档（不是静默删掉）");
 
   const notes2: any[] = [];
   const out2 = await materializeAtoms(fs, root, cfgSql, { note: (...a: any[]) => notes2.push(a) });
@@ -417,7 +429,7 @@ let baseline: any; // 供后续组复用（fs 路输出）
   const root = mkRoot();
   const D = dayStr(0);
   const NAME = memName(D, "120000", "core");
-  const REL = `.shadow/${D}/${NAME}`;
+  const REL = `.shadow/atoms/${NAME}`;
   put(root, D, NAME, memoryText("v1"));
   const fs = makeStrictFs(root);
   await materializeAtoms(fs, root, cfgSql); // 建索引
@@ -426,18 +438,18 @@ let baseline: any; // 供后续组复用（fs 路输出）
   const NEW = memName(D, "130000", "added");
   put(root, D, NEW, memoryText("added"));
   const r1 = await materializeAtoms(fs, root, cfgSql);
-  assert.ok(relsOf(r1).includes(`.shadow/${D}/${NEW}`), "新增文件必须被索引看见（门② 细比对）——漏一条就是静默少结果");
+  assert.ok(relsOf(r1).includes(`.shadow/atoms/${NEW}`), "新增文件必须被索引看见（门② 细比对）——漏一条就是静默少结果");
 
   // (ii) 删除文件不得留幽灵
-  rmSync(join(root, ".shadow", D, NEW));
+  rmSync(join(root, ".shadow", "atoms", NEW));
   const r2 = await materializeAtoms(fs, root, cfgSql);
-  assert.ok(!relsOf(r2).includes(`.shadow/${D}/${NEW}`), "删掉的文件不得留在索引里（幽灵记忆）");
+  assert.ok(!relsOf(r2).includes(`.shadow/atoms/${NEW}`), "删掉的文件不得留在索引里（幽灵记忆）");
 
   // (iii) 原地改内容：先证「目录令牌看不见这条路」，再证 dirty 能兜住
   const probe = makeStrictFs(root);
   const dirToken = async () => {
     const es = await probe.listDir(await probe.resolve(join(root, ".shadow")));
-    return (es.find((e: any) => e.name === D) || {}).version;
+    return (es.find((e: any) => e.name === "atoms") || {}).version;
   };
   const t0 = await dirToken();
   put(root, D, NAME, memoryText("v2-inplace"));
@@ -476,7 +488,7 @@ let baseline: any; // 供后续组复用（fs 路输出）
   const root = mkRoot();
   const D = dayStr(0);
   const NAME = memName(D, "080000", "steady");
-  const REL = `.shadow/${D}/${NAME}`;
+  const REL = `.shadow/atoms/${NAME}`;
   put(root, D, NAME, memoryText("s1"));
   const fs = makeStrictFs(root);
   await materializeAtoms(fs, root, cfgSql); // 建索引
@@ -508,9 +520,9 @@ let baseline: any; // 供后续组复用（fs 路输出）
   const root = mkRoot();
   const D = dayStr(0);
   const A = memName(D, "070000", "a");
-  const RELA = `.shadow/${D}/${A}`;
+  const RELA = `.shadow/atoms/${A}`;
   const NEW = memName(D, "070100", "newfile");
-  const RELNEW = `.shadow/${D}/${NEW}`;
+  const RELNEW = `.shadow/atoms/${NEW}`;
   put(root, D, A, memoryText("a"));
   const fs = makeStrictFs(root);
   await materializeAtoms(fs, root, cfgSql); // 建索引

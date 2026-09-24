@@ -83,7 +83,7 @@ export const component = (abs: string, ws: string) => {
  * `FsDirEntry` 是不是目录（**判据收一处**；T17-B）。
  *
  * 为什么要有它：`shadowSourcesFingerprint`（投影缓存指纹）与 `candidate-sqlite`（派生索引的目录粗信号）
- * 都要按它筛 `.shadow/` 下的日期目录；各写一遍 `e.type === "directory"` 就是同一条判据在两个生产模块
+ * 都要按它筛 `.shadow/` 下的权威源目录；各写一遍 `e.type === "directory"` 就是同一条判据在两个生产模块
  * 被表达两次（`tools/audit-drift.ts` 的 B 段抓的就是这个）。纯谓词、无副作用。
  */
 export const isDirEntry = (e: any): boolean => e?.type === "directory";

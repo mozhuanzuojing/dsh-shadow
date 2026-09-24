@@ -1,12 +1,13 @@
-// dsh-shadow —— core/view/abstract.ts：**目录级 L0/L1 sidecar**（ADR-0065 吸收 OpenViking，D6 落地）。
+// dsh-shadow —— core/view/abstract.ts：**when 桶级 L0/L1 sidecar**（ADR-0065 吸收 OpenViking，D6 落地；ADR-0106 路径）。
 //
 // 由来（`adr/0065-absorbing-openviking.md` 的「可吸收三条」）：
-//   ① 目录级（日期级）abstract + overview sidecar —— 今天判断相关**必须先读记忆文件**、
-//      只能靠全局 `_index.md`；OpenViking 是**每层目录都带 L0/L1**（256 / 4000 字符上限）。
+//   ① when 桶级 abstract + overview sidecar —— 判断相关**必须先读记忆文件**时，
+//      只能靠全局 `indexes/_index.md`；OpenViking 是**每层目录都带 L0/L1**（256 / 4000 字符上限）。
+//      ⚠ 分桶键 = atom 文件名里的日期（when 派生），**不是**已废除的日期目录树。
 //   ② **上层由下层确定性派生**（它的 L0 是从 L1 正文里抽的）—— 消除层间漂移。
 //   ③ 派生件**自报覆盖率与待处理变更**（`freshness`：子项覆盖数 + `pending_child_changes`）。
 //
-// 三条的层次：`记忆文件（source）→ L1 overview → L0 abstract →（可选）_index.md 的目录摘要段`。
+// 三条的层次：`记忆文件（source）→ L1 overview → L0 abstract →（可选）indexes/_index.md 的摘要段`。
 // **每一层只从它下面那一层派生** —— 这是 ② 的全部内容，也是本模块的**唯一纪律**。
 //
 // 三条硬边界（写在最前，因为越界会污染 source）：
@@ -15,13 +16,13 @@
 //      这是 ② 可验证的前提：同一批输入必然产出**逐字节相同**的文本（测试 ① 锁住）。
 //   3. **命名必须 `_` 前缀** —— `persistence/files.ts` 的 `listMemories` 按 `_` 前缀把
 //      「派生物」与「记忆」分开，故 sidecar 不会被当成一条记忆（测试 ⑤ 锁住）。
-import { SHADOW_ROOT } from "../paths.js";
+import { indexesRel } from "../paths.js";
 
 /** L0 上限（OpenViking 口径：256 字符）。 */
 export const L0_MAX = 256;
 /** L1 上限（OpenViking 口径：4000 字符）。 */
 export const L1_MAX = 4000;
-/** 目录级 sidecar 的文件名（`_` 前缀 = 派生物，见文件头边界 3）。 */
+/** when 桶 sidecar 的文件名（`_` 前缀 = 派生物，见文件头边界 3）。 */
 export const SIDECAR_NAME = "_abstract.md";
 
 /** 一条记忆的**最小可派生面**（只取派生 L1 真正需要的字段）。 */
@@ -34,7 +35,7 @@ export interface MemoryFace {
 
 /** sidecar 的自报覆盖率（对应 OpenViking 的 `freshness`）。 */
 export interface SidecarCoverage {
-  /** 本目录下被纳入派生的记忆条数。 */
+  /** 本 when 桶下被纳入派生的记忆条数。 */
   covered: number;
   /** **未**纳入派生的记忆条数（= 待处理变更）。正常应为 0；非 0 说明 sidecar 落后于源头。 */
   pending: number;
@@ -155,5 +156,5 @@ export const sidecarDrift = (faces: MemoryFace[], sidecarText: string): string[]
   return errs;
 };
 
-/** sidecar 的仓库相对路径（`_` 前缀 ⇒ 不进 `listMemories`）。 */
-export const sidecarRel = (date: string): string => `${SHADOW_ROOT}/${date}/${SIDECAR_NAME}`;
+/** sidecar 的仓库相对路径（按 when 日期分桶，落在 indexes/；`_` 前缀 ⇒ 不进 `listMemories`）。 */
+export const sidecarRel = (date: string): string => indexesRel("abstracts", date, SIDECAR_NAME);

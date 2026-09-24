@@ -44,8 +44,13 @@ export interface ShadowConfig {
   capture?: { echo?: "audit" | "memory" };
   /** Phase 1A.5 Shadow Query Observatory：默认开启（观察真实查询）；enabled:false 关闭旁路记录。系统派生记录（.shadow/query-log/），rm -rf 不影响 Atom。 */
   queryLog?: { enabled?: boolean };
-  /** Phase 1B Projection Store（Performance Feature，默认关）：把 Atom→ShadowNode 派生结果缓存成可重建投影（.shadow/shadow-index/nodes.jsonl），避免每次全量重取。只在「Node 稳定+query 稳定+rebuild 成本明显」时启用。 */
+  /** Phase 1B Projection Store（Performance Feature，默认关）：把 Atom→ShadowNode 派生结果缓存成可重建投影（`.shadow/indexes/shadow-index/nodes.jsonl`；ADR-0106 后索引层在 `indexes/`），避免每次全量重取。只在「Node 稳定+query 稳定+rebuild 成本明显」时启用。 */
   projectionStore?: { enabled?: boolean };
+  /**
+   * 投影空间小世界缓存（ADR-0107）。**默认开**（`cache !== false`）。
+   * 与 `projectionStore`（nodes.jsonl，默认关）**不是同一个开关**。
+   */
+  projectionSpace?: { cache?: boolean };
   /** Phase 2 Index Engine（候选生成）：provider = fs(默认全量扫描) | zg(未装→unavailable 不 fallback) | semble(本地语义检索 CLI，ADR-0054；同不 fallback)。 */
   indexEngine?: { provider?: "fs" | "zg" | "semble" };
   /**
@@ -54,7 +59,7 @@ export interface ShadowConfig {
    * · `provider`：`"fs"`（**默认**）| `"sqlite"`。
    *   **默认是 `fs`**，且 T17-B **不改默认**（D8）—— 改默认是 T17-C 的事：
    *   `adr/0095` §七写明「验证矩阵全部通过之后，才考虑把 `sqlite` 设为默认」。
-   *   `"sqlite"` 的载体是 `<ws>/.shadow/index.sqlite`（**派生件**：删掉它必须能仅凭 `.shadow/*.md` 重建）。
+   *   `"sqlite"` 的载体是 `<ws>/.shadow/indexes/index.sqlite`（**派生件**：删掉它必须能仅凭 `.shadow/atoms/*.md` 重建）。
    * · `verifySources`：新鲜度的**逃生口**。`"coarse"`（默认）= 用一次 `listDir(.shadow)` 的目录令牌做
    *   ~5 ms 的负判据（令牌变了才细比对那个目录）；`"full"` = 每次都做**文件级**全量比对（sound，
    *   但要付 3.3–3.6 s，等于放弃本层收益）。为什么必须有 `full`：**外部进程**对一个**已存在**的记忆文件
@@ -77,7 +82,7 @@ export interface ShadowConfig {
    *
    * **默认开**（`enabled !== false`）—— 与 `projectionStore`（默认关）**不同**，理由是：
    * ① 它是**派生物**（ADR-0003），可整份重建、删掉不丢事实；
-   * ② 写入次数**有界** —— 每个**日期目录一份**，不是每条记忆一份；
+   * ② 写入次数**有界** —— 每个 **when 日期桶**一份（按 atom 文件名日期分组，落在 `indexes/abstracts/<date>/`），不是每条记忆一份；
    * ③ 它就是 D6 决定「三条都做」的产物，若默认关就等于**又一次「写好了但从不执行」**
    *    （恰是本仓 T1/T4 刚清理干净的那类）。
    * `showInIndex`：在 `_index.md` 里列最近几个目录的 L0（默认 3，0 = 不列）。

@@ -2,8 +2,8 @@ import { SHADOW_ROOT } from "../core/paths.js";
 import { isNotFound } from "../core/util.js";
 
 // dsh-shadow —— persistence/meta.ts：_meta.json 派生状态读写（Derived Artifact）。
-// 派生约定（ADR-0003 §3-7）：Memory 文件（.shadow/<date>/<time>-<entry>.md）是 source of truth；
-// _meta.json / _recall_log.json / _index.md 都是可从 Memory 重建的派生物，坏了用 rebuild-index 重建。
+// 派生约定（ADR-0003 §3-7 / ADR-0106）：Memory 文件（.shadow/atoms/*.md）是 source of truth；
+// _meta.json / indexes/_index.md / indexes/index.sqlite 都是可从 Memory 重建的派生物。
 //
 // **并发纪律（ADR-0068，v1.15.25）**：`_meta.json` 是**全工作区共享**的一个文件，而它的所有写入
 // 都是「读全量 → 改 → 写回全量」。这在并发下（多会话 / teammate / 宿主与子代理同时召回）会**丢更新**。

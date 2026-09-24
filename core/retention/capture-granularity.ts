@@ -47,8 +47,8 @@ export const echoToAudit = (cfg: any): boolean => cfg?.capture?.echo !== ECHO_ME
 
 /**
  * 审计流落点：`.shadow/audit/<date>.jsonl`。
- * 它属**系统派生记录**层（同 `.shadow/query-log/`、`shadow-index/`）⇒
- * `persistence/files.ts:50` 只枚举 `^\d{4}-\d{2}-\d{2}$` 的目录，**整个 `audit/` 不会被当成记忆**。
+ * 它属**系统派生记录**层（同 `.shadow/query-log/`、`indexes/shadow-index/`）⇒
+ * `persistence/files.ts` 的 `listMemories` 只枚举 `.shadow/atoms/`（ADR-0106），**整个 `audit/` 不会被当成记忆**。
  */
 export const auditStreamRel = (date: string): string => `${SHADOW_ROOT}/audit/${date}.jsonl`;
 

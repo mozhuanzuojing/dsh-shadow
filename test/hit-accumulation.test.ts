@@ -47,7 +47,7 @@ const { renderWithinBudget } = await import("../dist/retrieval/budget-render.js"
 
 // ── ① 前置事实：这段文本的 tier 必须是 L0（否则本测试测不到目标的那个分支） ──
 const L0_BODY =
-  "# pkg-a\n\n> 完整线索\n> 概况：3 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T1\n\n" +
+  "# pkg-a\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：3 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T1\n\n" +
   "- [10:00:00] [pkg-a] 改/读 pkg-a/x.js\n" +
   "- [10:00:01] [pkg-a] 改/读 pkg-a/y.js\n" +
   "- [10:00:02] [pkg-a] 调用 build\n";
@@ -57,7 +57,7 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
 // ── ①b 主锁：renderWithinBudget 两集合分家 ──
 {
   const L0_scored = {
-    mm: { rel: ".shadow/2026-09-07/l0.md", date: "2026-09-07", time: "100000", name: "l0" },
+    mm: { rel: ".shadow/atoms/l0.md", date: "2026-09-07", time: "100000", name: "l0" },
     text: L0_BODY, entry: "pkg-a", tier: "L0", score: 2, tokens: ["build"], breakdown: {},
   };
   const r0 = renderWithinBudget([L0_scored], { limit: 10, maxChars: 8000, tokens: ["build"] });
@@ -65,11 +65,11 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
   assert.equal(r0.servedDetail.length, 0, "L0 不得进 servedDetail");
 
   const L2_BODY =
-    "# pkg-b\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n" +
+    "# pkg-b\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n" +
     "- [10:00:00] [pkg-b] 改/读 pkg-b/z.js\n\n我分析了为什么这样改，注意边界。\n";
   assert.equal(tierFor(L2_BODY), "L2");
   const L2_scored = {
-    mm: { rel: ".shadow/2026-09-07/l2.md", date: "2026-09-07", time: "110000", name: "l2" },
+    mm: { rel: ".shadow/atoms/l2.md", date: "2026-09-07", time: "110000", name: "l2" },
     text: L2_BODY, entry: "pkg-b", tier: "L2", score: 3, tokens: ["pkg-b", "边界"],
     breakdown: {}, evidence: { status: "active" },
   };
@@ -90,7 +90,7 @@ console.log("✔ ① 前置条件成立：动作行占满 ⇒ tierFor 返回 L0�
 //   否则 fixture 里的旧日期会被 isForgettable 滤掉，把被测行为一起滤没（T12 重判，v1.15.97）。
 P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T1");
-  m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100000-pkg-a.md`, L0_BODY);
+  m.set(`${WS}/.shadow/atoms/2026-09-07--100000-pkg-a.md`, L0_BODY);
 
   const rs = toolRegistry.get("read_shadow");
   assert.ok(rs, "read_shadow 工具应已注册");
@@ -99,7 +99,7 @@ P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false
   assert.ok(out.includes("pkg-a"), "前置条件：召回应返回该记忆（否则测不到累积逻辑）");
   const metaRaw = store.get(`${WS}/.shadow/_meta.json`);
   const meta = metaRaw ? JSON.parse(metaRaw) : {};
-  const rel = ".shadow/2026-09-07/2026-09-07--100000-pkg-a.md";
+  const rel = ".shadow/atoms/2026-09-07--100000-pkg-a.md";
   const rec = meta[rel];
   assert.ok(rec, "被返回的记忆必须在 _meta.json 里有记录（hits 是「召回命中数」，与是否展开片段无关）");
   assert.ok(Number(rec.hits) >= 1, `被返回一次应记 hits >= 1；实际 ${JSON.stringify(rec)}`);
@@ -113,14 +113,14 @@ P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false
   const P = { name, inject, apply };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T2");
-  const L2_BODY = "# pkg-b\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [pkg-b] 改/读 pkg-b/z.js\n\n我分析了为什么这样改，注意边界。\n";
+  const L2_BODY = "# pkg-b\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n- [10:00:00] [pkg-b] 改/读 pkg-b/z.js\n\n我分析了为什么这样改，注意边界。\n";
   assert.equal(tierFor(L2_BODY), "L2", "对照前提：含思维词 ⇒ L2");
-  m.set(`${WS}/.shadow/2026-09-07/2026-09-07--110000-pkg-b.md`, L2_BODY);
+  m.set(`${WS}/.shadow/atoms/2026-09-07--110000-pkg-b.md`, L2_BODY);
   const rs = toolRegistry.get("read_shadow");
   const out = String(await rs.execute({ topic: "pkg-b" }, { agent: T }));
   assert.ok(out.includes("pkg-b"), "对照：召回应返回该记忆");
   const meta = JSON.parse(store.get(`${WS}/.shadow/_meta.json`) || "{}");
-  const rec = meta[".shadow/2026-09-07/2026-09-07--110000-pkg-b.md"];
+  const rec = meta[".shadow/atoms/2026-09-07--110000-pkg-b.md"];
   assert.ok(rec && Number(rec.hits) >= 1, `L2 记忆同样应累积 hits；实际 ${JSON.stringify(rec)}`);
   console.log("✔ ③ 对照：tier=L2 的记忆同样累积 hits（两条路都覆盖）");
 }
@@ -132,20 +132,20 @@ P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false
   const P = { name, inject, apply };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T3");
-  m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100000-hit.md`, "# hit\n\n> 完整线索\n\n- [10:00:00] [hit] 调用 build\n");
-  m.set(`${WS}/.shadow/2026-09-07/2026-09-07--100001-miss.md`, "# miss\n\n> 完整线索\n\n- [10:00:01] [miss] 调用 deploy\n");
+  m.set(`${WS}/.shadow/atoms/2026-09-07--100000-hit.md`, "# hit\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n\n- [10:00:00] [hit] 调用 build\n");
+  m.set(`${WS}/.shadow/atoms/2026-09-07--100001-miss.md`, "# miss\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n\n- [10:00:01] [miss] 调用 deploy\n");
   const rs = toolRegistry.get("read_shadow");
   await rs.execute({ topic: "build" }, { agent: T });
   const meta = JSON.parse(store.get(`${WS}/.shadow/_meta.json`) || "{}");
-  assert.ok(meta[".shadow/2026-09-07/2026-09-07--100000-hit.md"], "命中的记忆应有记录");
-  assert.equal(meta[".shadow/2026-09-07/2026-09-07--100001-miss.md"], undefined,
+  assert.ok(meta[".shadow/atoms/2026-09-07--100000-hit.md"], "命中的记忆应有记录");
+  assert.equal(meta[".shadow/atoms/2026-09-07--100001-miss.md"], undefined,
     "**未命中/未返回**的记忆不得被记 hits（hits 是「被返回」，不是「被扫描」）");
   console.log("✔ ④ 不变量：只记「被返回」的记忆，未返回者不记（不是「凡候选即命中」）");
 }
 
 const seedTaskish = (m: Map<string, string>, rel: string, title: string) => {
   const BODY =
-    `# ${title}\n\n> 完整线索\n> 决策：〔user〕采用方案\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：Tx\n> 目标：${title}\n\n` +
+    `# ${title}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕采用方案\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：Tx\n> 目标：${title}\n\n` +
     `- [10:00:00] [${title}] 用户：${title}\n` +
     `- [10:00:01] [${title}] 改/读 todo.md\n` +
     `- [10:00:02] [${title}] 决定 采用方案\n`;
@@ -160,7 +160,7 @@ const seedTaskish = (m: Map<string, string>, rel: string, title: string) => {
   const P = { name, inject, apply };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T4");
-  const rel = ".shadow/2026-09-07/2026-09-07--120000-todo.md";
+  const rel = ".shadow/atoms/2026-09-07--120000-todo.md";
   seedTaskish(m, rel, "Todo清理");
   const rs = toolRegistry.get("read_shadow");
   const out = String(await rs.execute({ mode: "recovery", topic: "Todo" }, { agent: T }));
@@ -179,9 +179,9 @@ const seedTaskish = (m: Map<string, string>, rel: string, title: string) => {
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent("T5");
   const BODY =
-    "# oauth-fix\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n" +
+    "# oauth-fix\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n\n" +
     "- [10:00:00] [oauth-fix] 改/读 oauth.ts\n\n分析 OAuth 刷新边界。\n";
-  const rel = ".shadow/2026-09-07/2026-09-07--130000-oauth.md";
+  const rel = ".shadow/atoms/2026-09-07--130000-oauth.md";
   m.set(`${WS}/${rel}`, BODY);
   const rs = toolRegistry.get("read_shadow");
   const out = String(await rs.execute({ mode: "query", topic: "oauth" }, { agent: T }));
@@ -199,12 +199,12 @@ const smokeMode = async (mode: string, topic: string, label: string) => {
   const P = { name, inject, apply };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false } });
   const T = agent(`T-${mode}`);
-  const rel = `.shadow/2026-09-07/2026-09-07--140000-${mode}.md`;
+  const rel = `.shadow/atoms/2026-09-07--140000-${mode}.md`;
   seedTaskish(m, rel, topic);
   // context 需要材料路径才会有 ContextReference.source
   if (mode === "context") {
     const BODY =
-      `# ${topic}\n\n> 完整线索\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> 背景/材料：\`D:/ws/foo.ts\`\n\n` +
+      `# ${topic}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> 背景/材料：\`D:/ws/foo.ts\`\n\n` +
       `- [10:00:00] [${topic}] 改/读 foo.ts\n`;
     m.set(`${WS}/${rel}`, BODY);
   }

@@ -4,8 +4,8 @@ import { scrubFinal } from "../security/scrub.js";
 import { memorySummary, snippetFor } from "./rank.js";
 import { lossLine, neverWorseChars, type RecoverHandle } from "./loss.js";
 
-/** 索引路径的默认恢复句柄（`_index.md` 自身）。传 `null` = 显式声明没有源路径。 */
-export const INDEX_HANDLE: RecoverHandle = { file: ".shadow/_index.md" };
+/** 索引路径的默认恢复句柄（`indexes/_index.md` 自身）。传 `null` = 显式声明没有源路径。 */
+export const INDEX_HANDLE: RecoverHandle = { file: ".shadow/indexes/_index.md" };
 
 /**
  * 披露里段名的**长度上限**（v1.15.89，实测逼出来的）：段名在正常语料里是「主题索引」这种短语，
@@ -22,7 +22,7 @@ export const approxNote = (approx: string[] = [], label = "近似候选·未验�
   approx.length ? `\n> ${label}：${approx.map((a) => `\`${a}\``).join(" · ")}（只是词形相近，不代表相关）` : "";
 
 export const NO_MATCH_STEPS =
-  "> 下一步：① 换更短/同义的词再查（只留组件名、文件名片段）；② `read_shadow()` 无参看 `.shadow/_index.md` 的主题索引与近期记忆；③ 跨「决策/代码/文档」找上下文用 `shadow_query`；④ 按任务恢复用 `recall_shadow`。";
+  "> 下一步：① 换更短/同义的词再查（只留组件名、文件名片段）；② `read_shadow()` 无参看 `.shadow/indexes/_index.md` 的主题索引与近期记忆；③ 跨「决策/代码/文档」找上下文用 `shadow_query`；④ 按任务恢复用 `recall_shadow`。";
 
 export const noMatchText = (topic: string, warn: string, opts: { approx?: string[]; reason?: string; steps?: string; approxLabel?: string } = {}) =>
   scrubFinal(
@@ -141,7 +141,7 @@ export const renderIndexBudgeted = (
   if (loss) note.push(loss);
   if (partial.length) note.push(`> 部分返回的段：${partial.map((d) => `「${shortTitle(d.title)}」(前 ${d.kept} 行 / 共 ${d.total} 行)`).join(" · ")}`);
   if (dropped.length) note.push(`> 未返回的段：${dropped.map((d) => `「${shortTitle(d.title)}」(${d.lines} 行)`).join(" · ")}（主题索引/意识轨迹是**派生视图**：按主题穿透比整篇读回更省）`);
-  note.push("> 下一步：① `read_shadow(topic)` 按主题**穿透**（主题索引/意识轨迹是派生视图，不必整篇读回）；② 提高 `max_tokens`（上限 8000）重读；③ 需要全文就直接读 `.shadow/_index.md`。");
+  note.push("> 下一步：① `read_shadow(topic)` 按主题**穿透**（主题索引/意识轨迹是派生视图，不必整篇读回）；② 提高 `max_tokens`（上限 8000）重读；③ 需要全文就直接读 `.shadow/indexes/_index.md`。");
   // v1.15.89（甲-2 / D10）：**never_worse 守卫** —— 有损输出（正文 + 披露）若比原文还长，退回原文：
   //   那才是**没有损失**的那一份（披露随之消失，因为此时没有损失可披露）。单位 = **字符**（与预算同单位）。
   return neverWorseChars(body + note.join("\n"), raw);

@@ -1,5 +1,5 @@
 /**
- * dsh-shadow — agent「思维/上下文/灵魂」的投影，落成记忆树（每条记忆 = 一个文件）。
+ * dsh-shadow — agent「思维/上下文/灵魂」的投影，落成投影空间（每条记忆 = 一个文件）。
  *
  * Cordis host plugin entry（Cordis Adapter，薄）：config 解析 + 事件接线 + 工具注册 + systemPrompt。
  * 领域内核已拆出：
@@ -7,10 +7,10 @@
  *   - 读侧查询 → query/query.ts（runReadShadow：多模式分派 + 召回管线）
  *   - 其余（evidence/observer/soul/retrieval/persistence/security）为独立模块。
  *
- * 哲学：这只是思维/上下文/灵魂的投影，落成文件树。
- * 记忆以「入口点 + 时间」为纲、思维/决策为正文、动作为背景。
- *   - 每条记忆 = 一个文件：.shadow/<日期>/<时刻>-<入口slug>.md
- *   - .shadow/_index.md = 说明文档 + 近期记忆 + 主题索引 + 意识轨迹
+ * 哲学：思维/上下文/灵魂的投影；权威布局见 ADR-0106。
+ * 寻址坐标 = 五轴（locus/when/soul/role/intent）；思维/决策为正文、动作为背景。
+ *   - 每条记忆 = `.shadow/atoms/<date>--<HHMMSS>-<入口slug>.md`
+ *   - `.shadow/indexes/_index.md` = 说明文档 + 近期记忆 + 主题索引 + 意识轨迹
  *   - read_shadow：无参读索引；带 topic/entry 穿透到具体记忆文件
  *
  * 采集来源（按可靠度）：
@@ -176,7 +176,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       if (!toolsService) return;
       toolsService.register({
         name: "read_shadow",
-        description: "读取 agent 的记忆树（shadow）。无参数返回目录与索引；带 topic/entry 按入口或主题穿透到具体记忆文件。穿透按分层召回（先精后深、预算内返回）：低分记忆只给摘要，高分记忆给摘要+命中片段+正文骨架。当判断上下文不足、需要回忆最近想过/决定过什么时调用。",
+        description: "读取 agent 的投影空间（.shadow：atoms / roles / affaires / indexes）。无参数返回 indexes/_index.md；带 topic/entry 按入口或主题穿透到具体原子档案。穿透按分层召回（先精后深、预算内返回）：低分只给摘要，高分给摘要+命中片段+正文骨架。默认主题召回会套灵魂规避滤（raw:true 看原文；project:true 走 RealityProjection 且不经规避滤）。上下文不足、需要回忆最近想过/决定过什么时调用。",
         parameters: {
           type: "object",
           properties: {
@@ -189,7 +189,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
             experience: { type: "boolean", description: "返回结构化 Experience（情境/问题/决策/实现/证据/结果/教训），而非零散行。默认关。" },
             asOf: { type: "string", description: "时间锚定（YYYY-MM-DD）：只召回该时间点『当时可知』的记忆；晚于此的记忆不入窗口。默认=现在。" },
             observer: { type: "boolean", description: "Observer/Observation Window：以『当时可知』呈现（as-of），并把 outcome/lesson/verdict 等『后来才知』标为 [后验]，不让全局/后验知识假装成当下可知。默认关。" },
-            project: { type: "boolean", description: "Projection：把 topic 视为当前任务，返回 LocalContext（relevant 原则/经验/偏好 + current_state + uncertainty + excluded），用 Observer 透镜算显著、显式排除。默认关。" },
+            project: { type: "boolean", description: "RealityProjection：把 topic 当当前任务，返回带 distortion 的完整报告（默认关）。在管线中先于主题召回短路 ⇒ 不经默认灵魂规避滤。" },
+            raw: { type: "boolean", description: "逃生口：主题召回不套灵魂规避滤，看原子原文；mode:recovery 时不贴缺灵魂 F2 横幅（ADR-0107）。无参索引本就不套滤。" },
             judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
             claim: { type: "boolean", description: "返回 claim→Evidence→Judgment：对每条匹配记忆的断言验证证据，由 Observer 决定结论/置信/理由（Evidence 是输入，Observer 下判断）。默认关。" },
             taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + .shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
@@ -317,7 +318,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       // 只给一句自然查询，返回「记忆恢复包（Task Recovery Bundle）」。内部 = read_shadow({mode:'recovery', topic})。
       toolsService.register({
         name: "recall_shadow",
-        description: "人类友好的「记忆恢复」入口：给一句自然语言查询（如『Todo清理』『上次 OAuth 问题』），返回一份与历史任务相关的恢复包——任务/状态/关键决定(含理由)/证据(当前是否仍有效)/观测结果/当前注意。内部把 read_shadow 的 episode/decision/task/context 视图合成一段可读内容；内容全来自派生数据，不 LLM 补写理由/事实/判断。需要快速找回『上次在做什么/为什么/做到哪』时用。",
+        description: "人类友好的「记忆恢复」入口：给一句自然语言查询（如『Todo清理』『上次 OAuth 问题』），返回任务恢复包（内部 = read_shadow mode:recovery）。本路径不套灵魂规避滤；缺灵魂时顶部有 F2 提示（要关提示请用 read_shadow({mode:'recovery', raw:true, topic})）。内容全来自派生数据，不 LLM 补写。",
         parameters: {
           type: "object",
           properties: {
@@ -357,7 +358,7 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
         name: "dsh-shadow",
         order: 40,
         text: () =>
-          "你的思维、上下文与决策沉淀在 shadow 记忆树中。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery）。需要精细穿透时再用 `read_shadow`（mode:episode/decision/task/context/recovery）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verification）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
+          "你的思维、上下文与决策沉淀在工作区投影空间（.shadow/atoms 等；索引与便利贴可重建）。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery，缺灵魂时顶部有提示；本路径不套灵魂规避滤）。需要精细穿透时再用 `read_shadow`（默认主题召回会套规避滤；原文用 raw:true；完整 RealityProjection 用 project:true）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verification）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
           "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
       });
     });

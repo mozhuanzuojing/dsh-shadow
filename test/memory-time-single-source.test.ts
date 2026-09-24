@@ -53,8 +53,8 @@ const mkCtx = (m: Map<string, string>) => {
 };
 
 const seed = (store: Map<string, string>, rel: string, entry: string, decision: string, path: string) =>
-  store.set(`D:/ws/.shadow/${rel}`,
-    `# ${entry}\n\n> 完整线索\n> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
+  store.set(`D:/ws/.shadow/atoms/${rel.split('/').pop()}`,
+    `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
 
 // ─────────────────────────────────────────────
 // 场景：3 个 episode（09:00 pkg-a / 12:00 pkg-a / 18:00 pkg-z），间隔 > gapMinutes ⇒
@@ -82,7 +82,7 @@ assert.ok(!String(r0).startsWith("ERR"), `read_shadow 不应报错：${r0}`);
 // ─────────────────────────────────────────────
 const consolidated = [...store.keys()]
   .map((k) => k.replace(/\\/g, "/"))
-  .filter((k) => k.includes("/.shadow/") && k.endsWith("-consolidated.md"));
+  .filter((k) => k.includes("/.shadow/atoms/") && k.endsWith("-consolidated.md"));
 assert.equal(consolidated.length, 2, `应生成 2 个 consolidated 文件，实际 ${consolidated.length}：${consolidated.join(", ")}`);
 for (const k of consolidated) {
   const nm = k.split("/").pop()!;
@@ -138,7 +138,7 @@ console.log("✔ ④ 取代裁决确定（早者取代、晚者不取代），�
 // ─────────────────────────────────────────────
 // ⑤ 兼容与往返：无时间戳的旧文件仍被枚举（time=""，不崩）；`memoryFileName` 对非 6 位时间不加前缀
 // ─────────────────────────────────────────────
-store.set("D:/ws/.shadow/2026-09-07/ep-legacy-consolidated.md", "# pkg-legacy\n\n> 完整线索\n> 项目：ws\n> Agent：T7\n");
+store.set("D:/ws/.shadow/atoms/ep-legacy-consolidated.md", "# pkg-legacy\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 项目：ws\n> Agent：T7\n");
 const listed2 = await listMemories(mkFs(store), WS);
 const legacy = listed2.find((r: any) => String(r.rel).endsWith("ep-legacy-consolidated.md"));
 assert.ok(legacy, "旧的（无时间戳）consolidated 文件仍应被枚举");

@@ -24,7 +24,7 @@ export const ACTION_ONLY = "动作";
 /** 日期目录名。 */
 export const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** 记忆文件名判据：`.md` 且非 `_` 前缀（与 `persistence/files.ts:39-41` 同一口径）。 */
+/** 记忆文件名判据：`.md` 且非 `_` 前缀（与 `persistence/files.ts` 的 `isMemoryFileName` 同一口径）。 */
 export const isMemoryName = (name: string): boolean =>
   String(name || "").endsWith(".md") && !String(name || "").startsWith("_");
 
@@ -127,5 +127,21 @@ export const reclaimedRecordsOf = (text: string, rel: string): ReclaimedRecord[]
 /** 一条记录 → 原始正文行（用于「逐字不丢」的不变量断言）。 */
 export const renderBodyLine = (r: { at: string; comp: string; text: string }): string => `- [${r.at}] [${r.comp}] ${r.text}`;
 
-/** 文件名里的 rel（`.shadow/<date>/<name>`）。 */
+/**
+ * 记忆文件的 rel —— **必须是它真实所在的位置**（`<根>/<目录>/<文件名>`）。
+ *
+ * ⚠ v1.21.0 一度把它改成恒返回 `.shadow/atoms/<name>`（忽略目录参数），而唯一调用方
+ * `tools/granularity-reclaim.ts` 仍在扫**旧日期树** ⇒ 写进审计流的 `from` 变成假来源、
+ * 幂等守卫永不命中、`_meta.json` 剪枝恒 0。本函数只回答「这个文件在哪」，**不要**让它承担
+ * 「新布局在哪」这类判断（那属于调用方）。
+ */
 export const relOf = (shadowDirName: string, fileName: string): string => `.shadow/${shadowDirName}/${basename(fileName)}`;
+
+/**
+ * 线索头里**自报的日期**：`> 证据链：来源(…) · 日期(YYYY-MM-DD) · 证据(…)`。
+ *
+ * 用途：文件名不含日期时（如 consolidated 件 `ep-<id>-consolidated.md`）**不猜**、也不算「已判定」——
+ * 而是读它自报的日期。缺 ⇒ `""`（调用方归入「未判定」）。
+ */
+export const declaredDateOf = (text: string): string =>
+  (String(text || "").match(/·\s*日期\((\d{4}-\d{2}-\d{2})\)/) || ["", ""])[1] || "";

@@ -350,8 +350,8 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
     return { m, agent, ctx };
   };
   const seed = (store: Map<string, string>, rel: string, entry: string, path: string) =>
-    store.set(`${WS}/.shadow/${rel}`,
-      `# ${entry}\n\n> 完整线索\n> 背景/材料：${path}\n> 决策：〔user〕采用 ${entry}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
+    store.set(`${WS}/.shadow/atoms/${String(rel).split('/').pop()}`,
+      `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：${path}\n> 决策：〔user〕采用 ${entry}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
 
   /**
    * 跑两次读（留痕发生在**本回合写入之后**，横幅在下一次读才可见 —— 留痕本身是持久的，不会丢），

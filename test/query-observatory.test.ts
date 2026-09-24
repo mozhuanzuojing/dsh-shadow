@@ -120,12 +120,12 @@ console.log("✔ 场景 Query-Observatory-5 Fitness Report：mode:shadow-report 
 
 // —— 场景6：missing-types 启发式（纯函数）：≥3 处约束型内容 → 提议 candidate:constraint；<3 不提议 ——
 const mkParsed = (n: number, phrase: string): ParsedMemory[] => Array.from({ length: n }, (_, i) => ({
-  rel: `.shadow/2026-09-08/00000${i}-constraint.md`, date: "2026-09-08", time: "000000",
+  rel: `.shadow/atoms/2026-09-08--00000${i}-constraint.md`, date: "2026-09-08", time: "000000",
   entry: `config/policy-${i}.md`, project: "p", agent: "a", goal: "",
   decisions: [], decisionEvents: [], userMessages: [phrase], materials: [], actions: [], thinkLines: [], body: phrase,
-  // v1.15.5：ParsedMemory.kind / lineage 已是必填——合成构造也必须给全（不再有「可选=兼容合成」）。
-  kind: "experience",
-  lineage: { source: "synthetic", createdBy: "agent", evidence: [], createdAt: "2026-09-08 00:00:00" },
+  axes: { locus: "ws", when: "2026-09-08 00:00:00", soul: "default", role: "default", intent: "test" },
+  kind: "experience" as const,
+  lineage: { source: "synthetic", createdBy: "agent" as const, evidence: [], createdAt: "2026-09-08 00:00:00" },
 }));
 const miss = missingTypesOf(mkParsed(3, "禁止直接 fallback 到默认值，必须显式校验"));
 assert.ok(miss.some((m) => m.type === "constraint" && m.count >= 3), "≥3 处约束型 → 应提议 constraint");

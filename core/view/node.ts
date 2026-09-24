@@ -1,6 +1,6 @@
 // dsh-shadow —— core/view/node.ts：Shadow Projection Layer（ADR-0042/0043，Phase 1A）。
 // ShadowNode = 派生投影（不是事实源）：从 Memory Atom（memory/decision/code/document）
-// 聚合出的统一节点视图。投影可重建（shadow-index/ 可 rm -rf），Node 不覆盖 Atom。
+// 聚合出的统一节点视图。投影可重建（`indexes/shadow-index/` 可 rm -rf），Node 不覆盖 Atom。
 // 契约：Evidence=所有返回项带 evidence(指向 Atom)；relations 只从可观察信号派生(AST/路径/目标/证据)，
 //       LLM 不能制造关系；无证据的 context 不返回。
 import { slug } from "../util.js";
@@ -42,7 +42,7 @@ const CODE_PREFIX = /(src|backend|frontend|impl|core|main|api|io|service|control
 export const deriveShadowNodeFailures = (parsed: ParsedMemory[]): { path: string; reason: string }[] => {
   const out: { path: string; reason: string }[] = [];
   for (const p of parsed) {
-    const gate = validateAtomProjection({ type: nodeTypeOf(p), kind: p.kind, lineage: p.lineage });
+    const gate = validateAtomProjection({ type: nodeTypeOf(p), kind: p.kind, lineage: p.lineage, axes: p.axes });
     if (!gate.allowed) out.push({ path: String(p.rel || `${p.date}/${p.entry || p.goal || "memory"}`), reason: String(gate.reason || "未通过 Evidence Gate") });
   }
   return out;
@@ -65,7 +65,7 @@ export const deriveShadowNodes = (parsed: ParsedMemory[]): ShadowNode[] => {
   for (const p of parsed) {
     const entry = p.entry || p.goal || "memory";
     const type = nodeTypeOf(p);
-    const gate = validateAtomProjection({ type, kind: p.kind, lineage: p.lineage });
+    const gate = validateAtomProjection({ type, kind: p.kind, lineage: p.lineage, axes: p.axes });
     if (!gate.allowed) continue;
     const id = `sn-${p.date}-${p.time || "000000"}-${slug(entry)}`;
     const content = [...(p.decisions || []).slice(0, 5), ...(p.actions || []).slice(0, 3), ...(p.thinkLines || []).slice(0, 3)].map((x) => scrubUnsafe(String(x || "")).slice(0, 80));

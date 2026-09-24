@@ -40,7 +40,7 @@ fire("goal/changed", { agent: { id: "AG" }, change: { operation: "create", ref: 
 fire("fs/observed", { targetKey: `${WS}/src/AuthFilter.java`, displayPath: `${WS}/src/AuthFilter.java` }, { kind: "present", version: "v1" }, { agent: { id: "AG" } });
 await flushAgent("AG");
 
-const memKeys = [...files.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+const memKeys = [...files.keys()].filter((k) => k.replace(/\\/g, "/").includes("/.shadow/atoms/") && k.endsWith(".md") && !k.endsWith("_index.md"));
 assert.ok(memKeys.length, "应落盘记忆文件");
 const decKey = memKeys.find((k) => files.get(k).includes("决策"));
 assert.ok(decKey, "应有含决策的记忆文件");

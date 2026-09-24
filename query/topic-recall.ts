@@ -18,6 +18,9 @@ import { recordObservationTrace } from "../subject/observer/trace.js";
 import { scrubFinal } from "../security/scrub.js";
 import { noteServedAtoms } from "../core/retention/served-hits.js";
 import { scoreTopicCandidates } from "./topic-score.js";
+import { applySoftLens, missingSoulBanner } from "../core/space/soft-lens.js";
+import { readProjectionViewIfFresh, writeProjectionView, bodyHashOf } from "../core/space/view-file.js";
+import { atomTokenOf, loadProjectionSpace } from "../core/space/world.js";
 import type { ShadowQueryDeps } from "./types.js";
 import type { MaterializedView } from "./materialize.js";
 import type { AgentLike } from "../core/types.js";
@@ -98,6 +101,39 @@ export async function runTopicRecall(
     );
   }
 
+  // ADR-0107：默认灵魂规避滤（非 RealityProjection）；`raw: true` 看原文；无参索引路径不经此。
+  let soulBanner = "";
+  if (!args?.raw) {
+    const world = await loadProjectionSpace(fs, ws, deps.config);
+    if (world.missingSoul) {
+      soulBanner = missingSoulBanner();
+      // 空滤 = 正文不动（F2 只加横幅）；避免无 type 的 listDir 桩把便利贴令牌弄僵。
+    } else {
+      for (const s of available) {
+        const name = String(s.mm?.name || s.mm?.rel?.split("/").pop() || "");
+        if (!name || !s.text) continue;
+        const atomToken = await atomTokenOf(fs, ws, name);
+        // 哈希取自**刚读到的正文** ⇒ 后端不给 version 时也不会拿旧便利贴顶替它（ADR-0107 §2.5）。
+        const want = { atomToken, soulToken: world.soulToken, bodyHash: bodyHashOf(String(s.text)), context: topic.slice(0, 80) };
+        let visible = await readProjectionViewIfFresh(fs, ws, name, want);
+        if (visible == null) {
+          const lens = applySoftLens(String(s.text), world.soul);
+          visible = lens.text;
+          // 读路径也会写盘（T8-A）：写失败必须留痕 —— 便利贴可重建，但「写不进去」不能无声。
+          const vw = await writeProjectionView(fs, ws, String(s.mm.rel), String(s.text), world.soul, want);
+          if (!vw.ok) {
+            deps.noteDegrade?.(
+              "projectionView",
+              `投影视图写失败（${vw.rel}）：${vw.reason}`,
+              "本次正文已按规避滤现滤（结果正确）；便利贴缺失/不可写，下次读会再试一次",
+            );
+          }
+        }
+        s.text = visible;
+      }
+    }
+  }
+
   const rendered = renderWithinBudget(available, { limit, maxChars, tokens, debug: debugMode });
   const { parts, servedRels, servedDetail, withheld, droppedByLimit, droppedByBudget, diagLines } = rendered;
   if (debugMode) diag.push(...diagLines);
@@ -122,7 +158,7 @@ export async function runTopicRecall(
 
   const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
   const lossNote = onByDefault(recallCfg.lossDisclosure) ? tierLossNote({ withheld, returned: parts.length }) : "";
-  const out = scrubFinal(RECALL_PREFIX + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
+  const out = scrubFinal(RECALL_PREFIX + soulBanner + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
   await recordObservationTrace(fs, ws, {
     observerId: obsCtx.observerId,
     createdAt: today(),

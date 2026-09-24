@@ -14,14 +14,14 @@ import { renderIndexBudgeted, INDEX_HANDLE } from "../dist/retrieval/render.js";
 // ① 损失形态与句柄：**可复取 / 不可复取，二者必居其一**
 // ─────────────────────────────────────────────
 assert.equal(lossLine({ loss: "none" }), null, "没有损失 ⇒ 不披露（零多余文字）");
-const withHandle = lossLine({ loss: "tail", handle: { file: ".shadow/2026-09-15/a.md", locator: "src/a.ts" } })!;
-assert.ok(withHandle.includes("可复取") && withHandle.includes("`.shadow/2026-09-15/a.md#src/a.ts`"), `有句柄 ⇒ 可复取 + 具体句柄：${withHandle}`);
+const withHandle = lossLine({ loss: "tail", handle: { file: ".shadow/atoms/a.md", locator: "src/a.ts" } })!;
+assert.ok(withHandle.includes("可复取") && withHandle.includes("`.shadow/atoms/a.md#src/a.ts`"), `有句柄 ⇒ 可复取 + 具体句柄：${withHandle}`);
 assert.ok(!withHandle.includes("不可复取"), "有句柄时不得同时说不可复取（两种说法互斥）");
 const noHandle = lossLine({ loss: "whole" })!;
 assert.ok(noHandle.includes("不可复取"), `给不出句柄 ⇒ 必须**显式**写「不可复取」（不是静默省略）：${noHandle}`);
 assert.ok(!noHandle.includes("可复取："), "不可复取时不得出现「可复取：」字样");
 assert.equal(handleText({ file: "" }), null, "空路径不是句柄");
-assert.equal(handleText({ file: ".shadow/_index.md" }), "`.shadow/_index.md`", "无定位时句柄就是路径本身");
+assert.equal(handleText({ file: ".shadow/indexes/_index.md" }), "`.shadow/indexes/_index.md`", "无定位时句柄就是路径本身");
 
 // ─────────────────────────────────────────────
 // ② never_worse（甲-2）：单位是**字符**，且方向判定在中英混排下不得被判反

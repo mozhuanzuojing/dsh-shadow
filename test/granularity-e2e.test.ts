@@ -48,9 +48,8 @@ const mkFs = (store: Map<string, string>, opts: FsOpts = {}) => {
         throw e;
       }
       const base = norm(t.displayPath).replace(/\/+$/, "") + "/";
-      // ⚠ 必须**合成目录项**：`listMemories` 先列出 `.shadow/` 下的**日期目录**再往下一层找文件。
-      // 只回「文件」的话它会看到 0 个日期目录 —— 那会让「审计流不被收」的断言**假绿**
-      // （v1.19.1 实测：本 mock 第一版就是这个错，② 的正对照立刻把它抓出来）。
+      // ⚠ 必须**合成目录项**：`listMemories` 先列出 `.shadow/atoms/` 再枚举 `.md`。
+      // 只回「文件」而看不到 `atoms` 目录 ⇒ 会让「审计流不被收」的断言**假绿**。
       const names = new Map<string, string>();
       for (const k of store.keys()) {
         if (!k.startsWith(base)) continue;
@@ -81,7 +80,7 @@ const mkCollector = (fs: any, config: any = {}) =>
   });
 
 const auditKeys = (store: Map<string, string>) => [...store.keys()].filter((k) => /\.shadow\/audit\/\d{4}-\d{2}-\d{2}\.jsonl$/.test(k));
-const memoryKeys = (store: Map<string, string>) => [...store.keys()].filter((k) => /\.shadow\/\d{4}-\d{2}-\d{2}\/.+\.md$/.test(k) && !/\/_\w+\.md$/.test(k));
+const memoryKeys = (store: Map<string, string>) => [...store.keys()].filter((k) => /\.shadow\/atoms\/.+\.md$/.test(k) && !/\/_[^/]+\.md$/.test(k));
 
 // ── ① 写侧·纯动作批 ⇒ 审计流（不写记忆文件）──
 {

@@ -66,10 +66,10 @@ const WS = "D:/ws";
 // ─────────────────────────────────────────────
 {
   const pm = (time: string, entry = "pkg-a"): ParsedMemory => ({
-    rel: `.shadow/2026-09-07/2026-09-07--${time}-${entry}.md`,
+    rel: `.shadow/atoms/2026-09-07--${time}-${entry}.md`,
     date: "2026-09-07", time, entry, project: "ws", agent: "T7", goal: "",
     decisions: [], decisionEvents: [], userMessages: [], materials: [], actions: [], thinkLines: [],
-    body: "", kind: "experience",
+    body: "", axes: null, kind: "experience",
     lineage: { source: "test", createdBy: "agent", evidence: [], createdAt: `2026-09-07 ${time}` },
   });
   // 09:00 · 09:00（同一分钟）· 10:00 · 12:00 —— 全部同 project/agent
@@ -126,8 +126,8 @@ const mkCtx = (m: Map<string, string>) => {
 };
 
 const seed = (store: Map<string, string>, rel: string, entry: string, path: string) =>
-  store.set(`D:/ws/.shadow/${rel}`,
-    `# ${entry}\n\n> 完整线索\n> 背景/材料：${path}\n> 决策：〔user〕采用 ${entry}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
+  store.set(`D:/ws/.shadow/atoms/${rel.split('/').pop()}`,
+    `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：${path}\n> 决策：〔user〕采用 ${entry}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [${entry}] 改/读 ${path}\n`);
 
 const EP_SECTION = "## 任务回溯（Episodes）";
 const AB_SECTION = "## 目录摘要（L0 · 派生物）";
@@ -147,7 +147,7 @@ P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false
   assert.ok(rs, "read_shadow 应已注册");
   const out = await rs.execute({}, { agent: agent("T7") });
   assert.ok(!String(out).startsWith("ERR"), `read_shadow 不应报错：${out}`);
-  const idx = store.get(`${WS}/.shadow/_index.md`);
+  const idx = store.get(`${WS}/.shadow/indexes/_index.md`);
   assert.ok(typeof idx === "string" && idx.length > 0, "_index.md 必须已落盘（否则本组的『不在索引里』是假绿）");
   return idx;
 };

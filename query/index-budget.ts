@@ -1,5 +1,5 @@
 // dsh-shadow —— query/index-budget.ts：无参 read_shadow → 预算内返回 _index.md。
-import { SHADOW_ROOT } from "../core/paths.js";
+import { indexesRel } from "../core/paths.js";
 import { readRel } from "../persistence/files.js";
 import { RECALL_PREFIX } from "../core/util.js";
 import { renderIndexBudgeted } from "../retrieval/render.js";
@@ -14,6 +14,6 @@ export async function runIndexBudget(
 ): Promise<string> {
   const { fs, ws, flushWarn, agent } = ctx;
   await deps.ensureIndex(ws, agent?.session);
-  const idx = await readRel(fs, ws, `${SHADOW_ROOT}/_index.md`);
+  const idx = await readRel(fs, ws, indexesRel("_index.md"));
   return scrubFinal(RECALL_PREFIX + (renderIndexBudgeted(idx, maxChars) || "（暂无 shadow 索引）") + flushWarn);
 }

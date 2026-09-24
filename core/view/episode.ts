@@ -13,12 +13,14 @@
 
 import { scrubUnsafe } from "../../security/scrub.js";
 import { numOr } from "../util.js";
+import { dateFromName, timeFromName } from "../../persistence/files.js";
+import { parseAxes, type AtomAxes } from "../retention/memory.js";
 import type { AtomKind, AtomLineage, CreatedBy, AtomEvidenceRef } from "../lineage/index.js";
 
 /** 一条记忆被解析后的字段（供 Episode/Decision 派生）。 */
 export interface ParsedMemory {
-  rel: string;          // .shadow/<date>/<file>.md
-  date: string;         // YYYY-MM-DD
+  rel: string;          // .shadow/atoms/<file>.md（ADR-0106）
+  date: string;         // YYYY-MM-DD（文件名 / when 轴）
   time: string;         // HHMMSS（文件名里的时刻）
   entry: string;        // # 入口（语义路径/组件）
   project: string;      // > 项目：
@@ -31,10 +33,11 @@ export interface ParsedMemory {
   actions: string[];    // 动作行（改/读 + 调用）
   thinkLines: string[]; // 非动作正文行（思维/结论，供"为什么"）
   body: string;         // 完整正文（含线索头），供标题/摘要兜底
+  /** 五轴坐标（ADR-0106）；缺轴 = null ⇒ 不上投影。 */
+  axes: AtomAxes | null;
   // v1.8.0 Evidence Lineage：从可观察信号派生（无 LLM / event-sourced）。
-  // parseMemory 恒产出二者；v1.15.5 起取消「可选」，不再有「无 lineage 的旧 Atom / 合成构造」。
-  kind: AtomKind;                 // memory 二级属性（experience/metadata/session/task/artifact）
-  lineage: AtomLineage;           // 为什么存在/来自哪里（source≠evidence）
+  kind: AtomKind;
+  lineage: AtomLineage;
 }
 
 /** 一次决策事件：发生了一个决定。reason 与 decision 分离——有 Decision ≠ 一定有 Reason（不补写）。 */
@@ -149,12 +152,13 @@ export const deriveLineage = (p: { source?: string; createdBy: CreatedBy; materi
 
 export const parseMemory = (text: string, rel: string, name: string): ParsedMemory => {
   const body = String(text || "");
-  const date = (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || "";
-  const time = (String(name || "").match(/^\d{4}-\d{2}-\d{2}--(\d{6})/) || [])[1] || "";
+  const date = dateFromName(name) || (rel.match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || "";
+  const time = timeFromName(name);
   const entry = (body.match(/^# (.+)$/m) || [])[1]?.trim() || "";
   const project = fieldOf(body, "项目");
   const agent = fieldOf(body, "Agent");
   const goal = fieldOf(body, "目标");
+  const axes = parseAxes(body);
   const materials = fieldOf(body, "背景/材料").split(/、/).map((s) => s.trim()).filter(Boolean).slice(0, 12);
   const decisions: string[] = [];
   const decisionEvents: DecisionEvent[] = [];
@@ -209,7 +213,7 @@ export const parseMemory = (text: string, rel: string, name: string): ParsedMemo
   const createdAt = `${date} ${ns || "00:00:00"}`;
   const kind = deriveAtomKind({ entry, materials, decisions: uniq(decisions), goal, userMessages: uniq(userMessages) });
   const lineage = deriveLineage({ source: fieldOf(body, "来源会话"), createdBy: deriveCreatedBy({ decisionEvents, userMessages: uniq(userMessages), materials }), materials, createdAt });
-  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body, kind, lineage };
+  return { rel, date, time, entry, project, agent, goal, decisions: uniq(decisions), decisionEvents, userMessages: uniq(userMessages), materials, actions: uniq(actions), thinkLines: uniq(thinkLines), body, axes, kind, lineage };
 };
 
 // ── 时间辅助 ──

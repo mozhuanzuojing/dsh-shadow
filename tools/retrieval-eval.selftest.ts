@@ -181,14 +181,14 @@ const runCompare = (candidate: Record<string, unknown>) =>
   assert.equal(stableStringify({ b: 1, a: 2 }), stableStringify({ a: 2, b: 1 }), "键序不得影响序列化");
   assert.ok(stableStringify({ a: 1 }).endsWith("\n"), "必须带尾换行（逐字可比的前提）");
   assert.equal(sha256Hex("x").length, 64);
-  const h1 = datasetHash([{ path: ".shadow/2026-09-01/a.md", text: "A" }]);
-  const h2 = datasetHash([{ path: ".shadow/2026-09-01/a.md", text: "A" }]);
+  const h1 = datasetHash([{ path: ".shadow/atoms/a.md", text: "A" }]);
+  const h2 = datasetHash([{ path: ".shadow/atoms/a.md", text: "A" }]);
   assert.equal(h1.hex, h2.hex, "同输入同哈希");
   // **不许拿常量跟它自己比**（v1.15.58）：旧断言是 `assert.equal(h1.algorithm, HASH_ALGORITHM)`，
   // 而 `datasetHash` 就是把同一个常量原样放进返回对象 ⇒ 恒真（写成 `assert.ok(true)` 等价）。
   // 改成对**字面量**断言 —— 常量一改这里就红，而它同时是协议里 `dataset_hash_algorithm` 的值。
   assert.equal(h1.algorithm, "sha256-utf8-lf-v1", "算法名必须是协议里那个字面量（与 HASH_ALGORITHM 常量的值一致）");
-  assert.notEqual(h1.hex, datasetHash([{ path: ".shadow/2026-09-01/a.md", text: "B" }]).hex, "内容变必须换哈希");
+  assert.notEqual(h1.hex, datasetHash([{ path: ".shadow/atoms/a.md", text: "B" }]).hex, "内容变必须换哈希");
   // 顺序无关（内部按 path 排序）
   const two = [
     { path: ".shadow/b.md", text: "B" },

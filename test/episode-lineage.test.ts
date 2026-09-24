@@ -56,7 +56,7 @@ const toolRegistry = new Map<string, any>();
   // goal/changed 用宿主真实形状 GoalChanged = { operation, ref, goal? }（`action` 字段在宿主不存在）。
   fire("goal/changed", { agent: { id: "T1" }, change: { operation: "complete", ref: { id: "g1", revision: 1 }, goal: { objective: "把入口改造为 bundle" } } });
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
-  const memW = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+  const memW = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/atoms/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(memW, "T1 记忆应落盘");
   const txtW = store.get(memW)!;
   assert.ok(txtW.includes("> 决策："), `用户拍板应输出 > 决策： 行：\n${txtW}`);
@@ -79,8 +79,8 @@ const toolRegistry = new Map<string, any>();
   //   09:00 / 09:01 / 09:05 → 同上一任务（间隔 < 60min）
   //   12:00 → 另一任务（间隔 > 60min → 新 Episode）
   const seed = (rel: string, entry: string, at: string, decision: string, goal: string) => {
-    store.set(`D:/ws/.shadow/${rel}`,
-      `# ${entry}\n\n> 完整线索\n> 背景/材料：${entry}/x.js\n> 决策：〔user〕${decision}\n> 证据链：来源(动作·用户) · 日期(2026-09-07) · 证据(${entry}/x.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T2\n> 目标：${goal}\n\n- [${at}] [${entry}] 改/读 ${entry}/x.js\n`);
+    store.set(`D:/ws/.shadow/atoms/${rel.split('/').pop()}`,
+      `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：${entry}/x.js\n> 决策：〔user〕${decision}\n> 证据链：来源(动作·用户) · 日期(2026-09-07) · 证据(${entry}/x.js)\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T2\n> 目标：${goal}\n\n- [${at}] [${entry}] 改/读 ${entry}/x.js\n`);
   };
   seed("2026-09-07/2026-09-07--090000-pkg-a.md", "pkg-a", "09:00:00", "采用 bundle 模式", "把入口改造为 bundle");
   seed("2026-09-07/2026-09-07--090100-pkg-b.md", "pkg-b", "09:01:00", "拆分模块", "把入口改造为 bundle");
@@ -93,7 +93,7 @@ const toolRegistry = new Map<string, any>();
   // 索引懒构建：read_shadow 无参才构建/落盘 _index.md
   await rd({});
   // 索引应含「任务回溯（Episodes）」段
-  const idx = store.get("D:/ws/.shadow/_index.md");
+  const idx = store.get("D:/ws/.shadow/indexes/_index.md");
   assert.ok(idx && idx.includes("## 任务回溯（Episodes）"), `索引应含任务回溯段：\n${(idx || "").slice(-400)}`);
   // mode:episode → 应分出独立 Episode：3 条同任务聚合、12:00 单独
   const ep = await rd({ mode: "episode" });
@@ -116,8 +116,8 @@ const toolRegistry = new Map<string, any>();
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
   const T = agent("T3");
   const rd = (x: any) => toolRegistry.get("read_shadow").execute(x, { agent: T });
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-io.md",
-    "# io-backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob；〔user〕保留 RetryWorker\n> 概况：0 动作 · 2 用户消息 · 2 决策\n> 项目：ws\n> Agent：T3\n\n- [09:00:00] [io-backend] 用户：删除 TodoSyncJob。\n- [09:00:01] [io-backend] 用户：保留 RetryWorker。\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-io.md",
+    "# io-backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕删除 TodoSyncJob；〔user〕保留 RetryWorker\n> 概况：0 动作 · 2 用户消息 · 2 决策\n> 项目：ws\n> Agent：T3\n\n- [09:00:00] [io-backend] 用户：删除 TodoSyncJob。\n- [09:00:01] [io-backend] 用户：保留 RetryWorker。\n");
   const dl = await rd({ mode: "decision" });
   assert.ok(!String(dl).startsWith("ERR"), "mode:decision 不应报错");
   assert.ok(String(dl).includes("2 条决策"), `Decision Lineage 应统计决策数：\n${String(dl).slice(0, 200)}`);
@@ -146,7 +146,7 @@ const toolRegistry = new Map<string, any>();
   fire("session/event", { id: "T4", header: { cwd: WS } },
     { type: "user/message", seq: 1, time: Date.now(), data: { id: "m4", role: "user", content: [{ type: "text", text: "好。" }], source: { kind: "user" } } });
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
-  const mem4 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+  const mem4 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/atoms/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(mem4, "T4 记忆应落盘");
   const txt4 = store.get(mem4);
   // assistant 决策 + 明确理由入头
@@ -184,7 +184,7 @@ const toolRegistry = new Map<string, any>();
   // 请求理解（不是决策）
   userMsg5("了解 当前 IO");
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
-  const mem5 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && !k.endsWith("_index.md"));
+  const mem5 = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/atoms/") && k.endsWith(".md") && !k.endsWith("_index.md"));
   assert.ok(mem5, "T5 记忆应落盘");
   const txt5 = store.get(mem5);
   assert.ok(txt5.includes("> 决策：〔user〕资产同步"), `范围/聚焦应捕获为决策：\n${txt5}`);
@@ -202,13 +202,13 @@ const toolRegistry = new Map<string, any>();
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
   // 种子：活跃(act, hits5) / 已归档(old, archived) / 旧低命中(low, 2020, hits0)
-  store.set("D:/ws/.shadow/2026-09-05/2026-09-05--100000-act.md", "# act\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [act] 用户：活跃记忆 A\n");
-  store.set("D:/ws/.shadow/2026-09-05/2026-09-05--110000-old.md", "# old\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [old] 用户：已归档记忆 OLD\n");
-  store.set("D:/ws/.shadow/2020-01-01/2020-01-01--000000-low.md", "# low\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [00:00:00] [low] 用户：旧低命中记忆 LOW\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-05--100000-act.md", "# act\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [act] 用户：活跃记忆 A\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-05--110000-old.md", "# old\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [11:00:00] [old] 用户：已归档记忆 OLD\n");
+  store.set("D:/ws/.shadow/atoms/2020-01-01--000000-low.md", "# low\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [00:00:00] [low] 用户：旧低命中记忆 LOW\n");
   store.set("D:/ws/.shadow/_meta.json", JSON.stringify({
-    ".shadow/2026-09-05/2026-09-05--100000-act.md": { created: "2026-09-05", hits: 5, status: "active", pinned: false },
-    ".shadow/2026-09-05/2026-09-05--110000-old.md": { created: "2026-09-05", hits: 0, status: "archived", pinned: false },
-    ".shadow/2020-01-01/2020-01-01--000000-low.md": { created: "2020-01-01", hits: 0, status: "active", pinned: false },
+    ".shadow/atoms/2026-09-05--100000-act.md": { created: "2026-09-05", hits: 5, status: "active", pinned: false },
+    ".shadow/atoms/2026-09-05--110000-old.md": { created: "2026-09-05", hits: 0, status: "archived", pinned: false },
+    ".shadow/atoms/2020-01-01--000000-low.md": { created: "2020-01-01", hits: 0, status: "active", pinned: false },
   }));
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: true, staleDays: 14, minHits: 1 } });
@@ -218,7 +218,7 @@ const toolRegistry = new Map<string, any>();
   await fire("agent/turn-stopping", { agent: T, turn: 1, signal: undefined });
   // 索引懒构建：read_shadow 无参才构建/落盘 _index.md（同时验证遗忘在该路径生效）
   await toolRegistry.get("read_shadow").execute({}, { agent: T });
-  const idx = store.get("D:/ws/.shadow/_index.md");
+  const idx = store.get("D:/ws/.shadow/indexes/_index.md");
   assert.ok(idx && idx.includes("2026-09-05--100000-act.md"), "活跃记忆应保留在索引");
   assert.ok(!idx.includes("2026-09-05--110000-old.md"), "已归档(old)遗忘：不应出现在索引");
   assert.ok(!idx.includes("2020-01-01--000000-low.md"), "旧低命中(low)遗忘：不应出现在索引");
@@ -239,13 +239,13 @@ const toolRegistry = new Map<string, any>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
   // Episode A（关闭）：09:00/09:01/09:05 三个原子（entry pkg-a，含决策"采用 bundle 模式"）
   const seedA = (rel: string, decision: string, path: string) =>
-    store.set(`D:/ws/.shadow/${rel}`,
-      `# pkg-a\n\n> 完整线索\n> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [pkg-a] 改/读 ${path}\n`);
+    store.set(`D:/ws/.shadow/atoms/${rel.split('/').pop()}`,
+      `# pkg-a\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n> 项目：ws\n> Agent：T7\n\n- [10:00:00] [pkg-a] 改/读 ${path}\n`);
   seedA("2026-09-07/2026-09-07--090000-pkg-a.md", "采用 bundle 模式", "pkg-a/x.js");
   seedA("2026-09-07/2026-09-07--090100-pkg-a.md", "拆分模块", "pkg-a/x2.js");
   seedA("2026-09-07/2026-09-07--090500-pkg-a.md", "重构 resolver", "pkg-a/x3.js");
   // Episode B（当前/打开）：12:00
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--120000-pkg-b.md", "# pkg-b\n\n> 完整线索\n> 背景/材料：pkg-b/y.js\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T7\n\n- [12:00:00] [pkg-b] 改/读 pkg-b/y.js\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-07--120000-pkg-b.md", "# pkg-b\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：pkg-b/y.js\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T7\n\n- [12:00:00] [pkg-b] 改/读 pkg-b/y.js\n");
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: true, gapMinutes: 60 } });
   const T = agent("T7");
@@ -253,19 +253,19 @@ const toolRegistry = new Map<string, any>();
   // 读索引 → ensureIndex → rebuildIndex → runCompact 收口 Episode A
   const r0 = await rs.execute({}, { agent: T });
   assert.ok(!String(r0).startsWith("ERR"), "compaction 下 read_shadow 不应报错");
-  const consolidatedKey = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/") && k.includes("-consolidated.md"));
+  const consolidatedKey = [...store.keys()].find((k) => k.replace(/\\/g, "/").includes("/.shadow/atoms/") && k.includes("-consolidated.md"));
   assert.ok(consolidatedKey, "应生成 consolidated 文件");
   const ctext = store.get(consolidatedKey);
   assert.ok(ctext.includes("采用 bundle 模式"), "consolidated 文件保留决策");
   assert.ok(ctext.includes("改/读 pkg-a/x.js"), "consolidated 文件保留动作");
   // 索引只含 consolidated + 当前 episode，不再列 3 个 pkg-a 原子
-  const idx = store.get("D:/ws/.shadow/_index.md");
+  const idx = store.get("D:/ws/.shadow/indexes/_index.md");
   assert.ok(idx && idx.includes("consolidated.md") && idx.includes("120000-pkg-b.md"), "索引应含 consolidated+当前episode");
   assert.ok(!idx.includes("090000-pkg-a.md") && !idx.includes("090500-pkg-a.md"), "已收口原子不应出现在索引");
   // 原子已标记 compacted（meta 持久化），文件保留（Forget≠Delete）
   const meta = JSON.parse(store.get("D:/ws/.shadow/_meta.json") || "{}");
-  assert.equal(meta[".shadow/2026-09-07/2026-09-07--090000-pkg-a.md"]?.status, "compacted", "原子应标记 compacted");
-  assert.ok(store.has("D:/ws/.shadow/2026-09-07/2026-09-07--090000-pkg-a.md"), "原子文件应保留（未删除）");
+  assert.equal(meta[".shadow/atoms/2026-09-07--090000-pkg-a.md"]?.status, "compacted", "原子应标记 compacted");
+  assert.ok(store.has("D:/ws/.shadow/atoms/2026-09-07--090000-pkg-a.md"), "原子文件应保留（未删除）");
   // 召回：bundle 由 consolidated 提供
   assert.ok(String(await rs.execute({ topic: "bundle" }, { agent: T })).includes("采用 bundle 模式"), "收口后决策可召回");
   console.log("✔ Episode 收口归档：关闭 episode → consolidated 文件 + 原子压缩归档（文件数大降、可回放）");
@@ -278,10 +278,10 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-task.md",
-    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-task.md",
-    `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-task.md",
+    `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--093000-task.md",
+    `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T8\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
@@ -316,9 +316,9 @@ const toolRegistry = new Map<string, any>();
       return [...names].map((n) => ({ name: n }));
     },
   };
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-ev.md", "# io/backend\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/good.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:00:00] [io/backend] 改/读 src/good.js\n");
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-ev.md", "# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/good.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:00:00] [io/backend] 改/读 src/good.js\n");
   store.set("D:/ws/src/good.js", "export {}"); // 存在 → validated
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090001-stale.md", "# io/backend\n\n> 完整线索\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:01:00] [io/backend] 改/读 src/gone.js\n"); // gone.js 不在 store → stale
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090001-stale.md", "# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 证据链：来源(动作) · 日期(2026-09-07) · 证据(src/gone.js)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T9\n\n- [09:01:00] [io/backend] 改/读 src/gone.js\n"); // gone.js 不在 store → stale
   const agentsById = new Map<string, any>();
   const agent9 = (id: string) => { const a = { id, session: { header: { cwd: WS } } }; agentsById.set(id, a); return a; };
   const T9 = agent9("T9");
@@ -345,10 +345,10 @@ const toolRegistry = new Map<string, any>();
 {
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-recall.md",
-    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--093000-recall.md",
-    `# io/backend\n\n> 完整线索\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-recall.md",
+    `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕删除 TodoSyncJob\n> 决策理由：〔user〕代码不再需要\n> 概况：2 动作 · 2 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 用户：清理待办残留\n- [09:00:01] [io/backend] 改/读 io/backend/TodoSyncJob.java\n- [09:00:02] [io/backend] mvn test：85 tests passed\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--093000-recall.md",
+    `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕保留 RetryWorker\n> 决策理由：〔user〕历史数据兼容\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T10\n> 目标：删除 Todo 同步链路\n\n- [09:30:00] [io/backend] 改/读 io/backend/RetryWorker.java\n`);
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
@@ -378,10 +378,10 @@ const toolRegistry = new Map<string, any>();
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx, services } = mkCtx(store);
   // 任务 A（index 0）：Todo 清理；任务 B（index 1）：U8 补丁
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-a.md",
-    `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-b.md",
-    `# u8\n\n> 完整线索\n> 决策：〔user〕采用 U8 同步补丁\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：U8 同步补丁\n\n- [09:30:00] [u8] 改/读 u8/patch.java\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-llm-a.md",
+    `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-llm-b.md",
+    `# u8\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕采用 U8 同步补丁\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：U8 同步补丁\n\n- [09:30:00] [u8] 改/读 u8/patch.java\n`);
   const llmMock = { stream: async function* () { yield { type: "text-delta", index: 0, text: "1" }; yield { type: "finish", reason: { kind: "stop" } }; } };
   services.llm = llmMock;
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
@@ -396,7 +396,7 @@ const toolRegistry = new Map<string, any>();
   // 控制组：llmRecall 关闭 → 确定性 bestTask("Todo") 选 index0
   const store2 = new Map<string, string>();
   const ctx2 = mkCtx(store2);
-  store2.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-llm-a.md", `# io/backend\n\n> 完整线索\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
+  store2.set("D:/ws/.shadow/atoms/2026-09-07--090000-llm-a.md", `# io/backend\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 决策：〔user〕删除 TodoSyncJob\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T11\n> 目标：删除 Todo 同步链路\n\n- [09:00:00] [io/backend] 改/读 io/backend/TodoSyncJob.java\n`);
   const P2 = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
   P2.apply(ctx2.ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });
@@ -414,14 +414,14 @@ const toolRegistry = new Map<string, any>();
   const store = new Map<string, string>();
   const { m, agentsById, agent, listeners, ctx } = mkCtx(store);
   // code 节点（纯代码入口，无决策/goal）
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090000-code.md",
-    `# io/backend/AuthFilter.java\n\n> 完整线索\n> 背景/材料：io/backend/AuthFilter.java\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:00:00] [io/backend/AuthFilter.java] 改/读 io/backend/AuthFilter.java\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090000-code.md",
+    `# io/backend/AuthFilter.java\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：io/backend/AuthFilter.java\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:00:00] [io/backend/AuthFilter.java] 改/读 io/backend/AuthFilter.java\n`);
   // decision 节点（goal + decision）；v1.8.0 Evidence Gate：decision 需 evidence（材料）才能进 context
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090100-decision.md",
-    `# adr/003\n\n> 完整线索\n> 背景/材料：adr/003.md\n> 决策：〔user〕采用 RSA+MD5Key\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T12\n> 目标：appid 签名方案\n\n- [09:01:00] [adr/003] 改/读 adr/003.md\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090100-decision.md",
+    `# adr/003\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：adr/003.md\n> 决策：〔user〕采用 RSA+MD5Key\n> 概况：1 动作 · 0 用户消息 · 1 决策\n> 项目：ws\n> Agent：T12\n> 目标：appid 签名方案\n\n- [09:01:00] [adr/003] 改/读 adr/003.md\n`);
   // document 节点（.md 文档入口）
-  store.set("D:/ws/.shadow/2026-09-07/2026-09-07--090200-doc.md",
-    `# docs/sso.md\n\n> 完整线索\n> 背景/材料：docs/sso.md\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:02:00] [docs/sso.md] 改/读 docs/sso.md\n`);
+  store.set("D:/ws/.shadow/atoms/2026-09-07--090200-doc.md",
+    `# docs/sso.md\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：docs/sso.md\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：ws\n> Agent：T12\n\n- [09:02:00] [docs/sso.md] 改/读 docs/sso.md\n`);
   const P = { name, inject, apply: (c: any, cfg: any) => apply(c, { forget: { enabled: false }, compact: { enabled: false }, ...(cfg || {}) }) };
   // v1.15.85：本文件测**派生的 Episode 视图**（需要原始原子在场）⇒ 显式关掉收口合并
   P.apply(ctx, { summary: { enabled: false }, recall: {}, compact: { enabled: false } });

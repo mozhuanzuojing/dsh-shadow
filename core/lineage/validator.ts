@@ -7,24 +7,22 @@
 //   - 其余 → allowed。
 // 关键：reject 不是删除，Atom 仍然存在；只影响「是否进入 shadow_query context / 认知查询」。
 import type { NodeType, AtomKind, AtomLineage, AtomProjectionVerdict } from "./index.js";
+import { axesComplete, type AtomAxes } from "../retention/memory.js";
 
 export interface AtomLike {
   type: NodeType;
   kind?: AtomKind;
   lineage?: AtomLineage;
+  /** ADR-0106：缺轴 ⇒ 不上投影。 */
+  axes?: AtomAxes | null;
 }
 
 export const validateAtomProjection = (atom: AtomLike): AtomProjectionVerdict => {
-  // ⚠ `kind === "session"` 这一支**永不可达**（ADR-0063 实测）：`AtomKind` 声明了 5 个值
-  //   （`core/lineage.ts:14`），而 `deriveAtomKind`（唯一生产者）只能产出 `experience|task|metadata`
-  //   —— `session` 与 `artifact` **全仓无生产者**（探针复核：`node _research/measure-path-visibility.ts`）。
-  //   保留该分支无害（要么是前瞻、要么是遗漏），但不得据它推论「session 原子被挡住了」。
-  //
-  // `kind === "metadata"` 这一支**可达，且已按 ADR-0066 校准**：判据收敛到
-  //   `core/view/episode.ts` 的 `isSessionMetadataAtom`（精度 100%、只挡 1.3% 的库）。
-  //   此前它按旧判准**拦掉 66.9% 的库**，使主题召回（不过 kind 门）与 `shadow_query`
-  //   （过 kind 门）对同一份语料可见性相差 66.9% —— 那是**漂移**：同一条记忆在两个入口
-  //   一处可见一处不可见。校准后两条读路径可见性一致（91.1% 进入投影）。
+  // ADR-0106：调用方传入 axes（含 null）时才校验；缺轴不上投影。未传字段的单测（只验 kind）不受影响。
+  if (atom.type !== "resource" && atom.axes !== undefined && !axesComplete(atom.axes)) {
+    return { allowed: false, reason: "缺五轴坐标（locus/when/soul/role/intent）不进入默认认知查询（Atom 保留；ADR-0106）" };
+  }
+  // ⚠ `kind === "session"` 这一支**永不可达**（ADR-0063 实测）
   if (atom.type === "memory" && (atom.kind === "metadata" || atom.kind === "session")) {
     return { allowed: false, reason: `memory kind=${atom.kind} 不进入默认认知查询（Atom 保留）` };
   }

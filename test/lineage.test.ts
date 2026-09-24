@@ -6,6 +6,7 @@ import { evidenceBreakdownOf } from "../dist/query/observatory.js";
 const SAMPLE = `# io/backend/src/main/java/com/openapi/io/dept/DeptMapService.java
 
 > 完整线索
+> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)
 > 背景/材料：io/backend/DeptMapService.java、io/backend/DeptMapRepository.java
 > 证据链：来源(动作) · 日期(2026-09-08) · 证据(io/backend/DeptMapService.java)
 > 概况：6 动作 · 0 用户消息 · 0 决策
@@ -15,7 +16,7 @@ const SAMPLE = `# io/backend/src/main/java/com/openapi/io/dept/DeptMapService.ja
 - [11:04:04] [io/backend] 改/读 io/backend/DeptMapService.java
 `;
 
-const p = parseMemory(SAMPLE, ".shadow/2026-09-08/2026-09-08--110404-io-backend.md", "2026-09-08--110404-io-backend.md");
+const p = parseMemory(SAMPLE, ".shadow/atoms/2026-09-08--110404-io-backend.md", "2026-09-08--110404-io-backend.md");
 assert.ok(p.lineage, "应派生 lineage");
 assert.equal(p.lineage.source, "session-abc", "source 来自「> 来源会话」");
 assert.equal(p.lineage.evidence.length, 2, "证据 = 材料条数");
@@ -41,12 +42,13 @@ console.log("✔ lineage 派生（source/evidence/createdBy/kind）+ EvidenceBre
 const dec = parseMemory(`# shadow
 
 > 完整线索
+> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)
 > 决策：〔assistant〕采用 e-Builder 的 openApi + OAuth2 认证
 > 证据链：来源(agent·决策) · 日期(2026-09-08) · 证据(—)
 > 概况：0 动作 · 0 用户消息 · 1 决策
 > 来源会话：session-xyz
 - [11:02:27] [shadow] 决定 采用 e-Builder 的 openApi + OAuth2 认证
-`, ".shadow/2026-09-08/2026-09-08--110227-shadow.md", "2026-09-08--110227-shadow.md");
+`, ".shadow/atoms/2026-09-08--110227-shadow.md", "2026-09-08--110227-shadow.md");
 assert.equal(dec.lineage.evidence.length, 0, "无材料决策→evidence=[]");
 assert.equal(dec.lineage.createdBy, "agent", "〔assistant〕→agent");
 assert.equal(dec.kind, "experience", "有决策→experience");
@@ -54,12 +56,13 @@ assert.equal(dec.kind, "experience", "有决策→experience");
 const decEv = parseMemory(`# adr/003
 
 > 完整线索
+> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)
 > 背景/材料：adr/003.md、docs/sso-spec.pdf
 > 决策：〔user〕采用 RSA 签名方案
 > 概况：1 动作 · 0 用户消息 · 1 决策
 > 来源会话：session-xyz
 - [11:11:11] [adr/003] 改/读 adr/003.md
-`, ".shadow/2026-09-08/2026-09-08--111111-decision.md", "2026-09-08--111111-decision.md");
+`, ".shadow/atoms/2026-09-08--111111-decision.md", "2026-09-08--111111-decision.md");
 assert.equal(decEv.lineage.evidence.length, 2, "带材料决策→evidence=2");
 assert.equal(decEv.lineage.evidence[0].locator, "adr/003.md", "evidence locator=材料路径");
 assert.equal(decEv.lineage.createdBy, "user", "〔user〕决策→user");

@@ -3,15 +3,15 @@
 // 无 fs / 无状态突变 / 无 LLM——输入参数即全量依赖，可在无 harness 环境单测。
 // 契约与原 writer.ts 逐字一致（仅把闭包提升为纯函数）。
 
-/** 生成 .shadow/_index.md 的全文（目录说明 + 今日摘要 + 近期记忆 + 主题索引 + 意识轨迹）。 */
+/** 生成 `.shadow/indexes/_index.md` 的全文（目录说明 + 今日摘要 + 近期记忆 + 主题索引 + 意识轨迹）。 */
 export function buildIndexText(ws: string, memories: any[], topicFiles: Record<string, string[]>, todayInfo: { count: number; topics: string[] }): string {
   const byDate: Record<string, any[]> = {};
   for (const mm of memories) (byDate[mm.date] = byDate[mm.date] || []).push(mm);
   const lines: string[] = [];
   lines.push("# shadow 目录说明与索引");
   lines.push("");
-  lines.push("`.shadow/` 是 agent 思维/上下文/灵魂的投影——每条记忆都是一个文件。");
-  lines.push("格式：`.shadow/<日期>/<时刻>-<入口slug>.md`；记忆以「入口点+时间」为纲，思维/决策为正文。");
+  lines.push("`.shadow/` 是投影空间根（atoms / roles / affaires / indexes）——每条记忆都是 `atoms/` 下的一个文件。");
+  lines.push("格式：`.shadow/atoms/<date>--<HHMMSS>-<入口slug>.md`；线索头含五轴坐标；思维/决策为正文。");
   lines.push("默认入口：`read_shadow` 无参读本索引；带 `topic`/`entry` 穿透到具体记忆文件。");
   lines.push("");
   lines.push(`工作区：\`${ws}\``);

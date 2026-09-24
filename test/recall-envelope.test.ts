@@ -65,8 +65,8 @@ const makeHost = (config: any, seeds: { rel: string; text: string }[] = []) => {
 };
 
 const memText = (entry: string, line: string) =>
-  `# ${entry}\n\n> 完整线索\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] ${line}\n`;
-const mem = (date: string, time: string, slug: string) => `${WS}/.shadow/${date}/${date}--${time}-${slug}.md`;
+  `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [${entry}] ${line}\n`;
+const mem = (date: string, time: string, slug: string) => `${WS}/.shadow/atoms/${date}--${time}-${slug}.md`;
 
 // ⚠ **日期必须相对今天，不能硬编码**（`recall-attribution.test.ts` 里 v1.15.38 立下的**同一条**约定）：
 //   `forget` 缺省=开、`staleDays` 默认 14 ⇒ 写死的日期一旦变旧到 14 天，三条种子会被遗忘判据**全部**滤掉，
@@ -183,10 +183,10 @@ console.log("✔ ② 召回信封：limit/预算/冷却截断自报且计数自�
 // ─────────────────────────────────────────────
 // ③ deprioritize：只降权、不移除
 // ─────────────────────────────────────────────
-assert.equal(deprioritizeFactor(".shadow/2026-09-06/x.md", "references-agents/alpha.md", ["references-agents"]), DEPRIORITIZE_FACTOR, "命中降权子串");
+assert.equal(deprioritizeFactor(".shadow/atoms/x.md", "references-agents/alpha.md", ["references-agents"]), DEPRIORITIZE_FACTOR, "命中降权子串");
 assert.equal(deprioritizeFactor("D:\\ws\\_reports\\x.md", "src/alpha.ts", ["_reports"]), DEPRIORITIZE_FACTOR, "反斜杠路径也应归一匹配");
-assert.equal(deprioritizeFactor(".shadow/2026-09-06/x.md", "references-agents/alpha.md", "references-agents"), DEPRIORITIZE_FACTOR, "字符串配置也应生效");
-assert.equal(deprioritizeFactor(".shadow/2026-09-06/x.md", "src/alpha.ts", ["references-agents"]), 1, "未命中不降权");
+assert.equal(deprioritizeFactor(".shadow/atoms/x.md", "references-agents/alpha.md", "references-agents"), DEPRIORITIZE_FACTOR, "字符串配置也应生效");
+assert.equal(deprioritizeFactor(".shadow/atoms/x.md", "src/alpha.ts", ["references-agents"]), 1, "未命中不降权");
 assert.equal(deprioritizeFactor(".shadow/x.md", "src/alpha.ts", []), 1, "默认空=不降权");
 
 const noDp = makeHost(baseCfg, seeds);
@@ -290,21 +290,21 @@ console.log(`✔ ⑥ 索引预算：${im![2]} 字 → 返回 ${im![3]} 字 + 按
 //    甲-2：有损输出不得比原文长（纯函数那一半由 `test/loss-and-handle.test.ts` 覆盖）。
 // ─────────────────────────────────────────────
 {
-  const rLoss = await budgetHost.read({ topic: "alpha", limit: 12, max_tokens: 256 });
+  const rLoss = await budgetHost.read({ topic: "alpha", limit: 12, max_tokens: 256, raw: true });
   assert.ok(rLoss.includes("> 分层省略："),
     `条目被降档/省略片段时必须披露 —— 否则「被省略」与「本来就短」在输出上不可区分：\n${rLoss.slice(-400)}`);
-  assert.ok(rLoss.includes("> 可复取：") && /\.shadow\/\d{4}-\d{2}-\d{2}\//.test(rLoss),
+  assert.ok(rLoss.includes("> 可复取：") && /\.shadow\/atoms\//.test(rLoss),
     `披露必须交出**句柄**（记忆文件路径）：\n${rLoss.slice(-400)}`);
   // 正控：那些**本来就短**的记忆 ⇒ 不得被说成「被省略」（否则披露本身在撒谎）
-  const rShort = await host.read({ topic: "alpha", limit: 10, max_tokens: 4096 });
+  const rShort = await host.read({ topic: "alpha", limit: 10, max_tokens: 4096, raw: true });
   assert.ok(!rShort.includes("> 分层省略："), `本来就短 ⇒ 不添一句话：\n${rShort.slice(-300)}`);
 
   // 开关（v1.15.91 / `adr/0092`）：默认为**开**（判据走 `onByDefault`）；显式 `false` 只关「披露」，
   // **不改「给了什么」** —— 这条正是开关的边界，必须钉住（否则「关掉省 token」会悄悄变成「关掉就多给内容」）。
-  // 条目渲染形如 `[.shadow/<日期>/<文件>.md]`（`mm.rel` 是**工作区相对**路径）
+  // 条目渲染形如 `[.shadow/atoms/<文件>.md]`（`mm.rel` 是**工作区相对**路径）
   const rels = (s: string) => [...s.matchAll(/\[\.shadow\/[^\]]+\]/g)].map((m) => m[0]).join("|");
   const offHost = makeHost({ summary: { enabled: false }, recall: { lossDisclosure: false } }, longSeeds);
-  const rOff = await offHost.read({ topic: "alpha", limit: 12, max_tokens: 256 });
+  const rOff = await offHost.read({ topic: "alpha", limit: 12, max_tokens: 256, raw: true });
   assert.ok(!rOff.includes("> 分层省略："), `显式关掉后不得出现省略披露：\n${rOff.slice(-300)}`);
   assert.ok(rels(rLoss).length > 0, "（前置）开着时确实返回了条目");
   assert.equal(rels(rOff), rels(rLoss), "开关只许改「说了什么」，不许改「给了什么」（返回条目标识必须逐字相同）");

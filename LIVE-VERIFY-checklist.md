@@ -1,19 +1,20 @@
-# dsh-shadow · live 复验清单（历史稿 · 原标注 v0.13.0）
+# dsh-shadow · live 复验清单（历史步骤稿 · 路径已按 v1.21.0 投影空间改口）
 
-> **口径提示（2026-09-10）**：下列步骤多写旧版工具/参数口径。当前包版本见 `package.json`；读侧命名以 **工具 schema + `CONTEXT.md`「mode 参考」** 为唯一现行口径（被取代的旧名与映射见 ADR-0050 / ADR-0053，本清单不登记）。本清单未逐条改写，执行时以现行 schema 为准。
+> **现行口径**：版本以 `package.json` 为准；读侧命名以 **工具 schema + `CONTEXT.md`「mode 参考」** 为准（旧名映射见 ADR-0050 / ADR-0053）。
+> 布局权威见 ADR-0106（`atoms/` · `indexes/`）；默认滤 / `raw` / `project` 见 ADR-0107。
+> 下列「应见 …」字段仍可能写旧版文案 —— **以真机输出为准**，本清单只保路径与工具名不指错目录。
 >
-> 预检（本文件由重启前会话完成）：dist 已建/node --check 过；profile bundles 含 `dsh-shadow`；dump-config 无 Error；
-> 探针遗留 `shadowRoot=D:\dsh-probe\csh-sandbox` 已去（走 session cwd）；`sandbox-policy.mode`/`permission.defaultPreset` 已还原 `workspace-write`。
 > 用法：重启 web profile 后，在**新会话**里按顺序执行；每项记录结果（✅/⚠️/❌）。
 
 ## 0. 确认 running host 载入的版本
 - `dsh --profile web --dump-config` → 应见 `- id: dsh-shadow`（无 shadowRoot），且无 `Error:/Cannot/failed`。
-- 确认 `vendor/dsh-shadow/package.json` version = `0.13.0`，`dist/index.js` 存在。
+- 确认 `vendor/dsh-shadow/package.json` version = **当前版本**（现 `1.21.0`），`dist/index.js` 存在（改代码后先 `npm run build`）。
 - 触发一个真实工具回合（任意工具调用）→ 让插件采集。
 
 ## 1. 采集落地 + 系统提示不泄漏
-- 检查会话工作区 `D:\project\dsh1\shadow\` 出现 `<日期>/<时刻>-<入口>.md` 文件。
-- grep 该记忆文件：**不得**含 `<system-reminder>` / `The following workspace` / `Current runtime context` / `A skill is a reusable`（v0.5.1 修复生效）。
+- 检查会话工作区出现 `.shadow/atoms/<date>--<HHMMSS>-<入口>.md`（**不是**旧日期目录树 `.shadow/<date>/…`）。
+- 可选：同名便利贴可能出现在 `.shadow/indexes/projections/`（派生，可删）。
+- grep 该 **atom** 文件：**不得**含 `<system-reminder>` / `The following workspace` / `Current runtime context` / `A skill is a reusable`（v0.5.1 修复生效）。
 
 ## 2. 召回 + provenance/生命周期/裁决（v0.10）
 - `read_shadow("<入口>")` → 应见 `（来源 … · 生命周期 … · 状态 … · 裁决 … · 结果 … · 证据 …）`。

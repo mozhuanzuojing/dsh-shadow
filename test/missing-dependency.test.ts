@@ -78,8 +78,8 @@ assert.equal(badProvider.provenance.reason, "provider_unknown", "应带 reason=p
 assert.equal(badProvider.confidence, 0, "未验证 → confidence 0");
 
 // fs provider 本身仍要工作：存在的路径 verified，不存在的 not_found
-const hostFs = makeHost({ summary: { enabled: false }, recall: {}, forget: { enabled: false } }, [{ rel: `${WS}/.shadow/2026-09-08/2026-09-08--100000-a.md`, text: "# src/a.ts\n\n> 背景/材料：src/a.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/a.ts] alpha 条目\n" }]);
-const okRef = await routeVerify({ path: ".shadow/2026-09-08/2026-09-08--100000-a.md" }, { fs: (hostFs as any).ctx.get("fs"), ws: WS }, "fs");
+const hostFs = makeHost({ summary: { enabled: false }, recall: {}, forget: { enabled: false } }, [{ rel: `${WS}/.shadow/atoms/2026-09-08--100000-a.md`, text: "# src/a.ts\n\n> 背景/材料：src/a.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/a.ts] alpha 条目\n" }]);
+const okRef = await routeVerify({ path: ".shadow/atoms/2026-09-08--100000-a.md" }, { fs: (hostFs as any).ctx.get("fs"), ws: WS }, "fs");
 assert.equal(okRef.status, "verified", "存在的路径应 verified（未把 fs 一起改坏）");
 const missingRef = await routeVerify({ path: "src/does-not-exist.ts" }, { fs: (hostFs as any).ctx.get("fs"), ws: WS }, "fs");
 assert.equal(missingRef.status, "not_found", "不存在的路径应 not_found");
@@ -97,7 +97,7 @@ const host = makeHost(
     knowledgeEngine: { enabled: true, llmNavigate: { enabled: true, provider: "p", model: "m" } },
     forget: { enabled: false },
   },
-  [{ rel: `${WS}/.shadow/2026-09-08/2026-09-08--100000-a.md`, text: "# src/auth/JwtFilter.java\n\n> 完整线索\n> 背景/材料：D:/ws/src/missing.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/auth/JwtFilter.java] alpha JWT 校验\n" }],
+  [{ rel: `${WS}/.shadow/atoms/2026-09-08--100000-a.md`, text: "# src/auth/JwtFilter.java\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 背景/材料：D:/ws/src/missing.ts\n> 概况：0 动作 · 1 用户消息 · 0 决策\n\n- [10:00:00] [src/auth/JwtFilter.java] alpha JWT 校验\n" }],
 );
 const rTopic = await host.read({ topic: "JwtFilter", max_tokens: 4096 });
 // 勿只 assert includes("JwtFilter")：无匹配文案也会回显主题词（假绿）。
