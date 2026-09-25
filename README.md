@@ -174,7 +174,7 @@ npm run verify
 | GC / 归档 `forget` | **开**（v1.15.85；`forget: { enabled: false }` 关） | 有开放未验证项（`minHits` 链随 ADR-0067 待真机验） | **显式关掉** → `isForgettable` 恒 false、`maxActive` 失效（无降级） | 仓库未定义 | 默认即把低价值 / 过期记忆移出活跃召回集（**文件保留，Forget≠Delete ⇒ 不减磁盘占用**）；`staleDays` / `minHits` / `maxActive` 可调 |
 | Episode 收口归档 `compact` | **开**（v1.15.85；`compact: { enabled: false }` 关） | 有开放未验证项（ADR-0068 `runCompact` delta 真机未验） | **显式关掉** → 直接 return，不合并（无降级） | 仓库未定义 | 默认即把结束的 episode 合成 consolidated 文件（**原子保留可回放**） |
 | LLM 推理导航 `llmRecall` | 关 | 无开放未验证项 | 缺 `llm`/route/解析不出编号 → `[]` → 确定性 `renderRecovery` ✅**可见**（T8 第 1 条，v1.15.65。修前是**最彻底**的一条：`label:""` 使异常**连 log 都没有**，且 `!llm`/`!route`/finish 出错**三条路径从不进 catch**） | 仓库未定义 | 开需 `llmRecall = { enabled: true, provider, model }` |
-| Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 未接线） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 —— **裁定为正当静默**（`adr/0049:38` 行级豁免 + `adr/0085` §5 的类判据：**读者拿到的内容逐字节不变**） | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
+| Projection Store `projectionStore` | 关 | 有开放未验证项（ADR-0069 真机端到端；D1 `invalidateFor` 已于 v1.21.14 删除） | 读失败 / 坏行 → 全量重派生，**结果仍正确**、只是无缓存 —— **裁定为正当静默**（`adr/0049:38` 行级豁免 + `adr/0085` §5 的类判据：**读者拿到的内容逐字节不变**） | **有**：`projection-store.ts:5`「Node 稳定 + query 稳定 + rebuild 成本明显」 | `projectionStore.enabled: true` |
 | 投影空间缓存 `projectionSpace.cache`（ADR-0107） | **开**（`cache: false` 关） | 新能力 | 关缓存 → 每次读重 hydrate（结果正确）；**不关**灵魂规避滤 | 仓库未定义 | **只**控小世界缓存。规避滤默认开、无独立 config（逃：`raw: true`）；便利贴 `indexes/projections/`（与 atom 同名，勿扫全树当记忆条数） |
 | when 桶摘要 `abstracts`（v1.15.35 / ADR-0075；路径 ADR-0106） | **开** | **边界 ADR 已接受但收益未验证**（ADR-0075 自陈：召回收益未测 → T9） | 写失败 → 该 **when 桶**不列入 `indexes/_index.md`（索引少一行 = 内容变了）✅**可见**（v1.15.65 复查时补：它**不属于**正当静默那一类，判据同上；`showInIndex: 0` 的「不列」v1.15.64 才真的生效） | 仓库未定义 | 按 atom 文件名日期分桶，写 `indexes/abstracts/<date>/_abstract.md`（L1 + L0）；**不是**日期目录树；`abstracts.enabled: false` 关、`showInIndex` 控制索引里列几个（默认 3） |
 | Knowledge Engine `knowledgeEngine` | **并非「关」——闸门不存在**（注④） | **边界 ADR 未接受**（`adr/0047` 已提出；`adr/0046` 实现计划冻结） | 读路径**无条件**建树；唯一闸门 `llmNavigate`（默认关）→ 确定性检索，**输出显式标注**「LLM 导航未启用/失败」（可见） | 仓库未定义 | `mode:"knowledge"` 直接用；`llmNavigate.enabled` 是**唯一**闸门 |
@@ -274,4 +274,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.13`**（归档层按 `D12` 口径去数 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.14`**（`D1` 改判：删除 `ChangeSet`/`invalidateFor` —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

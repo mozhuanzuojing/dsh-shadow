@@ -1135,7 +1135,7 @@
 
 ## 三、决策（**状态看每条标题的标记** —— 本节原写「D1–D3 待拍板；D4–D6 已按推荐决策」，而 D4–D11 均已 ✅ 结案：同上，v1.21.9 改）
 
-### 🟡 D1. `ChangeSet` / `invalidateFor` —— **已决策（2026-09-25 用户）：② 删除**（连同测试与 `ADR-0048⑤` 相应条款）；**待执行**
+### ✅ D1. `ChangeSet` / `invalidateFor` —— **已执行（v1.21.14）**：模块 + 测试 + 测试用例 + `adr/0048` ⑤ 条款一并删除；⚠ **代价已如实记录**：`audit-wiring` selftest ⑧ 自此**失去真仓库校准锚点**（断言仍绿但不具判别力），`adr/0086` §6 已改判
 
 - **依据**：`adr/0062-wiring-audit.md` §3。
 - **现状**：`core/retention/change-set.ts`（83 行）与 `ShadowProjectionStore.invalidateFor?()`

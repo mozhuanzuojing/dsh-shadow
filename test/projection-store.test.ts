@@ -1,7 +1,7 @@
 // dsh-shadow —— Phase 1B Projection Store（Performance Feature，默认关）：save/load/invalidate/rebuild + 缓存行为。
 import assert from "node:assert/strict";
 import { createJsonlProjectionStore, loadOrBuildProjection } from "../dist/core/view/projection-store.js";
-import { ChangeSet } from "../dist/core/retention/change-set.js";
+// v1.21.14（D1 改判）：`ChangeSet` 已删除，其 change-aware 用例一并移除。
 import type { ShadowNode } from "../dist/core/view/node.js";
 
 const makeFs = () => {
@@ -63,22 +63,8 @@ const NODE = (id): ShadowNode => ({ id, type: "code", source: `.shadow/x/${id}.m
   assert.equal(r2.nodes.length, 2, "缓存节点数量正确");
 }
 
-// —— 块 4：change-aware invalidateFor（ADR-0048⑤）——只移除变更 rel 的节点，保留其余 ——
-{
-  const { fs } = makeFs();
-  const store = createJsonlProjectionStore(fs, WS);
-  await store.save([
-    { id: "a", type: "code", source: ".shadow/atoms/a.md", title: "a", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
-    { id: "b", type: "code", source: ".shadow/atoms/b.md", title: "b", content: [], evidence: [], relations: [], kind: "experience", createdBy: "tool" },
-  ]);
-  const set = new ChangeSet({ root: WS });
-  set.add(".shadow/atoms/a.md", "changed");
-  await store.invalidateFor!(set);
-  const left = await store.load();
-  assert.equal(left.length, 1, "只移除变更 rel 的节点");
-  assert.equal(left[0].id, "b", "保留未变更节点");
-}
-
+// —— 块 4 已移除（v1.21.14，D1 改判）：change-aware `invalidateFor` 与 `ChangeSet` 一并删除 ——
+// 代价（明文记录）：`audit-wiring` selftest ⑧ 自此**失去真仓库校准锚点**（断言仍绿但已不具判别力）。
 // —— 块 5：FsTarget 契约（v1.15.12 回归锁）——
 // 曾经：`abs()` 返回 `.displayPath` **字符串**，却当作 FsTarget 传给 writeText/readText。
 // 该 bug 长期隐藏，因为 `invalidate()` **零调用点**；一旦写侧开始调用它就会在 mock/sandbox 后端上炸
@@ -133,5 +119,4 @@ const NODE = (id): ShadowNode => ({ id, type: "code", source: `.shadow/x/${id}.m
 
 console.log("✔ 场景 Projection-Store-1 save/load/invalidate/rebuild");
 console.log("✔ 场景 Projection-Store-2 loadOrBuild：store 关闭恒派生 / 开启首次派生+再次命中缓存");
-console.log("✔ 场景 Projection-Store-3 invalidateFor change-aware：只移除变更 rel 节点（ADR-0048⑤）");
 console.log("ALL PASS ✅");

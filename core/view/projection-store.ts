@@ -6,7 +6,7 @@
 import { SHADOW_ROOT, ATOMS_DIR, ROLES_DIR, AFFAIRES_DIR, indexesRel } from "../paths.js";
 import { isDirEntry } from "../util.js";
 import type { ShadowNode } from "./node.js";
-import type { ChangeSet } from "../retention/change-set.js";
+// v1.21.14（D1 改判）：`ChangeSet` 模块已删除 —— 见 `adr/0086` §6 改判与 `adr/0062` 补记。
 import { buildManifest, writeManifest } from "../manifest.js";
 
 export interface ShadowProjectionStore {
@@ -14,21 +14,9 @@ export interface ShadowProjectionStore {
   load(): Promise<ShadowNode[] | null>;   // null = 无缓存 / 读到坏数据（需 rebuild）
   invalidate(): Promise<void>;
   rebuild(derive: () => Promise<ShadowNode[]>, failures?: { path: string; reason: string }[]): Promise<ShadowNode[]>;
-  /**
-   * ADR-0048⑤：变革驱动——只移除变更 rel 的节点（保持其余缓存），回退到「无变更→不清」。
-   *
-   * ⚠ **生产中未接线**（v1.15.19 用 `tools/audit-wiring.ts` 审计确认，见 ADR-0062）：
-   *   本方法的**唯一调用点是测试**（`test/projection-store.test.ts`）。生产走的是
-   *   `invalidateProjection` 的**粗粒度清空**（`invalidate()`）——见 `core/writer/materialize.ts` 的
-   *   `ensureIndex`：它在 `rebuildIndex` 后清整个缓存，而 `rebuildIndex` 本身是**全量扫描**
-   *   （`listMemories`），**没有跟踪变更集**，故拿不到可喂给本方法的 `ChangeSet`。
-   *
-   * **这不是正确性缺陷**：粗粒度清空是正确路径（缓存是可重建派生，清空后下次读自动重建），
-   *   只是放弃了「只失效变更项」的优化。接线它需要**新增写侧变更跟踪**（并伴随一次性能取舍：
-   *   清空 = 一次极小写 + 下次全量重建；本方法 = 读全量缓存 + 写回，换下次读更快）。
-   *   按本仓纪律**不臆造机制**，故保留实现与测试、显式标注未接线，由后续决策是否接线或删除。
-   */
-  invalidateFor?(set: ChangeSet): Promise<void>;
+  // v1.21.14（D1 改判 · 用户决策）：`invalidateFor` 已删除（连带 `adr/0048` ⑤ 条款撤回）。
+  // 原判（`adr/0086` §6，v1.15.74）是「**保留**」，理由是它充当 `audit-wiring` selftest ⑧ 的**真仓库校准锚点**；
+  // 本次改判**接受该锚点丢失**（⑧ 自此为空判据）—— 逐条见 `adr/0086` §6 改判与 `adr/0062` 补记。
 }
 
 export const projectionIndexRel = () => indexesRel("shadow-index", "nodes.jsonl");
@@ -100,14 +88,6 @@ export const createJsonlProjectionStore = (fs: any, ws: string): ShadowProjectio
       await writeManifest(fs, ws, buildManifest("1", nodes, failures));
       return nodes;
     },
-    async invalidateFor(set) {
-      try {
-        const nodes = await this.load();
-        if (!nodes || nodes.length === 0) return;
-        const kept = nodes.filter((n) => !set.affects(String(n.source || "")));
-        if (kept.length !== nodes.length) await this.save(kept);
-      } catch { /* best-effort */ }
-    },
   };
 };
 
@@ -117,7 +97,8 @@ export const getProjectionStore = (fs: any, ws: string): ShadowProjectionStore =
 /**
  * 让投影缓存失效（best-effort）。**这是 `invalidate()` 的生产调用点**。
  *
- * 修复的缺陷（v1.15.12）：`invalidate` / `invalidateFor` 此前**零调用点** —— 接口与实现都在，
+ * 修复的缺陷（v1.15.12）：`invalidate` 此前**零调用点** —— 接口与实现都在，
+ * （`invalidateFor` 已于 v1.21.14 按 D1 删除，见上。）
  * 但没人调，于是「开了 `projectionStore` 之后，记忆变了、`shadow_query` 仍读陈旧投影」，
  * 实际只能靠手动删 `.shadow/indexes/shadow-index/nodes.jsonl` 才能刷新。
  *
