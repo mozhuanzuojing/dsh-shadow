@@ -84,6 +84,7 @@ npm run verify
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
 + npm run audit:scripts        脚本扩展名门（v1.15.87：仓内不得有**手写** `.js` / `.mjs` / `.cjs`；`.ts` 与 `.py` / `.ps1` 等允许）
 + npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名 …… ⑦三处「验证基线」= `engines.dsh`，v1.20.2 补）
++ npm run audit:complexity     复杂度预算门（v1.21.29：**硬上限 800 行** + **热点棘轮只降不升**；判**产品面**，不扫 `test/` 与 `tools/`，见 `adr/0109`）
 + npm run audit:granularity    记录粒度门（v1.19.0 `adr/0097`：**起点之后**不得再有「纯动作回声」落成记忆文件）
 +                               ⚠ 边界：**起点（2026-09-21）之前的归档豁免**（`adr/0049` 不改写历史）⇒ 它回答的是
 +                                 「起点之后有没有新的纯动作记忆文件」，不是「全仓都不是」；同样要 `.shadow` 语料根（兜底同上）
@@ -274,4 +275,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.28`**（`T11` ① 结案：留出集落地 + 口径必须声明 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.29`**（`T13` 后半：复杂度预算门 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

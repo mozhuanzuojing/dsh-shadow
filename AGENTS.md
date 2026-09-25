@@ -57,7 +57,7 @@
   手写 `tsc` / `tsc -w`（会 emit）之前也要先 `npm run clean`。
   `tsc --noEmit` / `typecheck:tools` / `typecheck:tests`（`noEmit: true`）**不写盘**，不必 clean。
 - **验证只用一条命令：`npm run verify`** —— 它串行跑 `build`（clean+tsc，工具面/测试面类型门都 import `dist/`）→ `typecheck:tools` → `typecheck:tests` →
-  `audit:layers` → `audit:scripts` → `audit:docs` → `audit:granularity` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
+  `audit:layers` → `audit:scripts` → `audit:docs` → `audit:complexity` → `audit:granularity` → `eval:retrieval:check` → `audit:ratchet` → `tsc --noEmit` → `test:all`
   （**检查条数不写在这里**：由 `run-tests` 自己打印，末行应为 `[run-tests] ALL PASS ✅`）。
   ⚠️ **本文件曾写「仓库没有配置 test runner」—— 那是过期信息**（运行器是 `tools/run-tests.ts`）。
 - **跑测试前必须 `npm run build`**：`test/*.test.ts` 与 `tools/*.selftest.ts` **import 的是 `dist/`**。

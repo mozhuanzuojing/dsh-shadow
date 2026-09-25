@@ -1,0 +1,17 @@
+{
+  "hard_cap": 800,
+  "hotspot_threshold": 300,
+  "hotspots": {
+    "core/admission/decision-outcome.ts": 322,
+    "core/admission/proposal.ts": 376,
+    "core/candidate/sqlite.ts": 526,
+    "core/toolset/exec.ts": 366,
+    "core/toolset/index.ts": 587,
+    "core/view/episode.ts": 389,
+    "core/writer/materialize.ts": 447,
+    "index.ts": 368,
+    "query/observatory.ts": 392,
+    "query/reads.ts": 388
+  },
+  "scanned_files": 219
+}
