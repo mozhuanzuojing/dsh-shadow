@@ -22,6 +22,11 @@ import {
   checkAggregateOnly,
   compareEval,
   corpusFloorVerdict,
+  corpusRoleVerdict,
+  isDateCut,
+  isHoldoutRel,
+  phaseVerdict,
+  splitVerdict,
 } from "./retrieval-eval.lib.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -95,16 +100,54 @@ const mulberry = (a) => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imu
 //     不排除就会把同一条记忆数两遍（v1.21.0 修）。
 const files = [];
 const DERIVED_DIRS = new Set(["indexes"]);
+
+// ── T11 ①：**留出集与调参集的分离**（v1.21.28）──────────────────────────────
+// 切点来自**协议常量**（`holdout_from`，改它＝改数据、被 diff 审阅）：`>= 切点` 的记忆是**留出集**。
+// **默认阶段 = `dev`**（调参集，**排除**留出切片）⇒ 留出集在调参期间**根本不会被读**（结构上排除）。
+// `--holdout-only` 才读留出切片（报告用），而它**不在 `verify` 里**。
+const HOLDOUT_FROM = (() => {
+  try {
+    const raw = JSON.parse(readFileSync(PROTOCOL_PATH, "utf8"));
+    return isDateCut(raw?.holdout_from) ? String(raw.holdout_from) : undefined;
+  } catch {
+    return undefined; // 协议缺失/坏件 ⇒ 无切点（全部算 dev）；`checkProtocol` 会另行报结构缺失
+  }
+})();
+const PHASE = FLAG("--holdout-only") ? "holdout" : "dev";
+if (PHASE === "holdout" && HOLDOUT_FROM === undefined) {
+  console.error("拒绝 `--holdout-only`：协议里没有可用的 `holdout_from`（切点）⇒ 没有留出集可读。");
+  console.error("  T11 ①：留出集必须是**预注册**的切片（先定切点，再看读数）—— 缺件不静默（ADR-0049）。");
+  process.exit(2);
+}
+
+const relOf = (p: string) => p.slice(ROOT.length + 1).replace(/\\/g, "/");
+let devSeen = 0;
+let holdoutSeen = 0;
 (function walk(d) {
   let es; try { es = readdirSync(d, { withFileTypes: true }); } catch { return; }
   for (const e of es) {
     const p = join(d, e.name);
     if (e.isDirectory()) {
       if (!DERIVED_DIRS.has(e.name)) walk(p);
-    } else if (e.name.endsWith(".md") && !e.name.startsWith("_")) files.push(p);
+    } else if (e.name.endsWith(".md") && !e.name.startsWith("_")) {
+      const rel = relOf(p);
+      const isHoldout = isHoldoutRel(rel, HOLDOUT_FROM);
+      if (isHoldout) holdoutSeen++; else devSeen++;
+      if (isHoldout === (PHASE === "holdout")) files.push(p);
+    }
   }
 })(SHADOW);
 files.sort();
+
+// 切片健康：**两侧都必须非空**（空的留出集 = 没有留出集，而它会照样「全过」）。
+if (HOLDOUT_FROM !== undefined) {
+  const split = splitVerdict(devSeen, holdoutSeen);
+  if (!split.ok) {
+    console.error(`拒绝产出读数：${split.reason}`);
+    console.error(`  （切点 holdout_from = ${HOLDOUT_FROM}；本机语料 dev=${devSeen} / holdout=${holdoutSeen}）`);
+    process.exit(2);
+  }
+}
 
 // **全语料**（用于数据集指纹；路径取工作区相对 posix 路径 ⇒ 与机器/盘符无关）
 const corpus = [];
@@ -333,6 +376,8 @@ const onN = RUN.onN;
 const offN = RUN.offN;
 emit("=".repeat(100));
 emit("");
+emit(`【语料口径（T11 ①）】phase=${PHASE} · 切点 holdout_from=${HOLDOUT_FROM ?? "（协议未声明 ⇒ 全部算调参集）"} · dev=${devSeen} / holdout=${holdoutSeen} · 本次入评 ${corpus.length} 条`);
+emit("");
 emit("【裁决性对比】");
 const A = R["A 单库·词·有阈值"], C = R["C 扇出2库·无阈值+RRF"], D = R["D 路由·有阈值+弃权"], E = R["E 扇出2库·有阈值+RRF"], F = R["F 单库·二元组·有阈值"];
 const cmp = (a, b, label, higherBetter = true) => {
@@ -385,10 +430,29 @@ for (const [nm, v] of Object.entries(R)) {
     noise_offtopic_mean: v.nz.mean,
   };
 }
+// 口径声明（T11 ①）：**读数运行**缺省按调参口径；**录基线**时强制显式声明（见 `--update-baseline`）。
+const ROLE_ARG = VALUE("--corpus-role");
+if (ROLE_ARG !== undefined) {
+  const roleOk = corpusRoleVerdict(ROLE_ARG);
+  if (!roleOk.ok) {
+    console.error(`❌ ${roleOk.reason}`);
+    process.exit(1);
+  }
+}
+const CORPUS_ROLE = ROLE_ARG ?? "live-workspace";
+const PHASE_OK = phaseVerdict(PHASE);
+if (!PHASE_OK.ok) {
+  console.error(`❌ ${PHASE_OK.reason}`);
+  process.exit(1);
+}
+
 const RESULT = {
   protocol_version: PROTOCOL?.protocol_version ?? "retrieval-eval-unversioned",
   baseline_tag: PROTOCOL?.baseline_tag ?? "none",
   provenance: "local_dev_aggregate_only",
+  // T11 ①：**这两项必须随基线一起落盘**，否则读者无从知道「这份基线是哪份语料、哪个切片录的」。
+  corpus_role: CORPUS_ROLE,
+  eval_phase: PHASE,
   dataset_hash_algorithm: DATASET.algorithm,
   dataset_sha256: DATASET.hex,
   protocol_sha256: PROTOCOL_SHA,
@@ -441,6 +505,19 @@ if (FLAG("--check-baseline")) {
         if (typeof baseline.metrics[strategy]?.[f] !== "number") violations.push(`基线缺读数：${strategy}.${f}`);
       }
     }
+    // T11 ①（v1.21.28）：基线的**口径声明**必须齐备 —— 否则读者无从知道「这份基线是哪份语料、哪个切片录的」，
+    // 也就无法判断「报告口径与调参口径是否同源」。缺件不静默。
+    const roleOk = corpusRoleVerdict(baseline.corpus_role);
+    if (!roleOk.ok) violations.push(`基线缺口径声明：${roleOk.reason}`);
+    const phaseOk = phaseVerdict(baseline.eval_phase);
+    if (!phaseOk.ok) violations.push(`基线缺阶段声明：${phaseOk.reason}`);
+    console.log(`  基线口径：corpus_role=${baseline.corpus_role} · eval_phase=${baseline.eval_phase} · 协议切点 holdout_from=${HOLDOUT_FROM ?? "（未声明）"}`);
+    console.log(`  本次运行：corpus_role=${CORPUS_ROLE} · eval_phase=${PHASE} · 语料 sha ${DATASET.hex.slice(0, 12)}… vs 基线 ${String(baseline.dataset_sha256).slice(0, 12)}…`);
+    if (baseline.dataset_sha256 !== DATASET.hex) {
+      // **刻意不是违规**：本仓语料是活的，每回合都可能变 ⇒ 判违规＝常红的假闸门。
+      // 这里只把「不可比」这条事实说出来（数值判定是 `--compare` 的事，它会给第三种结论）。
+      console.log("    ⚠ 语料 sha 与基线不同 ⇒ 数值**不可比**（本门只判协议/形状/口径声明，不做数值判定）");
+    }
   }
   if (violations.length > 0) {
     console.log(`基线完整性检查：失败（${violations.length} 处）`);
@@ -453,6 +530,15 @@ if (FLAG("--check-baseline")) {
 
 if (FLAG("--update-baseline")) {
   const FORCE = FLAG("--force");
+  // T11 ①（v1.21.28）：**录基线必须显式声明语料口径**（不许默认成某一个）——
+  // 基线是「报告口径」的锚点，若不声明它是活语料还是冻结快照录的，下一次就没有任何东西能判断
+  // 「这条读数是不是拿调参语料当报告用」。
+  if (ROLE_ARG === undefined) {
+    console.log("拒绝录基线：必须显式声明语料口径 `--corpus-role <live-workspace|frozen-snapshot>`。");
+    console.log("  缘由（T11 ①）：报告口径与调参口径**必须可区分**——「不得针对调参集调完就拿它当报告」。");
+    console.log(`  另请确认阶段：默认 dev（调参切片）；报告口径请用 \`--holdout-only\`（切点见协议 holdout_from=${HOLDOUT_FROM ?? "未声明"}）。`);
+    process.exit(1);
+  }
   if (existsSync(BASELINE_PATH) && !FORCE) {
     console.log(`拒绝覆盖既有基线：${BASELINE_PATH}`);
     console.log("（防「重刷基线掩盖退化」；确要重录请显式加 --force，并在提交信息里说明为什么旧基线失效）");
@@ -461,6 +547,7 @@ if (FLAG("--update-baseline")) {
   writeFileSync(BASELINE_PATH, stableStringify(RESULT), "utf8");
   console.log(`已写入基线：${BASELINE_PATH}`);
   console.log(`  provenance = ${RESULT.provenance}（只含聚合数字 + 哈希 + 枚举；不含记忆原文/路径/日期）`);
+  console.log(`  corpus_role = ${RESULT.corpus_role} · eval_phase = ${RESULT.eval_phase} · 切点 holdout_from = ${HOLDOUT_FROM ?? "（协议未声明）"}`);
   console.log(`  dataset_sha256 = ${RESULT.dataset_sha256}`);
   console.log(`  protocol_sha256 = ${RESULT.protocol_sha256}`);
   console.log(`  case_count = ${RESULT.case_count} · docs = ${RESULT.docs} / source_files = ${RESULT.source_files}`);

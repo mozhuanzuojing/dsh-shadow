@@ -14,6 +14,10 @@ import {
   checkAggregateOnly,
   corpusFloorVerdict,
   compareEval,
+  corpusRoleVerdict,
+  isHoldoutRel,
+  phaseVerdict,
+  splitVerdict,
   HASH_ALGORITHM,
   RESULT_FIELDS,
   type EvalProtocol,
@@ -33,6 +37,8 @@ const protocol: EvalProtocol = {
   k: 5,
   seeds: [1, 2, 3],
   max_docs: 1500,
+  // T11 ①（v1.21.28）：留出切点是**协议常量**（`checkProtocol` 会要求它存在且是 YYYY-MM-DD）。
+  holdout_from: "2026-09-24",
 };
 
 const read = (recall: number, noise: number, budget: number) => ({
@@ -217,10 +223,59 @@ const runCompare = (candidate: Record<string, unknown>) =>
   console.log("✔ ⑬ 语料绝对下限：`==` 通过 / `<` 拒绝（带阈值）/ 未设或非法 ⇒ 不拦");
 }
 
+// ─────────────────────────────────────────────
+// ⑭ 留出集切分（T11 ①，v1.21.28）
+//    由来（量化，非转述）：hl_mem 在同一份 400-bundle dev 上调参拿到 13/13，独立 held-out **只有 3/13** ⇒ 整批撤回。
+//    本仓用「时间窗切点」分离：`>= 切点` 算留出；**默认阶段 dev 在结构上排除留出**（不靠自觉）。
+// ─────────────────────────────────────────────
+{
+  // 正对照
+  assert.equal(isHoldoutRel(".shadow/atoms/2026-09-24--120000-a.md", "2026-09-24"), true, "切点当天算留出（边界是 `>=`）");
+  assert.equal(isHoldoutRel(".shadow/atoms/2026-09-25--000000-a.md", "2026-09-24"), true, "切点之后算留出");
+  assert.equal(isHoldoutRel(".shadow/2026-09-23/2026-09-23--090149-a.md", "2026-09-24"), false, "切点之前算调参集");
+  assert.equal(isHoldoutRel(".shadow/atoms/2026-09-23--235959-a.md", "2026-09-24"), false, "切点前一秒仍算调参集（日期字典序 = 时间序）");
+  // 负对照
+  assert.equal(isHoldoutRel(".shadow/atoms/no-date-file.md", "2026-09-24"), false, "**没有日期 ⇒ 算调参集**（宁可留在 dev，也不能谎报有一份留出集）");
+  assert.equal(isHoldoutRel(".shadow/atoms/2026-09-24--120000-a.md", undefined), false, "切点缺件 ⇒ 一律不算留出（不猜）");
+  assert.equal(isHoldoutRel(".shadow/atoms/2026-09-24--120000-a.md", "2026-9-24"), false, "非法切点形状（非 YYYY-MM-DD）⇒ 不认");
+  // 切片健康
+  assert.equal(splitVerdict(572, 460).ok, true, "两侧都非空 ⇒ 切片成立");
+  assert.equal(splitVerdict(0, 460).ok, false, "**负对照**：dev 为空 ⇒ 不成立（没有可调参的集）");
+  assert.equal(splitVerdict(572, 0).ok, false, "**负对照**：留出为空 ⇒ 不成立（空的留出集 = 没有留出集，而它会照样「全过」）");
+  assert.ok(String(splitVerdict(0, 0).reason).includes("dev=0 / holdout=0"), "拒绝理由要带两侧计数（可诊断）");
+  // 切点必须是**协议常量**
+  assert.equal(checkProtocol(protocol).length, 0, "**正对照**：声明了合法切点的协议 ⇒ 0 违规");
+  const noCut = checkProtocol({ ...protocol, holdout_from: undefined } as EvalProtocol);
+  assert.ok(noCut.some((v) => v.where === "protocol.holdout_from"), "**负对照**：缺 `holdout_from` ⇒ 违规（T11 ① 不允许「没有留出集也放行」）");
+  const badCut = checkProtocol({ ...protocol, holdout_from: "2026/09/24" } as EvalProtocol);
+  assert.ok(badCut.some((v) => v.where === "protocol.holdout_from"), "**负对照**：非法切点形状 ⇒ 违规");
+  console.log("✔ ⑭ 留出切分：切点当天/之后算留出、之前与无日期算调参；两侧为空都拒绝；切点必须是协议常量");
+}
+
+// ─────────────────────────────────────────────
+// ⑮ 口径与阶段**必须显式声明**（T11 ①：报告口径 ≠ 调参口径，且二者必须可区分）
+// ─────────────────────────────────────────────
+{
+  assert.equal(corpusRoleVerdict("frozen-snapshot").ok, true, "冻结快照 ⇒ 合法（报告口径）");
+  assert.equal(corpusRoleVerdict("live-workspace").ok, true, "活工作区 ⇒ 合法（调参口径）");
+  assert.equal(corpusRoleVerdict(undefined).ok, false, "**负对照**：缺件 ⇒ 违规（不许默认成某一个）");
+  assert.equal(corpusRoleVerdict("live").ok, false, "**负对照**：简写 ⇒ 违规（不得被当成合法值）");
+  assert.equal(corpusRoleVerdict("FROZEN-SNAPSHOT").ok, false, "**负对照**：大小写不符 ⇒ 违规");
+  assert.equal(phaseVerdict("dev").ok, true, "dev ⇒ 合法");
+  assert.equal(phaseVerdict("holdout").ok, true, "holdout ⇒ 合法");
+  assert.equal(phaseVerdict("both").ok, false, "**负对照**：未知阶段 ⇒ 违规（不得被当作 dev）");
+  // 形状白名单：新字段是**枚举**，仍满足「基线只含聚合面」
+  assert.deepEqual(checkAggregateOnly(doc({ S: read(0.5, 0, 3.5) }, { corpus_role: "frozen-snapshot", eval_phase: "holdout" }), "baseline"), [], "**正对照**：口径/阶段枚举在白名单里 ⇒ 0 违规");
+  assert.ok(checkAggregateOnly(doc({ S: read(0.5, 0, 3.5) }, { corpus_role: "/d/project/net1" }), "baseline").length > 0, "**负对照**：把路径写进 corpus_role ⇒ 违规（枚举是白名单，不是自由文本）");
+  assert.ok(checkAggregateOnly(doc({ S: read(0.5, 0, 3.5) }, { eval_phase: "2026-09-24" }), "baseline").length > 0, "**负对照**：把日期写进 eval_phase ⇒ 违规");
+  console.log("✔ ⑮ 口径/阶段声明：两个枚举各有正反对照；缺件/简写/大小写/写成路径或日期都红");
+}
+
 console.log("");
 console.log("未在测试中验证（诚实标注）：");
 console.log("  · `--update-baseline` 的**拒绝覆盖**是 CLI 行为，本文件不 spawn 子进程验证（已人工实测一次）；");
 console.log("  · `--determinism-check` 的**双跑逐字比**同样是 CLI 行为，已在真仓库手工跑过（通过），但未做成自动断言；");
+console.log("  · `--update-baseline` **缺 `--corpus-role` 即拒**、`--holdout-only` **切点缺件即拒**（T11 ①，v1.21.28）同为 CLI 行为，未做成子进程断言（已手工实测）；");
 console.log("  · 「聚合数字本身是否泄露语料」**不是形状问题**，本文件只能证明基线**不含语料原文/路径/日期**这一类内容；");
 console.log("  · 语料指纹用「相对路径 + 全文」；**不代表**「语料分布」相同（同样的哈希只在逐字节相同时成立）。");
 console.log("ALL PASS ✅");

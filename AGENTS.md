@@ -67,6 +67,9 @@
 - **语料根（v1.15.83）**：`eval:retrieval:check` 要一个带 `.shadow` 的**工作区根** —— 默认由 `tools/retrieval-eval.ts` 的位置**往上找**（最多三级，取第一个存在的）。
   一个都没有 ⇒ **exit 2，且后面 3 步（分诊棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。
   兜底：`SHADOW_EVAL_ROOT=<工作区> npm run verify`。**取「有 `.shadow` 且语料够大」的那个根，别照抄写死的路径** —— 本机实测（2026-09-25）：`D:\project\dsh1` 的 `.shadow/atoms` 只剩 **87** 条 < 协议常量 `min_corpus_files=100` ⇒ 该门**拒出读数**（不是"通过"，也不是"失败"）；可用的是 `D:\project\net1`（**161** 条）。
+  **T11 ①（v1.21.28）：`verify` 跑的是「调参切片」** —— 协议常量 `holdout_from`（`>= 切点` 的记忆）是**留出集**，默认路径按设计**排除**它 ⇒ **留出集在调参期间不会被读**（结构上排除，不靠自觉）。
+  要出**报告口径**的读数用 `node tools/retrieval-eval.ts --holdout-only --json`（它**不在 `verify` 里**，就是为此）；
+  录基线必须**显式**声明 `--corpus-role <live-workspace|frozen-snapshot>`（基线是「报告口径」的锚点，不声明就无法判断它是不是拿调参语料录的）。
 - **`dist/` 出现在 `git status` 里 ⇒ 说明 ignore 坏了**（v1.20.6 起它应被忽略）。若误 `git add`，
   `.gitattributes` 仍钉 `dist/** text eol=lf`，避免 Windows 下 CRLF 假脏。
 - 源码入口：`index.ts`（Cordis adapter）→ tsc → `dist/index.js`（DSH 加载编译后 JS）。

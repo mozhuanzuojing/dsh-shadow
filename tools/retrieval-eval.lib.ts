@@ -48,6 +48,59 @@ export const datasetHash = (files: { path: string; text: string }[]) => {
 /** 门控指标的方向：`higher` 越大越好，`lower` 越小越好，`exact` 必须逐字相等。 */
 export type MetricDirection = "higher" | "lower" | "exact";
 
+// ── T11 ①：**留出集与调参集的分离**（`v1.21.28`）──────────────────────────────
+//
+// 由来（hl_mem 的代价，量化）：它在**同一份 400-bundle dev** 上反复调参拿到 13/13，
+// 而在**独立 held-out-r5 只有 3/13**（另产生 27 条错误 edge / 3 条反例误 supersede）⇒ 整批撤回。
+// 它的对策里与本仓同形的两条：**dev/held-out 同源即无效** + **报告用那份在调参期间不得被读**。
+//
+// 本仓语料是**活的真实记忆**（每回合都在新增）⇒ 用「时间窗切点」分离：
+// 切点（协议常量 `holdout_from`）**当天及以后**的记忆算**留出集**，之前的算**调参集**。
+// 默认路径 = **调参集**（`dev`）⇒ 留出集在调参期间**根本不会被读**（结构上排除，不靠自觉）。
+
+/** 语料口径：录基线时**必须显式声明**（不许默认成某一个）。 */
+export type CorpusRole = "live-workspace" | "frozen-snapshot";
+export const CORPUS_ROLES: readonly CorpusRole[] = ["live-workspace", "frozen-snapshot"];
+
+/** 评测阶段：`dev` = 调参（**排除**留出切片）；`holdout` = 报告（**只读**留出切片）。 */
+export type EvalPhase = "dev" | "holdout";
+
+/** 切点必须形如 `YYYY-MM-DD`（**判据收一处**：CLI 与标定共用）。 */
+export const isDateCut = (s: unknown): boolean => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/**
+ * 「这条**工作区相对**路径属于留出切片吗」——纯函数。
+ *
+ * 口径：路径里**第一个** `YYYY-MM-DD` 与切点比**字典序**（本仓日期目录/文件名都是 `YYYY-MM-DD`，
+ * 字典序 = 时间序 —— 与 `ADR-0071` 同一处坑的同一口径）；`>= cut` ⇒ 留出。
+ * **没有日期 ⇒ 算调参集**（`false`）：宁可留在 dev（不干净但诚实），也**不能**把它算进留出集
+ * —— 那等于**谎报有一份可辩护的留出集**。
+ */
+export const isHoldoutRel = (rel: unknown, cut: unknown): boolean => {
+  if (!isDateCut(cut)) return false;
+  const m = String(rel ?? "").match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] >= (cut as string) : false;
+};
+
+/** 切片健康：**两侧都必须 ≥1** —— 空的留出集 = 没有留出集（而「全过」会照样绿）。 */
+export const splitVerdict = (devCount: number, holdoutCount: number): { ok: boolean; reason?: string } => {
+  if (devCount >= 1 && holdoutCount >= 1) return { ok: true };
+  return { ok: false, reason: `切片不成立：dev=${devCount} / holdout=${holdoutCount}（两侧都须 ≥1；空的留出集不是留出集）` };
+};
+
+/** 录制基线时的口径声明校验（缺件不静默：**不许**默认成某一个）。 */
+export const corpusRoleVerdict = (role: unknown): { ok: boolean; reason?: string } =>
+  CORPUS_ROLES.includes(role as CorpusRole)
+    ? { ok: true }
+    : { ok: false, reason: `语料口径必须显式声明为 ${CORPUS_ROLES.join(" | ")}：实测 ${JSON.stringify(role)}` };
+
+/** 阶段声明校验（CLI 只允许这两个值；未知值 ⇒ 违规而不是「当作 dev」）。 */
+export const phaseVerdict = (phase: unknown): { ok: boolean; reason?: string } =>
+  phase === "dev" || phase === "holdout"
+    ? { ok: true }
+    : { ok: false, reason: `评测阶段只能是 dev | holdout：实测 ${JSON.stringify(phase)}` };
+
+
 /** 基线里每个策略允许出现的字段（**这也是「基线不得含记忆原文」白名单的一部分**）。 */
 export const RESULT_FIELDS = ["recall_mean", "recall_range", "ndcg_mean", "avg_returned_mean", "noise_offtopic_mean"];
 
@@ -68,6 +121,9 @@ const SCALAR_FIELDS: Record<string, RegExp | "number" | "numbers"> = {
   max_docs: "number",
   external_model_calls: "number",
   seeds: "numbers",
+  // T11 ①（v1.21.28）：**口径声明**（枚举，不含路径/日期/正文 ⇒ 不破坏「只含聚合面」）。
+  corpus_role: /^(live-workspace|frozen-snapshot)$/,
+  eval_phase: /^(dev|holdout)$/,
 };
 
 /**
@@ -138,6 +194,12 @@ export interface EvalProtocol {
   readonly required_external_model_calls: number;
   /** **V7 语料健康门**的下限（协议常量，不是代码硬编码的可调项）。 */
   readonly min_corpus_files: number;
+  /**
+   * **T11 ① 的留出切点**（协议常量，`v1.21.28`）：`>= 切点` 的记忆算**留出集**。
+   * 可选字段：`checkProtocol` 会要求它**存在且合法**（缺件不静默），这里给成可选只是为了让
+   * 既有夹具不必一次性全改（判据仍在 `checkProtocol` 里，不在类型里）。
+   */
+  readonly holdout_from?: string;
   readonly k: number;
   readonly seeds: readonly number[];
   readonly max_docs: number;
@@ -167,6 +229,16 @@ export const checkProtocol = (protocol: EvalProtocol) => {
   const minFiles = (protocol as unknown as Record<string, unknown>).min_corpus_files;
   if (typeof minFiles !== "number" || !Number.isFinite(minFiles) || minFiles <= 0) {
     violations.push({ rule: "语料下限必须声明", why: "缺 min_corpus_files ⇒ PARTIAL 语料无法被识别（V7）", where: "protocol.min_corpus_files" });
+  }
+  // **T11 ①**：留出切点必须是协议里的常量（改切点＝改数据、被 diff 审阅）——
+  // 切点是「预注册」的一部分：**先定切点，再看读数**。缺件 ⇒ 违规（不是「没有留出集也放行」）。
+  const cut = (protocol as unknown as Record<string, unknown>).holdout_from;
+  if (!isDateCut(cut)) {
+    violations.push({
+      rule: "留出切点必须声明",
+      why: `缺 holdout_from（或不是 YYYY-MM-DD）⇒ 「调参集 / 留出集」无从分离（T11 ①）`,
+      where: "protocol.holdout_from",
+    });
   }
   return violations;
 };

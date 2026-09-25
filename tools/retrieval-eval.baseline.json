@@ -1,59 +1,61 @@
 {
   "baseline_tag": "local-dev-v1",
   "case_count": 210,
+  "corpus_role": "live-workspace",
   "dataset_hash_algorithm": "sha256-utf8-lf-v1",
-  "dataset_sha256": "1e770df7f36e4a053584698d58b13780364d97dd8e7692655b40cb7b2a8b7e8a",
-  "docs": 1500,
+  "dataset_sha256": "11d2a85b31668771f3207b8f1220a67080d37c940cd94f6262a5c1a5f9b2eafd",
+  "docs": 572,
+  "eval_phase": "dev",
   "external_model_calls": 0,
   "k": 5,
   "max_docs": 1500,
   "metrics": {
     "A 单库·词·有阈值": {
       "avg_returned_mean": 3.5714285714285716,
-      "ndcg_mean": 0.14783066086171606,
+      "ndcg_mean": 0.24519887367144286,
       "noise_offtopic_mean": 0,
-      "recall_mean": 0.2111111111111111,
-      "recall_range": 0.053333333333333316
+      "recall_mean": 0.29777777777777775,
+      "recall_range": 0.06
     },
     "B 单库·词·无阈值": {
       "avg_returned_mean": 5,
-      "ndcg_mean": 0.14783066086171606,
+      "ndcg_mean": 0.24519887367144286,
       "noise_offtopic_mean": 1,
-      "recall_mean": 0.2111111111111111,
-      "recall_range": 0.053333333333333316
+      "recall_mean": 0.29777777777777775,
+      "recall_range": 0.06
     },
     "C 扇出2库·无阈值+RRF": {
       "avg_returned_mean": 5,
-      "ndcg_mean": 0.14091651304846375,
+      "ndcg_mean": 0.23283051347517003,
       "noise_offtopic_mean": 1,
-      "recall_mean": 0.20222222222222222,
-      "recall_range": 0.06
+      "recall_mean": 0.28444444444444444,
+      "recall_range": 0.026666666666666672
     },
     "D 路由·有阈值+弃权": {
       "avg_returned_mean": 3.5714285714285716,
-      "ndcg_mean": 0.14783066086171606,
+      "ndcg_mean": 0.24519887367144286,
       "noise_offtopic_mean": 0,
-      "recall_mean": 0.2111111111111111,
-      "recall_range": 0.053333333333333316
+      "recall_mean": 0.29777777777777775,
+      "recall_range": 0.06
     },
     "E 扇出2库·有阈值+RRF": {
       "avg_returned_mean": 5,
-      "ndcg_mean": 0.14091651304846375,
+      "ndcg_mean": 0.23283051347517003,
       "noise_offtopic_mean": 1,
-      "recall_mean": 0.20222222222222222,
-      "recall_range": 0.06
+      "recall_mean": 0.28444444444444444,
+      "recall_range": 0.026666666666666672
     },
     "F 单库·二元组·有阈值": {
       "avg_returned_mean": 5,
-      "ndcg_mean": 0.12007519265289113,
+      "ndcg_mean": 0.2034268769953107,
       "noise_offtopic_mean": 1,
-      "recall_mean": 0.17333333333333334,
-      "recall_range": 0.04000000000000001
+      "recall_mean": 0.26,
+      "recall_range": 0.040000000000000036
     }
   },
   "off_topic_count": 60,
   "on_topic_count": 150,
-  "protocol_sha256": "62a3a412ba573e84ede6b2c456ebb013a540559d182374402596f71f90666e24",
+  "protocol_sha256": "d8e0b39e08ca90e364ff2ae3fd90b0190d2024af7d9d2a99c76b13f04951e590",
   "protocol_version": "retrieval-eval-v1",
   "provenance": "local_dev_aggregate_only",
   "seeds": [
@@ -61,5 +63,5 @@
     2,
     3
   ],
-  "source_files": 1585
+  "source_files": 572
 }

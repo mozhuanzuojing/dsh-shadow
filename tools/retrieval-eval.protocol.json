@@ -14,6 +14,7 @@
   },
   "required_external_model_calls": 0,
   "min_corpus_files": 100,
+  "holdout_from": "2026-09-24",
   "k": 5,
   "seeds": [1, 2, 3],
   "max_docs": 1500
