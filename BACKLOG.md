@@ -252,7 +252,7 @@
   （`projection-store.ts:85` 的 store 工厂在生产被调用），而 **D1 说「未接线」仍然成立**
   （无生产**实例化点**）。两条不矛盾：一条说接口可达、一条说没人实例化 ⇒ **D1 维持原判**。
 
-### 🟡 T2. 审计 B 类线索逐条分诊 —— **首批已分诊（2026-09-25）**：实测 **93 条**（台账原写 85 ⇒ **已过期**，工具读数随语料漂移，已更正标题）
+### ✅ T2. 审计 B 类线索逐条分诊 —— **已完成（2026-09-25，`v1.21.22`）**：实测 **93 条全部定性**（台账原写 85 已更正）；**0 条确证真断线**，1 处候选已另立 **`T25`**
 
 - **判据（本仓纪律，写在工具输出里）**：B 类问「该值是否真无写入者」，但**可能来自外部数据**
   （宿主载荷 / 读进来的 JSON / 审批返回值）—— 此时分支**可达**，**不得凭静态分析定罪**。
@@ -285,6 +285,20 @@
     `persistence` / `stance` / `subject` 共 **157** 个 `.ts`，**且只认 `= "lit"` / `: "lit"` 两种形态** ⇒
     **三元 / `return` / 数组里的字面量生产者会被漏判**（例：`evidence/filesystem.ts:55` 的 `return … ? "missing" : "undecidable"`）。
     ⇒ **「无简单写侧」≠「无生产者」**；B3 那 7 条必须逐条读表达式。
+- **⑤ 结项（2026-09-25，`v1.21.22`）：`④` 全部定性完毕 —— 26 条里 `0` 条确证真断线**。第二批取证（`return` / 三元 / 数组 / 映射表都算生产者）：
+  - **有生产者（工具的**形态**盲区）**：`expired`（`validate.ts:30 outcome = expiredByAge(h) ? "expired" : …`）·
+    `revoked`（`lifecycle-guard.ts:9 if (!notRevoked(ctx)) return "revoked";`）·
+    `metadata`（`episode.ts:122 return "metadata";`）· `L2`（`rank.ts:141 return "L2";`）·
+    `mem`（`util.ts:38 return (t || "mem")…`）· `exists`（`filesystem.ts:40/44 return "exists";`）·
+    `citation` / `conclusion`（`resource.ts:36-37` 的**别名映射表**）· `reject`（`proposal.ts:87` 的 **ACTIONS 数组**）·
+    `known-at-time`（`observer/core.ts:16` 三元赋值）。
+  - **外部来源 ⇒ 分支可达**：`aborted`（**模型流** `chunk.reason?.kind`，见 `llm.ts:68`）·
+    `historical`（`realityAnchor = explicitAnchor` —— 传播**入参**）· 另有前批的 `directory` / `clear`。
+  - **已判定的死支**：`session`（`ADR-0063` 实测「永不可达」，工具重复报了它）。
+  - **⚠ 唯一候选真断线 → 已另立条目**：`status=compared|explored` —— `SimulationStatus` **只有类型与读取，找不到生产者**
+    ⇒ 升 **`T25`**（与台账 §7.3「`simulation/` 本轮未修」**吻合**，互为旁证）。
+- **本条的净结论**：B 类 93 条**全部定性**，**没有一条确证的产品断线**；`audit-wiring` 的 B 类精度问题集中在
+  **「按 `字段=字面量` 单行窗口找写入者」** 这个判据形态上 —— 生产者只要写成 `return` / 三元 / 数组 / 映射表 / 在别的文件，它就看不见。
 - **完成判据**：④ 的 26 条逐条给出「外部数据 / 跨文件常量写入 / **真断线**」三选一；
   **若出现真断线，另立条目**（那是缺陷修复，不是本条的分诊收口）。
 - **复现**：`npm run audit:wiring`（键清单按读点分组，见本条的读法）。
@@ -1165,6 +1179,18 @@
   **当时取证的放 `../.docs/fix/<日期>/`**」—— `_research/` 这两处都不是。
 - **完成判据**：三选一 —— ① 有复现价值的迁 `tools/`（并配标定）；② 纯取证的迁 `../.docs/fix/<日期>/`；
   ③ 维持现状，并在 `.gitignore` 里**显式**写明为什么留在仓内（当前是靠「未跟踪」隐式成立）。
+
+---
+
+### T25. `epistemic/simulation/` 的 `SimulationStatus`（`compared` / `explored`）**找不到生产者**
+
+- **由来**：`T2` ④ 的逐条取证里，`status=compared` / `status=explored` 是**唯一**两条「无生产者且非外部来源」的键。
+- **实测**：`epistemic/simulation/types/outcome.ts:3` 只有类型 `SimulationStatus = "hypothetical" | "explored" | "compared"`；
+  `reality-boundary.ts:5` 的 `outcomeIsHypothetical` **读** `o?.status`；**全目录搜不到写侧**。
+- **旁证**：台账 **§7.3** 已把 `simulation/` 列为「本轮**未修**」这一批 —— 与本条吻合。
+- **完成判据**：三选一 —— ① 判定为「**未接线的泳道**」并如实标注（若确实没有消费者，按 `ADR-0087` 应评估删除）；
+  ② 判定为「状态由**外部/规划方**提供」⇒ 补一条与 `adr/0108` 同型的来源说明；③ 若属**真缺陷**（该写的地方没写）⇒ 修复并加断言。
+- **注意**：不要凭静态分析直接定罪 —— 本仓纪律（B 类可能来自外部数据）。
 
 ---
 
