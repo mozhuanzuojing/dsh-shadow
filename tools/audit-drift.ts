@@ -16,7 +16,7 @@ import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findFreshnessAsksProcess, findPredicateExpressedTwice, isProductModulePath } from "./audit-drift.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
-import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+import { classifyCorpus, shrinkConfirmVerdict, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
 import { walkTree } from "./audit-corpus.lib.ts";
 
@@ -126,15 +126,50 @@ if (wantsRatchet) {
     fingerprint: sha256Hex(prod.map((f: { file: string }) => f.file).sort().join("\n")),
   };
   const health = classifyCorpus("audit-drift", CORPUS, all.corpus?.drift, missing);
+  // 「已确认的收缩」：与 `audit-wiring` **同一份判据**（`shrinkConfirmVerdict`）；只放开文件面健康时的那一种 PARTIAL。
+  const CONFIRM_SHRINK = (() => {
+    const i = process.argv.indexOf("--confirm-shrink");
+    return i >= 0 ? process.argv[i + 1] : undefined;
+  })();
+  const prevCorpus = all.corpus?.drift;
 
   if (isUpdate) {
+    let confirmed: string | undefined;
     if (health.health === "EMPTY" || health.health === "PARTIAL") {
+      const verdict = shrinkConfirmVerdict({
+        health: health.health,
+        missingSentinels: missing,
+        observedFiles: CORPUS.files,
+        baselineFiles: prevCorpus?.files,
+        reason: CONFIRM_SHRINK,
+      });
+      if (!verdict.ok) {
+        for (const l of health.lines) console.log(l);
+        console.log(`  ⇒ 拒绝 \`--update-ratchet\`：${verdict.reason}`);
+        process.exit(2);
+      }
+      confirmed = String(CONFIRM_SHRINK).trim();
       for (const l of health.lines) console.log(l);
-      console.log("  ⇒ 拒绝 `--update-ratchet`：先确认是「真修好了」还是「工具坏了」。");
-      process.exit(2);
+      console.log(`  ⚠ **已确认的收缩**：${verdict.reason}`);
+      console.log(`     理由（写进基线的 \`confirmed_shrinks\`）：${confirmed}`);
     }
     // 语料段**按消费者分开**（见 `audit-wiring.ts` 同处注释：两工具量的是不同语料，共享键会互相覆盖）。
-    all.corpus = { ...(all.corpus ?? {}), drift: CORPUS };
+    const driftCorpus: CorpusObservation & { confirmed_shrinks?: unknown[] } = { ...CORPUS };
+    if (confirmed) {
+      const prev = Array.isArray((prevCorpus as { confirmed_shrinks?: unknown[] })?.confirmed_shrinks)
+        ? (prevCorpus as { confirmed_shrinks: unknown[] }).confirmed_shrinks
+        : [];
+      driftCorpus.confirmed_shrinks = [
+        ...prev,
+        {
+          at: new Date().toISOString(),
+          reason: confirmed,
+          from: prevCorpus ? { files: prevCorpus.files, findingsA: prevCorpus.findingsA, findingsB: prevCorpus.findingsB } : null,
+          to: { files: CORPUS.files, findingsA: CORPUS.findingsA, findingsB: CORPUS.findingsB },
+        },
+      ];
+    }
+    all.corpus = { ...(all.corpus ?? {}), drift: driftCorpus };
     all.drift = DRIFT_COUNTS;
     writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
     console.log(`已写入棘轮基线（drift 段 + corpus 段）：${RATCHET_BASELINE}`);

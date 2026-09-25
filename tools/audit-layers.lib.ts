@@ -44,20 +44,19 @@ export const PURE_MODULES = [
   "core/types.ts",
   "core/util.ts",
   "core/polarity.ts",
-  "decision/types.ts",
   "security/scrub.ts",
 ];
 
 /**
  * 方向禁令：`from` 层不得 import `to` 层。
  * 每条的 `why` 必须点名它的**判据来源**，否则后来者无法判断该改代码还是该改表。
+ *
+ * ⚠ **`decision` 层的三条禁令已随该层一起删除**（`T26`，`v1.21.33`，用户决定「删掉没有消费者的原语」）：
+ * 层不存在还留着禁令 = **一条永不命中的死规则**（本仓最忌的「门绿着、判别力没了」）。
  */
 export const DIRECTION_RULES = [
   { from: "core", to: "query", why: "读路径不得被 core 依赖（ADR-0003：派生件不是 source）" },
   { from: "core", to: "tools", why: "CLI 是外层" },
-  { from: "core", to: "decision", why: "决策原语是**派生层**，不得被 core 依赖（ADR-0096 §7；同 core↛query 的 ADR-0003 理由）" },
-  { from: "decision", to: "query", why: "原语不得依赖读路径（ADR-0096 §7：读侧消费原语，反向不许）" },
-  { from: "decision", to: "tools", why: "CLI 是外层" },
   { from: "persistence", to: "query", why: "写侧不得依赖读侧" },
   { from: "query", to: "tools", why: "CLI 是外层" },
 ];

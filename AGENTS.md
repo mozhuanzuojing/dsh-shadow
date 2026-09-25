@@ -86,6 +86,13 @@
   在真临时目录上驱动**真 provider**，报 cold rebuild / startup / incremental 三个数字，并起两个子进程做同机并发探针。
   **刻意不进 `verify`**（要造 8800 个文件）；改了 `core/candidate/sqlite.ts` 或索引新鲜度逻辑之后重跑它。
   ⚠ 并发读数**时序相关**（同一份代码两次运行可能一次撞锁一次不撞）⇒ **别拿单次运行当结论**（见 `adr/0095` 补记）。
+- **棘轮基线的录制与「已确认的收缩」**（`v1.21.33`）：`node tools/audit-wiring.ts . --update-ratchet`（`drift` 侧同理）
+  会先过 **V7 语料健康门**：`files < 基线×0.9` / `dirs` 骤降 / **线索跌 > 20%** 任一条 ⇒ `PARTIAL` ⇒
+  **拒绝录基线**（防「工具坏了 → 线索骤降 → 被判成修好了 → 写进基线」这条自我固化路径）。
+  若那份骤降**确实是人删出来的**（例：`T26` 删掉零消费者的 `decision/` 整层，A 段线索 33 → 25），
+  用 **`--confirm-shrink "<一句人话理由>"`** 显式确认：判据在 `tools/corpus-health.lib.ts` 的 `shrinkConfirmVerdict`
+  （**只**放开「文件面健康 + 哨兵齐 + 只有线索面骤降」这一种），理由与前后数字写进基线的 `confirmed_shrinks`。
+  ⚠ **它不是万能开关**：`EMPTY` / 哨兵缺失 / **文件面**骤降一律拒绝确认；**编不出理由就说明还没查清**。
 
 ## 脚本一律 TypeScript
 

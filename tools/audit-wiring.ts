@@ -18,7 +18,7 @@ import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectComparisons, hasProducer, findOrphanComparisons, isCallerCorpusPath, countCallSites, importedBy, exportsOf, pairedExport, bareMentions, maskStrings, bucketOf, isTestPath } from "./audit-wiring.lib.ts";
 import { ratchetCounts, serializeBaselines, type Counts } from "./audit-ratchet.lib.ts";
-import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+import { classifyCorpus, shrinkConfirmVerdict, type CorpusObservation } from "./corpus-health.lib.ts";
 import { sha256Hex } from "./retrieval-eval.lib.ts";
 import { walkTree } from "./audit-corpus.lib.ts";
 
@@ -182,20 +182,56 @@ if (wantsRatchet) {
     fingerprint: sha256Hex(allTs.map(rel).sort().join("\n")),
   };
   const health = classifyCorpus("audit-wiring", CORPUS, all.corpus?.wiring, missing);
+  // 「已确认的收缩」：**只有**「文件面健康 + 哨兵齐 + 只有线索面骤降」这一种 PARTIAL 可被显式确认（见 lib 注释）。
+  const CONFIRM_SHRINK = (() => {
+    const i = process.argv.indexOf("--confirm-shrink");
+    return i >= 0 ? process.argv[i + 1] : undefined;
+  })();
+  const prevCorpus = all.corpus?.wiring;
 
   if (isUpdate) {
     // 只有 EMPTY / PARTIAL 才拒绝录制（**UNKNOWN 是首次录基线的正常状态**）。
     // 这条正是 V7 的关键：**工具坏了导致骤降时，不许把坏读数写进基线**。
+    let confirmed: string | undefined;
     if (health.health === "EMPTY" || health.health === "PARTIAL") {
+      const verdict = shrinkConfirmVerdict({
+        health: health.health,
+        missingSentinels: missing,
+        observedFiles: CORPUS.files,
+        baselineFiles: prevCorpus?.files,
+        reason: CONFIRM_SHRINK,
+      });
+      if (!verdict.ok) {
+        console.log("");
+        for (const l of health.lines) console.log(l);
+        console.log(`  ⇒ 拒绝 \`--update-ratchet\`：${verdict.reason}`);
+        process.exit(2);
+      }
+      confirmed = String(CONFIRM_SHRINK).trim();
       console.log("");
       for (const l of health.lines) console.log(l);
-      console.log("  ⇒ 拒绝 `--update-ratchet`：先确认是「真修好了」还是「工具坏了」。");
-      process.exit(2);
+      console.log(`  ⚠ **已确认的收缩**：${verdict.reason}`);
+      console.log(`     理由（写进基线的 \`confirmed_shrinks\`）：${confirmed}`);
     }
     // ⚠ **语料段按消费者分开存**（V7 首次运行的实测教训）：两个工具量的是**不同的语料**
     //（wiring 扫全仓 778 文件含 dist/；drift 只扫生产面 210 文件）⇒ 共用一个 `corpus` 键会互相覆盖，
     // 于是 drift 录基线时会被 wiring 的数字判成「骤降 76%」。**共享键 + 不同口径 = 必炸**。
-    all.corpus = { ...(all.corpus ?? {}), wiring: CORPUS };
+    const wiringCorpus: CorpusObservation & { confirmed_shrinks?: unknown[] } = { ...CORPUS };
+    if (confirmed) {
+      const prev = Array.isArray((prevCorpus as { confirmed_shrinks?: unknown[] })?.confirmed_shrinks)
+        ? (prevCorpus as { confirmed_shrinks: unknown[] }).confirmed_shrinks
+        : [];
+      wiringCorpus.confirmed_shrinks = [
+        ...prev,
+        {
+          at: new Date().toISOString(),
+          reason: confirmed,
+          from: prevCorpus ? { files: prevCorpus.files, findingsA: prevCorpus.findingsA, findingsB: prevCorpus.findingsB } : null,
+          to: { files: CORPUS.files, findingsA: CORPUS.findingsA, findingsB: CORPUS.findingsB },
+        },
+      ];
+    }
+    all.corpus = { ...(all.corpus ?? {}), wiring: wiringCorpus };
     all.wiring = WIRING_COUNTS;
     writeFileSync(RATCHET_BASELINE, serializeBaselines(all), "utf8");
     console.log("");

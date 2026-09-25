@@ -5,7 +5,7 @@
 // 判松了（PARTIAL 放行）⇒ 工具坏了会被写进基线（假绿自我固化）；
 // 判紧了（正常波动当骤降）⇒ 人会习惯性 `--update-ratchet --force`，门就变成装饰品。故每一档都要有正反例。
 import assert from "node:assert/strict";
-import { classifyCorpus, type CorpusObservation } from "./corpus-health.lib.ts";
+import { classifyCorpus, shrinkConfirmVerdict, type CorpusObservation } from "./corpus-health.lib.ts";
 
 const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
   files: 210,
@@ -123,6 +123,29 @@ const obs = (o: Partial<CorpusObservation> = {}): CorpusObservation => ({
   const edge = classifyCorpus("t", obs({ files: 189, dirs: 168 }), obs({ dirs: 400 }), []);
   assert.equal(edge.health, "NORMAL", "189/210 = 0.9 恰在容许带下限（含）⇒ 仍算健康");
   console.log("✔ ⑪ 目录数骤降：文件面健康 ⇒ NORMAL + 印理由；文件面也掉 ⇒ PARTIAL（真截断仍拦得住）");
+}
+
+// ⑫ 「已确认的收缩」（`v1.21.33`）：只放开「文件面健康 + 哨兵齐 + 只有线索面骤降 + 有理由」这一种 PARTIAL
+{
+  const base = {
+    health: "PARTIAL" as const,
+    missingSentinels: [] as string[],
+    observedFiles: 956,
+    baselineFiles: 963,
+    reason: "T26：按用户决定删掉零消费者的 decision/ 整层",
+  };
+  assert.equal(shrinkConfirmVerdict(base).ok, true, "正例：文件面健康 + 哨兵齐 + 理由非空 ⇒ 允许记为已确认");
+  // **每一条负对照都必须红**（判松了 = 假绿自我固化）：
+  assert.equal(shrinkConfirmVerdict({ ...base, reason: undefined }).ok, false, "缺理由 ⇒ 拒绝（确认必须留痕）");
+  assert.equal(shrinkConfirmVerdict({ ...base, reason: "   " }).ok, false, "空白理由 ⇒ 拒绝（等同没写）");
+  assert.equal(shrinkConfirmVerdict({ ...base, health: "EMPTY" }).ok, false, "空语料 ⇒ 不可确认（那是扫不到东西）");
+  assert.equal(shrinkConfirmVerdict({ ...base, health: "UNKNOWN" }).ok, false, "UNKNOWN ⇒ 不可确认");
+  assert.equal(shrinkConfirmVerdict({ ...base, health: "NORMAL" }).ok, false, "NORMAL ⇒ 不需要确认（不许当万能开关）");
+  assert.equal(shrinkConfirmVerdict({ ...base, missingSentinels: ["index.ts"] }).ok, false, "哨兵缺失 ⇒ 不可确认（扫描范围不对）");
+  assert.equal(shrinkConfirmVerdict({ ...base, observedFiles: 800 }).ok, false, "文件面也骤降 ⇒ 不可确认（真截断的形状）");
+  // 边界：文件数恰在 90% ⇒ 允许（与 classifyCorpus 的 minFileRatio 同口径）
+  assert.equal(shrinkConfirmVerdict({ ...base, observedFiles: Math.floor(963 * 0.9) }).ok, true, "文件数恰在 90% 下限 ⇒ 允许（同口径）");
+  console.log("✔ ⑫ 已确认的收缩：只放开「文件面健康 + 哨兵齐 + 只有线索骤降 + 有理由」；空语料/UNKNOWN/哨兵缺/文件面骤降/无理由一律拒绝");
 }
 
 console.log("");

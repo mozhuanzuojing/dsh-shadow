@@ -162,3 +162,39 @@ export const classifyCorpus = (
   }
   return { health: "NORMAL", ok: true, exitCode: 0, lines };
 };
+
+/**
+ * **「已确认的收缩」**（`v1.21.33` 立；由来见下）—— 这道闸**缺的那一半**。
+ *
+ * **由来（实测）**：`T26` 按用户决定删掉 `decision/` 整层（零消费者的原语）之后，A 段线索 33 → 25（跌 24% > 20%）
+ * ⇒ 判 `PARTIAL` ⇒ **拒绝 `--update-ratchet`**。而闸自己的提示是「**先确认**是『真修好了』还是『工具坏了』」——
+ * **却没有留下「确认」这个动作的位置**（同型问题本仓早记过一次：`PARTIAL` 拒绝录基线 ⇒ 把口径修正也堵死了）。
+ * ⇒ 补上它，但只补**窄**的那一条：**只放开「文件面健康 + 哨兵齐 + 只有线索面骤降」这一种 PARTIAL**，
+ * 且**必须带一句人话理由**（理由写进基线，见 `audit-wiring.ts` / `audit-drift.ts` 的 `confirmed_shrinks`）。
+ *
+ * **刻意不放开**（这些形状一律拒绝，`--confirm-shrink` 也救不了）：
+ * 空语料（`EMPTY`）· 哨兵文件缺失（扫描范围不对）· **文件面**也骤降（真截断的形状）。
+ * ⇒ 它**不是**「确认一下就全过」的万能开关；它只回答一句话：**「这批线索的消失，是有人删了东西，不是工具坏了」**。
+ */
+export const shrinkConfirmVerdict = (input: {
+  health: CorpusHealth;
+  missingSentinels: readonly string[];
+  observedFiles: number;
+  baselineFiles: number | undefined;
+  reason: string | undefined;
+}): { ok: boolean; reason: string } => {
+  const why = String(input.reason ?? "").trim();
+  if (!why) return { ok: false, reason: "缺理由：`--confirm-shrink` 必须带一句人话（这句话会写进基线留痕）" };
+  if (input.health === "EMPTY" || input.health === "UNKNOWN") {
+    return { ok: false, reason: `语料判为 ${input.health} ⇒ 不可确认（那是「扫不到东西」，不是「删了东西」）` };
+  }
+  if (input.missingSentinels.length > 0) {
+    return { ok: false, reason: `哨兵文件缺失（${input.missingSentinels.join(",")}）⇒ 扫描范围不对，不可确认` };
+  }
+  const base = input.baselineFiles;
+  if (base !== undefined && base > 0 && input.observedFiles < Math.floor(base * 0.9)) {
+    return { ok: false, reason: `文件面也骤降（${input.observedFiles} < 基线 ${base} 的 90%）⇒ 不可确认（真截断的形状）` };
+  }
+  if (input.health !== "PARTIAL") return { ok: false, reason: `语料判为 ${input.health} ⇒ 不需要确认` };
+  return { ok: true, reason: "文件面健康、哨兵齐、只有线索面骤降 ⇒ 允许记为「已确认的收缩」（理由见基线）" };
+};

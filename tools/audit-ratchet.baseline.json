@@ -13,11 +13,27 @@
     "findingsB": 103,
     "fingerprint": "6caf7889e734ccf92024795f9259c3dbc6b377f96a285d33a28fd3787aaff348",
     "wiring": {
-      "dirs": 221,
-      "files": 963,
-      "findingsA": 33,
+      "confirmed_shrinks": [
+        {
+          "at": "2026-09-25T09:54:36.920Z",
+          "from": {
+            "files": 963,
+            "findingsA": 33,
+            "findingsB": 102
+          },
+          "reason": "T26: 用户 2026-09-25 决定删掉 decision/ 整层（零消费者的原语）——A 段线索 33→25 是删出来的，不是工具坏了",
+          "to": {
+            "files": 954,
+            "findingsA": 25,
+            "findingsB": 102
+          }
+        }
+      ],
+      "dirs": 219,
+      "files": 954,
+      "findingsA": 25,
       "findingsB": 102,
-      "fingerprint": "243d840307721fb20c3f87e41d5ebb5d4037cc59e74d8e2ec438367a9cca99b2"
+      "fingerprint": "b291041520ca419c23be0e4a2be7a5900b8ccfb1dc269bd47ad39ad97aa87d26"
     }
   },
   "drift": {
@@ -25,11 +41,11 @@
     "drift_sites": 23
   },
   "wiring": {
-    "a1": 26,
+    "a1": 18,
     "a2a": 3,
     "a2b": 0,
     "a3": 4,
-    "a_total": 33,
+    "a_total": 25,
     "b_keys": 102
   }
 }

@@ -3,71 +3,61 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.21.32] `T17-C` 补上**跨平台**那半（Linux 读数）+ 默认值的**理由换成具体缺口**
+## [v1.21.33] `T26` 执行：**删掉零消费者的 `decision/` 整层** + 补上棘轮闸**缺的那一半**（`--confirm-shrink`）
 
-**产品代码零改动；证据面 + 台账面。** 上一版（`v1.21.30`）把「跨平台锁未测」列为不改默认的理由之一 ——
-本版把那半**测了**，于是**理由必须重写**：不再是「没测」，而是**测出了一个具体缺口**。
+**用户裁定（2026-09-25）**：`T26` 的选项不是「接线 / 维持现状 / 删除」里的 ③，而是**更强的那个 —— 直接删掉**。
+理由按用户一贯口径：**没使用者的机制要么用要么删**。
 
-### 1. 怎么跑起来的（先记障碍，免得下次重试）
+### 1. 删之前先查锚点（`D1` 的教训）+ 实测「零消费者」
 
-- 按指示先走 `wslc`（WSL 容器）路线：**拉不到任何镜像** ——
-  `Get "https://registry-1.docker.io/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded)`；
-  换国内镜像 `docker.m.daocloud.io` / `docker.1ms.run` 两次都在 2 分钟以上**零输出**（挂住）。
-- 查过两条「本该能配代理」的路，**都不通**：`wslc` 的设置文件（`%LOCALAPPDATA%\wslc\settings.yaml`）**只有 session（CPU/内存/磁盘/绑定地址）与凭据存储**，
-  **没有 registry/代理项**；给 `wslc pull` 进程设 `HTTPS_PROXY=127.0.0.1:9910` 也**无效**（拉取请求由**容器引擎**发出，不是 CLI 进程）。
-- ⇒ 改用**同一台机的 WSL2 发行版**：`debian-u8-1`（Debian 13 trixie · 内核 `6.18.40.1-microsoft-standard-WSL2`），
-  经宿主代理（WSL 网关 `172.30.176.1:9910`；实测 `curl` / `python urllib` 都是 **200**）下载**官方 Linux 版 node 26.8.2**，
-  再把 `dist/` 与探针拷到 ext4 的 `/tmp` 跑（不直接跑 `/mnt/d`，避开 9p 干扰）。`node:sqlite` 可用：`DatabaseSync = function`。
-- **可重放脚本**（仓外证据，按约定落 `../.docs/fix/2026-09-25/`）：
-  `t17c-env.sh`（环境 + 代理连通性）· `t17c-setup.sh`（下载 Linux node + 拷 `dist/`/探针）· `t17c-run.sh <N>`（跑探针）。
+- `grep` 全部**产品面**（`index.ts` / `core/` / `query/` / `persistence/` / `selfhood/` / `subject/` / `epistemic/` / `stance/` / …）
+  ⇒ **零处** import `decision/`；该层只被自己的测试与工具扫到。连 `choose()` 也只有测试调用（10 处），
+  与 `adr/0096` §12 记的「唯一引擎只报 `null`」互相印证。
+- 找到**两处会变成死引用的锚点**（这一步才是「查锚点」的实际价值）：
+  ① `tools/audit-layers.lib.ts` 的 `PURE_MODULES` 里有 `decision/types.ts`（白名单对**不存在的路径必须报腐化** ⇒ 留着天天红）；
+  ② 同文件 `DIRECTION_RULES` 里 **3 条 `decision` 层禁令**（层没了还留禁令 = **永不命中的死规则**，正是本仓最忌的「门绿着、判别力没了」）。
 
-### 2. 三个数字：Windows vs Linux（合成语料 8800 条）
+### 2. 删了什么 + 代价（如实记，不缩小）
 
-| 场景 | Windows | **Linux（WSL2 Debian 13 · node 26.8.2）** |
-|---|---|---|
-| cold rebuild（8800 `.md` → SQLite） | 512.6 ms | **251.8 ms** |
-| startup（索引已存在） | **68.9 ms** | 86.2 ms |
-| incremental（+1 新、原地改 1） | 302.5 ms | **136.4 ms** |
+- 删除 `decision/` 全部 6 个文件（`choice.ts` / `engine.ts` / `guard.ts` / `heuristic.ts` / `lineage.ts` / `types.ts`）
+  + 只测它的 `test/decision-primitive.test.ts`（236 行）；同步清掉上面那两处引用。
+- **代价**：`T19` 的证据指针（`test/decision-primitive.test.ts` ⑦「`EngineDeclaration` 字段集恰好四个」）**随之失效**
+  —— 结论仍成立，但**重放路径消失**（已在 `BACKLOG` 就地补注）；`adr/0096` §12 的论证失去可跑锚点（协议仍在、实现没了）。
+  `MATERIALS.md` 的「已吸收 `choice` 原语…」是**历史台账**，不改。
+- `adr/0096` 追加**补记**（记录删除决定、实测前提、影响面、代价、以及「为什么不选维持现状」）。
 
-索引体积两侧一致（**6884 KB**）。⇒ 冷建**不到一秒**、启动**几十毫秒**，两侧都在可接受量级内（Linux 冷建/增量更快、启动略慢）。
+### 3. 顺带发现并补上：棘轮闸**缺的那一半**（`--confirm-shrink`）
 
-### 3. 二进程并发：**四次运行，结论不同，都照记**
+- **现象**：删完之后 `audit:ratchet` 的 **V7 语料健康门**判 `PARTIAL`（A 段线索 **33 → 25**，跌 24% > 20% 容许带）
+  ⇒ **拒绝 `--update-ratchet`**。而闸自己的提示是「**先确认**是『真修好了』还是『工具坏了』」——
+  **却没有留下「确认」这个动作的位置**（同型问题本仓早记过一次：`PARTIAL` 拒绝录基线 ⇒ 把口径修正也堵死了）。
+- **补法（刻意窄）**：新增 `--confirm-shrink "<一句人话理由>"`，判据在 `tools/corpus-health.lib.ts` 的 `shrinkConfirmVerdict`，
+  **只**放开「**文件面健康 + 哨兵齐 + 只有线索面骤降**」这一种 `PARTIAL`；理由与前后数字写进基线的 `confirmed_shrinks` 段
+  （**确认本身也留痕**，不是静默放行）。
+- **它不是万能开关**：`EMPTY` / `UNKNOWN` / **哨兵缺失** / **文件面骤降** 一律拒绝；**理由为空或空白也拒绝**
+  —— 正反对照进了 `tools/corpus-health.selftest.ts` 的 **⑫**（每条负对照都必须红）。
+- 本次实际记录：`{from: {files 963 → 954, findingsA 33 → 25}, reason: "T26: 用户 2026-09-25 决定删掉 decision/ 整层…"}`；
+  wiring 段新基线 `a1=18 / a2a=3 / a2b=0 / a3=4 / a_total=25 / b_keys=102`（drift 侧 `NORMAL`、逐桶相等）。
 
-| 运行 | Windows reader | Windows writer | Linux reader | Linux writer |
-|---|---|---|---|---|
-| 合成 **300** 条 | 12/12 `ok` | **`query-error`** | **`query-error`** | **`query-error`** |
-| 合成 **8800** 条 | 12/12 `ok` | 12/12 `ok` | 12/12 `ok` | 12/12 `ok` |
+### 4. 验证
 
-⇒ ① 撞锁**会发生且时序相关**（同代码两次运行可能一次撞一次不撞）；小语料更易撞、大语料稳态不撞；
-② **跨平台确实不同**（300 条那次 Linux 两个进程都撞、Windows 只有 writer 撞）；
-③ 撞锁一律表达成 `query-error`（本次回退 fs + **可见**），**不崩、不静默空集**（`error ≠ empty` 成立）；
-④ **不能靠单次运行断言**。
+- `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` → **exit 0**（`run-tests` **69/69**：删掉那个测试文件后 70 → 69）。
+- `node tools/audit-wiring.ts . --update-ratchet --confirm-shrink "…"` → exit 0，且**基线里确实留下了 `confirmed_shrinks`**（已回读核对）。
+- `npm run audit:ratchet` → 两个消费者都通过（wiring 已确认收缩、drift `NORMAL` 逐桶相等）。
+- `node tools/corpus-health.selftest.ts` → `ALL PASS ✅`（含新增 ⑫ 的 9 条断言）。
+- `npx tsc -p tsconfig.tools.json` → exit 0。
 
-### 4. 决策：**默认仍是 `fs`** —— 但**理由换了**
+### 5. 诚实标注
 
-- 9 项矩阵的证据落点已齐，第 8/9 项跨平台也测了 ⇒ **不再是「没测」**。
-- 挡住的是并发那半边测出的**具体缺口**：**撞锁会发生，而当前实现没有重试/退避**（撞上就回退本次，那一轮走 fs 全量扫 + 读侧挂一条降级横幅）。
-  在「默认开」的位置上这是**偶发一次性降级 + 横幅** —— 属产品取舍，**不是**「已验证通过」。
-- ⇒ **改默认的前置条件现在是可执行的**：① 给 `query-error` 做**有界重试 + 退避**（并保持「重试仍失败才回退」的可见性）；
-  ② 用真实流量 `query-log` 样本压一遍。其余未核实项不变（真实流量漏召回 / 外部进程原地改频率 / 非本地后端 `processPath`）。
-
-### 5. 验证
-
-- `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` → **exit 0**（`run-tests` **70/70**；本版无产品代码改动）。
-- 探针两侧各跑通：Windows `node tools/derived-index-bench.ts --atoms 8800` exit 0；Linux `t17c-run.sh 8800` exit 0（四步全成立、含并发）。
-- `npm run audit:docs` / `audit:complexity` / `audit:ratchet` 全过（无新增桶）。
-
-### 6. 诚实标注（不缩小）
-
-- **跨平台那条用的是 WSL2 发行版，不是容器**（原因见 §1）⇒ 适用范围写「**Linux（WSL2 内核）**」，
-  **不要**读成「容器里也验过了」；容器/overlayfs 下的锁与 WAL 仍未测。
-- 三个数字仍是**单次运行**、合成语料**分布均匀** ⇒ 只当**量级**。
-- `query-error` 的**分布**（哪几轮、多少次）只打印、未做成断言 ⇒ 读者不能据此估频率。
-- 矩阵第 4 项「表缺失」分支仍未单独断言。
+- 「零消费者」是**实测**（grep 产品面），不是推测；但**删除是不可逆的**（重放只能回 `v1.21.32` 及以前的提交）。
+- `--confirm-shrink` 是**新开的确认通道**：它把闸的判据**放宽了一条**（只在这一种形状上）。
+  这是有意的取舍（闸的提示要求人确认，而此前无处记录确认），代价是**多了一个将来可能被误用的口子** ——
+  故：理由必填、负对照齐全、记录进基线、且不覆盖「工具坏了」的那几种形状。
+- 本版**没有**做 `T27`（审计→证据的路径键）—— 那是下一件，尚未开工。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；
 治理 = ADR 登记册 · 棘轮 · 引用门 · 文档一致性门 · 分层方向门 · 复杂度预算门 · 脚本语言门；唯一验证入口 `npm run verify`；
 **发版唯一入口 `npm run release`（闸门在第一步）**；评测口径 = dev 切片（默认）/ 留出切片（报告，`--holdout-only`）。
-- **下一批**：`T17-C` 的**默认值前置条件 ①**（`query-error` 有界重试 + 退避）→ `T26`/`T27`（选型后写码）。
-- **仍等你**：`T26`/`T27` 的选型 · `D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料**（报告级基线）。
+- **下一批**：`T27`（审计记录按**文件路径**当线索键接进证据面，缺路径标「归不了」）→ `T17-C` 的默认值前置条件 ①。
+- **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料**（报告级基线）。
