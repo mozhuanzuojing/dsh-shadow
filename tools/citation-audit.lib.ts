@@ -38,6 +38,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { loadTrustedRoots, resolveAgainstTrustedRoots, type TrustedRoot } from "./trusted-roots.lib.ts";
 
 export type CiteResult = {
   ok: boolean;
@@ -181,7 +182,7 @@ type Judged = {
  * 能唯一解析的才比行数。呈现（文案 / 退出码 / 报不报红）由调用方决定 —— 当前态门与归档层度量
  * **共用它**，这样「什么算引用」「什么算越界」不会在两处各写一遍而漂移（本仓反复吃过的亏）。
  */
-const judge = (ROOT: string, docs: string[], MATERIALS: string): Judged => {
+const judge = (ROOT: string, docs: string[], MATERIALS: string, roots: TrustedRoot[]): Judged => {
   const cites = collectCites(ROOT, docs);
   const unjudgedList: string[] = [];
   const overflow: { cite: Cite; total: number; isExternal: boolean }[] = [];
@@ -245,11 +246,29 @@ const judge = (ROOT: string, docs: string[], MATERIALS: string): Judged => {
       }
     }
     if (!hit) {
-      unjudged++;
-      unjudgedList.push(
-        `  ? 带目录的路径在本仓 / 材料里都找不到（不判；可能是**别的根**，如平台克隆）  ${c.doc}:${c.docLine}  →  ${c.raw}`,
-      );
-      return;
+      // 第四档：**已注册的别的根**（adr/0108）。唯一命中才算；多根命中**仍不判**（ADR-0059：不猜）。
+      const rr = resolveAgainstTrustedRoots(c.target, roots, ROOT);
+      if (rr.hit) {
+        hit = { path: rr.hit, isExternal: true };
+      } else if (rr.ambiguous.length) {
+        unjudged++;
+        unjudgedList.push(
+          `  ? 已注册根里命中 ${rr.ambiguous.length} 个，**不猜**（不判）  ${c.doc}:${c.docLine}  →  ${c.raw}  [根：${rr.ambiguous.join(" / ")}]`,
+        );
+        return;
+      } else if (rr.unavailable.length) {
+        unjudged++;
+        unjudgedList.push(
+          `  ? **根不可用**（不判）  ${c.doc}:${c.docLine}  →  ${c.raw}  [根：${rr.unavailable.join(" / ")}]`,
+        );
+        return;
+      } else {
+        unjudged++;
+        unjudgedList.push(
+          `  ? 带目录的路径在本仓 / 材料 / **已注册根**里都找不到（不判；可能是**别的根**，如平台克隆 —— 要用它得先注册）  ${c.doc}:${c.docLine}  →  ${c.raw}`,
+        );
+        return;
+      }
     }
 
     const isExternal = hit.isExternal;
@@ -287,7 +306,14 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
     };
   }
 
-  const { cites, judged, unjudged, external, overflow, unjudgedList } = judge(ROOT, docs, MATERIALS);
+  // 可信根注册表（adr/0108）：坏件**不得静默**（ADR-0049）——问题逐条打进报告。
+  const { roots, problems } = loadTrustedRoots(ROOT);
+  const { cites, judged, unjudged, external, overflow, unjudgedList } = judge(ROOT, docs, MATERIALS, roots);
+  const rootLines = [
+    "  · 可信根注册表：" + roots.length + " 个可用" +
+      (problems.length ? " · **" + problems.length + " 条问题**（不得静默）" : ""),
+    ...problems.map((p) => `      ⚠ ${p}`),
+  ];
 
   const head =
     `引用 ${cites.length} 处（当前态文档；\`CHANGELOG.md\` 与冻结 ADR **不在范围内**）` +
@@ -295,6 +321,7 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
   const boundary = [
     "  ⚠ 本门**只答「越界了没有」**：抓不到「行号存在但指错行」（那要读语义），",
     "    也不判外部材料的内容位移（材料随上游移动）—— 未判定**不是**「已验证」（ADR-0049）。",
+    ...rootLines,
   ];
 
   if (overflow.length) {
@@ -350,13 +377,16 @@ export const checkArchiveCitations = (root: string, opts: { verbose?: boolean } 
     };
   }
 
-  const r = judge(ROOT, docs, MATERIALS);
+  const { roots, problems } = loadTrustedRoots(ROOT);
+  const r = judge(ROOT, docs, MATERIALS, roots);
   const lines = [
     `归档层引用 ${r.cites.length} 处（\`CHANGELOG.md\` + **全部** ADR，含冻结）` +
       ` ⇒ 可唯一解析并判定 ${r.judged} 处（其中外部材料 ${r.external} 处）` +
       ` · 未判定 ${r.unjudged} 处 · **越界 ${r.overflow.length} 处**`,
     "  ⚠ **只报不判**：归档层的行号是「**当时**」语义 ⇒ 越界是历史事实，**不构成本门失败**（exit 0）。",
     "  ⚠ 「未判定」**不是**「死链」：带目录的路径常属**别的根**（平台克隆等），判它 = 假阳性（ADR-0059）。",
+    `  · 可信根注册表：${roots.length} 个可用${problems.length ? ` · **${problems.length} 条问题**（不得静默）` : ""}`,
+    ...problems.map((p) => `      ⚠ ${p}`),
   ];
   if (r.overflow.length) {
     lines.push("", `--- 越界逐条（${r.overflow.length} 处）---`);

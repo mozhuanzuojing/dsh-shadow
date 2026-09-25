@@ -1,0 +1,4 @@
+{
+  "_README": "可信根注册表（设计见 adr/0108）。⚠ 只有人能加根：addedBy 必须为 \"human\"，agent 不得自行写入。字段：root（绝对路径或相对本仓，如 ../wslc1）/ label / addedBy / addedAt / reason；scope 可选（前缀收窄优先，\"*\" 被拒）。空数组 = 未注册任何根（默认态）。",
+  "roots": []
+}

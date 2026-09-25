@@ -176,8 +176,77 @@ try {
     assert.match(r.out, /结构缺失/, `报文应含「结构缺失」：${r.out}`);
   }
 
+  // ⑫ 正对照（**可信根**唯一命中 ⇒ 可判定）：`adr/0108` 的第四档。目标带目录、
+  //    本仓与材料里都没有、只有**注册根**里有 ⇒ 实现前会是「未判定」，现在必须被判定。
+  {
+    const d = tree({
+      "README.md": "见 `pkg/a.ts:1-2`。\n",
+      "tools/trusted-roots.json": JSON.stringify({ roots: [{ root: "ext", label: "wslc1", addedBy: "human", addedAt: "2026-09-25", reason: "跨项目源码根（fixture）" }] }),
+      "ext/pkg/a.ts": "l1\nl2\nl3\nl4\nl5\n",
+    });
+    const r = run(d, ["--verbose"]);
+    assert.equal(r.code, 0, `注册根里唯一命中且在范围内 ⇒ 放行（0）；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /未判定 0 处/, `该引用应**被判定**，不得仍是未判定：${r.out}`);
+    assert.match(r.out, /可信根注册表：1 个可用/, `报告应写出注册表状态：${r.out}`);
+  }
+
+  // ⑬ 负对照（**多根同名 ⇒ 仍不判**）：`ADR-0059` 的「不猜」不许被这道门绕过。
+  {
+    const d = tree({
+      "README.md": "见 `pkg/a.ts:1-2`。\n",
+      "tools/trusted-roots.json": JSON.stringify({ roots: [
+        { root: "ext1", label: "r1", addedBy: "human", addedAt: "2026-09-25", reason: "fixture" },
+        { root: "ext2", label: "r2", addedBy: "human", addedAt: "2026-09-25", reason: "fixture" },
+      ] }),
+      "ext1/pkg/a.ts": "l1\n",
+      "ext2/pkg/a.ts": "l1\n",
+    });
+    const r = run(d, ["--verbose"]);
+    assert.equal(r.code, 0, `多根同名**不得**猜（放行 0）；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /已注册根里命中 2 个，\*\*不猜\*\*/, `多根同名应列未判定并点名不猜：${r.out}`);
+    assert.match(r.out, /r1 \/ r2/, `应点名是哪些根：${r.out}`);
+  }
+
+  // ⑭ 控制变量（**根不可用**）：不得伪装成「找不到」——必须点名根（ADR-0049：缺件可见）。
+  {
+    const d = tree({
+      "README.md": "见 `pkg/a.ts:1-2`。\n",
+      "tools/trusted-roots.json": JSON.stringify({ roots: [{ root: "nope", label: "gone", addedBy: "human", addedAt: "2026-09-25", reason: "fixture" }] }),
+    });
+    const r = run(d, ["--verbose"]);
+    assert.equal(r.code, 0, `根不可用 ⇒ 未判定、放行；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /根不可用/, `必须点名「根不可用」：${r.out}`);
+    assert.match(r.out, /gone/, `应点名是哪个根：${r.out}`);
+  }
+
+  // ⑮ 控制变量（**scope 外**）：该根不参与解析 ⇒ 回落「都找不到」，且**不得**报成「根不可用」。
+  {
+    const d = tree({
+      "README.md": "见 `pkg/a.ts:1-2`。\n",
+      "tools/trusted-roots.json": JSON.stringify({ roots: [{ root: "ext", label: "scoped", addedBy: "human", addedAt: "2026-09-25", reason: "fixture", scope: "other/" }] }),
+      "ext/pkg/a.ts": "l1\n",
+    });
+    const r = run(d, ["--verbose"]);
+    assert.equal(r.code, 0, `scope 外 ⇒ 不解析、放行；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /都找不到/, `scope 外应回落「都找不到」而非命中：${r.out}`);
+    assert.ok(!/根不可用/.test(r.out), `scope 外**不得**被报成「根不可用」：${r.out}`);
+  }
+
+  // ⑯ 坏件不静默（`adr/0108` §2.3 授权）：`addedBy: "agent"` ⇒ **报出来**且**该条不入表**。
+  {
+    const d = tree({
+      "README.md": "见 `pkg/a.ts:1-2`。\n",
+      "tools/trusted-roots.json": JSON.stringify({ roots: [{ root: "ext", label: "agent-added", addedBy: "agent", addedAt: "2026-09-25", reason: "fixture" }] }),
+      "ext/pkg/a.ts": "l1\nl2\n",
+    });
+    const r = run(d, ["--verbose"]);
+    assert.equal(r.code, 0, `坏件不得让门变红，但必须报出来；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /只接受 `human`/, `必须报出授权违规：${r.out}`);
+    assert.match(r.out, /条问题\*\*（不得静默）/, `报告必须写出问题条数：${r.out}`);
+    assert.ok(!/可信根注册表：1 个可用/.test(r.out), `违规条目**不得**入表：${r.out}`);
+  }
   console.log(
-    "✔ citation-audit.selftest：① 正对照 / ② 负对照 / ③ 不猜 / ④ 归档层豁免 / ⑤ 冻结 ADR 豁免（含控制变量）/ ⑥ 结构缺失 / ⑦ 别的根不误配 / ⑧ 已挂在 audit:docs 上 / ⑨ 归档层度量看得见越界且不报红 / ⑩ 冻结 ADR 也被纳入度量 / ⑪ 归档层缺件不静默 —— 全部通过",
+    "✔ citation-audit.selftest：① 正对照 / ② 负对照 / ③ 不猜 / ④ 归档层豁免 / ⑤ 冻结 ADR 豁免（含控制变量）/ ⑥ 结构缺失 / ⑦ 别的根不误配 / ⑧ 已挂在 audit:docs 上 / ⑨ 归档层度量看得见越界且不报红 / ⑩ 冻结 ADR 也被纳入度量 / ⑪ 归档层缺件不静默 / ⑫ 可信根唯一命中可判定 / ⑬ 多根同名仍不判 / ⑭ 根不可用点名 / ⑮ scope 外不解析 / ⑯ 坏件不静默（授权） —— 全部通过",
   );
 } finally {
   for (const d of tmp) rmSync(d, { recursive: true, force: true });
