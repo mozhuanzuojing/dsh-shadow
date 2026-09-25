@@ -476,6 +476,25 @@
      **记下一条可见信号**（形态对齐 `lastFlushError`：可读、可断言、不抛异常）；
   2. **附一条能复现该场景的测试**（**无 session + 无显式 root**）—— 这是本条完成判据里对 `①②` 的硬要求；
   3. ⚠ **不得**把信号做成「静默通过」：它必须**可见**（否则等于把 `②` 做成了 `③`）。
+### 实施设计（2026-09-25 侦察所得，含精确锚点 —— 下一轮机械可执行）
+
+- **关键侦察事实**：`resolveWorkspace` 的调用方**只有三处**，其中**写路径两处**、读路径一处：
+  `core/writer/capture.ts:73`（写）· `core/writer/materialize.ts:292`（写，**`lastFlushError` 的设置点就在紧邻的 `:299`**）·
+  `query/query.ts:61`（读）。⇒ **信号的落点应该与 `lastFlushError` **同一个地方**（`materialize.ts`），而不是另造一条路。
+- **改动清单（4 文件）**：
+  1. `core.ts`：在 `lastFlushError` 旁加一个同形字段 —— `lastScopeNotice: { at: number; note: string } | undefined;`
+     （声明处与初值处**各一行**：初值跟 `lastFlushError: undefined` 那一行放一起）。
+  2. `core/writer/materialize.ts:292`：把 `resolveWorkspace(...)` 换成 `resolveShadowScope(...)`（**两者同源**，见 `scope.ts:36`），
+     并在 `scope === "fallback"` 时置 `core.lastScopeNotice = { at: Date.now(), note: … }` + `console.error`（**完全对齐** `:299` 那处 `lastFlushError` 的写法）。
+  3. `index.ts`（`lastFlushError` 的读侧出口在 `:69`）：**照样加一段** `if (core.lastScopeNotice) parts.push(…)`，
+     把它拼进读侧提示 —— 这就是「**可见**」的实现（否则等于把 `②` 做回了 `③`）。
+  4. `test/`：**新增一条**「**无 session + 无显式 root**」驱动 flush 的用例，断言该信号被置上且出现在读侧提示里。
+     （既有 `recall-attribution.test.ts:571-576` 已在测 `resolveShadowScope` 的三种 scope 返回，可作写法参考；
+     但**本条要测的是「信号被置上」**，不是 scope 枚举。）
+- **为什么本版没直接改（如实记录）**：这是**4 文件 + 1 条新测试**的连贯改动，而本轮的上下文预算已接近见底 ——
+  **起一个半成品会把仓库留在脏状态**，比停下来更糟。故本轮只把设计落纸，下一轮一次性做完并跑门。
+- **验收（下一轮照此跑）**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` 全绿 + 新用例通过；
+  并在 `CHANGELOG` 里写明「信号形态对齐 `lastFlushError`」与「测的是无 session 场景」。
 - **顺手更正一处过期注记**：本条原写「**优先级低于 B3**」，而 **B3 早已闭环**（`v1.15.40` 第 4 轮，宿主 2026-09-12 重启）
   ⇒ 那句已无意义；本条现在的相对优先级由「主路径 vs 边角路径」决定，仍建议排在 `T9`/`T11`/`T13` 之后。
 
