@@ -1182,7 +1182,7 @@
 
 ---
 
-### T25. `epistemic/simulation/` 的 `SimulationStatus`（`compared` / `explored`）**找不到生产者**
+### ✅ T25. `epistemic/simulation/` 的 `SimulationStatus`（`compared` / `explored`）找不到生产者 —— **已结案（`v1.21.23`）：预留登记，不是断线**
 
 - **由来**：`T2` ④ 的逐条取证里，`status=compared` / `status=explored` 是**唯一**两条「无生产者且非外部来源」的键。
 - **实测**：`epistemic/simulation/types/outcome.ts:3` 只有类型 `SimulationStatus = "hypothetical" | "explored" | "compared"`；
@@ -1191,6 +1191,17 @@
 - **完成判据**：三选一 —— ① 判定为「**未接线的泳道**」并如实标注（若确实没有消费者，按 `ADR-0087` 应评估删除）；
   ② 判定为「状态由**外部/规划方**提供」⇒ 补一条与 `adr/0108` 同型的来源说明；③ 若属**真缺陷**（该写的地方没写）⇒ 修复并加断言。
 - **注意**：不要凭静态分析直接定罪 —— 本仓纪律（B 类可能来自外部数据）。
+
+- **✅ 结案（2026-09-25，`v1.21.23`）——并且**更正了我起这条时的猜测**（我原以为它与 §7.3 的「simulation 未修」吻合 ⇒ 疑似未接线）：
+  实测 `reality-boundary.ts:4` 的禁止集是 **`predicted/confirmed/expected`**，**不含** `explored`/`compared`。
+- **真相**：`types/outcome.ts:3` 的类型与 `outcomeIsHypothetical` 的白名单**都允许**这三值，
+  但 `engine/simulator.ts:25` **只生产 `"hypothetical"`**（注释：「只 hypothetical，禁 predicted/confirmed/expected」）。
+  ⇒ 这是 **「声明的状态面 > 生产的状态面」= 预留登记**，**不是缺陷、也不是未接线泳道**；
+  与 §7.3 的「`simulation/` 未修」**只是字面吻合，不是因果**（那条指的是别的内容）。
+- **处置（沿用本仓对「未接线的预留」的既有判法：保留并注明）**：在 `types/outcome.ts` 类型处**就地注明**
+  「当前引擎只产 `hypothetical`；这两值是预留，若将来真要生产，须同时补产生路径与断言」。
+- **未做的备选（如实记录）**：**没有**把类型收窄到 `"hypothetical"` —— 那会**改一个契约面**（类型白名单），
+  按本仓纪律应先过 `adr/0086` 的登记册流程；且收窄属**语义决策**，不宜随分诊顺手做。
 
 ---
 
