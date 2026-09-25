@@ -6,6 +6,49 @@
 > 那是**磁盘枚举**生成的唯一台账（文件数/字节/许可/已吸收/未读/优先级）。
 > **本文件只登记与记忆层相关的参考材料**的核实记录；**同一事实不在两处重复登记**（避免两处各写一遍而漂移）。
 
+## 宿主原生能力（**不是材料**，不进 `MATERIALS.md` 台账）
+
+> **本节性质**：记**宿主自身提供的能力面**，不是外部参考材料。两条理由：材料台账回答「这份**外部**材料吸收了吗」，
+> 本节回答「**本机现在能干什么**」；且 `MATERIALS.md` 的口径本就是**由磁盘枚举生成、不由手写清单生成**
+> （`adr/0078`），手写塞条目会违反它。故 **不进下方 `## 完整清单`**、**不进 `MATERIALS.md` §2**，
+> 也不受材料侧的**远端 / 许可 / commit** 核实口径约束——那些属性对第一方包不适用。
+> 术语消歧（`browser-use` 两名分立）见 [`CONTEXT.md`](./CONTEXT.md) 的 `browser-use` / `dsh 原生 browser-use` /
+> `dsh 原生 computer-use` 三条。
+
+**登记时刻** 2026-09-25 08:23 +08:00 · 实测宿主 `dsh 0.1.7-rc.2`。
+
+| 宿主原生能力 | 形态（**独占注册：同一作用域一次只能挂一个 provider**） | 外部同名 / 对标材料（**勿混**） |
+|---|---|---|
+| **dsh 原生 browser-use** | seam `@deepseek-ai/dsh-browser-use` + provider **择一**：`…-experimental-browser-use-chrome-devtools-mcp`（驱动真实 Chrome）/ `-playwright-mcp` / `-stagehand-native` | `browser-use/browser-use`（§2）· `browser-use/browser-harness`（§2；§18 的 `jev-ultrafast` 复用它的 CDP 会话）· `eze-is/web-access` |
+| **dsh 原生 computer-use** | seam `@deepseek-ai/dsh-computer-use` + provider **择一**：`…-experimental-computer-use-cua-driver-native`（进程内嵌 Cua Driver SDK；有 `win32-x64-msvc` 二进制）/ `-cua-driver-mcp`（连外部可执行） | 无同名外部项目；对标面是 OpenAI《Computer use》工具指南（§1） |
+
+**两条最容易写错的边界（已实测认定）**：
+
+- **「第一方发布」≠「dsh 自带」**：四个包都在 `@deepseek-ai/` 命名空间下**发布**，但**不在 dsh 安装的宿主树里**
+  —— 宿主树 `@deepseek-ai/` 下**0 命中**（**口径**：枚举 dsh 安装目录的 `node_modules/@deepseek-ai/`），
+  `list_bundles` 也无对应 bundle ⇒ 必须**作为 profile bundle 显式挂载**。
+  版本取 **`next` dist-tag**（`0.1.7-rc.2`，与运行时同版）；**`latest` = `0.1.6-alpha.1`，装它版本错配**。
+- **「宿主有能力」≠「本仓引依赖」**：seam 与 provider 都是**宿主侧**的行；dsh-shadow **不新增依赖、仍不操作浏览器**
+  —— `adr/0089` 的边界与「仅登记」判词**均不变**。
+
+**§2 的结论为何仍成立、但要补一个前提**：§2 判 `browser-use/browser-use` 为「浏览器自动化能力的参考实现……**不引入依赖**」
+—— 这条**不变**（它确实只是参考实现）。变的只是**决策前提**：需要浏览器 / 桌面能力时，**首选开启宿主原生 provider**，
+而不是引入 `browser-harness` 这类第三方。一句话：**外部材料是「看」的，宿主原生面是「用」的。**
+
+**实测（本机 `web` profile，2026-09-25；宿主 `dsh 0.1.7-rc.2`，四包同为 `0.1.7-rc.2`）**——
+⚠ **本节不写「插件总数」「目录条目数」这类会随装件漂移的派生计数**（本仓规矩：能推出来的字段不手写），只给断言 + 口径：
+
+- **四条行 `fiberPhase: active`**。**口径**：`dsh --profile web --dump-config` 过滤 `browser-use|computer-use`；
+  或 `list_bundles` 里该 bundle 的 `installed: true` / `enabled: true`。
+- **浏览器侧**：`chrome-devtools-mcp@1.9.0` 目录 **29 个工具**、`navigate_page` 成功、
+  `document.title = Example Domain`。**口径**：无 LLM、隔离 profile、headless 直连 MCP 的
+  `tools/smoke-browser.mjs`（登记在 `dsh-browser-computer-use/tools/`，可重放）。
+- **桌面侧**：`cua_driver_native__*` **56 个工具**；`check_permissions` 返回 `UIA accessibility: available`。
+  **口径**：`cordis_inspect_query` 的 `Tool.listTools` + 一次真实调用。工具数随 provider 版本
+  （`@trycua/cua-driver@0.28.0`）变化 ⇒ **引用时连带写版本**。
+- ⚠ **浏览器工具在下一场新会话才出现**（provider 在会话创建 / 恢复时绑定，**不接管已激活会话**）——
+  上游行为，不是接线缺陷。
+
 ## ★ 重点材料（2026-09-11 用户指定）
 
 > 本节是**用户点名「作为重点材料」的条目**。其余条目按时间序记在下方各节，性质是「登记备查」。

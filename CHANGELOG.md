@@ -3,6 +3,31 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.1] 登记宿主原生 browser-use / computer-use（术语消歧 + 边界不变）
+
+文档与术语层，**无代码、无行为改动**（不改 mode / 召回 / `.shadow/` 落盘 / 依赖）。
+
+- **术语消歧（`CONTEXT.md`）**：`browser-use` 在本仓**既有指称是外部项目**（`browser-use/browser-use` + `browser-harness`，见 `references.md` §2）；
+  而 DSH 官方发布的包里**有同名第一方包**。⇒ 三名分立并写明「同名不同物」：`browser-use`（既有 = 外部项目）·
+  **`dsh 原生 browser-use`** · **`dsh 原生 computer-use`**。
+- **新节 `references.md` §宿主原生能力**（**不是材料**、**不进 `MATERIALS.md` 台账**）：两能力 × 形态对照表 ——
+  seam（`@deepseek-ai/dsh-browser-use` / `dsh-computer-use`，**独占命名注册，一次只挂一个**）+ provider **择一**
+  （浏览器：chrome-devtools-mcp / playwright-mcp / stagehand-native；桌面：cua-driver-native / cua-driver-mcp），
+  并指向外部同名 / 对标材料（§1 OpenAI《Computer use》· §2 · §18）。
+- **两条最易写错的边界**：① **「第一方发布」≠「dsh 自带」** —— 四个包都在 `@deepseek-ai/` 命名空间下发布，
+  但**不在 dsh 安装的宿主树里**（`@deepseek-ai/` 下 **0 命中**）⇒ 必须**作为 profile bundle 显式挂载**；
+  版本取 **`next` dist-tag**（与运行时同版），**`latest` 落后 ⇒ 版本错配**。② **「宿主有能力」≠「本仓引依赖」**；
+  dsh-shadow **不新增依赖、仍不操作浏览器**。
+- **`adr/0089` 补注**：判词与「仅登记」结论**均不变**；新增的是**宿主**事实 ⇒ 需要浏览器 / 桌面能力时
+  **首选宿主原生面**，外部材料仍只作「看」的参考。**不立新 ADR** —— 三项判据（难撤销 / 无上下文看不懂 / 确实做过取舍）
+  只中一项。
+- **为什么记**：`references.md` §2 的「参考实现……不引入依赖」会诱导未来去装 `browser-harness` 这类第三方，
+  而宿主已有原生面 ⇒ 不记这一条，同一个坑会重走。
+- **派生计数纪律**：本节只写**断言 + 口径 + 命令**，不写「插件总数 / 目录条目数」这类会随装件漂移的数
+  （本仓规矩：能由其他数据推出来的字段不手写）；工具数一律**连带 version pin**。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。另有两项可重放的实测：无 LLM 的浏览器后端冒烟
+  （`chrome-devtools-mcp` 目录 + `navigate_page` 真实导航）与一次真实桌面调用（`cua_driver_native__check_permissions`）。
+
 ## [v1.21.0] 投影空间绿地切权威 + 小世界 hydrate（ADR-0106 / 0107）
 
 行为变更：记忆语料权威从日期树改为多轴投影空间；有 topic 的**默认主题召回**套灵魂规避滤（`raw: true` 看原文；`project: true` 仍为完整 RealityProjection 且短路不经规避滤）。
