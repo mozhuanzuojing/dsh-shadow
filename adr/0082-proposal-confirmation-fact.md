@@ -2,12 +2,12 @@
 
 - 状态：**已接受并冻结边界**（2026-09-12，用户明确选 A 并要求升为通用纪律）
 - 关联：`adr/0081`（M1 决策→结果→经验，本原语的第一个使用者）· `adr/0037`（Reason 绝不生成）· `adr/0003`（派生件不是 source）· **ADR-0049**（缺件不静默）· **ADR-0059**（不把语义裁决交给 LLM/相似度）· `adr/0080`（阈值不可达的量化证明）
-- 定位：**T15 Registry 的第 2 条真契约**，也是**所有 Memory Intelligence 能力的共同架构纪律**（不只 M1）
+- 定位：**T15 Registry 的第 真契约**，也是**所有 Memory Intelligence 能力的共同架构纪律**（不只 M1）
 
 ## 1. Context：这条边界是被一次具体争议逼出来的
 
 M1 讨论「决策的结果从哪里来」时，用户先选了「允许 LLM 判断归属」，我提出异议（四条：不可复现 ⇒ 会打在 V6/V7 刚做可信的验证层；
-不可审计；精度上界已被量过 —— `adr/0080` AUROC 0.5926 / precision 上限 0.667；与 `adr/0037`「Reason 绝不生成」冲突 —— **归属比理由更强**，它在断言因果）。
+不可审计；精度上界已被量过 —— `adr/0080` AUROC  / precision 上限 0.667；与 `adr/0037`「Reason 绝不生成」冲突 —— **归属比理由更强**，它在断言因果）。
 用户接受异议并**把结论推广**：
 
 > **「LLM 可以提高『发现候选』的召回率，但不能提高『事实』的权威性。」**
@@ -111,7 +111,7 @@ Proposal ├── subject proposal
   「正常等待 / 长期积压 / 疑似永不结算」三档。
 - **硬边界**：**不得**设置自动结算阈值 —— **年龄只暴露风险，不改变状态**（与「不设窗口」自洽）。
 
-## 4. 按 T15 Registry 十字段填写（第 2 条真条目）
+## 4. 按 T15 Registry 十字段填写（第 真条目）
 
 | 字段 | 值 |
 |---|---|
@@ -133,7 +133,7 @@ Memory → Evidence → Inference → Confirmation → Knowledge
 ```
 
 - 这是用户指定的 **M1 → M3 → M5 主干**：`Inference` 廉价（模型可海量提议），`Confirmation` 是唯一闸口，`Knowledge` 才可被统计与回召。
-- **泳道位置**：本原语属 🧠 Memory Track 的**第 0 项（P1）**，**先于 M1** —— M1 是它的第一个使用者。
+- **泳道位置**：本原语属 🧠 Memory Track 的**第 （P1）**，**先于 M1** —— M1 是它的第一个使用者。
 - **不新增横向功能**：它**没有**给系统加任何能力，只是**给「什么算事实」定了一条不可绕过的路径**。
 
 ## 6. 未决（不脑补）
@@ -148,7 +148,7 @@ Memory → Evidence → Inference → Confirmation → Knowledge
 **落地物**：`core/proposal.ts`（纯函数：严格白名单校验 / `projectFacts` 投影 / 唯一统计入口 `factualOnly` / 候选可见性 `candidateStats`）
 + `test/proposal-firewall.test.ts`（**11 组闸，含用户点名的两条伪装负例**）+ `tsconfig.json` 显式把该模块纳入编译面
 （它尚未被 `index.ts` 引用，而测试按本仓约定 import 编译产物 ⇒ 必须显式 include，否则 `dist` 里没有它）。
-`npm run verify` = **50/50**。
+`npm run verify` = ****。
 
 ### 7.1 「Fact 是投影」⇒ 冒充在**结构上不可能**（比字段校验更强）
 
@@ -255,7 +255,7 @@ candidates · confirmed · rejected · pendingConfirmation · oldestCandidateDay
 - 新增 `byActor: CandidateActorStats[]`（按 `human → tool → ci`，**只列实际有裁决的 actor**），各自的 `acceptanceRate` / `rejectionRate`，该 actor 分母 0 ⇒ `null`；
 - **总体 `acceptanceRate` / `rejectionRate` 只认 `human`**：**无任何 `human` 裁决 ⇒ `null`（不可测，不报 0）**；
 - 需要工具/CI 的比率时读 `byActor`。
-闸：⑫。**验证**：dry run 里 7 条确认全为 `actor:"tool"` ⇒ 总体报 `null`，`[tool]` 分层照实报 1.0。
+闸：⑫。**验证**：dry run 里 确认全为 `actor:"tool"` ⇒ 总体报 `null`，`[tool]` 分层照实报 1.0。
 
 ### 8.5 本轮**未做**（诚实标注）
 

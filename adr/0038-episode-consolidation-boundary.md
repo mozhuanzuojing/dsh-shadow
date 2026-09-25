@@ -8,7 +8,7 @@
 
 ## Context
 
-dsh-shadow 补上"收口"：一个 episode 结束时，把其 turn 原子合并成 1 个 consolidated 文件，个体原子 `mark compacted` 并移出活跃热集。这解决了"**事实如何长期存储而不爆炸**"（v1.2.2 层）。
+dsh-shadow 补上"收口"：一个 episode 结束时，把其 turn 原子合并成  consolidated 文件，个体原子 `mark compacted` 并移出活跃热集。这解决了"**事实如何长期存储而不爆炸**"（v1.2.2 层）。
 
 但引入收口时，必须想清楚一条边界：**收口是"读取模型"（projection）的变化，不是"事实模型"的变化。** 一旦把「解释层（Episode summary）」当成"事实源"，就会把"Observation → Summary"当成真相（把可读性当事实）——而 dsh-shadow 的目标是 **Observer Runtime verification layer**，**必须保留不可替代的事实层（Memory Atom）**：
 

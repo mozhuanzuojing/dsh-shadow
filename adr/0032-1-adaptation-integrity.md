@@ -56,6 +56,6 @@ Reality unchanged / Memory unchanged / Identity unchanged / Authority unchanged 
 ## 附录：v0.38.1 实现说明（Invariant Lock）
 
 - 固化 208–223 为不可回退测试（mock 217–223）。
-- 补 3 个 after 措辞守卫：objective(219)/preference(220)/agencyLevel(223)；强化 epistemic 守卫（proven correct/belief upgrade）。
+- 补  after 措辞守卫：objective(219)/preference(220)/agencyLevel(223)；强化 epistemic 守卫（proven correct/belief upgrade）。
 - 无新增 capability；全量 mock 1–223 全绿；tag `v0.38.1 Adaptation Integrity Lock`。
 - 通过后进入 v0.39 Long Horizon Interaction（长期交互组合 Recall + Adaptation + Delegation + Action History + Planning，才是最大边界压力）。

@@ -36,7 +36,7 @@ Prediction 暗示未来真实值；Simulation 只是"在假设成立时模型内
 - v0.32：可作为 Simulation 输入——`RelationHypothesis → Simulation assumption → Outcome`；但**结果仍不能证明关系**。
 - 例：假设 `A depends_on B` → 模拟 `remove B → A unavailable` → 只能得到 `simulation supports this hypothesis`，**不能得到** `RealityClaim: A depends_on B`。
 
-## 6 条 Invariant
+##  Invariant
 
 - **131** Simulation 不产生 RealityClaim（`SimulationOutcome ≠ RealityEvidence`）。
 - **132** Simulation 不修改 Identity。

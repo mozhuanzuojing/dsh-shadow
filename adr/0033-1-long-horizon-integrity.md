@@ -56,7 +56,7 @@ Success Rate ≠ Autonomy Level
 
 ## 附录：v0.39.1 实现说明（Invariant Lock）
 
-- 固化 230/231 为不可回退测试（mock 230–231）。
+- 固化  为不可回退测试（mock 230–231）。
 - 最小 runtime 修正：`long-horizon/guard/authority-guard.ts` 的 `resultNoAuthorityGrowth` 正则补 `authority expansion / authority increase / reliability→permission`（真实绕过，231）。
 - 无新增 guard 函数/能力；全量 mock 1–231 全绿；tag `v0.39.1 Long Horizon Integrity Lock`。
 - 收尾：ADR-0034 Observer Runtime Closure（架构总图 + invariant 1–231 + Threat Model + Boundary Matrix + Release v1.0-alpha），见下一阶段。

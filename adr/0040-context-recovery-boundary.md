@@ -74,5 +74,5 @@ Context Validity Rate = 历史引用仍有效比例
 
 ## 自检（本 ADR 无代码，仅记录）
 
-- [x] 与 ADR-0037/0038/0039 自洽（Evidence≠Interpretation / Episode=投影 / Task=生命周期），不冲突。
+- [x] 与 ADR-/0039 自洽（Evidence≠Interpretation / Episode=投影 / Task=生命周期），不冲突。
 - [x] 吸收 Cursor 但保持 Observer Runtime 原则：Memory 是**可验证历史证据**，不变成知识库。

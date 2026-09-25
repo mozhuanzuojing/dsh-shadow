@@ -1,9 +1,9 @@
 # ADR-0090: 实装 rtk 的三条判据形态（BACKLOG D9 / D10 / D11 —— 甲-1 / 甲-2 / 甲-3）
 
 - 状态：**已接受**（2026-09-15 / `v1.15.89`）
-- 关联 ADR：**ADR-0087**（判定来源：`rtk` 的 8 条形态，本轮实装其中 3 条）· **ADR-0049**（缺件不静默）·
+- 关联 ADR：**ADR-0087**（判定来源：`rtk` 的 形态，本轮实装其中 ）· **ADR-0049**（缺件不静默）·
   **ADR-0072**（标签不得强于事实 —— D11 是它的续）· **ADR-0001**（不引重服务 —— 恢复载体不许用 SQLite/gzip）·
-  **ADR-0085** §8.7（能推出来的字段不要手写）· **ADR-0003 / 0075**（派生件不是 source）
+  **ADR-0085** §8.7（能推出来的字段不要手写）· **ADR-**（派生件不是 source）
 - 关联待办：`BACKLOG.md` 的 **D9 / D10 / D11**（三条同代，本轮一并结案）
 
 ## Context：用户 2026-09-15 的「都要」= 授权做那三条被搁置的实装
@@ -32,7 +32,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 **② 「拿不到句柄时不许输出有损结果」的本仓口径（必须写清楚，否则会被误读成「永不截断」）。**
 甲-1 的原话是 *"Never emit an unrecoverable truncation marker: fall back to full raw"*，
 它在 rtk 里成立的前提是「退回原文**是免费的**」（原文本来就已产出，压缩只是优化）。
-**本仓相反**：`.shadow/_index.md` 实测 **2199 KB / 24639 行** ⇒ 对**索引路径**退回原文
+**本仓相反**：`.shadow/_index.md` 实测 **2199 KB / ** ⇒ 对**索引路径**退回原文
 等于**放弃预算**（那正是 `v1.15.85` 修掉的缺陷）。故本仓拆成两条：
 
 - **有损输出必须显式声明「可复取」或「不可复取」，二者必居其一**，**不许**静默省略；
@@ -57,7 +57,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 | 损失形态 / 句柄 / never_worse | **新** `retrieval/loss.ts` | `Lossiness{ none, tail, whole }` · `RecoverHandle{file, locator}` · `handleText` · `neverWorseChars`（单位 `chars`）· `lossLine`（可复取/不可复取二选一）· `excerptWorthwhile`（区分「本来就短」）· `tierLossNote` |
 | 索引路径 | `retrieval/render.ts` | `renderIndexBudgeted(idx, maxChars, source = INDEX_HANDLE)`：加**损失行**（形态 + 句柄/不可复取）；出口改为 `neverWorseChars(body + notes, raw)`；披露里的段名**限长**（见 §自检 ②） |
 | 召回路径 | `query/query.ts` | 降档前取句柄：**无句柄不降档**；降档必须**真省字**（`degraded.length <= render.length`）；「本是够长却没给片段」记进披露，输出 `tierLossNote`（**条内**损失）与信封（**条级**损失）分开 |
-| 出处类型化 | `core/util.ts` / `core/toolset/index.ts` | 新增 `VerSrcKind` + `verSrcLabel`（查表）；`Capability` 增 `verSrcKind` / `verSrcVersion`；57 个调用点 `"权威核验"` ⇒ `"authority"`；两个 provider 条目显式 `"none"` |
+| 出处类型化 | `core/util.ts` / `core/toolset/index.ts` | 新增 `VerSrcKind` + `verSrcLabel`（查表）；`Capability` 增 `verSrcKind` / `verSrcVersion`；调用点 `"权威核验"` ⇒ `"authority"`；两个 provider 条目显式 `"none"` |
 | 出处读取 | `tools/toolset-authority.lib.ts` / `.ts` | `claimOf(cap)` 读类型化字段；`ledgerMismatch` 入参同步 |
 
 ### C. 判据与测试（**每条都配反向不变量**）
@@ -80,11 +80,11 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 两件事各自有断言，且新行为是 D10 的**规格**。
 
 **④ D11 的反向不变量**（`test/toolset-authority.test.ts` 新增 ⑧）：**渲染与字段不许分叉**
-（101 条逐条比对：`claimOf(c)` 的值必须等于 `note` 散文里那一段，**用测试自带的正则做独立 oracle**）·
+（逐条比对：`claimOf(c)` 的值必须等于 `note` 散文里那一段，**用测试自带的正则做独立 oracle**）·
 **弱档不得被散文升格**（字段 `authority` + 散文写「实测」⇒ 判据取弱档）·
 字段缺失/非法 ⇒ 未标（不得默认强档）· **把弱档合并进强档必须被检出**（合成行：`权威核验`→`实测` 且本机读数不符）。
 
-**⑤ 门槛**：`npm run verify` ⇒ **60/60 ALL PASS**（新增 `test/loss-and-handle.test.ts` 一个检查）。
+**⑤ 门槛**：`npm run verify` ⇒ ** ALL PASS**（新增 `test/loss-and-handle.test.ts` 一个检查）。
 `audit:ratchet` 保持**通过**（见 §自检 ①）。
 
 ## Alternatives Considered
@@ -105,7 +105,7 @@ rtk 必须造一份存储（SQLite + gzip + 内容哈希去重 + 老化），因
 - 「**被省略**」与「**本来就短**」在输出上**可区分**了（这是 D9 的完成判据①），且被省略的部分**有句柄可复取**。
 - 有损路径多了一道**全函数守卫**（出口唯一）：*压完没变短 ⇒ 别压*。
 - `verSrc` 从「散文里的一段字符串」变成**类型化字段**：弱档**折不进**散文，缺失**不会**默认成强档。
-- **零新增依赖、零新增存储、零改签入清单**（63 行 `core/toolset/index.ts` 的 57 处只是把字面量换成类型取值）。
+- **零新增依赖、零新增存储、零改签入清单**（ `core/toolset/index.ts` 的 只是把字面量换成类型取值）。
 
 ### 负 / 已知边界（诚实）
 
@@ -140,5 +140,5 @@ node test/loss-and-handle.test.ts                   # 甲-1/甲-2 的纯函数�
 node test/recall-envelope.test.ts                   # 召回/索引两条路径的披露与信封（⑥⑦ 两段）
 node test/toolset-authority.test.ts                 # 甲-3：字段唯一事实源 + 弱档不被升格（⑧）
 node tools/audit-wiring.ts . --ratchet              # 期望：通过（38 A / 97 B，与基线逐桶相等）
-$env:SHADOW_EVAL_ROOT="D:\project\dsh1"; npm run verify   # 末行应为 [run-tests] ALL PASS ✅（60/60）
+$env:SHADOW_EVAL_ROOT="D:\project\dsh1"; npm run verify   # 末行应为 [run-tests] ALL PASS ✅（）
 ```

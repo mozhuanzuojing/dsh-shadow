@@ -25,11 +25,11 @@ Continuity ≠ Autonomy
 ## Invariant（224–229）
 
 - **224** Temporal Accumulation ≠ Authority Growth：`执行时间越来越长 → 系统认为自己更可信 → 权限增加` ❌（时间累积不产生可信度/权限）。
-- **225** Long History ≠ Preference：`长期选择 A → 形成偏好 A` ❌（延续 213/220）。
-- **226** Adaptation Chain ≠ Identity Chain：`100 次调整 → 我是一个不断成长的新主体` ❌（Adaptation 链不构成 Identity 演化）。
+- **225** Long History ≠ Preference：`长期选择 A → 形成偏好 A` ❌（延续 ）。
+- **226** Adaptation Chain ≠ Identity Chain：`调整 → 我是一个不断成长的新主体` ❌（Adaptation 链不构成 Identity 演化）。
 - **227** History Compression ≠ Reality Simplification：`长期历史 → 压缩摘要 → 摘要替代事实` ❌（与 Recall/Representation 连接：摘要只是索引，不替代 Observation/RealityClaim）。
 - **228** Interaction Pattern ≠ Objective：`长期合作模式 → 系统自己推断目标` ❌（目标只能来自外部权威，不能用交互模式自证目标）。
-- **229** Long Horizon Success ≠ Self Confidence：`长期成功 → 能力提升 → 自我信任 → 自主扩大` ❌（v0.38.1 216/223 的时间维度扩展）。
+- **229** Long Horizon Success ≠ Self Confidence：`长期成功 → 能力提升 → 自我信任 → 自主扩大` ❌（v0.38.1  的时间维度扩展）。
 
 ## 测试（mock 224–229）
 

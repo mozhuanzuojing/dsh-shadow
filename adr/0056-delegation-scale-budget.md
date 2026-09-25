@@ -7,7 +7,7 @@
   **自己做 / `workflow`**）。**§2 的「复用优先」判据与 §3 的往返纪律继续有效**；**§1–§5 的决定与行号按「当时」保留、不改写**
   （理由见 `adr/0099` §4.2）。
 - 包版本 pin（v1.20.3 补）：**本文所有包内行号 pin 在 `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2`**
-  （即 v1.15.17 那次独立复核所用的安装体）。该包在 `0.1.7-alpha.1/2` 上已变：`DEFAULT_MAX_MEMBERS` 为 **16**、
+  （即 v1.15.17 那次独立复核所用的安装体）。该包在 `0.1.7-alpha.` 上已变：`DEFAULT_MAX_MEMBERS` 为 **16**、
   限额检查仍在创建时、`state.members.push` 的位置亦已移位 ⇒ **引用本文行号之前先读这一行**。
 - 决定日期：2026-09-10
 - 关联 ADR：ADR-0049（缺件不静默——不是本轮）、inv 178 `Authority ≠ Ownership`、inv 182 `Delegation Scope 不可扩大`；**修订 v1.15.4 的「team 优先」口径**
@@ -26,10 +26,10 @@ v1.15.4 曾把 persona 改成「**优先 Agent Team**」，理由是「复用省
 
 | 事实 | 证据 |
 |------|------|
-| 每个成员**每次请求**都背 `team:policy` + **9 个**工具 schema | 官方 README：*"Fixed policy and schema cost on every Team member request"* |
+| 每个成员**每次请求**都背 `team:policy` + ****工具 schema | 官方 README：*"Fixed policy and schema cost on every Team member request"* |
 | peer 消息**永久进对方历史**，此后每次请求都重发 | 官方 README：「每次 peer 投递都会把发送者前缀与消息内容加入 target 历史」 |
-| `maxMembers` **不是并发上限，是会话终身累计上限** | 上游 `lib/index.js`：`L564` 在**创建时**检查 `state.members.length >= this.maxMembers`（`TEAM_MEMBER_LIMIT`）；`L1244` 只 `push`；**`members.splice/pop/filter/delete` 命中 0 处**（无任何移除路径）；`L563` 重名抛错 + README「即使**创建失败**的 teammate 也保留其名字」⇒ **失败也吃名额** |
-| **（v1.15.17 补）上述四条已在本机装包后独立复核** | `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2` 装进 profile 后逐条核对：`L1594 DEFAULT_MAX_MEMBERS = 8`（默认值属实）；`L564` 创建时检查（属实）；`members.splice/pop/shift/filter` **实测命中 0 处**（无移除路径，属实）；**且机制比原说法更严格** —— `L561-570` 先把成员以 `phase:"provisioning"` **落盘**，`L572+` 才真的 spawn，失败走 `settleProvisioning`（`L708-721`）**只追加一个新版本把 phase 改成 `"failed"`，不移除条目** ⇒ **失败创建永久占一个名额**，不只是「名字被占」 |
+| `maxMembers` **不是并发上限，是会话终身累计上限** | 上游 `lib/index.js`：`L564` 在**创建时**检查 `state.members.length >= this.maxMembers`（`TEAM_MEMBER_LIMIT`）；`L1244` 只 `push`；**`members.splice/pop/filter/delete` 命中 **（无任何移除路径）；`L563` 重名抛错 + README「即使**创建失败**的 teammate 也保留其名字」⇒ **失败也吃名额** |
+| **（v1.15.17 补）上述四条已在本机装包后独立复核** | `@deepseek-ai/dsh-experimental-agent-team@0.1.5-rc.2` 装进 profile 后逐条核对：`L1594 DEFAULT_MAX_MEMBERS = 8`（默认值属实）；`L564` 创建时检查（属实）；`members.splice/pop/shift/filter` **实测命中 **（无移除路径，属实）；**且机制比原说法更严格** —— `L561-570` 先把成员以 `phase:"provisioning"` **落盘**，`L572+` 才真的 spawn，失败走 `settleProvisioning`（`L708-721`）**只追加一个新版本把 phase 改成 `"failed"`，不移除条目** ⇒ **失败创建永久占一个名额**，不只是「名字被占」 |
 | `workflow` / `subagent` **不吃** teammate 名额 | `dsh-tool-workflow` / `dsh-workflow-worker-thread` / `dsh-tool-subagent` 三个包对 `agentTeams` 的引用数均为 **0** |
 | 嵌套**不是**杠杆 | 宿主 roster **扁平**，只有 Lead 能 `spawn_teammate`，不支持嵌套 Team |
 
@@ -41,14 +41,14 @@ v1.15.4 曾把 persona 改成「**优先 Agent Team**」，理由是「复用省
 
 在 profile 的 `cordis.patch.yml` 的 `agent-team` 行加 `config: { maxMembers: 4 }`（原来是宿主默认 8）。
 
-- 这是一个 **per-session 终身累计**上限：一个会话从头到尾最多创建 4 个 teammate，**不可释放**，**失败的创建也占名额**。
+- 这是一个 **per-session 终身累计**上限：一个会话从头到尾最多创建  teammate，**不可释放**，**失败的创建也占名额**。
 - 取 **4** 的依据：覆盖本部署自己的**最大显式需求**——① 审查要两个不同视角（2）+ 实现（1）+ 调研（1）= 4；超出即应自己做或串行。
 - 撑爆时的降级是**优雅**的：`spawn_teammate` 抛 `TEAM_MEMBER_LIMIT`，Lead 转为自己做——不是「卡死」。
 - **已知残余风险**：4 对「失败的创建」**没有余量**；若实测过紧，调 6。
 
 ### 2. 判据改为「复用优先」（修订 v1.15.4）
 
-**只有会复用 ≥2 次（或需要共享任务板）才用 teammate**；只用一次就用 `subagent`（要带上下文用 `subagent_fork`）。
+**只有会复用 ≥（或需要共享任务板）才用 teammate**；只用一次就用 `subagent`（要带上下文用 `subagent_fork`）。
 「省下前缀」这个理由只在**复用**时成立——用一次时 teammate 比 subagent **更贵**。
 
 ### 3. 往返纪律（preset ②）
@@ -69,13 +69,13 @@ v1.15.4 曾把 persona 改成「**优先 Agent Team**」，理由是「复用省
 
 | 备选 | 否决理由 |
 |------|----------|
-| 保持默认 8 | 对「控制规模」力度不足；8 = 该会话最多 8 个成员且永不释放 |
-| 3 | 对**失败的创建**太紧：一个坏 spawn 就只剩 2 个可用 |
+| 保持默认 8 | 对「控制规模」力度不足；8 = 该会话最多 成员且永不释放 |
+| 3 | 对**失败的创建**太紧：一个坏 spawn 就只剩 可用 |
 | 6 | 留了失败余量，但相对 8 只减 2，基本等于没控 |
 | 只在 persona 写纪律、不动 host config | 措辞拦不住，硬上限仍是 8；A 与 B 机制不同、**互不替代** |
 | 往返收紧到 ≤1 | 首发一次、不许返工追问；与 ④「零分栏退回重派」冲突（重派即第二轮） |
 | 往返放宽到 ≤3 | 复利风险高（每条消息永久进历史） |
-| 单独立为 ⑧ 而不动 ② | ② 本就是「派谁」的条款，加「派几个、来回几次」是同一条决策链；新增 ⑧ 会让 persona 到 8 条 |
+| 单独立为 ⑧ 而不动 ② | ② 本就是「派谁」的条款，加「派几个、来回几次」是同一条决策链；新增 ⑧ 会让 persona 到  |
 
 ## Consequences
 
@@ -97,7 +97,7 @@ v1.15.4 曾把 persona 改成「**优先 Agent Team**」，理由是「复用省
 
 - [x] 与 v1.15.4 已核实的事实一致：`fresh/fork` 两边同构、Teams **多付**固定前缀 → 故判据必须是「复用次数」而不是「机制偏好」。
 - [x] `maxMembers` 的语义经**代码核实**（创建时检查 / 无移除路径 / 失败也占名额），不是照抄文档。
-- [x] 「workflow/subagent 不吃名额」经**包级引用核实**（3 个包对 `agentTeams` 引用 0 处）。
-- [x] 不越界：host 行只改**一个配置值**；不改上游代码、不新增权限（与 inv 178/182 无关）。
-- [ ] **未验证**：`maxMembers: 4` 的实际拦截行为**未在真机触发过**（需要真创建 5 个 teammate 才能验）；`dump-config` 已确认值被读到，但**运行时闸门未实测**。
+- [x] 「workflow/subagent 不吃名额」经**包级引用核实**（包对 `agentTeams` 引用 ）。
+- [x] 不越界：host 行只改**一个配置值**；不改上游代码、不新增权限（与 inv  无关）。
+- [ ] **未验证**：`maxMembers: 4` 的实际拦截行为**未在真机触发过**（需要真创建  teammate 才能验）；`dump-config` 已确认值被读到，但**运行时闸门未实测**。
 - [ ] **未验证**：改 host 行 config 是否需要**重启**才生效（v1.15.4 加该行时是热生效，但**改 config** 的路径未单独验过）。

@@ -37,7 +37,7 @@ LLM 只在 **Context Planning（选择）** 参与；**绝不** 判断事实 / �
 1. **Entity ≠ Memory**：Entity 是**观察到的可复用对象**（`{type, name, value, status, last_seen, evidence:[atom/episode], source:"observed"}`）。例：补丁目录 `D:\U8\u8-20260908\OpenAPI适配` 是实体，不是"修改了xxx目录"的记忆。**绝不能** `LLM认为这是补丁目录`；只能 `观察到用户称它为补丁目录`（Observer 原则）。
 2. **State ≠ Memory**：`state/current-task` = **Context Resume Point**（任务/已完成/关键决定/保留/未处理/相关/下一步），不是 Memory；是"恢复工作状态"的入口。
 3. **Rule ≠ Memory**：Rule = "**永远约束什么**"（如 Java8 / 禁改生成代码）；Memory = "**曾经发生什么**"。不混。
-4. **Context Reconstruction = Planner + Resolver + Builder → Context Bundle**：Planner(LLM) 判断"用户的话指哪个 Entity/Episode/Task"→ 选上下文 → Builder 产出 `Context Bundle {task, entities, decisions, evidence, current_state}`（**带证据来源**）→ 交给 LLM 回答。**不读全量 atom（500 个）**，只取所需。
+4. **Context Reconstruction = Planner + Resolver + Builder → Context Bundle**：Planner(LLM) 判断"用户的话指哪个 Entity/Episode/Task"→ 选上下文 → Builder 产出 `Context Bundle {task, entities, decisions, evidence, current_state}`（**带证据来源**）→ 交给 LLM 回答。**不读全量 atom（）**，只取所需。
 5. **LLM 的边界**：只在 **Context Planning** 参与（把"昨天那个接口问题"映射到 Entity/Episode/Task）。**禁**：判断事实 / 生成 memory / 补 reason / 创造实体。
 6. **差异化**：dsh-shadow 的 Context Reconstruction 比 Cursor 多一个东西——**每一次恢复都能指出证据来自哪里（provenance）**。这正是 Observer Runtime 的差异化。
 
@@ -63,5 +63,5 @@ LLM 只在 **Context Planning（选择）** 参与；**绝不** 判断事实 / �
 
 ## 自检（本 ADR 无代码，仅记录）
 
-- [x] 与 ADR-0037/0038/0039/0040 自洽（Evidence≠Interpretation / Episode=投影 / Task生命周期 / ContextReference），不冲突。
+- [x] 与 ADR-/ 自洽（Evidence≠Interpretation / Episode=投影 / Task生命周期 / ContextReference），不冲突。
 - [x] 只吸收 Cursor 思路，不照搬：核心 = `Memory + Entity + State + Context Reconstruction（带证据来源）`。

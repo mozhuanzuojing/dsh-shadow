@@ -11,7 +11,7 @@ Hypothesis → Reality Evidence → Validation Judgment → Observer Update
 ```
 v0.27 完成"产生假设但保持无知"；v0.28 引入**认识论闭环**。过去不能验证未来（防"事后诸葛亮"）。
 
-## 7 条协议
+## 协议
 
 ### 1. Validation 只能消费 Future Evidence
 禁 `Hypothesis(t0) → 读取已有 Memory → validated`（事后诸葛亮）。正确：
@@ -50,7 +50,7 @@ ValidationResult {
 ```ts
 Confidence { evidenceStrength: number; repetition: number; contradiction: number; alternativeSurvival: number; }
 ```
-例：支持 10 次但存在更简单解释 → 不高（alternativeSurvival 低）。
+例：支持 但存在更简单解释 → 不高（alternativeSurvival 低）。
 
 ### 5. Validation 不修改 Identity
 ```
@@ -103,7 +103,7 @@ v0.28–v0.30 = **Reality Coupling**（观察 → 现实反馈 → 模型修正 
 
 ---
 
-## 附录：v0.28 实现说明（5 个 checklist 已落地）
+## 附录：v0.28 实现说明（ checklist 已落地）
 
 1. **FutureEvidence 独立存储**：`shadow/future-evidence/<id>.json`；`shadow/hypothesis/<id>.json`（dream 产出）；`shadow/validation/<id>.json`（artifact）。保持 Memory ≠ Evidence、Hypothesis ≠ Evidence。
 2. **Validation 生成 Artifact，不覆盖 Hypothesis**：`epistemic/validation/validate.ts` `validateHypothesis` → `ValidationArtifact`（同一假设可多次 validated/observed/rejected，保留历史）。

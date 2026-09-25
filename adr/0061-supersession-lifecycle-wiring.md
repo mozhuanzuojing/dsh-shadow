@@ -13,7 +13,7 @@
 | 方向 | 证据 |
 |---|---|
 | ✅ **确定性取代规则 + 双时间账本** | Temporal Validity（[2606.26511](https://arxiv.org/abs/2606.26511)）：余弦相似度分辨「被推翻的旧事实」与「换个说法」的 **AUROC 仅 0.59（近随机）** → **解法是不靠相似度、用确定性键做取代** |
-| ❌ LLM 判断哪条过期 / LLM 自动纠正 | 同上；误纠正率主导 **53–94%** |
+| ❌ LLM 判断哪条过期 / LLM 自动纠正 | 同上；误纠正率主导 **53–** |
 
 本仓**已经有**这个确定性机制：`observer/arbitrate.ts` 的
 `newestByEntryOf(list)` + `verdictOf(...)` —— 按**同 `entry` 是否存在更新的记忆**判定 `superseded`，
@@ -48,7 +48,7 @@
 
 ### 根因（顺序，不是缺代码）
 
-`query/query.ts` 里两处相距 6 行：
+`query/query.ts` 里两处相距 ：
 
 ```ts
 293:  ev.lifecycle = lifecycleOf(meta[mm.rel], ageDaysOf(mm.rel), conflict.missing.length, stale);  // 每记忆循环
@@ -128,7 +128,7 @@ pinned(TRUSTED) > archived(ARCHIVED) > superseded(SUPERSEDED) > STALE > DECAYING
 - [x] 与 inv 178 一致：外部权威状态（pinned/archived）优先于派生判断。
 - [x] **修前/修后实测对照**齐备（同场景两次运行，标签由 `NEW` → `SUPERSEDED`）。
 - [x] 新增 `test/lifecycle-superseded.test.ts`（4 组），并在场景 36 加**集成回归断言**（修前该断言红）。
-- [x] 全套回归 **31 个测试文件全过**；既有分支行为未变（④ 组专门验）。
+- [x] 全套回归 **测试文件全过**；既有分支行为未变（④ 组专门验）。
 - [ ] **未验证**：真机端到端（需重启 DSH）。
 - [ ] **未做**：`(subject, relation, object)` 级细粒度取代（本仓是 `entry` 单键）。
 
@@ -138,7 +138,7 @@ pinned(TRUSTED) > archived(ARCHIVED) > superseded(SUPERSEDED) > STALE > DECAYING
 **单键 + 时间序**的粗粒度规则。本轮（吸收 hl_mem 可移植部分）为这条判据面补一条**原则性依据**：
 
 > **并存噪音是可观察问题；错误关链是静默破坏。不能证明时保留多值比制造单一真相安全。**
-> —— hl_mem `docs/adr/0004` 的「选择原因」第 5 条（别家材料，非本系统证据）
+> —— hl_mem `docs/adr/0004` 的「选择原因」第 （别家材料，非本系统证据）
 
 **为什么它对本 ADR 直接成立**：取代（superseded）是**破坏性动作** —— 它降权（×0.7）并改生命周期标签，
 一旦判错，被错关的那条记忆**从此静默地不再被信任**。而「同日并列 / 分不出先后」这种情形**留下的是

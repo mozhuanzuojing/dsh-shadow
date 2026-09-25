@@ -1,7 +1,7 @@
 # ADR-0084: 显式 0 不得被默认值吞掉 + 比较点判据收一处（T8-B 执行记录）
 
 - 状态：**已接受并实现**（2026-09-12 / v1.15.64）
-- 关联：`BACKLOG.md` **T8**（本条是其 **B 部分**：2 处开关缺陷）· **ADR-0049**（缺件不静默）·
+- 关联：`BACKLOG.md` **T8**（本条是其 **B 部分**：开关缺陷）· **ADR-0049**（缺件不静默）·
   **ADR-0063 / ADR-0070**（判据收一处 —— 本条第二半就是它的一次实测）· `adr/0083` §14.1（路线漂移，
   本条是**回到泳道**后的第一个产物）· 用户 2026-09-12 的泳道：`T8 → T15 → D1/D2/D3 → A段 → …`
 - 定位：**契约/纪律**（不是能力）。产出一条新纪律 + 修掉一处跨两个工具重复的判据。
@@ -9,7 +9,7 @@
 ## 1. Context：两条独立线索在同一轮里撞上
 
 用户 2026-09-12 定下泳道 `T8 → T15 → …`（`adr/0083` §14.1 记下：我在 M1 之后连续 **8 轮**做
-「审查→修」，T8/T15/D1-3/A段/T2 **一项未动**）。本轮回到泳道做 **T8**，其中 **B 部分**（2 处开关缺陷）
+「审查→修」，T8/T15/D1-3/A段/T2 **一项未动**）。本轮回到泳道做 **T8**，其中 **B 部分**（开关缺陷）
 的**判据已定、纯实现**，不需要决策，故先做。
 
 做的时候撞出**第二条**线索 —— 一条与 T8 无关、由闸门自己顶出来的：
@@ -64,10 +64,10 @@ numOr(v, dflt, min = 0)
    回落默认值比静默取 1 更诚实。
 2. **`min > 0` 的调用点不纳入本次修复**。那些点上 0 本就不是合法值，回落默认值才是对的
    （`Math.max(1, Number(0) || 80)` 恒为 1，与 `dflt=80` 不同）。
-   **口径更正**（元审查 self-fix）：我原先写「本仓 **25 处** `Number(x) || dflt`」——
+   **口径更正**（元审查 self-fix）：我原先写「本仓 **** `Number(x) || dflt`」——
    那是一次 `Select-String` 在 **`core/*.ts`** 上的**快照**（且是**修前**的），不是「本仓」全量，
-   修后这个数字也不再是 25（6 处已换掉）。**能站住的说法**：
-   「`core/` 下当时有 25 处 `Number(x) || dflt`，其中 `min <= 0`（即显式 0 可能有意义）的 6 处属本条」。
+   修后这个数字也不再是 25（已换掉）。**能站住的说法**：
+   「`core/` 下当时有  `Number(x) || dflt`，其中 `min <= 0`（即显式 0 可能有意义）的 属本条」。
    数字要带**范围**与**时刻**，否则它会在下一次改动后变成一句无人能复核的断言。
 3. **默认值只在库函数里落一次**。`deriveEpisodes` 是 `gapMinutes` 默认值的**唯一落点**；
    `writer-core` 与 `query/reads` **原样传配置**（`core/episode.ts` 的 `deriveEpisodes` 注释里写明）。
@@ -91,23 +91,23 @@ numOr(v, dflt, min = 0)
 | 工具 | 它问的问题 | 为什么 `typeof` 是噪音 |
 |---|---|---|
 | `audit-wiring` B 类 | 某 `字段=字面量` **只有读点、生产里无写入点** ⇒ 分支可能不可达 | 右侧是**类型名**、左侧是 `typeof` 的结果 ⇒ **必然**「无写入点」。可这个分支的可达性由**运行时类型**决定，静态文本**永远答不了** |
-| `audit-drift` B 类 | 同一 `字段=字面量` 在 **≥2 个生产模块**被表达 ⇒ 判据可能分叉 | `typeof` 的名字空间只有 8 个字面量，左侧又几乎总是泛用局部名（`v`/`x`/`k`）。两个模块同时写 `typeof v === "object"` 只是**巧合同名**，不是同一条判据 |
+| `audit-drift` B 类 | 同一 `字段=字面量` 在 **≥生产模块**被表达 ⇒ 判据可能分叉 | `typeof` 的名字空间只有 字面量，左侧又几乎总是泛用局部名（`v`/`x`/`k`）。两个模块同时写 `typeof v === "object"` 只是**巧合同名**，不是同一条判据 |
 
 ### 3.2 实测规模（**不是估计**）
 
-真语料实测假阳：**18 个键 / 23 处 site**，全部来自 `typeof`：
+真语料实测假阳：**键 /  site**，全部来自 `typeof`：
 
 - 键（18）：`agent=object` · `c=object` · `drift=object` · `editText=function` · `fromSoul=object` ·
   `ident=string` · `inject=function` · `k=string` · `location=string` · `nested=string` ·
   `patterns=string` · `pref=object` · `resolve=function` · `stat=function` · `turn=number` ·
   `v=object` · `v=string` · `wiring=object`
-- **9 个键是「带点操作数」的 typeof**（`typeof thing.agent === "object"`、`typeof fs.stat === "function"` …）
+- **键是「带点操作数」的 typeof**（`typeof thing.agent === "object"`、`typeof fs.stat === "function"` …）
   —— 这一点**很重要**，见 §4 我自己的错误。
 
-**取证**：`.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts` 对这 18 个键**逐键**回到 HEAD 语料，
+**取证**：`.docs/fix/2026-09-12/t8b-typeof-vs-real-audit.ts` 对这 键**逐键**回到 HEAD 语料，
 断言「**每一处**出现点都带 `typeof ` 前缀」。判据等价性：某键只要有**一处**非 typeof 出现点，
 它就不会消失 ⇒ 该检查**恰好等价**，既不过严也不过松。
-结果：**18/18 通过，非 typeof 出现点 0 个** ⇒ 下降**只**减掉假阳，**没有误删任何真线索**。
+结果：** 通过，非 typeof 出现点 ** ⇒ 下降**只**减掉假阳，**没有误删任何真线索**。
 
 ### 3.3 决定：判据搬到 `tools/comparison-points.lib.ts`，两份实现合一
 
@@ -139,8 +139,8 @@ numOr(v, dflt, min = 0)
 
 写取证探针时，我用「匹配点**之前**紧邻 `typeof `」来判断一处是不是 typeof 形态。
 **这错了**：`typeof thing.agent === "object"` 的匹配点落在链的**最后一段** `agent` 上，
-它前面是 `typeof thing.` 而不是 `typeof ` ⇒ 探针把 9 个**真 typeof**误判成「非 typeof」，
-于是报出「9 个键**减多了**」的**假警报**。
+它前面是 `typeof thing.` 而不是 `typeof ` ⇒ 探针把 **真 typeof**误判成「非 typeof」，
+于是报出「键**减多了**」的**假警报**。
 
 修法：探针改用**与 `comparison-points.lib.ts` 逐字同源**的正则（可选 `typeof ` 前缀 + 接收者链）
 并复刻其判据 `/^typeof\b/.test(m[0])`，不自创近似判断。
@@ -159,20 +159,20 @@ numOr(v, dflt, min = 0)
 | `audit-wiring` `b_keys` | 115 | **97** | −18，全部经 §3.2 逐键取证 |
 | `audit-drift` `drift_keys` | 11 | **9** | −2 |
 | `audit-drift` `drift_sites` | 28 | **23** | −5 |
-| `numOr` 覆盖的配置点 | 0 | **6** | `min <= 0` 的那 6 处；`min > 0` 的 19 处**未动** |
-| `episodes.gapMinutes` 默认值落点 | 3 处 | **1 处** | `core/episode.ts` 的 `deriveEpisodes` |
-| 比较点扫描判据落点 | 2 处 | **1 处** | `comparison-points.lib.ts` |
-| `npm run verify` | 53/53 | **54/54** | 新增 `test/t8-explicit-zero.test.ts` |
+| `numOr` 覆盖的配置点 | 0 | **6** | `min <= 0` 的那 ；`min > 0` 的 **未动** |
+| `episodes.gapMinutes` 默认值落点 |  | **** | `core/episode.ts` 的 `deriveEpisodes` |
+| 比较点扫描判据落点 |  | **** | `comparison-points.lib.ts` |
+| `npm run verify` |  | **** | 新增 `test/t8-explicit-zero.test.ts` |
 
 **红前绿后**（不是推断）：把 `core/writer/core.ts` / `core/writer/materialize.ts` 的三处调用点**临时还原**为
 `||` 形态、重新 `tsc`、再跑新测试 ⇒ `③b episodes.showInIndex:0` **真的红**，
-报文里打印出修前索引仍含 `## 任务回溯（Episodes）` 段。恢复后 54/54 全绿。
+报文里打印出修前索引仍含 `## 任务回溯（Episodes）` 段。恢复后  全绿。
 
 ## 6. 未做 / 诚实边界
 
-- **T8 的 A 部分（7 处静默降级）未做** —— 本条只完成 B 部分（2 处开关缺陷）。A 部分每条需要
+- **T8 的 A 部分（静默降级）未做** —— 本条只完成 B 部分（开关缺陷）。A 部分每条需要
   **不同的可见信号形态**，是本条的下一段工作。
-- **`min > 0` 的 19 处 `Number(x) || dflt` 未审**：它们不属于「显式 0 有意义」这一类，
+- **`min > 0` 的  `Number(x) || dflt` 未审**：它们不属于「显式 0 有意义」这一类，
   但**不等于**都判过正当 —— 本轮**只按 `min <= 0` 这个必要判据筛**，没有逐条读语义。
 - **棘轮基线被收紧，不是被放宽**：`b_keys` 97 / `drift_keys` 9 / `drift_sites` 23 都已用
   工具自身的 `--update-ratchet` 重录（`a_total` 仍 39，**未变** ⇒ 新 `numOr` 确有接线）。

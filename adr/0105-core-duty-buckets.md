@@ -5,7 +5,7 @@
 - 关联：**ADR-0102**（G1 前缀簇；明确非目标含 G2）· **ADR-0104**（同发版先落地的第五伞）·
   **T13** / [`tools/audit-layers.lib.ts`](../tools/audit-layers.lib.ts)
 - 定位：**源码导航**。回答「`core/` 根上剩余单件怎么按职责粗分、`layerOf` 是否变」。
-- 触发：前缀簇后根上仍约 31 个 `.ts`；grill 锁定 G2+S → O1 → B1 桶表 → R1。
+- 触发：前缀簇后根上仍约  `.ts`；grill 锁定 G2+S → O1 → B1 桶表 → R1。
 
 ## 1. Context
 

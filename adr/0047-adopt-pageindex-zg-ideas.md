@@ -2,7 +2,7 @@
 
 - 状态：**已提出（2026-09-08；学习 PageIndex/zg 的**思想**并进入 dsh-shadow，不集成外部工具**）
 - 决定日期：2026-09-08
-- 关联 ADR：ADR-0001（不引向量库）、ADR-0042/43（Shadow Contract）、ADR-0045/46（Lineage/Plan）、ADR-0044（Evidence Lineage Boundary）
+- 关联 ADR：ADR-0001（不引向量库）、ADR-（Shadow Contract）、ADR-（Lineage/Plan）、ADR-0044（Evidence Lineage Boundary）
 - 参考源码：`vendor/_src/PageIndex`（Vectorless, Reasoning-based RAG）、`vendor/_src/zvec-grep`（zg, local-first search layer）
 - 关联术语：`../CONTEXT.md`（Knowledge Tree / Index Engine / Evidence Gate / provenance）
 
@@ -73,5 +73,5 @@ v1.9.0（Knowledge Tree + Index Engine 骨架）✅
 ## 自检（本 ADR 无代码，仅记录）
 
 - [x] 提炼 PageIndex（免向量树+推理检索+可追溯+语料树）与 zg（多级管线+多格式+本地化）核心思想。
-- [x] 明确"吸收思想、不集成工具"；与 ADR-0001/0043 自洽（不向量化、LLM 不造事实、zg 是 sensor）。
+- [x] 明确"吸收思想、不集成工具"；与 ADR- 自洽（不向量化、LLM 不造事实、zg 是 sensor）。
 - [x] 映射到 dsh-shadow 现有骨架（Knowledge Engine 树 / Index Engine 候选 / Evidence Gate 可追溯）。

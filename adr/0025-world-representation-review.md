@@ -4,7 +4,7 @@
 > 前置：ADR-0024（v0.31 World Representation Kernel）。定位：**证明 Representation Layer 永远低于 Reality Layer**。
 > 新风险：v0.30 风险=把自己的观察当成事实；v0.31 新风险=**把对事实的结构表示当成世界本身**（很多 World Model / Knowledge Graph 系统的滑点）。
 
-## 5 条 Invariant（冻结）
+##  Invariant（冻结）
 
 ### Invariant 116 · Representation 不能超越 Evidence
 ```
@@ -67,6 +67,6 @@ Simulation: 如果条件变化，会怎样？
 
 ## 附录：v0.31.1 实现说明（Invariant Lock）
 
-- 5 条 边界固化为不可回退测试（mock 124–130）：unsupported 不生成 Representation / Representation 不增加 predicate / Graph 无 causalGraph·entityGraph·worldGraph·realityGraph / RelationHypothesis 不升级 / Explain lineage 完整 / Representation 不进入 Identity / Representation 不直接驱动 Decision。
+-  边界固化为不可回退测试（mock 124–130）：unsupported 不生成 Representation / Representation 不增加 predicate / Graph 无 causalGraph·entityGraph·worldGraph·realityGraph / RelationHypothesis 不升级 / Explain lineage 完整 / Representation 不进入 Identity / Representation 不直接驱动 Decision。
 - 无运行时改动（v0.31 三个守卫已满足全部 invariant；本轮只加测试固化）。全量 mock 1–130 全绿；tag `v0.31.1 World Representation Integrity Lock`。
 - 通过后进入 v0.32 Simulation Boundary Protocol（真正 World Model 是"对可能世界模拟"，第三层最易污染前两层）。

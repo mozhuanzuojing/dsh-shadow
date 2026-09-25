@@ -2,7 +2,7 @@
 
 > 时间：2026-09-06 ｜ 状态：迁移表（可直接执行）
 > 前置：ADR-0003（Core Refactor 分阶段）。领域逻辑已全部拆出（index.ts 1432→642）。
-> 目标：把最后的两个巨型关注点拆出——`read_shadow` 的 query/router（单函数，~350 行）+ apply 接线收敛，使 index.ts 成为 ~200 行 Cordis Adapter。
+> 目标：把最后的两个巨型关注点拆出——`read_shadow` 的 query/router（单函数，~）+ apply 接线收敛，使 index.ts 成为 ~ Cordis Adapter。
 
 ## 1. 目标目录
 
@@ -109,7 +109,7 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
 - 步骤：① 建 `query/types.ts`（ShadowQueryDeps）→ ② 建 `query/query.ts`（把 index.ts 的 read_shadow execute 全体搬入，闭包引用改 `deps.*`/import）→ ③ index.ts 构造 `queryDeps` + `execute` 改调 `runReadShadow(queryDeps, args, exec)`。
 - 每步：`tsc` + `node --check` + 全量 mock 1–42 全绿。
 - 验收：`index.ts` ~200 LOC；`read_shadow` 外部行为不变；mock 全绿。
-- 关键：**不要**把 `read_shadow` 拆成 8 个 DSH 工具（保持单一工具，内部 Router）。
+- 关键：**不要**把 `read_shadow` 拆成  DSH 工具（保持单一工具，内部 Router）。
 
 ## 6. 取舍 / 排除
 - query/query.ts 保留多模式分派的 `if (args.xxx)`（不改读侧 API）；进一步改为内部 Query Router 对象是可选项，非本题必要。

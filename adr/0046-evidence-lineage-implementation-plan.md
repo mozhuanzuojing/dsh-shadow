@@ -117,9 +117,9 @@ Atom → validateProjection → deriveShadowNodes → Node
 
 ```markdown
 Evidence Density
-type      decision 86% · memory 74% · code 100% · document 100%
-kind      experience 82% · metadata excluded · task 71%
-createdBy agent 65% · user 95% · tool 100%
+type      decision  · memory  · code  · document 
+kind      experience  · metadata excluded · task 
+createdBy agent  · user  · tool 
 ```
 
 ---
@@ -142,8 +142,8 @@ createdBy agent 65% · user 95% · tool 100%
 3. shadow-report（Evidence Density 三维）
       ↓
 4. 对比：
-   Before: decision 0% · memory 0%
-   After:  decision >80% · memory >80%（过滤 metadata 后）
+   Before: decision  · memory 
+   After:  decision > · memory >（过滤 metadata 后）
 ```
 
 ## 版本边界（再确认）

@@ -5,7 +5,7 @@
 
 ## 1. 目标
 
-把 index.ts 里剩余的**写侧采集基础设施**抽出，使 index.ts 成为名副其实的 ~200 行（实际 **124 行**）Cordis Adapter：
+把 index.ts 里剩余的**写侧采集基础设施**抽出，使 index.ts 成为名副其实的 ~（实际 ****）Cordis Adapter：
 只保留 config 解析 + 事件接线 + 工具注册 + systemPrompt。写侧领域逻辑整体迁入 `core/writer/index.ts`。
 
 ## 2. 迁移（index.ts 顶层名 → core/writer/index.ts）
@@ -25,7 +25,7 @@
 | `getFlushWarn` | index 内部 | writer 返回，经 queryDeps 注入 |
 | `verifyEvidence` | index 内部 | **留在 index**（引用 config.evidenceProvider/evidenceProviders，属 Adapter 配置路由） |
 
-## 3. index.ts（Adapter，124 行）现状
+## 3. index.ts（Adapter，）现状
 
 - `config` 解析；`getAgentById`（context.get("agents")）；`createShadowCollector({context, config, getAgentById})`。
 - `context.on(...)` 六个事件全部绑定到 collector 返回的 handler（只绑定，不实现逻辑）。
@@ -49,6 +49,6 @@
 
 ## 6. 取舍 / 遗留
 
-- writer.ts 366 行仍偏大，但它是**单一职责的写侧采集状态机**（状态 + push/flush + LLM 闭包），内聚可接受；若继续拆可把 summarization/索引物化再分文件，但收益递减，暂不做。
+- writer.ts 仍偏大，但它是**单一职责的写侧采集状态机**（状态 + push/flush + LLM 闭包），内聚可接受；若继续拆可把 summarization/索引物化再分文件，但收益递减，暂不做。
 - 事件 handler 已从 index 迁出（ADR-0003 §2 建议「index 只负责 on() 绑定」）；index.ts 现已满足该目标。
 - P1 语义修正（Summary≠Lesson / confidence 维度拆分 / lineage / Trace）与 P2（Derived Artifacts、scrub=presentation-only、asOf{timestamp,timezone}）仍是 ADR-0003 §3 的后续项，未在本 ADR 做（非结构迁移，属功能增强，另立项）。

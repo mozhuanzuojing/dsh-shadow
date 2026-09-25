@@ -64,7 +64,7 @@ v0.37 Controlled Autonomy
 
 ## 附录：v0.34.1 实现说明（Invariant Lock）
 
-- 7 条边界固化为不可回退测试（mock 159–165）：Planning 不产生 Objective / PlanCandidate 不产生 Preference / Evaluation 不产生 Value Model / Planning 不改变 Identity / Success ≠ Planning Capability / Plan Failure 不删除路径 / Planning Lineage 完整。
+- 边界固化为不可回退测试（mock 159–165）：Planning 不产生 Objective / PlanCandidate 不产生 Preference / Evaluation 不产生 Value Model / Planning 不改变 Identity / Success ≠ Planning Capability / Plan Failure 不删除路径 / Planning Lineage 完整。
 - **PlanningComparison 非谁最好**：`planning/render.ts` 输出 `satisfiedConstraints/violatedConstraints`（哪些约束被满足/违反），不是 best/preferred。
 - 无新增 runtime capability（只加边界/测试）；全量 mock 1–165 全绿；tag `v0.34.1 Planning Integrity Lock`。
 - 通过后进入 v0.35 Agency Boundary Protocol（真正危险：Planning+Action+Feedback+History 组合 → self-directed behavior——"系统什么时候只是执行外部目标，什么时候开始形成自己的目标"）。

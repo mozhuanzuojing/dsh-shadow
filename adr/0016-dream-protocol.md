@@ -2,7 +2,7 @@
 
 > 时间：2026-09-07 ｜ 状态：已实现（v0.26.0） ｜ 版本：v0.26.0
 > 前置：ADR-0015（v0.25 Identity）。定位：**Observer 对自身时间轨迹的低频压缩观察**（对应人睡眠），不是生成器、不是总结。
-> 关键红线：**Dream ≠ Fact / ≠ Reflection / ≠ Identity / ≠ Knowledge**。Dream 天生是"从不完整信息中发现隐藏结构"，必须先锁边界，否则破坏前 6 个版本建立的约束。
+> 关键红线：**Dream ≠ Fact / ≠ Reflection / ≠ Identity / ≠ Knowledge**。Dream 天生是"从不完整信息中发现隐藏结构"，必须先锁边界，否则破坏前 版本建立的约束。
 
 ## 1. 定位
 
@@ -52,7 +52,7 @@ interface Hypothesis {
 Observer Timeline → 选时间窗 → 压缩 traces → 检测 pattern → 生成 hypothesis → 未来验证
 ```
 
-## 6. Dream Pattern（v0.26 只做 3 个）
+## 6. Dream Pattern（v0.26 只做 ）
 
 - **Pattern A Repeated Hidden Cause**：`决策→结果→反思` 相同结果背后重复原因 → Hypothesis"可能存在未观察变量 X"（**不是**"发现原因 X"）。
 - **Pattern B Prediction Error**：`Projection.visible→expected` vs `actual` → "Observer 经常低估某因素" → Hypothesis"当前 RealityProjection 可能遗漏因素 Y"。

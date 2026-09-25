@@ -5,8 +5,8 @@
 
 ## 1. 背景 / 判断
 
-`index.ts` 已是 **1432 LOC / 106 个顶层名** 的 god object：scope/config/采集/安全/持久化/索引/召回/排序/生命周期/证据/KG/Soul/Experience/Observer/Projection/Judgment/Taste/工具注册/提示 全挤在一个文件。多个 bounded context 被压扁。
-- 概念架构 8.5/10、工程结构 6/10、数据模型 6.5/10、可扩展性 5.5/10。
+`index.ts` 已是 **1432 LOC / 顶层名** 的 god object：scope/config/采集/安全/持久化/索引/召回/排序/生命周期/证据/KG/Soul/Experience/Observer/Projection/Judgment/Taste/工具注册/提示 全挤在一个文件。多个 bounded context 被压扁。
+- 概念架构 8.、工程结构 、数据模型 6.、可扩展性 5.。
 - 继续往 `index.ts` 加（如 zg）会不可维护。**下一步正确动作 = Core Refactor，不是 Feature。**
 
 ## 2. 目标目录（每模块单一职责）
@@ -66,7 +66,7 @@ dsh-shadow/
 
 ## 4. 迁移表（真实 index.ts 函数 → 模块）
 
-> 以当前 `index.ts` 顶层名为准（1432 行 / 106 个名字）。`[]` 内为原文件位置逻辑。
+> 以当前 `index.ts` 顶层名为准（ / 名字）。`[]` 内为原文件位置逻辑。
 
 ### index.ts（Adapter，保留，变薄）
 `config` 解析、`context`、`MAX_PENDING`、`apply()` 的 config/事件 wire/工具注册/systePrompt/cleanup；导出 `resolveShadowScope/resolveWorkspace/firstNonEmpty` → 移到 core/scope.ts（index.ts 只 re-export）。
@@ -129,6 +129,6 @@ dsh-shadow/
 - **验收**：`index.ts` 目标 ~200 LOC；无重复；mock 全绿；read_shadow 外部行为不变。
 
 ## 6. 取舍 / 排除
-- **不做**：把 read_shadow 拆成 8 个 DSH 工具（会炸 Agent 工具选择空间）——保持单一 `read_shadow`，内部分 Router。
+- **不做**：把 read_shadow 拆成  DSH 工具（会炸 Agent 工具选择空间）——保持单一 `read_shadow`，内部分 Router。
 - **不做**：自动推断 Observer（research 级）——保留"curated + 可证伪"边界，明确不宣称"你的灵魂就是这样"。
 - **不做**：更多 Memory 类型（Fact/Episodic/Semantic/Procedural/Normative 仅在概念层注明，不作新存储）。

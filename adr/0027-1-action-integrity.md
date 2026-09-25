@@ -4,7 +4,7 @@
 > 前置：ADR-0027（v0.33 Action Boundary Kernel）。目标：**证明 Action 可以改变环境，但不能改变 Observer 对自己的定义**。
 > 特殊性：v0.28 允许现实修正自己 / v0.32 允许模拟可能世界 / **v0.33 允许影响现实**——Action 层是目前最大"外溢风险点"。
 
-## 6 条 Invariant（冻结）
+##  Invariant（冻结）
 
 ### 146 · ActionExecution ≠ RealityClaim
 ```
@@ -65,6 +65,6 @@ Action 可以改变环境，但**不能改变 Observer 对自己的定义**；Ac
 
 ## 附录：v0.33.1 实现说明（Invariant Lock）
 
-- 6 条边界固化为不可回退测试（mock 146–151）：ActionExecution 不生成 RealityClaim / Feedback 不 direct validate hypothesis / Failure 保留 / Action 不改历史 Observation / Success 不改 Identity / ActionScope ≠ RealityOwnership。
+- 边界固化为不可回退测试（mock 146–151）：ActionExecution 不生成 RealityClaim / Feedback 不 direct validate hypothesis / Failure 保留 / Action 不改历史 Observation / Success 不改 Identity / ActionScope ≠ RealityOwnership。
 - 最小 boundary enforcement：`action/guard.ts` 扩展 `EXECUTION_FORBIDDEN`(RealityClaim/Evidence/should_exist/is correct/proves) 与 `FEEDBACK_FORBIDDEN`(validated/proves/方向正确)——Action 是影响现实不是拥有现实。
 - 全量 mock 1–151 全绿；tag `v0.33.1 Action Integrity Lock`。通过后进入 Adaptive Planning Boundary Protocol（Planning 会引入新危险："选择行动的机制"会不会偷偷变成"目标、价值、奖励、人格"——需比 Action 更严格）。

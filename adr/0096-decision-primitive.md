@@ -6,7 +6,7 @@
   **ADR-0081**（`core/decision-outcome.ts` 的归属 + §8.4 自陈「无生产消费者」）·
   **ADR-0086**（受保护契约面；§7 决定 T1 **不进**该面）· **ADR-0049**（缺件不静默）·
   **ADR-0003**（派生件不是 source）· **ADR-0095**（Atom 是唯一事实源，索引可重建）·
-  **ADR-0080/0081**（阈值不构成权威）
+  **ADR-**（阈值不构成权威）
 - 定位：**协议**。回答「Decision 原语是什么、谁产生、怎么记、记成什么」。
   **实现清单与门禁在 §9**，不是本 ADR 的判据。
 - 材料：`vendor/_src/jev-ultrafast`（局部只读实测，见 §1.2；引用均为 `文件:行号`）
@@ -20,7 +20,7 @@
 
 > 「LLM 负责**想**，Jev-like 负责**判**，Shadow 负责**记住为什么判**。」
 
-并给出一个 8 文件的 `decision/` 层草图（`types/choice/score/boolean/rank/engine/policy/lineage`）
+并给出一个 的 `decision/` 层草图（`types/choice/score/boolean/rank/engine/policy/lineage`）
 与 T1→T5 的推进顺序（T1 先抽象原语、不接 jev；T5 才把 jev 接成后端）。
 
 ### 1.2 Jev 实测：提案里的五个原语，只有一个是真的
@@ -31,7 +31,7 @@
 |---|---|---|
 | `choice` | ✅ **存在**，且是**唯一**的题型：`{"type":"choice","criteria":{…}}` | `model.py:81,91-106` |
 | `score` | ⚠️ **半有** —— 只有**模型自报**的 `probabilities`/`confidence`；代码里**没有任何** score 函数 | `model.py:120-133` |
-| `boolean` | ❌ **不存在**（无 yes/no 题型） | `model.py` 内 `boolean` 字面量 **0 处** |
+| `boolean` | ❌ **不存在**（无 yes/no 题型） | `model.py` 内 `boolean` 字面量 **** |
 | `rank` | ❌ **不存在** —— `"Ranked by Jev"` 只是 inspector UI 文案 | `jev_ultrafast/static/app.js:107` |
 | `threshold` | ❌ **不存在** —— argmax 无条件执行，概率再低也照做 | `model.py:120-133` |
 
@@ -103,12 +103,12 @@
 | `rank` | ❌ **不提供**（v1.17.0 从「视图」再降一级） | 分布字段已删 ⇒ 要排就得**解析 `rawOutput`**，那正是把引擎的置信度**重新建模**成 shadow 的排序。v1.16.0 曾给过 `orderByReported()` 视图，按 §12 取消 |
 | `threshold` | ❌ **不提供** | 见下 |
 
-**为什么删除 `threshold` 是最重要的一条**：本仓对「阈值当权威」已有立场（ADR-0080/0081）。
+**为什么删除 `threshold` 是最重要的一条**：本仓对「阈值当权威」已有立场（ADR-）。
 更根本的是 —— **一旦 shadow 按阈值把引擎输出切成「执行 / 不执行」，决策就变成了 shadow 的策略，
 而不是引擎的声明**；那正是 ADR-0037 禁止的那种「**采集变判断**」（`adr/0037:82-92`）。
 阈值若存在，是**引擎的内部事务**；shadow 只记结果，不记「shadow 怎么切的」。
 
-⇒ 因此 `decision/` 的文件集从提案的 8 个减到 **6 个**（§9.1），删掉
+⇒ 因此 `decision/` 的文件集从提案的 减到 ****（§9.1），删掉
 `score.ts` / `boolean.ts` / `rank.ts` / `policy.ts`（`policy` 概念留到真有第二个后端时再定，
 避免先造空抽象）。
 
@@ -128,7 +128,7 @@
 3. `rawOutput` **非空**（没有原始声明就不叫「声明」）；
 4. 违例 ⇒ **逐条点名** + `invalid`，**不静默纠正、不落回默认**（ADR-0049）。
 
-> v1.16.0 曾有第 4–6 条**分布判据**（键逐字对齐 / 值域 `[0,1]` / 和 ≈ 1，容差 `1e-6`）。
+> v1.16.0 曾有第 4–**分布判据**（键逐字对齐 / 值域 `[0,1]` / 和 ≈ 1，容差 `1e-6`）。
 > **它们随字段一起删除了 —— 不是被放松。** 没有字段，就没有可判的对象；保留「判空字段」的判据
 > 只会制造一门**看起来在守、其实无物可守**的假闸门。
 
@@ -176,8 +176,8 @@
 ## 7. 决定六：T1 **不进入**受保护契约面（ADR-0086）
 
 ADR-0086 的公开面 = `README.md` 表 A / 表 B 的那组 `*-v1` 契约。
-⚠ **条数不许手写**（本仓规矩，见 `AGENTS.md` 的「能推出来的字段不要手写」）—— 实测 **9 个 id**，
-而同一份 README 的另一处写「**8 条**」、`adr/0086:71` 又写「**七个**面族」：
+⚠ **条数不许手写**（本仓规矩，见 `AGENTS.md` 的「能推出来的字段不要手写」）—— 实测 ** id**，
+而同一份 README 的另一处写「****」、`adr/0086:71` 又写「**七个**面族」：
 **三处不一致，且没有任何门在守这个数**（§7.1 末注）。现行口径用命令取，别凭记忆：
 
 ```powershell
@@ -202,8 +202,8 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 ```text
 桩预估 :  a1 23 → 30 (+7)  |  a2b 0 → 1 (+1)  |  a_total 38 → 46 (+8)
 真实现 :  a1 23 → 31 (+8)  |  a2b 0 → 0 (±0)  |  a_total 38 → 46 (+8)   ← **定案用这一行**
-（两次实测 drift 侧都**不变**（9 个键 / 23 处）；`audit:layers` 语料 199→205 文件、553→559 边，
- 含**新增 3 条方向禁令之后**仍「**全部判据通过 ✅**」⇒ §9.2 第 2 步的判断得到实证）
+（两次实测 drift 侧都**不变**（键 / ）；`audit:layers` 语料 199→、553→559 边，
+ 含**新增 方向禁令之后**仍「**全部判据通过 ✅**」⇒ §9.2 第 2 步的判断得到实证）
 ```
 
 处理方式是**显式重定基线 + 在 CHANGELOG 说明**（§9.2 第 5 步），**不是偷偷 `--update-ratchet`**。
@@ -228,8 +228,8 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 `for (const t of ["read_shadow", "recall_shadow", "shadow_query"]) assert.ok(tools.reg.has(t), …)` ——
 **纯名字存在性**断言，不涉 schema / 参数 / 默认值） |
 | 冻结清单 | `tools/contract-surface.selftest.ts:24`（`TOOLS`）· `:50`（`TOOL_PARAM_FROZEN`） | **有**（`missing` 红；清单可由 `:223-224` 的打印重新生成） |
-| 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `docs/maintainers.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见该文完成度表；⚠ **该分组本身曾腐烂**：9 个 id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而旧文又写「8 条全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
-| 若加配置键 | `tools/contract-surface.selftest.ts` 的 `CONFIG_KEY_FROZEN` + README 默认开关表 | ⚠ **加键本身没有任何门挡着**（**实测**：往 `ShadowConfig` 加一个键 ⇒ 该 selftest 明说「**新增顶层键 N 个（allowed，只报告）**」并 `exit 0`；`audit:docs` ③ **完全不受影响**，仍是 `20 = 20`）。③ 守的是 **README 表自洽**（**实测**：把声明数改成 21 而表里仍 20 行 ⇒ **红，`exit 1`**）⇒ **「新键要登记进 README 那 10 个字段」这件事无门可守**，只有**删键 / 改名**才红。※ 本 ADR 早先在此写「表计数**有**（`audit:docs` ③）」—— **错了**，自审时用正反两个实验改正 |
+| 登记册 **10 字段**（表 A / 表 B 的**填写完整度**） | `docs/maintainers.md` 受保护契约面 | **无自动化门** —— 各面**都有** verification（分组见该文完成度表；⚠ **该分组本身曾腐烂**： id 被分成「6 强门 + 2 只守名字面」= **8**，**漏了 `tool-output-v1`**，而旧文又写「全无棘轮桶」），且那些门守的是**代码面**（名字 / 断言），**不是这张表的完整度** |
+| 若加配置键 | `tools/contract-surface.selftest.ts` 的 `CONFIG_KEY_FROZEN` + README 默认开关表 | ⚠ **加键本身没有任何门挡着**（**实测**：往 `ShadowConfig` 加一个键 ⇒ 该 selftest 明说「**新增顶层键 N 个（allowed，只报告）**」并 `exit 0`；`audit:docs` ③ **完全不受影响**，仍是 `20 = 20`）。③ 守的是 **README 表自洽**（**实测**：把声明数改成 21 而表里仍  ⇒ **红，`exit 1`**）⇒ **「新键要登记进 README 那 字段」这件事无门可守**，只有**删键 / 改名**才红。※ 本 ADR 早先在此写「表计数**有**（`audit:docs` ③）」—— **错了**，自审时用正反两个实验改正 |
 | 若加 `mode` | `test/recall-envelope.test.ts:104`（62→63）+ `CONTEXT.md`「mode 参考」 | **有**（`:104` 计数断言 + `:111` 覆盖断言） |
 
 ⇒ 两条结论：
@@ -238,10 +238,10 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
    本节的表就是现成的清单，不必重新考古。
 
 > **末注（实测到的三处同类腐烂，**本轮已一并修**）**：受保护契约面的**条数**曾有**三个互相矛盾**的值 ——
-> 实测 **9 个 id**（命令见 §7 开头）· `README.md` 写「**8 条**」· `adr/0086` 写「**七个**面族」。
+> 实测 ** id**（命令见 §7 开头）· `README.md` 写「****」· `adr/0086` 写「**七个**面族」。
 > 三者已统一为「**不写数、以 `README.md` 表 A/表 B 的 `id` 为准**」，并补上原先漏掉的 `tool-output-v1`。
 > 同批修的还有：`README.md` / `BACKLOG.md` 指向**已不存在的** `../.docs/fix/2026-09-12/` 生成器
-> （→ 重建为 `tools/module-ownership.ts`），以及 8 处把「守 62 的那道门」引成 `recall-envelope.test.ts:96`
+> （→ 重建为 `tools/module-ownership.ts`），以及 把「守 62 的那道门」引成 `recall-envelope.test.ts:96`
 > 的过期行号（真值是 **`:104`**；覆盖断言是 **`:111`**，不是 `:112`）。
 
 ## 8. 决定七：lineage / outcome **接线不重建**
@@ -263,12 +263,12 @@ Select-String -Path README.md -Pattern '^\| `([a-z0-9-]+-v1)` \|' |
 
 ## 9. T1 的范围、文件集与门禁
 
-### 9.1 文件集（**6 个**，不是提案的 8 个）
+### 集（****，不是提案的 ）
 
 ```text
 decision/
 ├── types.ts       稳定协议（`engine` / `candidates` / `selected` / `rawOutput` —— **恰好这四个字段**，§4）
-├── guard.ts       边界守卫（§4 的 **4 条**判据；镜像 action/ · planning/ 的 guard 形态）
+├── guard.ts       边界守卫（§4 的 ****判据；镜像 action/ · planning/ 的 guard 形态）
 ├── choice.ts      **唯一原语** `choose`（**无视图** —— `rank` 已在 §3 取消）
 ├── engine.ts      DecisionEngine 接口 + 查找 + unavailable 语义（§7：无网络、无 LLM、无 jev）
 ├── heuristic.ts   HeuristicDecisionEngine（确定性规则表；T1 唯一后端）
@@ -349,23 +349,23 @@ D8）；未知 / 缺件引擎 ⇒ **`unavailable` + reason，绝不静默 fallba
       `selected` 不在候选集 / `candidates` 空 / `rawOutput` 空白 / `engine` 空（**四条**，与实现一一对应）
       ※ v1.16.0 的分布三条反例（键多 / 键少 / 越界 / 和偏离 / 容差边界）随字段删除而**一并撤除**
 - [x] 本层**没有视图** —— `rank` 已在 §3 取消（`orderByReported` 删除）；全仓**没有任何**偏好 / 排序消费者
-- [x] **全层 6 个文件**的**字段名**里禁词 **0 处**（含 `probabilities` / `reportedDistribution`）——
+- [x] **全层 文件**的**字段名**里禁词 ****（含 `probabilities` / `reportedDistribution`）——
   由第 ⑦ 块断言，同一块还断言 `types.ts` **零 import**（`PURE_MODULES` 的承诺）与**文件集本身**
 - [x] **结构判据**（第 ⑦ 块，**本层最重要的一条**）：`EngineDeclaration` 的字段集**恰好**
       `{engine, candidates, selected, rawOutput}`；带**标定**（合成样本证明检测器看得见非法字段）
-- [x] `tsconfig.json` 的 `include` 含 `decision/**/*.ts` ⇒ `dist/decision/` 下 6 个 `.js` + 6 个 `.d.ts`。
+- [x] `tsconfig.json` 的 `include` 含 `decision/**/*.ts` ⇒ `dist/decision/` 下  `.js` +  `.d.ts`。
       **破坏性验证已做**（v1.16.2）：去掉 include ⇒ build `exit 0` 零报错、`dist/decision` 不重建、
       测试死在 `ERR_MODULE_NOT_FOUND`（**文件不存在**，不是类型错）—— 见 §9.2 第 3 步
-- [x] `npm run audit:layers` **0 违规**，且在**新增 3 条方向禁令之后**仍绿（`decision` 现受
+- [x] `npm run audit:layers` **0 违规**，且在**新增 方向禁令之后**仍绿（`decision` 现受
       `core↛decision` / `decision↛query` / `decision↛tools` 约束；`why` 非空由 selftest ⑦ 强制）
 - [x] 两处棘轮基线已**显式**重定；v1.17.0 因删除导出而**下降**，已按工具提示**收紧**基线
       （`a1 31 → 30` · `a_total 46 → 45`）并报「与基线逐桶相等 ✅」
-- [x] `adr/0037` **正文未动**（`git diff --numstat` = `27 0`，纯追加；6 个原标题全在，只多一个 `## 补记`）
+- [x] `adr/0037` **正文未动**（`git diff --numstat` = `27 0`，纯追加；原标题全在，只多一个 `## 补记`）
 - [x] `SHADOW_EVAL_ROOT=D:\project\dsh1 npm run verify` → **exit 0**，末行 `[run-tests] ALL PASS ✅`
 - [x] 模块归属表：生成器已重建为 `tools/module-ownership.ts`（§9.2 第 6 步选 (a)）并由它打印
-      **28 行 = 27 个目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
+      ** = 目录 + `index.ts`**；`README.md` 与 `BACKLOG.md` 的**死指针**一并改指它
       ⚠ 过程中 `audit:ratchet` **判红过一次**（`b_keys 95 → 100（+5）`）—— 因为初版把 `=== "(root)"`
-      内联散在 5 处；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
+      内联散在 ；收成一处 `isRoot()` 后回到 95。**这是「判据收一处」有执行形态的证据**
 - [x] **端到端**（第 ⑥ 块）：`produced` 产出的 `AtomLineage` 能过**真实**的 `core/lineage/validator.ts`
       投影门（**正例**），且**无 evidence** 时被**下游**挡下（**反证** —— 否则正例是恒真的假绿）
 - [x] **T19 结案**（见 §12）：0037 的「❌ Confidence」**结构性成立**（类型里没有那个槽）⇒
@@ -390,7 +390,7 @@ v1.16.x 的本文与 `BACKLOG` 的 T19 把下一程写成「**概率型后端（
 
 ### 12.2 症状：我把「生产里还没有分布」当成了承重理由
 
-v1.16.0 的四条承重理由里，第 4 条是「**生产里根本不存在分布**（唯一引擎报 `null`）」。
+v1.16.0 的四条承重理由里，第 是「**生产里根本不存在分布**（唯一引擎报 `null`）」。
 那条其实是**吸收没做完的自白**：如果一个原语合不合 0037，要靠**某个后端当前的行为**来判断，
 那么被吸收的就只是**调用约定**，不是原语本身。
 

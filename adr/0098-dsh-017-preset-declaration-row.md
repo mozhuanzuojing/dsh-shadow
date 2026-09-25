@@ -41,11 +41,11 @@
 ### 2.2 Agent Teams 移到 profile 平面：预设里那一行删掉
 
 0.1.7 的 `@deepseek-ai/dsh-experimental-agent-team-profile` 在 profile 平面插
-`agent-team`（服务）+ `tool-agent-team`（9 个工具）+ `ui-agent-team`，**并自己 disable**
+`agent-team`（服务）+ `tool-agent-team`（工具）+ `ui-agent-team`，**并自己 disable**
 `tool-subagent-control` / `tool-subagent-list-agents` / `tool-subagent` / `tool-subagent-fork`。
 
 ⇒ 本预设**不再持有任何委派行**（连 `tool-agent-team` 也删）。用户 2026-09-16 定调的
-「如非必要，不得轻易开子代理」（v1.15.96 靠手工删 6 行维持）**改由上游执行**。
+「如非必要，不得轻易开子代理」（v1.15.96 靠手工删 维持）**改由上游执行**。
 另有一条硬理由：同一进程第二次挂载 `tool-agent-team` 会因
 `prompt section "team:policy" is already registered in this scope` 失败 —— 旧写法与 bundle 并存必然踩它。
 
@@ -55,7 +55,7 @@
 
 ### 2.3 预设内容以 0.1.7 `standard` 为基线**重建**
 
-实测原先的 `projection` 是**旧版 standard 的副本**（`standard@0.1.5` + persona + 删 6 行），
+实测原先的 `projection` 是**旧版 standard 的副本**（`standard@0.1.5` + persona + 删 ），
 它连 `command-goal` 与 `present` 都缺 —— 而那两行 `standard@0.1.5` 就已经有了（陈旧漂移）。
 本轮以 0.1.7 `standard` 为基线重建，**只保留两处有意偏差**：persona 文本、delegation 组不含委派行。
 persona 文本逐字未改（折叠语义下 2915 字符）。
@@ -95,9 +95,9 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 **这不是「向后兼容的小改」，是一次形态切换。** 任何一个「悄悄保留旧目录」的折中都会让下一个人
 以为宿主还读它。
 
-### 3.3 行清单用**写死的棘轮**，不是「跑到就行」
+### 清单用**写死的棘轮**，不是「跑到就行」
 
-`test/preset-projection.test.ts` 逐字锁住 27 行 + T1 不变量（0 个 `tool-subagent*`、0 个 `tool-agent-team`）
+`test/preset-projection.test.ts` 逐字锁住  + T1 不变量（ `tool-subagent*`、 `tool-agent-team`）
 + F1 忠实性。它**故意**会在上游增删行时变红 —— 那是要人裁决的信号（同 `recall-envelope.test.ts` 的 `mode` 计数）。
 理由：本预设的整个卖点是「= 宿主 standard + 投影 persona」，**落后于宿主就是它唯一的失败模式**，
 而那正是它上一版发生的事（缺 `command-goal`/`present` 而无人发现）。
@@ -108,7 +108,7 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 
 | 面 | 结果 |
 |---|---|
-| `dsh-goal` | **逐字未变**（0 行差异）—— `goal/changed` 的 `{operation, ref, goal?}` 没动 |
+| `dsh-goal` | **逐字未变**（差异）—— `goal/changed` 的 `{operation, ref, goal?}` 没动 |
 | `dsh-session` 的 `user/message` / `assistant/message` | 事件**形状未变**；`SurfaceEventType` 只多 `developer/message`，而 `core/collect.ts` 只认前两者、其余 `null` ⇒ **被忽略** |
 | `SESSION_FORMAT_VERSION` | 3 → 4（本插件不读会话文件格式 ⇒ 无影响） |
 | `dsh-fs` | 只**新增** `watch()`；`readText`/`writeText`/`listDirectory`/`stat`/`processPath` 与 `FsWriteIntent`/`FsInfo.version`/`FS_STALE_VERSION` 未变（ADR-0068 继续成立） |
@@ -123,10 +123,10 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 
 | 面 | 结果 |
 |---|---|
-| 组合 | `--dump-config`：`preset-projection` **组合出 27 行**、`tool-subagent*` **0**、`agent-team.maxMembers: 4` 生效 |
+| 组合 | `--dump-config`：`preset-projection` **组合出 **、`tool-subagent*` **0**、`agent-team.maxMembers: 4` 生效 |
 | 激活 | web 面启动 **零 `did not activate` 警告** |
-| 真机写盘 | 隔离 home **补上用户提供的模型凭据**后跑两轮真模型回合（`--profile shadow17hl`），产出：`_index.md` / `_abstract.md`（L0/L1 sidecar）/ `_meta.json`（ADR-0068 事务路径）/ **5 枚记忆原子** / **1 份 Episode 收口 consolidated 文件**（「由 2 个原子记忆在 Episode 收口时合并」）/ `audit/2026-09-22.jsonl`（ADR-0097 审计流） |
-| 读侧召回 | 第二轮的 `read_shadow`（不带参数）正确报出日期目录 `2026-09-22/` 与条目数（3 条，含 consolidated 一份） |
+| 真机写盘 | 隔离 home **补上用户提供的模型凭据**后跑两轮真模型回合（`--profile shadow17hl`），产出：`_index.md` / `_abstract.md`（L0/L1 sidecar）/ `_meta.json`（ADR-0068 事务路径）/ **5 枚记忆原子** / ** Episode 收口 consolidated 文件**（「由 原子记忆在 Episode 收口时合并」）/ `audit/2026-09-22.jsonl`（ADR-0097 审计流） |
+| 读侧召回 | 第二轮的 `read_shadow`（不带参数）正确报出日期目录 `2026-09-22/` 与条目数（，含 consolidated 一份） |
 | 能力探测 | 全程**无** `[dsh-shadow]` 告警 ⇒ 两个硬依赖 `fs` / `tools` 齐备 |
 
 **已知非缺陷**：headless 面报 `preset-projection: pending (waiting for service: agentPresets)` ——
@@ -201,17 +201,17 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 
 - **判据面（§1 的三条）在 rc.2 上继续成立 —— 且这次是逐字节比的**：照 `adr/0099` §1 的方法，对本机两代 dlx 树
   （`e1472f28…` = alpha.2，`d1523a95…` = rc.2）逐文件比 MD5，取**实质面（`lib/**` · `presets/**` · `locale/**`）**：
-  **`dsh-agent-preset` 0 处差异**（预设声明行契约未变 ⇒ §1 的「唯一硬断裂」判据不变）；
-  **`dsh-web-app` 0 处**（含随包 `presets/standard.patch.yml` —— **7511 字节 / MD5 `25BD75AC…`，与 alpha.1 / alpha.2 / rc.1 四代完全相同**
+  **`dsh-agent-preset` 差异**（预设声明行契约未变 ⇒ §1 的「唯一硬断裂」判据不变）；
+  **`dsh-web-app` **（含随包 `presets/standard.patch.yml` —— **7511 字节 / MD5 `25BD75AC…`，与 alpha.1 / alpha.2 / rc.1 四代完全相同**
   ⇒ 本仓 `presets/projection.patch.yml` 那份「faithful copy」**未过期、无需重同步**）；
-  **`dsh-experimental-tool-agent-team` 0 处**（⇒ `presets/README` 引用它的内部行号快照**仍成立**）；**`dsh-system-prompt` 0 处**。
+  **`dsh-experimental-tool-agent-team` **（⇒ `presets/README` 引用它的内部行号快照**仍成立**）；**`dsh-system-prompt` **。
 - **rc.2 上的实测（用户 live 环境，2026-09-25）**：`dsh --version` = **`0.1.7-rc.2`**；live profile 的 `--dump-config`
   含 `agent-preset-registry` / `preset-standard` / **`preset-projection`（`fiberPhase: active`）**；
   本会话**人格文本即为 `preset-projection` 注入的投影模式 persona** ⇒ 声明行在 rc.2 上**确被读取**（这是抬基线的实质判据，
   比「版本号对得上」强）；持续落盘，`read_shadow` / `recall_shadow` / `shadow_query` 均可用；
   `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` **exit 0**。
-- **⚠ 未核（诚实标注，勿读成「已逐包对齐」）**：同一次比对显示 **`dsh-tools`（4 处）· `dsh-session`（6 处）·
-  `dsh-experimental-agent-team`（18 处）· `dsh-goal`（1 处）** 的 `lib/**` **确有变化**。本仓对宿主只经**注入的服务**消费
+- **⚠ 未核（诚实标注，勿读成「已逐包对齐」）**：同一次比对显示 **`dsh-tools`（）· `dsh-session`（）·
+  `dsh-experimental-agent-team`（）· `dsh-goal`（）** 的 `lib/**` **确有变化**。本仓对宿主只经**注入的服务**消费
   （`ctx.tools` / `systemPrompt` / `goal` / session 事件 / `fs` / `sandboxPolicy`），**无运行期依赖**，故模块级差异
   不直接作用于本仓；但**「这四个包的变化对 dsh-shadow 有无影响」本次未逐行核对** —— 本次抬的是**声明**，
   不是「已逐包审过」。要做那一层，属 `adr/0099` 规模的独立轮次。

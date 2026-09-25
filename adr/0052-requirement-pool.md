@@ -1,14 +1,14 @@
-# ADR-0052: Requirement Pool —— 需求（知识缺口）作为第 7 个 NodeType（提议，边界待冻结）
+# ADR-0052: Requirement Pool —— 需求（知识缺口）作为第  NodeType（提议，边界待冻结）
 
 - 状态：**提议（2026-09-10）——边界待冻结，未实现任何代码。**
 - 决定日期：2026-09-10
-- 关联 ADR：ADR-0001（不引向量库）、ADR-0042（Shadow Knowledge Graph，提议未实现）、ADR-0043（Shadow Contract：Atom/Projection/Evidence/Mutation）、ADR-0044/0045/0046（Evidence Lineage / Validation Gate）、ADR-0049（缺件不静默）、ADR-0050（正名硬切）、ADR-0051（Resource Card → `resource` NodeType）
+- 关联 ADR：ADR-0001（不引向量库）、ADR-0042（Shadow Knowledge Graph，提议未实现）、ADR-0043（Shadow Contract：Atom/Projection/Evidence/Mutation）、ADR-/0046（Evidence Lineage / Validation Gate）、ADR-0049（缺件不静默）、ADR-0050（正名硬切）、ADR-0051（Resource Card → `resource` NodeType）
 - 关联术语：`../CONTEXT.md`（Requirement / Knowledge Gap / ShadowNode Projection / Evidence Gate）
 - 上游动机：投影模式预设 ⑦「创意与资源」在 v1.14.x 只解决了**采到的东西怎么存**（资源卡）；没有解决**没采到的东西怎么被记住**。本 ADR 只处理后者中「缺口」这一种。
 
 ## Context
 
-§1 现状：`NodeType` 只有 6 个（`memory|code|document|decision|concept|resource`，`core/lineage.ts:19`），前 5 个从**记忆原子**派生，`resource` 从**资源卡源文件**派生（ADR-0051）。系统里**没有任何对象表示「我们现在缺什么」**——全仓 grep `requirement` **0 命中**。
+§1 现状：`NodeType` 只有 （`memory|code|document|decision|concept|resource`，`core/lineage.ts:19`），前 从**记忆原子**派生，`resource` 从**资源卡源文件**派生（ADR-0051）。系统里**没有任何对象表示「我们现在缺什么」**——全仓 grep `requirement` **0 命中**。
 
 §2 缺口造成的具体失败：一个 agent 发现「Java 调试 MCP 的断点支持没人验证过」时，唯一去处是把它写进对话。换上会话即失忆（README 失败模式 #1）；另一个 agent 会**重新搜一遍同样的东西**——这正是 v1.13.2 立的「编排者与专家不重复做同一件事」在**知识维度**上的漏洞：那条纪律只约束了**同一次编排内**不重复，跨会话、跨 agent 无从约束，因为没有共享的「已搜过 / 还缺什么」记录。
 
@@ -25,7 +25,7 @@
 
 ## Decision
 
-**1. 新增 `NodeType` 第 7 个值 `requirement`**（`core/lineage.ts:19`）。
+**1. 新增 `NodeType` 第 值 `requirement`**（`core/lineage.ts:19`）。
 
 **2. 两层分离，完全照 ADR-0051 的形状：**
 
@@ -66,7 +66,7 @@
 - `id` = `rq-<slug(文件名)>`，非 ASCII slug 退化为 `mem` 时走短哈希兜底（照抄 `resourceIdOf`，`core/resource.ts:69-74`）。**由文件名派生，不由作者指定**——同名需求的去重天然落在文件系统上（同 slug ⇒ 同文件 ⇒ 后写者追加 `requester`），这是**确定性去重**，不需要 LLM 或向量。
 - `type` = `"requirement"`；`createdBy` = `"tool"`（与 resource 同口径：人/agent 写，落盘经工具）。
 - `relations` **只派生 `references`**（指向 gap-site），**不派生** `similar_to` / `depends_on` / `blocks` 等——ADR-0043 §5「LLM 只能解释关系，不能制造关系」。
-- **`content` 行序固定（读侧只取前 6 行，`core/node.ts:79`）**，高价值行在前：
+- **`content` 行序固定（读侧只取前 ，`core/node.ts:79`）**，高价值行在前：
 
 ```text
 缺口：<question>
@@ -77,7 +77,7 @@
 （resolved 时）已由：<resolved_by>
 ```
 
-**6. 接线面（实现时共 7 处，本 ADR 不改代码）：**
+**6. 接线面（实现时共 ，本 ADR 不改代码）：**
 
 | # | 文件 | 改动 |
 |---|------|------|
@@ -85,7 +85,7 @@
 | 2 | `core/requirement.ts`（新） | `REQUIREMENT_DIR` / 别名表 / `parseRequirementCard` / `listRequirementCards` / `requirementLineage` / `deriveRequirementNodes`——结构照 `core/resource.ts` |
 | 3 | `core/lineage-validator.ts` | 增 requirement 的门（含与 resource 不同的判据注释） |
 | 4 | `query/reads.ts:110-113` | 合并 `deriveRequirementNodes(cards)` + scope 白名单加 `requirement` |
-| 5 | `index.ts:302 / 307` | `shadow_query` 描述 + scope schema |
+| 5 | `index.ts:` | `shadow_query` 描述 + scope schema |
 | 6 | `test/requirement-node.test.ts`（新） | 照 `test/resource-node.test.ts` 的棘轮（含**「无 source 的需求必须能上投影」**这条与 resource 相反的正向断言） |
 | 7 | `README.md` / `CONTEXT.md` / `CHANGELOG.md` | 同步（仓库约定：改 mode/术语后做四查） |
 
@@ -131,7 +131,7 @@
 ## 自检（本 ADR 无代码）
 
 - [x] 与 ADR-0043 自洽：Requirement Card = source（事实源），节点 = Projection（可重建）；relations 只派生；LLM 不生成任何字段。
-- [x] 与 ADR-0044/0045/0046 自洽：走**同一道** `validateAtomProjection`，判据按 type 分化。
+- [x] 与 ADR-/0046 自洽：走**同一道** `validateAtomProjection`，判据按 type 分化。
 - [x] 与 ADR-0049 自洽：`resolved` 缺 `resolved_by` 走**可见降级**，不冒充成功。
 - [x] 与 ADR-0050 自洽：新增名 `requirement` 无旧名冲突。
 - [x] 与 ADR-0051 自洽：两层分离、文件名派生 id、插件只读不写、纯派生无 LLM。

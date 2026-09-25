@@ -23,7 +23,7 @@
 |---|---|---|---|---|
 | 1 | **判据分叉**：正/负结果分类器在**三处**各写一份 | `epistemic/validation/validate.ts` 与 `dream/compress.ts` 逐字相同，且与 `reflection/patterns/success-rate.ts` **给出不同答案**（实测：`"依赖降低"` 一边 true 一边 false；`"unstable"` 因 `"unstable".includes("stable")` 恰好相反）⇒ **同一份 trace 一处记成功、一处记反例** | 收进 `core/polarity.ts`：词表**并集** + 负向**一票否决**；三个消费方改为 import | `test/review-fixes.test.ts` ① |
 | 2 | **`_meta.json` 坏件 ≡ 空件** | `readMetaVersioned` 解析失败返回空快照且不报，`mutateMeta` 随后把**空快照整体写回** ⇒ **一条坏字节把全工作区 pinned/archived/compacted/hits 清零** | `MetaSnapshot.corrupt` 显式标记；`mutateMeta` 遇坏件**直接放弃**（不调 mutate、不写） | `review-fixes` ② |
-| 3 | **validation timeline 坏件被覆盖** | 解析失败返回空历史，`appendValidationEvent` 用「1 条新事件」覆盖文件 ⇒ **append-only 历史永久销毁**，从外面看只是「历史变短了」 | 新增 `readTimelineDetailed` 区分「还没有」与「读不出」；坏件**拒绝覆盖**；读路径显式播报 | `review-fixes` ③ |
+| 3 | **validation timeline 坏件被覆盖** | 解析失败返回空历史，`appendValidationEvent` 用「新事件」覆盖文件 ⇒ **append-only 历史永久销毁**，从外面看只是「历史变短了」 | 新增 `readTimelineDetailed` 区分「还没有」与「读不出」；坏件**拒绝覆盖**；读路径显式播报 | `review-fixes` ③ |
 | 4 | **写失败报成功** | `writeMetaGuarded` 在非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」⇒ `mutateMeta` 判定事务已提交，`hits`/`compacted` 标记**静默不落盘** | 引入三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false（不重试、**绝不报成功**） | 见 §5 线索（未单列闸） |
 | 5 | **未知枚举落回默认值** | `disposition` 枚举外的值（如少写一个词的 `"deferred"`）会静默落进 `open` 桶 ⇒ 污染 buckets / 最老 / p90。**这是本轮新加的字段，审查当场指出** | 只有明确的 `open`（含缺省）才算在等；非法值单列 `invalidDisposition` 且**不进任何桶** | `decision-outcome.test.ts` ⑯ |
 | 6 | **证据路径漏一道过滤** | `arbitrate`/`judgment`/`core/context` 都有 `isConcreteLocator`，`query/lenses.ts（verifyEvidence 路径，已补 `isConcreteLocator`）` **漏了** ⇒ glob / git-ref 被当路径去验，必然 `not_found`：同一处证据一处算 `missing=0`、另一处报 not_found | 补 `.filter(isConcreteLocator)` | 未单列闸（需真 host；见 §5） |
@@ -49,16 +49,16 @@
 
 ## 4. 证据（可复现）
 
-- `npm run verify` = **52/52**（新增 `test/review-fixes.test.ts`）；闸组数：`proposal-firewall` 14 · `decision-outcome` **16**。
-- 棘轮**如实变红 4 处并逐条点名后重录**：`a1 23→24`（`core/util.ts` 的 `hoursBetween`：新导出，唯一消费者是 `core/decision-outcome.ts`）、
+- `npm run verify` = ****（新增 `test/review-fixes.test.ts`）；闸组数：`proposal-firewall` 14 · `decision-outcome` **16**。
+- 棘轮**如实变红 并逐条点名后重录**：`a1 23→24`（`core/util.ts` 的 `hoursBetween`：新导出，唯一消费者是 `core/decision-outcome.ts`）、
   `a2a 3→4`（`isPositiveOutcome` 的再导出形态）、`a_total 37→39`、`b_keys 105→107`（**`outcome=ok` / `outcome=failed`** ——
   正是本轮引入的三态写入判据）。**没有一条是「忘了接线」**，故按 V6/V7 规程记录理由后重录。
 
 ## 5. 未修线索（**已逐条带 `文件:行号` 记入 `BACKLOG.md` §六（第一批）与 §七（第二批）**，本节不重复）
 
-本轮**只修了 7 类**。审查另外撞出 **约 30 条确证但未修**的问题（多为「受影响面较小」或「需要先决定语义」），
+本轮**只修了 7 类**。审查另外撞出 **约 确证但未修**的问题（多为「受影响面较小」或「需要先决定语义」），
 以及**整目录未读**的范围边界（`adaptation/`、`agency/`、`federation/`、`long-horizon/`、`simulation/`、`soul/` 等，
-`tools/*.selftest.ts` 全部未读）与 **169 个既存测试类型错误**。
+`tools/*.selftest.ts` 全部未读）与 **既存测试类型错误**。
 
 **这些不得被读成「已修」或「不存在」** —— 台账见 `BACKLOG.md` **§六 / §七**，状态以其最新一节（§6.11 / §7.5）为准。
 **本 ADR 不主张审查已穷尽**：三名审查者各自只读了一部分，且**都未做端到端复现**（坏件发生率、真语料影响面均未量化）。
@@ -83,9 +83,9 @@
 | 缺陷 | 现象 | 修法 |
 |---|---|---|
 | **V7 语料闸把 `.git` 当语料** | `git gc` 把 `.git/objects/xx` 松散对象打包 ⇒ 目录数 **428 → 185**，而语料一个字没变（指纹相同）⇒ 报 **PARTIAL** 并拒绝比较。**会把一次 gc 误判成「语料坏了」的闸，会被当成狼来了** | `audit-wiring.ts` / `audit-drift.ts` 的遍历**排除 `.git`** |
-| **PARTIAL 拒绝录基线 ⇒ 闸把自己的修正堵死** | 修完遍历口径后仍然 PARTIAL（基线是旧的），而 PARTIAL 又**拒绝 `--update-ratchet`** ⇒ **口径修正永远录不进去**（本轮实测卡住） | 目录数这条判据改为**用文件面定案**：文件面健康时的目录降判为「遍历口径/结构变化」⇒ NORMAL **但必须印出理由**（不静默放过）；同时保留**两档**保护 —— 文件面也掉、或目录掉到 **<10%**（物理上解释不通）照旧 PARTIAL。阈值可注入（`catastrophicDirRatio`） |
+| **PARTIAL 拒绝录基线 ⇒ 闸把自己的修正堵死** | 修完遍历口径后仍然 PARTIAL（基线是旧的），而 PARTIAL 又**拒绝 `--update-ratchet`** ⇒ **口径修正永远录不进去**（本轮实测卡住） | 目录数这条判据改为**用文件面定案**：文件面健康时的目录降判为「遍历口径/结构变化」⇒ NORMAL **但必须印出理由**（不静默放过）；同时保留**两档**保护 —— 文件面也掉、或目录掉到 **<**（物理上解释不通）照旧 PARTIAL。阈值可注入（`catastrophicDirRatio`） |
 
-**标定**：`tools/corpus-health.selftest.ts` 新增 ⑪（口径变化 ⇒ NORMAL + 印理由 / 真截断 ⇒ PARTIAL / 0.9 边界含）；⑥ 改为测**两档**并把 10% 边界显式化（`3/30` 恰在界内 ⇒ 归入口径变化那一档）。
+**标定**：`tools/corpus-health.selftest.ts` 新增 ⑪（口径变化 ⇒ NORMAL + 印理由 / 真截断 ⇒ PARTIAL / 0.9 边界含）；⑥ 改为测**两档**并把  边界显式化（`` 恰在界内 ⇒ 归入口径变化那一档）。
 
 **⚠ 本轮自己写错并当场改正的一处注释**：我起初把语料指纹描述为「**路径 + 全文**的内容派生值」——
 实际是 `sha256(文件**路径**集合)`（`audit-wiring.ts:194` / `audit-drift.ts:125`），**不含内容**。
@@ -99,7 +99,7 @@
 `episode.ts` 缺时刻被默认值掩盖 · zg 报错→not_found · `filesystem.ts` 读失败/不存在不分 ·
 缺 locator 当存在 · audit-drift `--json --update-ratchet` 写空表 · toolset-authority 落盘早于标红 ·
 `factualOnly`/`candidateStats` 丢 `violations` · 以及 §6.3 的六条**待定语义**。
-**未读范围与 169 个测试类型错误同样未变**（见 §5）。
+**未读范围与 测试类型错误同样未变**（见 §5）。
 
 ---
 
@@ -112,12 +112,12 @@
 | **`audit-drift --json --update-ratchet` 把空表写进基线** | `driftCounts` 只在**人读分支**（`else`）里赋值 ⇒ 走 `--json` 时保持初始 `{}`，**空 drift 表被写进棘轮基线**，而工具照样打印「已写入棘轮基线（drift 段 + corpus 段）」。下一次 `--ratchet` 会因桶消失报红（故不是静默），但**基线是错的** | B 段分组与计数**提到分支之前**，两条路径共用同一份派生 ⇒ **端到端验证**：`--json --update-ratchet` 现在写出 `drift_keys=11 / drift_sites=28` |
 | **`toolset-authority` 坏清单先落盘、后标红** | 顺序是「`writeFileSync` → 再判 `falseMeasured` → 置退出码 1」⇒ **它自己声明「必须为 0」的坏清单已经被签进仓库**，离线棘轮与人读消费的都是那份坏清单 | 与同文件上方 `countInconsistency` 的既有先例一致：**先判后写，拒绝产出坏清单**（`process.exit(1)`） |
 | **`registerMeta` 失败只 log** | 记忆文件与索引缓存**已写入** ⇒ 这条记忆在索引/召回里活跃，而 `_meta.json` 里没有它 ⇒ `hits` 永远不计、生命周期恒判 NEW、遗忘判据落回默认值 | 返回 `boolean`；`flush` 据此设 `core.lastMetaError`，`getFlushWarn()` 渲染**独立的一条**⚠（与「落盘失败」分开，因为这是不同的事实） |
-| **query-log 坏行无计数** | `catch { /* 单行坏跳过 */ }` 只丢不报 ⇒ `total` / 覆盖率 / drift 统计建立在**被削过的样本**上，读数字的人无从知道丢了几行 | `badLines` 计数 + `badLinesNote` 披露（0 行时**不带**该字段，免得误以为有坏行） |
+| **query-log 坏行无计数** | `catch { /* 单行坏跳过 */ }` 只丢不报 ⇒ `total` / 覆盖率 / drift 统计建立在**被削过的样本**上，读数字的人无从知道丢了几行 | `badLines` 计数 + `badLinesNote` 披露（时**不带**该字段，免得误以为有坏行） |
 | **`candidateStats` / `factualOnly` 丢掉 `violations`** | 「唯一统计入口」的消费者拿到**干净的数字**，不知道有记录被拒 —— 「有记录被拒」与「本来就没那些记录」是两件事 | `candidateStats` 露出 `violations: number`；`factualOnly` 写明边界并给出取用路径（`projectFacts(records).violations`） |
 
 **标定**：`test/review-fixes.test.ts` 新增 **⑥**（候选统计的 `violations` 与事实面一致 —— 判据收一处）与 **⑦**（坏行计数 + 披露；无坏行时不带该字段）。
 
-**证据**：`verify` 52/52；`--json --update-ratchet` 写出的 drift 表经**真跑核对**（并已还原基线）；两条棘轮通过。
+**证据**：`verify` ；`--json --update-ratchet` 写出的 drift 表经**真跑核对**（并已还原基线）；两条棘轮通过。
 
 ### 7.1 仍未修（台账剩余，**未缩小承诺**）
 
@@ -125,7 +125,7 @@
 证据路径上限无披露 · `observer/projection.ts` 可见性不一致 · 快照坏件回退更旧 ·
 `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · zg 报错 → not_found ·
 `filesystem.ts` 读失败/不存在不分 · 缺 locator 当存在 · §6.3 六条**待定语义** ·
-**169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
+**既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
 以及审查者点名「可能是最高危假绿源」的 `tools/*.selftest.ts`）。
 
 ---
@@ -146,27 +146,27 @@
 - `test/evidence-gate.test.ts` 新增**不变量**：`节点数 + 失败数 = 原子数`（没有「凭空少一条」的第三条路），且 `renderManifest` 必须显示真实失败数、**不得**出现「失败项：0」。
 - `test/evidence-absolute-path.test.ts` ⑤ 改口径（**判不了 ⇒ `undecidable`**，不再是「视为存在」）、新增 ⑪（provider：判不了 ⇒ `unavailable`/0/stale · 存在 ⇒ `verified`/0.99 · 不存在 ⇒ `not_found`）。
 
-**证据**：`verify` **52/52**；棘轮如实变红 `b_keys 107 → 110`（**+3 正是本轮新增的三态判据** `state=exists` / `state=undecidable` 等），逐条点名后重录。
+**证据**：`verify` ****；棘轮如实变红 `b_keys 107 → 110`（**+3 正是本轮新增的三态判据** `state=exists` / `state=undecidable` 等），逐条点名后重录。
 
 ### 8.1 仍未修
 
 `_index.md` 不进指纹 · 证据路径上限（`.slice(0,12)`）无披露 · `observer/projection.ts` 可见性不一致 ·
 快照坏件回退更旧 · `reads.ts` 截断只写 log · `episode.ts` 缺时刻被默认值掩盖 · **§6.3 六条待定语义** ·
-**169 个既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
+**既存测试类型错误** · **整目录未读**（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`，
 以及 `tools/*.selftest.ts`）。
 
 ---
 
-## 9. 第六轮（v1.15.58）：披露面 4 处 + **标定测试自身的假绿**（审查者点名的「最高危假绿源」）
+## 9. 第六轮（v1.15.58）：披露面  + **标定测试自身的假绿**（审查者点名的「最高危假绿源」）
 
 ### 9.1 披露面（「报告不得虚报」这一族）
 
 | 缺陷 | 为什么是真缺陷 | 修法 |
 |---|---|---|
-| **`shadow_query` 截断不披露** | 检索路径早就有 `truncationNote`（`retrieval/render.ts:26`，借 PageIndex 的 `part/total_parts/has_more`），而 `shadow_query` 只把 `returnedNodes` 写进 query-log、**返回文本里一个字不提** ⇒ 同一份数据**两条读路径披露不一致**：读到「8 条」的人不知道其实命中 30 条 | 用 `allMatched` 算 `droppedByLimit`，附一行「命中 N 个，只返回前 limit 个（**还有 k 个未显示**）」 |
-| **证据路径上限无披露** | `arbitrate.ts` 的 `.slice(0, 12)` 让「**前 12 条**都不是缺失」被读成「**全查过了、都没缺失**」 | 导出 `EVIDENCE_PATH_CAP`，`conflictOf` 返回 `droppedByCap`；experience 渲染与 `ev.unverifiedByCap` 都带出「另有 k 条**未核验**」 |
+| **`shadow_query` 截断不披露** | 检索路径早就有 `truncationNote`（`retrieval/render.ts:26`，借 PageIndex 的 `part/total_parts/has_more`），而 `shadow_query` 只把 `returnedNodes` 写进 query-log、**返回文本里一个字不提** ⇒ 同一份数据**两条读路径披露不一致**：读到「」的人不知道其实命中  | 用 `allMatched` 算 `droppedByLimit`，附一行「命中 N 个，只返回前 limit 个（**还有 k 个未显示**）」 |
+| **证据路径上限无披露** | `arbitrate.ts` 的 `.slice(0, 12)` 让「**前 **都不是缺失」被读成「**全查过了、都没缺失**」 | 导出 `EVIDENCE_PATH_CAP`，`conflictOf` 返回 `droppedByCap`；experience 渲染与 `ev.unverifiedByCap` 都带出「另有 k 条**未核验**」 |
 | **快照坏件回退更旧后无声** | `readLatestSnapshot` 某天快照坏就**继续找更旧的**（有意，不因一份坏文件返回 null），但调用方**不知道**自己拿到的是旧图 ⇒ 「读到旧投影」伪装成「投影就是当前状态」 | 跳过的坏件累积到 `skipped`，真正回退时打印「跳过了哪些 / 实际用了哪份」；函数文档写明回退语义 |
-| **`observer/projection.ts` 两处可见性失真** | ① 读不出的记忆 `continue` ⇒ 它**既不进 relevant 也不进 excluded**，而 `reality.total` 按全量算 ⇒ 数字对不上却看不出为什么；② `候选相关` 报的是 `rel.slice(0,8)` **之后**的长度 ⇒ 命中 12 条显示「候选相关 8」（**那是上限，不是命中数**） | 新增 `unreadable`（单列 + 渲染「读不出 ≠ 不相关」）与 `relTotal`（报上限**前**的真实命中数 + 「本视图只显示前 N」） |
+| **`observer/projection.ts` 两处可见性失真** | ① 读不出的记忆 `continue` ⇒ 它**既不进 relevant 也不进 excluded**，而 `reality.total` 按全量算 ⇒ 数字对不上却看不出为什么；② `候选相关` 报的是 `rel.slice(0,8)` **之后**的长度 ⇒ 命中 显示「候选相关 8」（**那是上限，不是命中数**） | 新增 `unreadable`（单列 + 渲染「读不出 ≠ 不相关」）与 `relTotal`（报上限**前**的真实命中数 + 「本视图只显示前 N」） |
 
 ### 9.2 标定测试自身的假绿（**这比被审对象的问题更该先修**）
 
@@ -174,15 +174,15 @@
 
 | 缺陷 | 为什么是假绿 | 修法 |
 |---|---|---|
-| **`audit-wiring.selftest.ts` ⑪ 是同义反复（致命）** | 它在测试内**重写了一遍产品侧的分桶 ternary**，再断言「四桶之和 = A 段总数」—— 分桶值由同一段代码赋出，和**必然成立**；各桶断言也逐字复述那几个条件。⇒ **把产品侧的分桶判据改成任何东西，这段标定测试照样全绿**（它验证的只是自己那份拷贝；注意：它测的是**分桶**这一条判据，不是整个工具） | 把分桶判据搬进 lib（`bucketOf`），CLI 与测试**共用同一份**；⑪ 重写为「四桶正例 + **三条反例**（A1/A2b/A3 各一条）」，并加「真仓库 A 段不得为空」。**变异验证**：把 `bucketOf` 的 A1 条件写反 ⇒ 立即 `AssertionError: 零引用 ⇒ A1` |
+| **`audit-wiring.selftest.ts` ⑪ 是同义反复（致命）** | 它在测试内**重写了一遍产品侧的分桶 ternary**，再断言「四桶之和 = A 段总数」—— 分桶值由同一段代码赋出，和**必然成立**；各桶断言也逐字复述那几个条件。⇒ **把产品侧的分桶判据改成任何东西，这段标定测试照样全绿**（它验证的只是自己那份拷贝；注意：它测的是**分桶**这一条判据，不是整个工具） | 把分桶判据搬进 lib（`bucketOf`），CLI 与测试**共用同一份**；⑪ 重写为「四桶正例 + **三条反例**（A1/A2b/A3 各一条）」，并加「真仓库 A 段不得为空」。**变异验证**：把 `bucketOf` 的 A件写反 ⇒ 立即 `AssertionError: 零引用 ⇒ A1` |
 | **`audit-drift` 判据 ③ 从未被任何夹具触达** | 原 NEG-2 的条件里**没有 `.has(`** ⇒ 它在判据 ② 就被 `continue` 掉，**根本走不到 ③**（收集 `probeVars` 并据此排除的那段）。把它删掉或写成恒空集合，标定测试仍全绿 | 加**差分对** `POS-4` / `NEG-6`：两者形状**只差**「条件里有没有探针赋值的局部名」⇒ 必须给出**相反**结果。**变异验证**：废掉 `probeVars` 的填充 ⇒ 立即 `AssertionError: NEG-6 不得被报出（假阳）` |
-| **`isTestPath` 这条判据零覆盖** | 它由 v1.15.43 的**真缺陷**修来（旧写法 `!isProductionPath` 把 `dist/`、`node_modules/` 也算成「测试引用」⇒ A 段那列虚高），却定义在 **CLI** 里 ⇒ 改成 `p.includes("test")`、退回旧写法、或整条删掉，6 个 selftest 全绿 | 搬进 lib，新增 ⑬：正例 + 反例（**明确断言它与旧写法在「产物/依赖」上给出不同答案**） |
+| **`isTestPath` 这条判据零覆盖** | 它由 v1.15.43 的**真缺陷**修来（旧写法 `!isProductionPath` 把 `dist/`、`node_modules/` 也算成「测试引用」⇒ A 段那列虚高），却定义在 **CLI** 里 ⇒ 改成 `p.includes("test")`、退回旧写法、或整条删掉， selftest 全绿 | 搬进 lib，新增 ⑬：正例 + 反例（**明确断言它与旧写法在「产物/依赖」上给出不同答案**） |
 | `audit-layers.selftest` ③ 用空判据表断言主方向 | `NO_RULES` 把方向禁令清空 ⇒ 该断言与 `DIRECTION_RULES` **完全无关**，往表里加反向禁令也测不出 | 改用 `{ pureModules: [] }`（只清白名单、**保留真方向表**） |
 | `retrieval-eval.selftest` 的恒真断言 | `assert.equal(h1.algorithm, HASH_ALGORITHM)` 而 `datasetHash` 就是把该常量原样放回 ⇒ 恒真（等价 `assert.ok(true)`） | 改为对**字面量** `"sha256-utf8-lf-v1"` 断言 |
-| `audit-drift.selftest` 真仓库断言无下限 | `walk` 吞 `readdirSync` 异常并返回已累积结果 ⇒ 取错根/递归没跟随会让 `prod` 变空，此时「0 条线索」**照样通过**（CLI 有 `exit 2` 的闸，标定测试没有） | 补 `assert.ok(prod.length > 0, …)` |
+| `audit-drift.selftest` 真仓库断言无下限 | `walk` 吞 `readdirSync` 异常并返回已累积结果 ⇒ 取错根/递归没跟随会让 `prod` 变空，此时「线索」**照样通过**（CLI 有 `exit 2` 的闸，标定测试没有） | 补 `assert.ok(prod.length > 0, …)` |
 | `corpus-health.selftest` footer 与代码不符 | footer 称 `retrieval-eval` 走本闸，实际它**没调用 `classifyCorpus`**、是第二份内联实现 ⇒ 那句话会让读者**不再去查它** | 改正 footer，并把「同一判据两份实现」记为线索（下节） |
 
-**证据**：`verify` **52/52**；6 个 selftest 全绿；**两处变异测试**（改坏 `bucketOf` / 废掉 `probeVars`）分别立即变红 —— 这是「标定测试真的能失败」的可复核证据。
+**证据**：`verify` ****； selftest 全绿；**两处变异测试**（改坏 `bucketOf` / 废掉 `probeVars`）分别立即变红 —— 这是「标定测试真的能失败」的可复核证据。
 棘轮如实变红 `b_keys 110 → 113`：**+3 正是本轮新增的标定断言**（`bucket=A1/A2a/A2b`），逐条点名后重录。
 
 ### 9.3 新记线索（本轮发现，**未修**）
@@ -203,14 +203,14 @@
 
 ### 10.2 新增 `tools/cli-wiring.selftest.ts`（5 组，**spawn 真 CLI**）
 
-此前 6 个 selftest **100% 只调纯函数**，而本仓历史上真实踩过的两类缺陷都长在 CLI 接线上：
+此前  selftest ** 只调纯函数**，而本仓历史上真实踩过的两类缺陷都长在 CLI 接线上：
 
 | # | 断言 | 锁住的真实缺陷 |
 |---|---|---|
-| ① | `node tools/audit-wiring.ts --ratchet`（**旗标占了 root 位置**）⇒ **exit 2**；drift 同 | v1.15.45：漏 root 参数 ⇒ ROOT 取到旗标 ⇒ 0 文件 ⇒ **静默全绿** |
-| ② | 显式给**空语料根** ⇒ 两个 CLI 都 exit 2 | 「0 文件不是没问题」这条闸的另一面 |
+| ① | `node tools/audit-wiring.ts --ratchet`（**旗标占了 root 位置**）⇒ **exit 2**；drift 同 | v1.15.45：漏 root 参数 ⇒ ROOT 取到旗标 ⇒  ⇒ **静默全绿** |
+| ② | 显式给**空语料根** ⇒ 两个 CLI 都 exit 2 | 「不是没问题」这条闸的另一面 |
 | ③ | `--update-ratchet` 在坏语料上 exit 2，**且基线文件逐字节未变** | 「闸不许把坏读数写进基线」的**接线面**：拒绝必须先于 `writeFileSync`。（安全性：测试内先备份、`finally` 还原） |
-| ④ | 基线**必须分段**：`wiring` / `drift` 各自独立，且 `corpus.wiring` / `corpus.drift` **分键** | v1.15.45 第二处：两个工具量**不同语料**却共用 `corpus` 键 ⇒ 互相覆盖、判成「骤降 76%」 |
+| ④ | 基线**必须分段**：`wiring` / `drift` 各自独立，且 `corpus.wiring` / `corpus.drift` **分键** | v1.15.45 第二处：两个工具量**不同语料**却共用 `corpus` 键 ⇒ 互相覆盖、判成「骤降 」 |
 | ⑤ | `run-tests.ts` 确实扫描 `tools/*.selftest.ts` | 防「标定测试没接进门禁」的死文件 |
 
 ### 10.3 两处判据收口 / 锁口
@@ -226,9 +226,9 @@
 `node tools/toolset-authority.ts --check` 在本机 **>120s**（winget 探测）⇒ 真实原因是**耗时**（它本身确实是只读的、`--check` 不写文件）。
 已写进新 selftest 的诚实标注，避免后来者以为是「忘了接线」。
 
-**证据**：`verify` **53/53**（+1 就是新 selftest）；棘轮如实变红 `b_keys 113 → 115`（**+2 = 基线分段断言** `wiring=object` / `drift=object`）后按规程重录。
+**证据**：`verify` ****（+1 就是新 selftest）；棘轮如实变红 `b_keys 113 → 115`（**+2 = 基线分段断言** `wiring=object` / `drift=object`）后按规程重录。
 
-**仍未修**：`isProductionPath` 口径统一（**等拍板**）· `--update-ratchet` 的**成功**路径未自动化（会改真实基线）· **169 个既存测试类型错误** · §6.3 六条待定语义 · 整目录未读（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`）。
+**仍未修**：`isProductionPath` 口径统一（**等拍板**）· `--update-ratchet` 的**成功**路径未自动化（会改真实基线）· **既存测试类型错误** · §6.3 六条待定语义 · 整目录未读（`adaptation/`/`agency/`/`federation/`/`long-horizon/`/`simulation/`/`soul/`）。
 
 ---
 
@@ -255,16 +255,16 @@
 
 ### 11.2 更正我自己的一处计数错误（诚实标注）
 
-我在 v1.15.58 / v1.15.59 的 CHANGELOG 与 README 里反复写「**169 个既存测试类型错误**」。
+我在 v1.15.58 / v1.15.59 的 CHANGELOG 与 README 里反复写「**既存测试类型错误**」。
 本轮**重新测量**：那 169 是 `npx tsc ... | Measure-Object -Line` 的**总输出行数**（含每条诊断的续行），
-**不是诊断条数**。用只匹配 `error TS` 的口径数，实际是 **83 条诊断**。
+**不是诊断条数**。用只匹配 `error TS` 的口径数，实际是 **诊断**。
 
 **教训**：把「输出行数」当成「问题条数」—— 这正是本仓一直在防的那类伪精度（同一个数字，两种口径）。**完整更正的唯一权威写在 `BACKLOG.md` §6.10**，本节只保留结论。
 已在 `BACKLOG` 与本轮 CHANGELOG 更正为 **83**。
 
 ---
 
-## 12. 第九轮（v1.15.61）：认识论层的「损坏/失败必须出声」6 处 + 三份从未读过的目录的审查台账
+## 12. 第九轮（v1.15.61）：认识论层的「损坏/失败必须出声」 + 三份从未读过的目录的审查台账
 
 ### 12.1 本轮的**一条判定**（推翻我此前的假设）
 
@@ -273,11 +273,11 @@
 → `query/query.ts` 路由与各 family runner → `index.ts` 的工具转发）。
 ⇒ 那些缺陷按**当前生效**定级，不是「潜在」。**「未读」不等于「未接线」，两者都必须查证而不是假定。**
 
-### 12.2 已修（6 处，全部属「损坏 ≠ 为空 / 写失败 ≠ 成功」这一族）
+### 12.2 已修（，全部属「损坏 ≠ 为空 / 写失败 ≠ 成功」这一族）
 
 | # | 缺陷 | 为什么是真缺陷 | 修法 |
 |---|---|---|---|
-| 1 | `readObservations` 单 `try` 包整个循环 | 第 k 个文件坏 ⇒ **静默返回前 k-1 条**，后续永不读；且目录读失败 ≡ 目录为空。下游 `claimOf` 的 `supported` 判据**就吃 `obs.length`** | `readObservationsDetailed`：单条坏件只丢该条 + **计数** + 留痕 |
+| 1 | `readObservations` 单 `try` 包整个循环 | 第 k 个文件坏 ⇒ **静默返回前 k-**，后续永不读；且目录读失败 ≡ 目录为空。下游 `claimOf` 的 `supported` 判据**就吃 `obs.length`** | `readObservationsDetailed`：单条坏件只丢该条 + **计数** + 留痕 |
 | 2 | `readClaims` 同型（**更危险**） | 一份坏 claim ⇒ 静默少返回 ⇒ `mode:"world"` 用**残缺图覆盖**落盘 `graph.json`（**不可逆**） | `readClaimsDetailed` + **坏件时不覆盖落盘图**并在出口披露「有 N 个坏件、本次未覆盖」 |
 | 3 | `readRealityEvidence` 同型 | 坏件 ⇒ 静默部分/空列表 ⇒ `mode:"stability"` 报 `isolated` | `readRealityEvidenceDetailed` |
 | 4 | 三处写失败渲染成成功 | `registerObservation` / `writeClaim` / `registerRealityEvidence` 只 `console.log` 就返回 ⇒ 「写入被拒」与「已登记」**逐字不可区分** | 返回 `{…, persisted}` / `boolean`；`mode:"model-observation"` / `"model-claim"` / `"real-evidence"` 输出显式「**未落盘**」段 |
@@ -289,7 +289,7 @@
 `query/federation.ts:35` 的 `Number(args?.obsConfidence) || 0.5` 与 `epistemic/federation/perspective.ts:11` 的 `opts.observationConfidence ?? 0.5`：
 **显式传 `0`（零确信）被 `||` 静默改成 0.5**。⇒ 默认值收进 `CONFIDENCE_DEFAULT` + `confidenceOfInput`（只认「没传 ⇒ 默认」；显式 `0` 原样保留；非法值归 0 而**不伪装成 0.5**）。
 
-### 12.4 三份审查的台账（**约 60 条**，本节不重复）
+### 12.4 三份审查的台账（**约 **，本节不重复）
 
 第二批（从未读过的目录）的完整线索记入 `BACKLOG.md` §七，按层分组、逐条带 `文件:行号`：
 认识论层（`federation/`·`world/`·`reality/`）· `long-horizon/`·`simulation/`·`soul/`·`planning/` · `adaptation/`·`agency/`·`continuity/`，
@@ -312,7 +312,7 @@
 ### 13.1 结果
 
 `tsconfig.test.json` 的 `include` 从「三个文件」扩到 **`test/**/*.ts`**，`npm run typecheck:tests`（已在 `verify` 里）现在覆盖**整个测试面**：
-**83 条既存诊断 → 0**；`npm run verify` = **53/53**（行为未变）。
+**既存诊断 → 0**；`npm run verify` = ****（行为未变）。
 
 ### 13.2 **独立核实**（不盲信「83→0」的声明）
 
@@ -321,10 +321,10 @@
 
 | 探针 | 做什么 | 结果 |
 |---|---|---|
-| `verify-assertions-unchanged.ts` | 取每个被改文件在 `HEAD` 与工作区的**所有 assert 行**，**按括号深度剥掉类型 cast** 后归一化，比较多重集 | 全测试面断言**逐字相同**（唯一残差是 5 处「补必填字段」与 1 处「多一对括号」） |
-| `verify-added-fixture-fields.ts` | 「补字段」理论上可能改变**会扫全部字段的守卫** ⇒ 把**旧输入**与**新输入**喂给同一编译产物，要求结果相同 | 3 处全部相同（`objectiveIsExternal` ×2、`configNotPreference` ×1） |
+| `verify-assertions-unchanged.ts` | 取每个被改文件在 `HEAD` 与工作区的**所有 assert 行**，**按括号深度剥掉类型 cast** 后归一化，比较多重集 | 全测试面断言**逐字相同**（唯一残差是 「补必填字段」与 「多一对括号」） |
+| `verify-added-fixture-fields.ts` | 「补字段」理论上可能改变**会扫全部字段的守卫** ⇒ 把**旧输入**与**新输入**喂给同一编译产物，要求结果相同 | 全部相同（`objectiveIsExternal` ×2、`configNotPreference` ×1） |
 
-另核：`@ts-ignore` / `@ts-expect-error` **0 处**；新增 `as any` **1 处**（`toolset-dispatch` 的「不读 ctx 的入口可达性」测试，带注释）。
+另核：`@ts-ignore` / `@ts-expect-error` ****；新增 `as any` ****（`toolset-dispatch` 的「不读 ctx 的入口可达性」测试，带注释）。
 
 **⚠ 我自己的探针第一版有两个 bug**（正是本仓反复踩的那类「验证工具自己有洞」，已修）：
 ① 用正则剥 cast，遇到含泛型的类型（`as Parameters<typeof lifecycleOf>`）**剥不干净** ⇒ 假报「文本不同」；
@@ -355,9 +355,9 @@
 
 | 遗漏 | 说明 | 处置 |
 |---|---|---|
-| **⭐ 路线漂移：8 轮审计/修复期间，Contract Track 的每一项都没有推进** | 用户 2026-09-12 定的泳道是 `T8 → T15 → D1/D2/D3 → A段 → T2(B段) → T9/T10/T7 → T14 → V/G/T6`（并行 Memory Track `P1 → M1 → …`）。我在 M1 之后连续 8 轮做「审查→修」，**T8 / T15 / D1-3 / A段 / T2 一项未动**，而「review fix all」的每一轮都能自洽地生出下一轮（线索越查越多）⇒ **这是一种自我延续的活动，不会自己停下**。 | **记在此处并置于最高优先**：下一步应回到 **T15（Protected Contract Registry）** 或 **T8（7 处静默降级 + 2 处开关缺陷）**，而不是继续扫线索。**我此前从未把这件事写下来 —— 这才是最大的遗漏。** |
-| §六/§七 的 54 条线索**没有优先级、没有归属** | 台账「有记录」但「不可行动」 | ✅ 已补 §6.0 / §7.0 **优先级分级表**（P0/P1/P2 + 判据 + 归属到条目组） |
-| §六 的 25 条里，**哪些已修**要读者自己在 7 个「状态更新」小节里回溯 | 状态分散 | ⏸ 已在 §6.0 写明用法（「原始行 → 最新状态 → 分级表」三处合读）；**彻底解法是重构成「一条一行、列含状态/优先级/证据」的表**，那需要重写 54 行，**未做**（记在 14.5） |
+| **⭐ 路线漂移：8 轮审计/修复期间，Contract Track 的每一项都没有推进** | 用户 2026-09-12 定的泳道是 `T8 → T15 → D1/D2/D3 → A段 → T2(B段) → T9/T10/T7 → T14 → V/G/T6`（并行 Memory Track `P1 → M1 → …`）。我在 M1 之后连续 8 轮做「审查→修」，**T8 / T15 / D1-3 / A段 / T2 一项未动**，而「review fix all」的每一轮都能自洽地生出下一轮（线索越查越多）⇒ **这是一种自我延续的活动，不会自己停下**。 | **记在此处并置于最高优先**：下一步应回到 **T15（Protected Contract Registry）** 或 **T8（静默降级 + 开关缺陷）**，而不是继续扫线索。**我此前从未把这件事写下来 —— 这才是最大的遗漏。** |
+| §六/§七 的 线索**没有优先级、没有归属** | 台账「有记录」但「不可行动」 | ✅ 已补 §6.0 / §7.0 **优先级分级表**（P0/P1/P2 + 判据 + 归属到条目组） |
+| §六 的 里，**哪些已修**要读者自己在 「状态更新」小节里回溯 | 状态分散 | ⏸ 已在 §6.0 写明用法（「原始行 → 最新状态 → 分级表」三处合读）；**彻底解法是重构成「一条一行、列含状态/优先级/证据」的表**，那需要重写 ，**未做**（记在 14.5） |
 
 ### 14.2 因果关系：把**静态推演**当成**当前生效**
 
@@ -375,7 +375,7 @@
 
 | 重复 | 处置 |
 |---|---|
-| 「169 → 83」的计数更正曾在 **4 处**各写一遍（`CHANGELOG` v1.15.60、`README` v1.15.60、`adr` §11.2、`BACKLOG` §6.10/§6.11） | ✅ 收口：**`BACKLOG` §6.10 为唯一权威**（含教训），其余三处改为**一行 + 指向 §6.10**；§6.11 只留指针。**保留 4 处提及是刻意的**（防止读者在任一处看到旧数字），但**只有一处写完整理由** |
+| 「169 → 83」的计数更正曾在 ****各写一遍（`CHANGELOG` v1.15.60、`README` v1.15.60、`adr` §11.2、`BACKLOG` §6.10/§6.11） | ✅ 收口：**`BACKLOG` §6.10 为唯一权威**（含教训），其余三处改为**一行 + 指向 §6.10**；§6.11 只留指针。**保留 提及是刻意的**（防止读者在任一处看到旧数字），但**只有一处写完整理由** |
 | `ADR` 与 `BACKLOG` 互相转述同一批修复 | ✅ 已在 `ADR` 头部写明**分工**：ADR = 决策与理由；BACKLOG §六/§七 = 台账与状态；**同一件事不在两处各写一遍**，状态一律回指章节号 |
 | §6.5–§6.11 与 §6.1–§6.3 对同一条目出现两次（一次是线索、一次是状态） | ⏸ **这是刻意的**（留痕：证明该线索确实存在过），已在 §6.0 说明读法；**未合并** |
 
@@ -383,23 +383,23 @@
 
 | 干扰 | 处置 |
 |---|---|
-| `BACKLOG` 表头说「现存 20 条」，而正文另有 **54 条**审查线索 ⇒ **表头与正文矛盾** | ✅ 表头改为「**两套台账分开计数**（不合流）：主台账（T/D/V/G，§一–§五）现存 20 / 已结案 23；**审查线索台账（§六/§七）另计**」 |
-| 「**169** 个测试类型错误」在 `BACKLOG` **残留 4 处**（其中一处已是「仍未修」），而实际早已 **83 → 0** | ✅ 全部改为「~~169~~（实为 **83**，**已修完** → 0，见 §6.11）」 |
+| `BACKLOG` 表头说「现存 」，而正文另有 ****审查线索 ⇒ **表头与正文矛盾** | ✅ 表头改为「**两套台账分开计数**（不合流）：主台账（T/D/V/G，§一–§五）现存 20 / 已结案 23；**审查线索台账（§六/§七）另计**」 |
+| 「**169** 个测试类型错误」在 `BACKLOG` **残留 **（其中一处已是「仍未修」），而实际早已 **83 → 0** | ✅ 全部改为「~~169~~（实为 **83**，**已修完** → 0，见 §6.11）」 |
 | `### 6.11` **被追加到了 §七 之后**（编号属 §六、位置在 §七） | ✅ 已移回 §七 之前，并核对章节顺序 |
 | `ADR-0083` 标题只覆盖第一轮（「三类缺陷」），实际已有 **14 节 / 跨 10 轮** ⇒ 读者会以为它是单轮快照 | ✅ 标题与状态行改为「三类缺陷、四条新增纪律、两批台账」，并标注范围 `v1.15.54–v1.15.62` |
 | `ADR-0083` §5 指向「`BACKLOG.md` 的审查线索**一节**」（现在有两节） | ✅ 改为「§六（第一批）/ §七（第二批）」 |
-| `README` 的版本行**单行数百字**（一句话里塞十几个修复） | ⏸ **未改**（改它等于重写 11 行历史条目，churn 大于收益）；**记为风格问题**：本表按约定是「每版一行」，但近几轮已超出「一行」的可读边界 ⇒ 建议后续只在 `CHANGELOG` 写详述、`README` 行改用「一句话 + 指向 CHANGELOG」 |
+| `README` 的版本行**单行数百字**（一句话里塞十几个修复） | ⏸ **未改**（改它等于重写 历史条目，churn 大于收益）；**记为风格问题**：本表按约定是「每版一行」，但近几轮已超出「一行」的可读边界 ⇒ 建议后续只在 `CHANGELOG` 写详述、`README` 行改用「一句话 + 指向 CHANGELOG」 |
 
 ### 14.5 缺失的环节（我**没有**补上的，如实列出）
 
-1. **线索表的字段不齐**：现在是「线索 / 位置 / 后果」三列 + 分散的状态小节。**应有的字段是「状态 · 优先级 · 证据等级（已核实/静态推演）· 归属（哪个泳道）」**。补它需要重写 54 行 ⇒ **未做**，只补了优先级表（§6.0/§7.0）与统一的可信度口径。
-2. **没有「线索 → 修复」的可机械核对链接**：无法用脚本回答「§六 里哪些还没修」。当前靠人读 7 个状态小节。
+1. **线索表的字段不齐**：现在是「线索 / 位置 / 后果」三列 + 分散的状态小节。**应有的字段是「状态 · 优先级 · 证据等级（已核实/静态推演）· 归属（哪个泳道）」**。补它需要重写  ⇒ **未做**，只补了优先级表（§6.0/§7.0）与统一的可信度口径。
+2. **没有「线索 → 修复」的可机械核对链接**：无法用脚本回答「§六 里哪些还没修」。当前靠人读 状态小节。
 3. **本 ADR 没有「哪些轮次的修复被独立复核过」的索引**：§13.2 做了探针复核，§12 没有。**读者无法一眼看出哪几轮的结论被独立验证过**。
 
 ### 14.6 我自己的一处**操作事故**（必须记下来）
 
 把 `BACKLOG.md` 的章节顺序调整时，我用了 `Set-Content -Value <数组> -NoNewline` ——
-**PowerShell 会把数组元素直接拼起来、不插换行** ⇒ 1540 行的文件被压成 **1 行**（163 KB，内容未丢、结构全毁）。
+**PowerShell 会把数组元素直接拼起来、不插换行** ⇒ 的文件被压成 ****（163 KB，内容未丢、结构全毁）。
 用 `git checkout -- BACKLOG.md` 恢复后，改成「单字符串 + `-NoNewline`」重做。
 
 **教训（与本仓一直在修的同一族）**：**破坏性操作要先确认「失败会留下什么」**。
@@ -408,5 +408,5 @@
 
 ### 14.7 本轮**没有**做的事
 
-没有继续修任何代码缺陷（本轮是**文档与过程的元审查**）；没有对 §六/§七 的 54 条逐条重写；
+没有继续修任何代码缺陷（本轮是**文档与过程的元审查**）；没有对 §六/§七 的 逐条重写；
 没有把 `README` 的膨胀行瘦身；没有建立「线索 → 修复」的机械核对链接。**这些都在 14.5 里如实列出。**

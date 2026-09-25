@@ -43,7 +43,7 @@ shadow/
 ```
 `listMemories` 跳过非日期目录，Reflection 不会被当记忆采集。
 
-## 5. Mock（v0.24 只需 3 个）
+## 5. Mock（v0.24 只需 ）
 
 - **场景 51 重复成功** → `candidate principle`（decision 多次 + 高 successRate）。
 - **场景 52 失败模式** → `anti-pattern candidate`（decision + negative outcome 多次）。

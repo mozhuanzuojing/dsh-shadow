@@ -35,7 +35,7 @@ dsh-shadow 已从"记忆插件"升级为"人类→Agent 投影系统"。在灵�
 | `provenance` | `> 来源会话/项目/Agent/日期` | 已有 |
 | `scope` | `> 项目：` + 条目域 | 已有 |
 
-> 结论：Experience 设计 = 11 字段里 9 个已在 v0.9 前就位；v0.10.0 补的是 **Outcome + Reflection（裁决派生）**。
+> 结论：Experience 设计 = 11 字段里 已在 v0.9 前就位；v0.10.0 补的是 **Outcome + Reflection（裁决派生）**。
 
 ## Memory≠Evidence 裁决接缝
 

@@ -10,7 +10,7 @@
 
 用户 2026-09-11：**「现在的工具集不够，去论文 github 上继续找」**。
 
-ADR-0055 曾**否决**「台账用外部数据源（npm/winget 实时查询）」，理由是「引入网络依赖与不确定性；静态登记 + 棘轮比对已够」。本轮要把 50 项扩到能覆盖一个编码 agent 实际要做的活，必须重新审议那条否决。
+ADR-0055 曾**否决**「台账用外部数据源（npm/winget 实时查询）」，理由是「引入网络依赖与不确定性；静态登记 + 棘轮比对已够」。本轮要把 扩到能覆盖一个编码 agent 实际要做的活，必须重新审议那条否决。
 
 ### 三个必须先查清的问题
 
@@ -30,9 +30,9 @@ ADR-0055 曾**否决**「台账用外部数据源（npm/winget 实时查询）�
 |---|---|---|
 | **`winget show`（本机 CLI）** | ✅ **首选**。直接给 版本/发布者/**绰号**/描述/主页/**许可证**，且查的是**本机实际配置的源** | **核验 + 取版本 + 取许可证** |
 | winget-pkgs raw manifest（GitHub） | ✅ MIT 可摘抄；**但路径含版本号，不知道版本就拼不出**（实测 `ripgrep`/`jadx` 直接 404） | 读 manifest 原文 |
-| winget CDN `source.msix` | ✅ 逐字节吻合 **20,230,433 字节**，`Last-Modified: Fri, 11 Sep 2026 00:00:20 GMT`；解出 `Public/index.db`（**41,680,896 字节** SQLite，**14,816 个包**） | 一次性**全量候选发现** |
+| winget CDN `source.msix` | ✅ 逐字节吻合 **20,230,433 字节**，`Last-Modified: Fri, 11 Sep 2026 00:00:20 GMT`；解出 `Public/index.db`（**41,680,896 字节** SQLite，**14,包**） | 一次性**全量候选发现** |
 | ScoopInstaller/Main bucket JSON | ✅ Unlicense；`ripgrep.json` 等实测 200 | 补 Windows 二进制名 + license |
-| Repology API | ✅ 123 个 repo，**确认 `has_winget=False`** —— **给不了 winget ID** | 仅 Linux/WSL 侧 |
+| Repology API | ✅  repo，**确认 `has_winget=False`** —— **给不了 winget ID** | 仅 Linux/WSL 侧 |
 | **`api.winget.run`** | ❌ **数据冻结在 2023-03-16**（fzf/ripgrep/neovim 的 `UpdatedAt` 全是 `2023-03-16T14:34:1x`） | **已废，不可用** |
 
 ⇒ **修正 ADR-0055 的否决**：否决的是「**让插件在运行时依赖网络查询**」——那条仍然成立，**本轮不放宽**。新增的是**构建期工具**：`tools/winget-verify*.ts` 在**开发时**核验台账，产物是静态 TS 数据，**插件运行时零新增依赖**。
@@ -65,13 +65,13 @@ CDN 索引解出后，按 moniker / 命令名 / 名称 / 包 ID 后缀 自动解
 
 - 对每个**精确包 ID** 调 `winget show`，解析 **locale 无关**（不按「版本:」/「Version:」标签匹配，改用「值像版本形状」+ 首行 `[ID]` 锚点）；
 - **诚实区分版本出处**：`verSrc="实测"`（本机跑 `--version` 得到）vs `"权威核验"`（来自 `winget show` 目录，**不代表本机已装**）。新增条目一律标后者。
-- 结果：**57/57 通过**（含许可证），写入台账后由既有**双向棘轮**（`test/toolset-catalog.test.ts`）继续约束台账↔文档不漂移。
+- 结果：** 通过**（含许可证），写入台账后由既有**双向棘轮**（`test/toolset-catalog.test.ts`）继续约束台账↔文档不漂移。
 
 ### 4. Q3：**扩目录不触发工具选择拐点**——但要分清两个量
 
 最硬的证据是 [arXiv:2606.30317](https://arxiv.org/abs/2606.30317)（MCP Server Architecture Patterns，2026-06）：
 
-> tool-selection accuracy drops below 90% between **10 and 15 tools per context** (Haiku 4.5) and between **20 and 30 tools** (Sonnet 4).
+> tool-selection accuracy drops below  between **10 and 15 tools per context** (Haiku 4.5) and between **20 and 30 tools** (Sonnet 4).
 
 **关键限定（必须写清楚，否则会被误用）**：它量的是**每次请求注入 prompt 的工具 schema 数（per context）**，**不是目录条目数**。旁证同向：[arXiv:2608.22695](https://arxiv.org/abs/2608.22695)（in-context routing Match@1 从 0.85 崩到 0.12，交叉点 N≈500）、[arXiv:2606.17519](https://arxiv.org/abs/2606.17519)（110 agents/584 tools，F1 掉 16–23pp，含 retrieval gap + confusion gap）。
 
@@ -112,16 +112,16 @@ CDN 索引解出后，按 moniker / 命令名 / 名称 / 包 ID 后缀 自动解
 - 澄清了拐点口径：**扩目录与工具面大小是两个量**，前者可长、后者必须小。
 
 ### 负 / 已知边界
-- **扩源靠人工裁决 publisher**：57 条是逐个判断的，新条目仍需人给包 ID。**这不是自动化，是核验自动化**。
+- **扩源靠人工裁决 publisher**：是逐个判断的，新条目仍需人给包 ID。**这不是自动化，是核验自动化**。
 - 版本取自核验日，**会随时间漂移**；`winget-verify.ts` 可重跑，但**没有 CI 自动跑**（会依赖网络与本机 winget）。
 - `probe` 旗标正确性仍未逐项实测（沿用 ADR-0055 的诚实标注）；新条目 `--version` 多数未在本机真跑（本机未装）。
-- 台账变大后，`read_shadow({mode:"toolset", survey:"all"})` 会起更多子进程（105 项），**默认仍只探 2 个 provider**，不受影响。
+- 台账变大后，`read_shadow({mode:"toolset", survey:"all"})` 会起更多子进程（），**默认仍只探  provider**，不受影响。
 
 ## 自检
 
 - [x] 与 ADR-0055 一致：仍**不代装**、**宁缺勿编**、双向棘轮保护未变；仅把「数据源」从「否决」修正为「构建期可用、运行期仍不依赖」。
 - [x] 与 ADR-0057 一致：预检是让工具面保持小的接口；本 ADR 明令禁止把条目暴露成工具。
 - [x] 与 ADR-0049 一致：核验失败只说「未取到」，**不说「包不存在」**（`winget-verify.ts` 区分 `unavailable` 与 `not-found`）。
-- [x] 实测证据齐备：CDN 字节数/时间戳、14,816 包数、api.winget.run 冻结时间戳、Repology `has_winget=False`、9 例假阳性、57/57 核验、棘轮 101 个 ID 双向通过。
-- [x] 全套回归 29 个测试文件通过。
+- [x] 实测证据齐备：CDN 字节数/时间戳、14,816 包数、api.winget.run 冻结时间戳、Repology `has_winget=False`、9 例假阳性、 核验、棘轮  ID 双向通过。
+- [x] 全套回归 测试文件通过。
 - [ ] **未验证**：新条目 `probe` 旗标在真机（多数工具本机未装，只会显示「未检出」）；`winget show` 解析在其他 winget 本地化（非中/英）下的表现。

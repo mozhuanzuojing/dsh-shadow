@@ -4,7 +4,7 @@
 > 前置：ADR-0021（v0.29 Federation）。定位：**架构冻结审查 ADR（非实现 ADR）**——确认 v0.20–v0.29 满足进入 Reality Model 的前置条件。
 > 分界：v0.20–v0.29 = **Observer 如何形成、观察、修正自身**；v0.30 = **Observer 如何描述 Reality**。两层次一旦混淆，World Model 会退化成 `多个 Observer Projection → merge → 看起来像 Reality`。
 
-## 一、Architecture Invariant Checklist（7 条冻结）
+## 一、Architecture Invariant Checklist（冻结）
 
 ```
 Invariant-1: Observer ≠ Reality
@@ -70,7 +70,7 @@ Invariant-7: Temporal ≠ Reality Graph
 
 ## 九、v0.30 Entry Conditions（进入 Reality Model 的前置）
 
-1. 7 条 Invariant 全过（invariant tests 95–101）。
+1.  Invariant 全过（invariant tests 95–101）。
 2. `Reality Evidence Registry` 弱事实 + `Validation History` 汇合到 Reality Model 的管道先立。
 3. 不产生 Knowledge/Identity/Principle；`Validated ≠ Truth`。
 4. 全量 mock 1–94 + invariant 95–101 全绿。
@@ -88,5 +88,5 @@ ADR-0022 Review → 全量 mock 1-94 regression → invariant tests 95-101 → t
 ## 附录：审查验收
 
 - 全量 mock 1–94 + invariant tests **95–101** 全绿（每个 Invariant 一条锁定测试：RealityEvidence 弱事实不声明规律 / Temporal Perception 非 World Model / Evidence 不入 knowledge 库 / validated 非绝对真理 / Federation 不产合并 Identity / Dream 不产 insight / Temporal 非 Reality Graph）。
-- 结论：7 条架构 Invariant 全部通过，满足进入 v0.30 Reality Model Kernel 的前置条件。标记 `v0.29.1 integrity`。
+- 结论：架构 Invariant 全部通过，满足进入 v0.30 Reality Model Kernel 的前置条件。标记 `v0.29.1 integrity`。
 - v0.30 残余风险提醒：`RealityProjection.reality` 命名建议改 `referenceRealityContext`；Reality Model 不得从 TemporalGraph 直接推导（须经 Evidence + Validation 汇合）。

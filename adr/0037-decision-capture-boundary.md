@@ -7,7 +7,7 @@
 
 ## Context
 
-对真实 OpenAPI-Gateway 的 `.shadow` 做 Shadow Replay（286 个 Memory Atom，平均 734B）后，问题被精确定位闭环：
+对真实 OpenAPI-Gateway 的 `.shadow` 做 Shadow Replay（ Memory Atom，平均 734B）后，问题被精确定位闭环：
 
 ```text
 286 Atoms → (聚合) 3 Episodes → (决策) 1 Decision(误报「好」) → 证明 Decision Capture 在源头缺失
@@ -67,7 +67,7 @@ Replay = Verification / Inspection
 
 **无 DecisionStore / Decision Repository / Decision DB / Decision Manager**——Memory 是唯一事实源，Decision/Episode 全是派生关系，避免两套事实源。`reason` 是 `sourceRef` 指向的原始文本语义，不落独立存储。
 
-## 下一阶段评估（5 个指标，供真实数据再次 Replay）
+## 下一阶段评估（指标，供真实数据再次 Replay）
 
 不只看 Decision 数量。第二次 Replay（v1.1.1 新数据）重点看：
 
@@ -75,9 +75,9 @@ Replay = Verification / Inspection
 |---|------|------|------|
 | ① | **Decision Precision** | 明确 Decision / 所有被标记 Decision | 有没有「好/可以/嗯/收到/继续」这类 Confirmation 混进 |
 | ② | **Decision Recall** | 人工抽查实际明确发生的 Decision / 系统捕获的 Decision | 正则是否漏掉大量真实决策 |
-| ③ | **Reason Coverage** | 有明确 Decision 的记录中，有明确 Reason 的比例（例：100 决策中 37 有理由 / 63 未明确） | 诚实反映"Agent 当时到底有没有表达理由"，**不是**要求 100% |
-| ④ | **Source Traceability** | Decision → sourceRef → 原始 Memory Atom → 原始 Event/Message | 应接近 100%，否则 Decision 变成"二手事实" |
-| ⑤ | **Task Replay Completeness** | Goal→Observation→Evidence→Decision→Reason→Action→Result 是否可追溯 | **存在的东西能追溯，不存在的明确显示缺失**（≠ 要求完整率 100%） |
+| ③ | **Reason Coverage** | 有明确 Decision 的记录中，有明确 Reason 的比例（例：100 决策中 37 有理由 / 63 未明确） | 诚实反映"Agent 当时到底有没有表达理由"，**不是**要求  |
+| ④ | **Source Traceability** | Decision → sourceRef → 原始 Memory Atom → 原始 Event/Message | 应接近 ，否则 Decision 变成"二手事实" |
+| ⑤ | **Task Replay Completeness** | Goal→Observation→Evidence→Decision→Reason→Action→Result 是否可追溯 | **存在的东西能追溯，不存在的明确显示缺失**（≠ 要求完整率 ） |
 
 ## 明确不做（本阶段排除，避免拉回 Verification / Epistemic Boundary）
 
@@ -97,7 +97,7 @@ Replay = Verification / Inspection
 - [x] `npm run build` 通过（dist 与源码同步）
 - [x] `node test/episode-lineage.test.ts` ALL PASS（含 Decision Capture 场景）
 - [x] `node test/recall-attribution.test.ts` ALL PASS（invariant 1–240 回归）
-- [x] 真实 OpenAPI-Gateway `.shadow` 回放：聚合生效（286→3），旧数据 1 条误报决策（v1.1.1 只对未来生效）
+- [x] 真实 OpenAPI-Gateway `.shadow` 回放：聚合生效（286→3），旧数据 误报决策（v1.1.1 只对未来生效）
 
 ## 补记（2026-09-20，ADR-0096）—— 正文冻结不动
 

@@ -2,7 +2,7 @@
 
 - 状态：**已提出（2026-09-07，先冻结契约；暂不实现**——用户明确"不是直接写实现，先定义身份边界"）
 - 决定日期：2026-09-07
-- 关联 ADR：ADR-0037/0038/0039/0040/0041/0042（全部自洽）
+- 关联 ADR：ADR-//（全部自洽）
 - 关联术语：`../CONTEXT.md`（Memory Atom / Episode / Task / ContextReference / Shadow Node）
 
 ## Context
@@ -89,5 +89,5 @@ ADR-0042（方向）
 
 ## 自检（本 ADR 无代码，仅记录）
 
-- [x] 与 ADR-0037/0038/0039/0040/0041/0042 自洽（Evidence≠Interpretation / Episode=投影 / Memory=source / Node=派生投影 / relations 只派生）。
+- [x] 与 ADR-// 自洽（Evidence≠Interpretation / Episode=投影 / Memory=source / Node=派生投影 / relations 只派生）。
 - [x] 明确这是身份边界（Contract），比代码更重要；先冻结，再分阶段实现。

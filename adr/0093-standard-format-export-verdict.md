@@ -10,7 +10,7 @@
 用户在 2026-09-15 的答复里点名：**评估 strix 的 `findings.sarif` 那类「标准格式出口」**。
 上一轮（`adr/0091` §2①）已记下样本事实：`strix` 每次运行产出**三元组**——
 `penetration_test_report.md`（人读）/ `vulnerabilities.json` + `findings.sarif`（**SARIF 2.1.0**，机读）/
-`run.json`（运行元数据：`status`、`llm_usage.cost` vs budget），外加退出码 `0/1/2` 与那句
+`run.json`（运行元数据：`status`、`llm_usage.cost` vs budget），外加退出码 `/2` 与那句
 「**`0` 只覆盖被分析的部分**」（`strix/AGENTS.md:36-37`）。**本 ADR 只回答一件事：本仓该不该有等价物。**
 
 ## §1 先清点本仓**现有**的机读出口与其消费方（可复算）
@@ -18,8 +18,8 @@
 | 出口 | 位置 | 消费方（**必须点名**） |
 |---|---|---|
 | 插件清单（宿主契约） | `package.json` 的 `dsh.bundle.patch` → `cordis.patch.yml` · 工具参数的 **JSON Schema** | **宿主**（DSH 加载与工具调用）—— 这是本仓**唯一**面向外部消费方的机读出口 |
-| 审计/评测清单（5 份） | `tools/{audit-ratchet.baseline,retrieval-eval.baseline,retrieval-eval.protocol,toolset-authority,toolset-seed}.json` | 仓内：棘轮测试 + 审计工具（**离线**、同源） |
-| 图与检查产物（4 份） | `docs/{absorb-verdict,architecture-seams}.{candidate,visual-check}.json` | 仓内：可视化与 `visual-check` |
+| 审计/评测清单（） | `tools/{audit-ratchet.baseline,retrieval-eval.baseline,retrieval-eval.protocol,toolset-authority,toolset-seed}.json` | 仓内：棘轮测试 + 审计工具（**离线**、同源） |
+| 图与检查产物（） | `docs/{absorb-verdict,architecture-seams}.{candidate,visual-check}.json` | 仓内：可视化与 `visual-check` |
 | 记忆侧派生件 | `.shadow/_meta.json` · `_index.md` · `query-log/<date>.jsonl` | 读侧自己 + agent（`adr/0003`：派生件不是 source） |
 
 ⇒ **本仓已经在用「标准格式出口」**：**给真正的消费方（宿主）的那一份**（清单 + 工具 schema）。
@@ -41,7 +41,7 @@
 **但吸收两条判据 —— 且经清点，本仓已具备，故只登记不实装：**
 
 1. **机读产物必须与报告同源**（`strix` 的报告与 `findings.sarif` 出自同一次运行）。
-   本仓对应物：5 份清单**全部由生成器产出、由棘轮消费同一份** —— 改台账/改版本而不重跑生成器 ⇒ **棘轮变红**
+   本仓对应物：清单**全部由生成器产出、由棘轮消费同一份** —— 改台账/改版本而不重跑生成器 ⇒ **棘轮变红**
    （`test/toolset-authority.test.ts` ②⑦、`tools/audit-ratchet.lib.ts`）。
 2. **「这次跑了什么」要有留档**（`strix` 的 `run.json`：状态 + 成本 vs 预算）。
    本仓对应物：`tools/toolset-authority.json` 的 `verifiedAt` + `counts`（并含**拒写**门：自洽失败/「实测」无据 ⇒
@@ -55,7 +55,7 @@
 | 引入 SARIF（或自造等价格式）给外部平台 | 无消费方 ⇒ 造死机制（本仓已八次记录同族缺陷：机制存在、没人调用） |
 | 只做「导出 JSON 摘要」给将来的门用 | **为将来建的机制**同样是没消费方；真需要时那一步的成本很低（清单生成器已存在） |
 | 把 `read_shadow` 的返回从 markdown 改成机读 JSON | 直接撞**读侧契约**：`tool-output-v1` 的 hard 半边与「数据非指令」前缀都是按**给模型读的文本**设计的（`adr/0002`/`0044`） |
-| 照 `strix` 把退出码语义也一起搬 | 本仓**已有**（`corpus-health` 的 `NORMAL ≠ 通过`、棘轮退出码 0/1/2、`audit:*` 的「0 ≠ 没找到」）⇒ `adr/0091` §2① 已判「同源，登记即可」 |
+| 照 `strix` 把退出码语义也一起搬 | 本仓**已有**（`corpus-health` 的 `NORMAL ≠ 通过`、棘轮退出码 /2、`audit:*` 的「0 ≠ 没找到」）⇒ `adr/0091` §2① 已判「同源，登记即可」 |
 
 ## Consequences
 
@@ -83,20 +83,20 @@ Select-String -LiteralPath package.json -Pattern '"dsh"' -Context 0,3           
 Select-String -LiteralPath ..\_src\strix\AGENTS.md -Pattern 'Exit codes|findings.sarif|run.json'
 ```
 
-## 补记（2026-09-25，`v1.21.8`）：§1 的「图与检查产物（4 份）」缩为 2 份，且**不再随包发布**
+## 补记（2026-09-25，`v1.21.8`）：§1 的「图与检查产物（）」缩为 ，且**不再随包发布**
 
-**触发**：用户指令「历史文档也没有清理吗」⇒ 追问后定案「4 个签入产物**留仓但移出发布面**；12 个本地产物**直接删**」。
+**触发**：用户指令「历史文档也没有清理吗」⇒ 追问后定案「签入产物**留仓但移出发布面**；本地产物**直接删**」。
 
 - **§1 那一行的更正（本补记即更正，§1 正文不改写）**：`docs/{absorb-verdict,architecture-seams}.{candidate,visual-check}.json`
-  的 **4 份** ⇒ 现只剩 **2 份** `*.candidate.json`。两份 `*.visual-check.json`（连同 2 份 `*.visual-check.html`
-  与 8 张 PNG）**已删除**：它们是 `.gitignore` L9 `docs/*.visual-check.*` 明确排除的**本地产物**，
-  **未进版本控制 ⇒ 删除不可恢复**（该代价在用户选项里已明示）。§1 该行的「4 份」与本文件 L81 的重放命令
-  （`docs\*.json` 现在只列 2 个）都以此为准。
+  的 **** ⇒ 现只剩 **** `*.candidate.json`。两份 `*.visual-check.json`（连同  `*.visual-check.html`
+  与  PNG）**已删除**：它们是 `.gitignore` L9 `docs/*.visual-check.*` 明确排除的**本地产物**，
+  **未进版本控制 ⇒ 删除不可恢复**（该代价在用户选项里已明示）。§1 该行的「」与本文件 L81 的重放命令
+  （`docs\*.json` 现在只列 ）都以此为准。
 - **发布面（本条更实质的一半）**：`package.json` 的 `files` 由 `"docs"` 改为 **`"docs/*.md"`**。两个效果：
-  ① 4 份 `candidate.json` / `html`（1.27 MB）**留在仓内**（§1 登记的证据不丢）但**不再随包分发**；
-  ② 顺带修掉一个**真实缺陷** —— npm 的 `files` 白名单**无视 `.gitignore`**，所以原先的 `"docs"` 把 12 个
+  ①  `candidate.json` / `html`（1.27 MB）**留在仓内**（§1 登记的证据不丢）但**不再随包分发**；
+  ② 顺带修掉一个**真实缺陷** —— npm 的 `files` 白名单**无视 `.gitignore`**，所以原先的 `"docs"` 把 
   「本意不入库」的 `visual-check.*`（0.96 MB）**也打进了包**。
-  实测：包 **1.8 MB → 621.5 kB**、unpacked **4.0 MB → 1.7 MB**、files **513 → 497**（−16 正好是那 16 个产物）。
+  实测：包 **1.8 MB → 621.5 kB**、unpacked **4.0 MB → 1.7 MB**、files **513 → 497**（−16 正好是那 产物）。
 - **根因（为什么这块长期没被任何门发现）**：引用门 `tools/citation-audit.lib.ts` 的 `CITE` 正则只认
   `md|ts|mts|json|ya?ml|py|sh|ps1` ⇒ **`.html` / `.png` 永远在扫描面之外**。这类产物只能靠人 / ADR 级决定；
   已在 `AGENTS.md` 记一笔。

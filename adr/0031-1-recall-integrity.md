@@ -48,7 +48,7 @@ Shadow 帮助"**可能在哪里找**"，不能回答"**过去一定发生过**"�
 ## 边界 / 非目标
 
 - 只加边界/测试，不新增 runtime capability。实现验收：`tsc` + `node --check` + mock 1–207。
-- **本轮未发现真实绕过漏洞**（v0.37.0 的 recall-forget/event 只写 `shadow/recall/`，无 mutation API 触及 ObservationTrace/ValidationHistory/RealityClaim lineage），故**无新增 runtime enforcement**，仅固化 206/207 为不可回退测试。
+- **本轮未发现真实绕过漏洞**（v0.37.0 的 recall-forget/event 只写 `shadow/recall/`，无 mutation API 触及 ObservationTrace/ValidationHistory/RealityClaim lineage），故**无新增 runtime enforcement**，仅固化  为不可回退测试。
 - 无 LLM；无 self-generated truth；无 confabulation；无证据等级提升；无删除/改写原始 lineage。
 
 ## 一句话
@@ -59,6 +59,6 @@ Shadow 帮助"**可能在哪里找**"，不能回答"**过去一定发生过**"�
 
 ## 附录：v0.37.1 实现说明（Invariant Lock）
 
-- 固化 198–207 为不可回退测试（mock 198–207）；补充 206/207（Forgotten Does Not Remove Authority / Recall Cannot Modify Original Lineage）。
+- 固化 198–207 为不可回退测试（mock 198–207）；补充 （Forgotten Does Not Remove Authority / Recall Cannot Modify Original Lineage）。
 - 无新增 runtime capability；无真实绕过漏洞，故仅加测试与文档。全量 mock 1–207 全绿；tag `v0.37.1 Recall Integrity Lock`。
 - 通过后进入 v0.38 Controlled Adaptation（最大风险 `Remembered Experience → Adaptation → Behavior Change → Identity Drift`，此时输入层已可信连续）。

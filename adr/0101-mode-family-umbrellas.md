@@ -9,7 +9,7 @@
 
 ## 1. Context
 
-顶层曾并列约 25 个域目录（含 `agency` / `delegation` / `federation` / …）。
+顶层曾并列约 域目录（含 `agency` / `delegation` / `federation` / …）。
 它们是 **mode-family 实现包**（`query/*.ts` 分派面仍在 `query/`），不是另一套 mode 契约。
 
 结构门（T13）已证明：**不能**用「目录名 = 纯度层」当判据（`core/` 是混合脊柱）。

@@ -67,7 +67,7 @@ dsh-sandbox/lib/index.js  writableRoots(policy) = [policy.workspaceRoot, "/tmp",
 | `.shadow` 目录不存在 | **排除** | `dsh-fs-local` L497 写前 `mkdir(directory, { recursive: true })`；且报错出自 L164 的 `!contained` 分支，不是 `ENOENT` |
 | 解析不出 session cwd、落到兜底根 `~/.dsh-observer/shadow` | **排除** | 报错路径 `G:\project\dsh1\.shadow\…` **就是会话 cwd**，`resolveShadowScope` 走的是 `implicit` 分支 |
 
-第 2 条是 `CHANGELOG.md` v1.15.x 的「记账未修」原文里的归因。它**把触发条件说窄了**：
+第 是 `CHANGELOG.md` v1.15.x 的「记账未修」原文里的归因。它**把触发条件说窄了**：
 真实触发条件是「**会话工作区 ≠ 服务进程启动目录**」，与能否解析 cwd **无关**。
 
 ### 4. 与既有记账的冲突
@@ -82,7 +82,7 @@ dsh-sandbox/lib/index.js  writableRoots(policy) = [policy.workspaceRoot, "/tmp",
 
 ## Decision
 
-### 1. 在**取得 fs 的三处**包一层会话作用域门面，而不是改 40 处调用点
+### 1. 在**取得 fs 的三处**包一层会话作用域门面，而不是改 调用点
 
 新增 `core/fs-scope.ts`，导出两个纯函数：
 
@@ -102,7 +102,7 @@ scopedFs(rawFs, policy)           // 只把 writeText 的第 5 参补齐；无�
 
 **为什么不逐点改**：所有写入都经由**同一个 `fs` 对象**向下传递（`flush`/`ensureIndex`/`queryDeps`
 是插件取得 fs 的**仅有三处**，已用 `get("fs")` 全仓 grep 核实）。在取得处包一次 ≡ 全部写入点都补上，
-且**不必动任何 `persistence/*` 模块的签名** —— 那才是真正的 40 处改动 + 40 处回归面。
+且**不必动任何 `persistence/*` 模块的签名** —— 那才是真正的 改动 + 回归面。
 
 ### 2. 边界：**不越权**
 
@@ -131,7 +131,7 @@ scopedFs(rawFs, policy)           // 只把 writeText 的第 5 参补齐；无�
 **修复前先跑**（暂存新 `dist`、用旧 `dist`）：
 
 ```
-[dsh-shadow][error] flush FAILED: cannot write "D:/proj/.shadow/2026-09-11/2026-09-11--195034-shadow.md":
+[dsh-shadow][error] flush FAILED: cannot write "D:/proj/.shadow/2026-09--09-11--195034-shadow.md":
   file access denied under workspace-write mode
 AssertionError: 会话工作区 ≠ 服务启动目录时，记忆仍必须落盘（旧版省略 sandboxPolicy ⇒ 被围栏拒绝）；
   实际写入 []
@@ -144,7 +144,7 @@ AssertionError: 会话工作区 ≠ 服务启动目录时，记忆仍必须落�
 
 | 备选 | 否决理由 |
 |---|---|
-| 逐点给 40 个写入调用点加第 5 参 | 动 40 处签名 + 40 处回归面，而收益与「在 3 处取得点包一层」**完全等价**（所有写入共用同一 fs 对象）。违背「精准修改」 |
+| 逐点给 写入调用点加第 5 参 | 动 签名 + 回归面，而收益与「在 取得点包一层」**完全等价**（所有写入共用同一 fs 对象）。违背「精准修改」 |
 | 直接传 `{ mode: "danger-full-access", workspaceRoot: ws }` | **提权**：门面会绕过会话真实的 `read-only`，撞 inv 182。本 ADR 明确拒绝 |
 | 传 `{ mode: <部署默认>, workspaceRoot: ws }`（只修 root、不动 mode） | 对当前部署**看起来够用**（默认 mode 是 workspace-write，root 换成 ws 后判定通过），但它**绕开了会话级 mode** —— 只读会话会被静默放行。仍是提权，只是隐蔽 |
 | 用 `Object.create(rawFs)` 做通用转发 | 更短，但会连带暴露后端**所有**方法（含未来新增的受围栏操作），且私有字段（`#x`）后端会炸。显式转发让「插件用到什么」是可见的，surprise 会**响**而不是变行为 |
@@ -181,12 +181,12 @@ AssertionError: 会话工作区 ≠ 服务启动目录时，记忆仍必须落�
 
 ## 自检
 
-- [x] **先复现再修**：旧 `dist` 上跑出新测试的红，且**报错文案与真机横幅逐字同型**；修复后 6/6 绿。
+- [x] **先复现再修**：旧 `dist` 上跑出新测试的红，且**报错文案与真机横幅逐字同型**；修复后  绿。
 - [x] **根因来自宿主编译产物，不是猜测**：三层调用链（`fs-sandbox` → `sandbox-policy` → `sandbox`）+ 配置出处均已引用行号。
 - [x] **两个替代解释都排除**，且指出既有记账把触发条件说窄了。
 - [x] **边界锁进测试**：不越权（③ read-only 正对照）、不破坏特性探测（⑥c `stat`）。
 - [x] **恒等降级**：无策略 / 无 fs / 无服务 / resolve 抛错四种情况均断言（⑥a）。
-- [x] `npx tsc --noEmit` exit 0；`npm run build` exit 0；全套回归 **39/39 ALL PASS**（38 + 新增 1）。
+- [x] `npx tsc --noEmit` exit 0；`npm run build` exit 0；全套回归 ** ALL PASS**（38 + 新增 1）。
 - [x] 未改任何 `mode` / 读侧语义 / API；新增一个模块 + 三处接入 + 一个测试。
 - [ ] **未验证**：真机（需重启宿主，**B3**）；真沙箱而非 mock。
 - [ ] **未做**：兜底根场景（**T6**）。

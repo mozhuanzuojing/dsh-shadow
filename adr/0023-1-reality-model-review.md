@@ -4,7 +4,7 @@
 > 前置：ADR-0023（v0.30 Reality Model Kernel）。定位：**确认 Reality Model 描述的是"被观察到的稳定结构"，而不是"世界本体"**。
 > 防隐蔽退化：`RealityClaim + Relation + Entity = 看起来像世界模型，但实际只是多个 Observer 投影的集合`。
 
-## Review 重点（5 条锁定）
+## Review 重点（锁定）
 
 ### 1. RealityClaim predicate 必须属 observable predicate set
 允许（观察到的行为）：`exists / exposes / changed / responded / returned / located_at / connected_to`。
@@ -41,7 +41,7 @@ Observer: "I currently have enough evidence to represent this part of reality li
 
 ```
 v0.30.0 Reality Model Kernel  ✅
-ADR-0023.1 Integrity Review    ← 本 ADR（冻结 5 条）
+ADR-0023.1 Integrity Review    ← 本 ADR（冻结 ）
 v0.31 ADR-0024 World Representation Boundary → v0.31 implementation
 ```
 
@@ -58,7 +58,7 @@ v0.31 ADR-0024 World Representation Boundary → v0.31 implementation
 
 ## 附录：v0.30.1 实现说明（Invariant Lock）
 
-- 5 条边界固化为不可回退测试（invariant tests 111–115）：
+- 边界固化为不可回退测试（invariant tests 111–115）：
   - **111** Observable Predicate Only：`reality/claim/engine.ts` 加 `OBSERVABLE_PREDICATES` + `isObservablePredicate` —— 评价性 predicate（is reliable 等）拒绝 `predicate_not_observable`；可观察 predicate（exposes 等）产 RealityClaim。
   - **112** Epistemic Never Truth：无 true/false/absolute/1.0。
   - **113** ObservedEntityCandidate 不写评估属性（reliable/should/better）。

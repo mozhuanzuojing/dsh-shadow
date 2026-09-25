@@ -32,7 +32,7 @@ ADR-0003 §3-7：`_index.md`/`_meta.json`/`_recall_log.json` 是派生物；Memo
 
 ## 5. 验收
 
-- `tsc` + `node --check` 通过；mock 场景 1–42 全绿（asOf 对象形态兼容，Scene 34/37 仍绿）。
+- `tsc` + `node --check` 通过；mock 场景 1–42 全绿（asOf 对象形态兼容，Scene  仍绿）。
 - 外部 read_shadow 工具面未变；仅 Soul 输出多一段澄清、Observer 窗口支持对象 asOf。
 
 ## 6. 遗留

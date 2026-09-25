@@ -2,7 +2,7 @@
 
 - 状态：**已接受（2026-09-08）**——把「缺件显式报错、不凭记忆继续」从「证据 Provider 的个例」提升为**全插件统一纪律**。
 - 决定日期：2026-09-08
-- 关联 ADR：ADR-0001（不引向量库）、ADR-0043（Shadow Contract）、ADR-0044/0045（Evidence Lineage）、ADR-0048（PageIndex/zg 思想，未装→unavailable）
+- 关联 ADR：ADR-0001（不引向量库）、ADR-0043（Shadow Contract）、ADR-（Evidence Lineage）、ADR-0048（PageIndex/zg 思想，未装→unavailable）
 - 关联术语：`../CONTEXT.md`（缺件不静默 / Evidence Gateway / 降级）
 - 外部来源：hyperframes 技能文档「Treat a failed update as a visible tool failure; **do not continue from a remembered workflow contract**」；OpenAI《Computer use》指南「续对话不恢复现实」；本项目 2026-09-08 参考材料研究 §二 2.5。
 
@@ -57,14 +57,14 @@ dsh-shadow 有一批**可选增强**：一句话摘要、语义召回 B 档、`r
 
 - [x] `npx tsc --noEmit` / `npm run build` 通过
 - [x] 新增 `test/missing-dependency.test.ts`：未知 provider → `unavailable`（不冒充 verified）；`streamText` 缺 `llm`/缺 route → `""`；全增强打开但无 `llm` 时读侧仍走确定性路径、不抛错
-- [x] 全量回归 `ALL PASS ✅`（20 个测试文件）
+- [x] 全量回归 `ALL PASS ✅`（测试文件）
 - [x] 盘点表逐条对源码核对（`writer-llm.ts` / `writer.ts` / `evidence/zg.ts` / `evidence/gateway.ts` / `projection-store.ts`）
 
 ## 补记（v1.15.65 / T8 结案）—— 行级豁免与「可见信号」的落地
 
 **为什么补记而不是改正文**：本 ADR 已接受并冻结，它的「现状盘点」表标题自陈
 「**本 ADR 冻结时**逐条对源码核对」—— 那是**那一刻的快照**。快照本身没错，
-但**读者会把它当现状**，而 T8 结案后表里至少 **3 行**的「可见信号」已经从**否**变成**有**。
+但**读者会把它当现状**，而 T8 结案后表里至少 ****的「可见信号」已经从**否**变成**有**。
 故在此补记增量，不动正文。
 
 ### 1. 表里哪些行的「可见信号」已经变了
@@ -80,7 +80,7 @@ dsh-shadow 有一批**可选增强**：一句话摘要、语义召回 B 档、`r
 
 ### 2. 「可见信号」三选一里，本仓**实务上**只用 flush warn
 
-清单第 45 行给了三选一（`unavailable` 状态 / flush warn / debug trace）。T8 的 7 条**全部**
+清单第 给了三选一（`unavailable` 状态 / flush warn / debug trace）。T8 的 **全部**
 落在 **flush warn** —— 因为 `getFlushWarn()` 的结果已被**每一个**读 handler 带在返回值里
 （60+ 处 `+ flushWarn`）⇒ 一处渲染、全部 mode 同时获得信号（`adr/0085` §2）。
 这不是「三选一里随便挑一个」，而是**本仓读侧本来就只有这一个统一出口**；
@@ -89,7 +89,7 @@ dsh-shadow 有一批**可选增强**：一句话摘要、语义召回 B 档、`r
 
 ### 3. 一条**类判据**补充（清单没写，T8 逼出来的）
 
-本 ADR 只说了「要有可见信号」，没说**什么时候可以不要**。T8 第 6 条逼出了这条：
+本 ADR 只说了「要有可见信号」，没说**什么时候可以不要**。T8 第 逼出了这条：
 
 > 一条降级**不必**加可见信号，**当且仅当读者拿到的内容逐字节不变** ——
 > 即被降级的那一步只是**冗余副本 / 加速结构**。
@@ -104,5 +104,5 @@ dsh-shadow 有一批**可选增强**：一句话摘要、语义召回 B 档、`r
 「**新增**可选增强时的门禁」，约束的是**将来新增**的增强；表格是**冻结时的现状台账**。
 适用范围不同 ⇒ 不构成矛盾。已改正（`adr/0085` §5.2）。
 
-**自检**：`npm run verify` **55/55**（`test/t8-silent-degradation.test.ts` 正/负对照；
+**自检**：`npm run verify` ****（`test/t8-silent-degradation.test.ts` 正/负对照；
 `test/missing-dependency.test.ts` 仍全绿 —— 本补记不改任何返回值契约）。

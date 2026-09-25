@@ -109,7 +109,7 @@ v0.20–v0.28.1 = **一个灵魂如何观察自己**。v0.29 开始 = **多个�
 
 ---
 
-## 附录：v0.29 实现说明（4 个工程约束已落地）
+## 附录：v0.29 实现说明（工程约束已落地）
 
 1. **RealityEvidenceRegistry 弱事实定位**：`epistemic/federation/reality.ts` `RealityEvidence{id, observedAt, source, observation, linkedHypothesis[], referencedBy[], status}`——只记录"某事件在某时间被观察到"，**不解释世界规律**（Observation→Projection→Judgment 不是 Evidence）；**append-only**（B 引用不改 A 的 observation）。
 2. **FederatedPerspective 不携带推理结果**：`epistemic/federation/perspective.ts` `confidence{observationConfidence, validationConfidence}` 拆分——"确定看到 X"（高）≠"X 对现实的解释正确"（可低）。`perspectiveIsClean` 拦"validationConfidence 超观察确信"。

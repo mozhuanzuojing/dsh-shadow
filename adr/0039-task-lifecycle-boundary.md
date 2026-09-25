@@ -32,7 +32,7 @@ Task Graph Projection
 Episode / Replay View
 ```
 
-- **Memory Atom 不是最高抽象**：286 个 atom 实际是"**一个任务生命周期**"，而非 286 个记忆。新增 **Task** 层来理解。
+- **Memory Atom 不是最高抽象**： atom 实际是"**一个任务生命周期**"，而非 记忆。新增 **Task** 层来理解。
 - **Event（不可变事实）**：`{ id, timestamp, type, source, content, evidence }`。例：`{ type:"file_change", file:"TodoSyncJob.java", action:"deleted" }`。
 - **DecisionEvent**：已有（`{ statement, source, reasonRef }`），**保留**。
 - **TaskContext（建议新增）**：`{ id, title, trigger, objective, constraints[], status: active|completed|abandoned }`。**注意：objective ≠ identity**，只是任务上下文。

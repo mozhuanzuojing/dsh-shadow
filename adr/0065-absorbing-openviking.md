@@ -2,7 +2,7 @@
 
 - 状态：**已接受（2026-09-11）**
 - 决定日期：2026-09-11
-- 关联 ADR：ADR-0060（多粒度检索层形态 —— 本 ADR 为其「路由」建议找到**独立先例**）、ADR-0054（Semble 阈值性质）、ADR-0055/0058（工具台账）、ADR-0049（缺件不静默）
+- 关联 ADR：ADR-0060（多粒度检索层形态 —— 本 ADR 为其「路由」建议找到**独立先例**）、ADR-0054（Semble 阈值性质）、ADR-（工具台账）、ADR-0049（缺件不静默）
 - 关联术语：`../CONTEXT.md`
 - 版本：`1.15.22`
 
@@ -95,18 +95,18 @@ Query → Intent Analysis → Hierarchical Retrieval → Rerank → Results
 | 项 | 不吸收的理由 |
 |---|---|
 | `viking://` 虚拟文件系统 + `ls`/`tree`/`find` 浏览范式 | 本仓的 Atom **本来就是真实文件**（`<工作区>/.shadow/**.md`），已经能 `ls`。再套一层虚拟 FS 是**重复抽象**；且会与 ADR-0003「Memory 文件是 source of truth」的落地方式冲突 |
-| LLM 意图分析生成 **0–5 个 TypedQuery** | 本仓有 `recall.enabled` 的语义扩词，且**默认关**；文献与本仓记录都对「让 LLM 参与判语义」持保留（ADR-0059）。**保留现状**：确定性路径为默认，LLM 路径 opt-in |
+| LLM 意图分析生成 **0– TypedQuery** | 本仓有 `recall.enabled` 的语义扩词，且**默认关**；文献与本仓记录都对「让 LLM 参与判语义」持保留（ADR-0059）。**保留现状**：确定性路径为默认，LLM 路径 opt-in |
 | 把 memory / resource / skill **统一成一个树** | 本仓已有 `NodeType` + `resource` 节点（ADR-0052 系列），且 **skill 不在本仓职责内**（skill 属 DSH 的 `~/.agents/skills`）。**不扩职责边界** |
 | 用它的 embedding / VLM 后端（Doubao / Jina） | 本仓不引入云端 embedding 依赖（ADR-0043 相关约束仍在，且向量库选型**本身尚未裁决**）。**不动** |
 | 它的**代码** | 主工程许可是 **AGPLv3**（`crates/ov_cli` 与 `examples` 为 Apache 2.0）。本仓 MIT + 随 DSH 分发 ⇒ **只看概念，不取代码**。（也是本 ADR 只写「形状对照」不写「移植」的原因） |
-| 它的 benchmark 读数（LoCoMo 80–83%、tau2-bench +6.87/+11.87pp） | 与 ADR-0060 同一纪律：**别家的语料与后端，不能当本系统的证据**。只作参考，不引用为「已验证」 |
+| 它的 benchmark 读数（LoCoMo 80–、tau2-bench +6.87/+11.87pp） | 与 ADR-0060 同一纪律：**别家的语料与后端，不能当本系统的证据**。只作参考，不引用为「已验证」 |
 
 ## Alternatives Considered
 
 | 备选 | 否决理由 |
 |---|---|
 | 只改文档措辞，不写 ADR | `hotness` 误标 + 三条可吸收项 + 一次对 ADR-0060 的精化，**值得留决策记录**；且本仓纪律要求结论有据可查 |
-| 直接照 OpenViking 的 256/4000 字符上限改本仓分层 | 本仓按 **token 预算**逐层展开是有意设计（「按 token 花」，见 CHANGELOG v1.16 前的分层记录）。改成固定字符数会**丢失预算自适应** |
+| 直接照 OpenViking 的  字符上限改本仓分层 | 本仓按 **token 预算**逐层展开是有意设计（「按 token 花」，见 CHANGELOG v1.16 前的分层记录）。改成固定字符数会**丢失预算自适应** |
 | 立刻实现「目录级 sidecar」 | 会新增一类**派生文件**（须先定它在 ADR-0003 下算 Projection 还是 source），并牵动 `_index.md` 的定位。**升为 D6 待裁决**，不在本轮顺手做 |
 | 采信第三方拆解文档（说 OpenViking 是 Apache 2.0） | **与一手 README 冲突**：主工程是 **AGPLv3**。许可判断错误会导致误用代码 ⇒ 一律以仓库内 `LICENSE` 与 README 为准 |
 
@@ -131,7 +131,7 @@ Query → Intent Analysis → Hierarchical Retrieval → Rerank → Results
 ## 自检
 
 - [x] 与 ADR-0060 一致：**未推翻**其结论，反而提供独立先例与一处精化。
-- [x] 与 ADR-0054/0059 一致：继续坚持「阈值按来源标定」「不让 LLM 判语义」。
+- [x] 与 ADR- 一致：继续坚持「阈值按来源标定」「不让 LLM 判语义」。
 - [x] 与 ADR-0003 一致：**未**新增派生文件；把这件事升为 D6 待裁决。
 - [x] **归因有据**：`hotness` 误标的证据是「三份官方文档关键词 0 命中」+「同句已引 MemoryBank」。
 - [x] **不冒充已证**：benchmark 读数只作参考；「无衰减」止于「官方文档未见」。

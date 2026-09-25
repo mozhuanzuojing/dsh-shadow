@@ -84,7 +84,7 @@ v0.31 的任务：**一个观察者在不拥有世界、不拥有真理的情况
 
 ---
 
-## 附录：v0.31 实现说明（3 个守卫已落地）
+## 附录：v0.31 实现说明（守卫已落地）
 
 1. **RepresentationObject 单向准入**：`epistemic/world/guard/claim-admission.ts` `createRepresentationFromClaims(claims)`——每 claim 必须 `status==="supported"`，否则拒绝（candidate/unstable/rejected 全拒）。Representation 是 Reality Model 的二级结构，不成为 Claim 生成器。
 2. **RelationHypothesis 独立生命周期**：`epistemic/world/guard/relation-guard.ts` `relationHypothesisOf` `{from, to, relation, status:"hypothesis", evidence, uncertainty}`——**恒 hypothesis**，绝 `fact/reality/confirmed_causal`（防止 `RealityClaim{subject:A, predicate:depends_on}` 绕过 v0.30.1 Relation≠Causality）。

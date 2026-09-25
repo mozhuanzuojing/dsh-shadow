@@ -4,9 +4,9 @@
 - 决定日期：2026-09-08
 - 关联 ADR：ADR-0044（Evidence Lineage Boundary，本层的边界依据）、ADR-0043（Shadow Contract）、ADR-0042（方向）、ADR-0037（Decision Capture）
 - 关联术语：`../CONTEXT.md`（Memory Atom / ShadowNode / AtomKind / Evidence Density / lineage）
-- 数据往来：`OpenAPI-Gateway/.shadow/2026-09-08`（52 原子：decision/memory 0% evidence，code/document 100%）
+- 数据往来：`OpenAPI-Gateway/.shadow/2026-09-08`（52 原子：decision/memory  evidence，code/document ）
 
-> **勘误（ADR-0051 / v1.14.0）**：本文「四、memory kind 设计」写的 `NodeType = "memory" | "code" | "document" | "decision" | "concept"`（5 值）是 v1.8.0 那一轮的冻结口径；v1.14.0 起实现侧新增第 6 个 `resource`（资源卡投影，见 ADR-0051）。原文「不增加 type」指当时那一轮的边界，历史措辞保留。
+> **勘误（ADR-0051 / v1.14.0）**：本文「四、memory kind 设计」写的 `NodeType = "memory" | "code" | "document" | "decision" | "concept"`（5 值）是 v1.8.0 那一轮的冻结口径；v1.14.0 起实现侧新增第  `resource`（资源卡投影，见 ADR-0051）。原文「不增加 type」指当时那一轮的边界，历史措辞保留。
 
 ## 目标
 
@@ -156,10 +156,10 @@ deriveShadowNodes() 无 generate / infer / guess 路径
 
 现在：
 ```text
-Evidence Density: code 100% · document 100% · decision 0% · memory 0%
+Evidence Density: code  · document  · decision  · memory 
 ```
 
-目标（**不是** 100%）：
+目标（**不是** ）：
 ```text
 code       保持 100
 document   保持 100

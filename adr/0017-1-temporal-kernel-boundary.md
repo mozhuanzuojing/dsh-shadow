@@ -1,10 +1,10 @@
 # ADR-0017.1 · Observer Temporal Kernel Implementation Boundary（v0.26 实现边界，先于实现）
 
 > 时间：2026-09-07 ｜ 状态：已实现（v0.26.0） ｜ 版本：v0.26.0
-> 前置：ADR-0017（Temporal Continuity）。本 ADR 锁定 5 个实现约束，防 v0.27 Dream / v0.29 Multi Observer 出现结构债。
+> 前置：ADR-0017（Temporal Continuity）。本 ADR 锁定 实现约束，防 v0.27 Dream / v0.29 Multi Observer 出现结构债。
 > 定位：v0.26 是 **Observer Temporal Kernel**（时间坐标系），不是"Dream 输入准备"。这是 dsh-shadow 从 AI Memory System 跨到 **Artificial Observer Runtime** 的分水岭。
 
-## 5 条锁定
+## 锁定
 
 ### 1. Temporal 独立于 Dream（`temporal/`，不是 `dream/`）
 Temporal Graph 是：Dream 的输入 + Identity Evolution 的证据来源 + Judgment 的时间上下文 + Multi Observer 的基础。**Temporal 是宇宙时间层，不是意识功能层。**
@@ -49,7 +49,7 @@ v0.26 至少支持：① replay 一个节点（该时刻 身份/intent/projectio
 **做**：TemporalNode / TemporalEdge / TemporalGraph builder / timeline resolution / temporal query / immutable。
 **不做**：Dream、Hypothesis、Prediction、World Model。
 
-## 附录：v0.26 实现说明（6 条 checklist 已落地）
+## 附录：v0.26 实现说明（ checklist 已落地）
 
 1. **可重建**：`shadow/temporal/<date>/graph.json` 存 `{graphVersion, generatedAt, sourceRange, sourceTraceIds, nodes, edges}`（含 sourceTraceIds）；**无新事实/新知识/新 memory**。`temporal/persistence.ts`。
 2. **TemporalNode 最终形状**：`stateSnapshot{identityVersion, observerState, intent}` + `perceptionSnapshot{lens, visible, hidden, distortion}` + `evidenceLinks` + `sourceTraceIds` + `observerContextHash?`（预留不计算）。`temporal/node.ts`。

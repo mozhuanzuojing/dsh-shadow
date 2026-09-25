@@ -20,7 +20,7 @@ v1.20.3 把 Agent Teams 的内容**确实写进了** `presets/projection.patch.y
 
 | 面 | 实测 | 后果 |
 |---|---|---|
-| 预设选择器的卡片 | `@deepseek-ai/dsh-client-ui-agent-preset` 的 `lib/client.js`：`cardDesc` 用 `-webkit-line-clamp: 4`；卡片列宽 `minmax(268px,1fr)`、描述字号 13px | 可见窗口 ≈ **4 行 ≈ 90 字**；v1.20.3 把 Agent Teams 写在**最后一句** ⇒ 卡片上**看不到** |
+| 预设选择器的卡片 | `@deepseek-ai/dsh-client-ui-agent-preset` 的 `lib/client.js`：`cardDesc` 用 `-webkit-line-clamp: 4`；卡片列宽 `minmax(268px,1fr)`、描述字号 13px | 可见窗口 ≈ ** ≈ 90 字**；v1.20.3 把 Agent Teams 写在**最后一句** ⇒ 卡片上**看不到** |
 | 悬停/展开 | 同一组件给 `<code>`/名称挂了 `title`（原生 tooltip 是完整文本），但描述本身**没有**展开控件 | 想看到就得悬停 —— 不能把「关键事实」放在只有悬停才出现的位置 |
 | 本机旧副本 | `~/.dsh/.agent-presets/projection/preset.yml`（2026-09-11 起未再动） | 仍写「上限 **4** / 只用一次用 **`subagent`** / 前置挂 `dsh-experimental-agent-team@0.1.5-rc.1` 且 `maxMembers: 4`」 |
 
@@ -69,7 +69,7 @@ persona ⑤ 当时是 **v1.15.4 时代的子集**（并行批派 + revision CAS 
 - **可见窗口里第一次出现 Agent Teams 的硬事实**（bundle 名 + 名额出处 + 无 `subagent` 可回落）。
 - **persona 变长**：`yaml.safe_load` 真解析 `persona.config.prefix`，**3047 → 3583 字符（+536）**。这是**常驻**成本，
   按预设 README 的口径回填了实测值；若判定不值，**要同时放松 ④b 再退回** v1.15.4 子集（不放假门）。
-- **判据没有松动**：「默认不派人」与「复用优先（≥2 次）」**原样保留**；上游那道「只有用户显式要求才建」是**更严**的门，
+- **判据没有松动**：「默认不派人」与「复用优先（≥）」**原样保留**；上游那道「只有用户显式要求才建」是**更严**的门，
   它只**前移**了「开不开 Team」，不改「开着时怎么花」。
 - **本机少一份可被误读的「现行描述」**；`≤0.1.6` 回退场景要靠那份 `projection.bak-<时间戳>/`（已披露）。
 - **新增一条跨仓同步面**：用户级规则 `moe-subagent-dispatch.md`（规则为源）+ `~/.dsh/AGENTS.md` 手工聚合一起改
@@ -78,12 +78,12 @@ persona ⑤ 当时是 **v1.15.4 时代的子集**（并行批派 + revision CAS 
 ## 5. Verification
 
 - **真 YAML 解析器**（一次性探针，放 `%TEMP%`、用完即删）：`description` 仍是**单行 plain scalar**（无「冒号 + 空格」，
-  即 v1.20.3 踩过的 `mapping values are not allowed here` 那颗雷）；声明行 id 仍 `preset-projection`；行清单仍 **27 项**；
+  即 v1.20.3 踩过的 `mapping values are not allowed here` 那颗雷）；声明行 id 仍 `preset-projection`；行清单仍 ****；
   `tool-subagent*` **0**；`tool-agent-team` **不在**；`Agent Teams` 落在**前 90 字**（实测第 58 字起）。
 - `node test/preset-projection.test.ts` → ①②③④ 全绿（exit 0）。
 - `npm run verify`（`audit:docs` ①②③④⑤⑥⑦ + layers/scripts/granularity/retrieval/ratchet/tsc/全部测试）+
   `dsh --profile web --dump-config` 复核组合面。
-- **部署面**：`~/.dsh/.agent-presets/projection/` 备份（3 个文件）后删除，`.agent-presets/` 下无同名活目录。
-- ⚠ **未复核（不声称）**：① GUI 的 4 行截断是从**装着的客户端源码**读出的，**没做浏览器实拍**，「≈90 字」是按列宽与
+- **部署面**：`~/.dsh/.agent-presets/projection/` 备份（文件）后删除，`.agent-presets/` 下无同名活目录。
+- ⚠ **未复核（不声称）**：① GUI 的 截断是从**装着的客户端源码**读出的，**没做浏览器实拍**，「≈90 字」是按列宽与
   字号**估算**，未像素级标定；② 上游 `team:policy` 的**后续漂移没有自动门**，只锁了六个锚点；③ 本部署至今
-  **0 次**真 `spawn_teammate`（ADR-0099 §4 实测），故新增的写作用域 / 任务板口径**只有文档与测试证据，无运行证据**。
+  ****真 `spawn_teammate`（ADR-0099 §4 实测），故新增的写作用域 / 任务板口径**只有文档与测试证据，无运行证据**。

@@ -31,11 +31,11 @@
 
 ### 2. **工具必须先标定，再用**（本 ADR 最重要的一条）
 
-初版在真仓库上报「A 类 0、B 类 10」，而其中 B 类 10 条**全是误报**——`status: violated ? "violated" : "satisfied"`
+初版在真仓库上报「A 类 0、B 类 10」，而其中 B 类 **全是误报**——`status: violated ? "violated" : "satisfied"`
 这种**三元写**我的检测器看不到。**一个不会报警的检测器，报「0」是没有意义的。**
 
 故新增 `tools/audit-wiring.selftest.ts`，用已知答案的夹具（`tools/fixtures/wiring-fixture.ts`）标定。
-标定过程**连续暴露了 4 个工具自身的缺陷**，每一个都会导致错误结论：
+标定过程**连续暴露了 工具自身的缺陷**，每一个都会导致错误结论：
 
 | # | 工具缺陷 | 后果 | 修正 |
 |---|---|---|---|
@@ -44,14 +44,14 @@
 | 3 | **扫注释文本** | 夹具里一句说明 `meta.status === "superseded"` 被当成真代码 | 加**尊重字符串的注释剥离**状态机 |
 | 4 | 分类器 `/[\\/]test[\\/]/` **要求前导斜杠**，相对路径 `test/x.ts` 不匹配 | **顶层 `test/` 从未被排除** ⇒ 测试夹具的 `status: "superseded"` 被当成生产写入者，**恰好掩盖**要抓的真缺陷 | 改为**按路径分段**判定（`isProductionPath`） |
 
-第 4 条尤其说明「标定」的价值：**工具的分类器 bug 会把真缺陷掩盖成"没问题"**。
+第 尤其说明「标定」的价值：**工具的分类器 bug 会把真缺陷掩盖成"没问题"**。
 
 另有两处比较行自匹配（`if (r.phase === "ghost")` 里 `phase` 与 `"ghost"` 同行共现，
 于是**读点冒充写入点**）与箭头函数定义误减，均由标定测试抓出并修正。
 
 ### 3. 审计结论：**一处确认，其余多为误报**
 
-**确认（真发现）**：`ChangeSet`（`core/change-set.ts`，83 行）与
+**确认（真发现）**：`ChangeSet`（`core/change-set.ts`，）与
 `ShadowProjectionStore.invalidateFor?()`（`core/projection-store.ts`）**在生产中未接线**：
 - `ChangeSet` 唯二消费者是 `test/change-set.test.ts` 与 `test/projection-store.test.ts`；
 - 生产侧只在**类型位置**提到它（`invalidateFor?(set: ChangeSet)`），而该方法**本身也无调用者**；
@@ -87,8 +87,8 @@
 ## Consequences
 
 ### 正
-- 有了一个**能自动发现同类问题**的工具，且它**自身经标定**（8 组断言，含 2 处真仓库已知答案）。
-- 标定过程暴露的 4 个工具缺陷本身是**方法论收获**：静态分析器必须尊重字符串/注释、
+- 有了一个**能自动发现同类问题**的工具，且它**自身经标定**（8 组断言，含 真仓库已知答案）。
+- 标定过程暴露的 工具缺陷本身是**方法论收获**：静态分析器必须尊重字符串/注释、
   必须按路径分段而非正则、必须区分「读点」与「写点」、必须做**已知答案回归**。
 - 把一处**未接线的优化**从「静默」变成「显式标注 + 有据可查」——避免以后有人以为它在工作。
 - 明确了 A 类**在本仓精度低**及其原因（有意导出测试向 API），避免把它当缺陷清单用。
@@ -101,22 +101,22 @@
 
 ## 自检
 
-- [x] 与 ADR-0057/0059/0061 一致：本 ADR 是该三条同类缺陷的**方法论收口**（不只修个案）。
+- [x] 与 ADR-/0061 一致：本 ADR 是该三条同类缺陷的**方法论收口**（不只修个案）。
 - [x] 与 ADR-0048⑤ 一致：**未推翻**其决策；只审计并标注其接线状态，处置留待决策。
 - [x] **未夸大**：`ChangeSet` 明确记为「未接线的优化，非正确性缺陷」，并给出理由。
-- [x] 工具经**标定**：8 组断言全过，含 2 处**真仓库已知答案**（`status=superseded` / `ChangeSet`）与 2 处**反例不误报**。
-- [x] 标定中修正的 4 个工具缺陷全部记录在案（本 ADR §2 表），可复现追溯。
+- [x] 工具经**标定**：8 组断言全过，含 **真仓库已知答案**（`status=superseded` / `ChangeSet`）与 **反例不误报**。
+- [x] 标定中修正的 工具缺陷全部记录在案（本 ADR §2 表），可复现追溯。
 - [x] 全套回归通过；`tools/` 已在 `package.json` 的 `files` 白名单内（随包发布）。
 - [ ] **未验证**：A 类命中是否还有**第二处**真实断线（本轮只逐条核实了 guard 类与 `ChangeSet`）。
-- [x] ~~**未做**：A 类 ~30 条未逐条分诊~~ → **已结（v1.15.33，见下节）**。
+- [x] ~~**未做**：A 类 ~未逐条分诊~~ → **已结（v1.15.33，见下节）**。
 - [ ] **未做**：把审计接入任何自动门禁（本仓无 CI）。
 
 ---
 
-## 补记（v1.15.33）：A 类**逐条**分诊结案 —— 33 条全部落格
+## 补记（v1.15.33）：A 类**逐条**分诊结案 —— 全部落格
 
 `BACKLOG.md` 的 **T1 / T4** 要求「A 类每条落『误报 / 真断线 / 零引用』三选一，结果回写 ADR-0062」。
-本轮把 **A 段 33 条**逐条核实完毕（`node tools/audit-wiring.ts .`，生产源码 192 个）。
+本轮把 **A 段 **逐条核实完毕（`node tools/audit-wiring.ts .`，生产源码 ）。
 
 ### 0. 先说工具的口径（否则会误读结论）
 
@@ -145,7 +145,7 @@
 
 | 类别 | 条数 | 符号 |
 |---|---|---|
-| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、4 个长程 `assertResultNo*`（`trajectory/long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
+| **误报 · 生产有真调用点（含间接）** | **9** | `renderExperience`（`query/lenses.ts（`renderExperience` 回调）` 作回调传入）、`sembleCandidates`（`index-engine.ts:45` 默认参数注入）、`apply`（**唯一调用者是 Cordis 宿主**，依 `cordis.patch.yml` 挂载 + `package.json` main）、`ledgerMismatch`（`toolset-authority.ts:24` import + 测试棘轮消费）、长程 `assertResultNo*`（`trajectory/long-horizon/engine/interaction.ts:11-17` 入 `resultGuards` 数组后 `:43` 间接调用） |
 | **误报 · 调用点只在注释里** | **2** | `progressiveDisclosure` / `refineTree` —— 生产命中仅定义行 + `core/knowledge/engine.ts:8` 的**清单式注释**。⚠ **更正 BACKLOG T1 原文**：T1 把它们写成「误报，但值得记」，措辞含糊 —— 准确表述是**仅测试消费**（真实消费者 `test/knowledge-engine.test.ts:53,59`），**不是**「有生产调用点」 |
 | **误报 · 跨层 API** | **1** | `ChangeSet` —— `core/projection-store.ts:85` 的 store 工厂在生产被调用（`:168`），故 `invalidateFor(new ChangeSet(...))` 是**可达消费点**。⚠ **与 D1 的关系**：D1 说「`ChangeSet`/`invalidateFor` 生产中未接线」**仍然成立**（无生产**实例化点**）；两条不矛盾 —— 一条说「接口可达」，一条说「没人实例化」。⇒ **D1 维持原判** |
 | **零引用（生产 + 测试皆无调用）** | **18 符号 / 8 决定** | 见 §4 表 |
@@ -190,13 +190,13 @@
 | `relationForProposal` | **保留并注明**（+ **新风险**，见 §5） | `temporal/edge.ts:29` 原文已写「保留：…v0.26 不跑 reflection，留接口」 |
 | `renderIntent` / `renderIdentityModel` | **保留并注明** | 二者同型：都是**完整形态的渲染器**，而实际读侧走别的路径（`observer/core.ts:31` 内联 / `soul/identity.ts` 的 `renderIdentity`）。它们承载「完整形态」的唯一落点，删掉会让模型只能以原始 JSON 出现；**接线与否属产品决策** ⇒ T1 待决。已在两处代码加注 |
 | `progressiveDisclosure` / `refineTree` / `renderRetrieved` | **保留并注明** | `adr/0048 ①/②` 的**目标能力**，实现完整；是否启用属产品决策（默认路径可能刻意不做成本折叠）⇒ T1 待决。已在 `core/knowledge/cost.ts` 加注 |
-| 7 个 delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 7 处缺陷。已在 `expansion-guard.ts` 加注（家族级） |
-| `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 15 个都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
+|  delegation `assert*` 包装 | **保留并注明** | 「谓词接线、`assert*` 不接线」是**一处决定**，不是 缺陷。已在 `expansion-guard.ts` 加注（家族级） |
+| `hasNoUpgradeApi` | **保留（暂不处置）** | 它是 `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 都被用）—— 「遗漏接线」还是「有意保留」本轮**未能判定**，且删它要动 invariant 面 ⇒ 留在 T4 |
 | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
-| 4 个长程 `assert*` | **误报** | `interaction.ts:11-17` 入数组、`:43` 循环调用 |
+| 长程 `assert*` | **误报** | `interaction.ts:11-17` 入数组、`:43` 循环调用 |
 
-**`assert*` 家族的结构性结论**：delegation 7 + 长程 4 = 11 个 `assert*` 的**唯一消费者是测试**。
-根因是**同一个决定**（导出「带理由」的断言包装作测试面），**不是 11 处独立缺陷**。
+**`assert*` 家族的结构性结论**：delegation 7 + 长程 4 =  `assert*` 的**唯一消费者是测试**。
+根因是**同一个决定**（导出「带理由」的断言包装作测试面），**不是 独立缺陷**。
 ⇒ 处置按**家族**做（加一条家族注释），不逐条删 —— 删一个会与其余不一致。
 
 ### 5. 本轮**新发现**（未修，已登记为待办）
@@ -207,10 +207,10 @@
 
 ### 6. 计数与验证
 
-- A 段：**33 条 → 31 条**（减少来自 `auditDrift` 的删除；`countInconsistency` 仍被工具报出，
+- A 段：** → **（减少来自 `auditDrift` 的删除；`countInconsistency` 仍被工具报出，
   但它现在是**已被接线的**，其「零调用」判定已失效 —— 这正是**记录的接线棘轮**要守的）。
 - `npx tsc --noEmit` / `npm run typecheck:tools` / `npm run build` 均 **exit 0**。
-- 全套回归 **40/40**；`audit-drift.selftest` 与 `audit-wiring.selftest` 均 **ALL PASS**。
+- 全套回归 ****；`audit-drift.selftest` 与 `audit-wiring.selftest` 均 **ALL PASS**。
 - **诚实标注**：A 类是**线索级**；本轮结论基于**人工 grep/read**（每条带 `文件:行号`），
   非工具自动判定；工具自身的盲区（间接调用 / 平行 API）**未修** ⇒ A 段仍会误报。
   （原文写的「三条盲区（注释 / 间接调用 / 平行 API）」已由 v1.15.36 更正为「**字符串** / 间接调用 / 平行 API」——见 §0 的更正表。）
@@ -247,15 +247,15 @@
 `countCallSites` 从 `stripComments` 改用 `maskStrings`。**`stripComments` 保留不动** ——
 B 类检测要匹配的**正是字符串里的值**，抹掉它会毁掉 B 类。
 
-**量证**：`stripComments` vs `maskStrings` 在当前真仓库（204 文件 / 516 导出）逐符号比对，
-**3 个符号**计数有差异（`isProductionPath` 8→6、`markedLines` 8→6、`notRevoked` 3→2），
+**量证**：`stripComments` vs `maskStrings` 在当前真仓库（ / 516 导出）逐符号比对，
+**符号**计数有差异（`isProductionPath` 8→6、`markedLines` 8→6、`notRevoked` 3→2），
 均**只是去掉虚高**、未翻转归桶 ⇒ **当前真仓库上零净效果（真但潜伏）**。
 这与 ADR-0071 的「运行时收益为 0」同一性质：**修的是「若触发则错」，收益是消除地雷**。
 
 ### 3. 分桶 ②③（不伪造精度，改为如实分类）
 
 ②（间接调用）与 ③（平行 API）**无法靠文本分析解决**（要类型/数据流分析）。
-⇒ 工具**不去猜「它到底有没有被调用」**，而是把原来的「一个 33 条大堆」拆成**四桶**：
+⇒ 工具**不去猜「它到底有没有被调用」**，而是把原来的「一个 大堆」拆成**四桶**：
 
 | 桶 | 判据 | 实测条数 | 复核价值 |
 |---|---|---|---|
@@ -270,12 +270,12 @@ B 类检测要匹配的**正是字符串里的值**，抹掉它会毁掉 B 类�
 在 A2 候选上它**恰好切开**已知答案 —— `ledgerMismatch` 裸提及 **0**（T1 已核实：仅测试用，真可疑），
 而 `ChangeSet` 1（类型位置 `set: ChangeSet`）· `renderExperience` 1（回调 `exps.map(renderExperience)`）·
 `sembleCandidates` 1（默认参数值）**全是正当用途**。
-⇒ 这条把「8 条要人工查」缩到「1 条真的要看」。
+⇒ 这条把「要人工查」缩到「真的要看」。
 
 ### 4. **第 4 类盲区（本轮新发现，未修）**：传递性死代码
 
-`notRevoked` **有** 2 个调用点（`revocation-guard.ts:7,8`），故它**不在 A 段**。
-但这 2 个调用点**都在 `assertNotRevoked` 内部** —— 而 `assertNotRevoked` 自己**零调用**（A3 桶）。
+`notRevoked` **有** 调用点（`revocation-guard.ts:7,8`），故它**不在 A 段**。
+但这 调用点**都在 `assertNotRevoked` 内部** —— 而 `assertNotRevoked` 自己**零调用**（A3 桶）。
 ⇒ **`notRevoked` 事实上是不可达的，工具却说它「有接线」**。
 
 本仓真正的模式是「**predicate 接线 / `assert*` 包装仅测试消费**」（§4 的家族结论），
@@ -286,7 +286,7 @@ B 类检测要匹配的**正是字符串里的值**，抹掉它会毁掉 B 类�
 
 ### 5. 验证
 
-- `npm run typecheck:tools` **exit 0**；全套回归 **41/41 `ALL PASS`**。
+- `npm run typecheck:tools` **exit 0**；全套回归 ** `ALL PASS`**。
 - `audit-wiring.selftest` **11 组 → 13 组**（新增 ⑨ 字符串掩码 · ⑩ 分桶判定 · ⑪ 真仓库分桶覆盖 · ⑫ 裸提及判据），
   **含反向不变量**：模板串 `${…}` 里的真调用**必须仍被计数**（防止修 ① 时误伤）。
 - `audit-drift.selftest` 仍 **ALL PASS**（B 类未受影响 —— `stripComments` 未动）。

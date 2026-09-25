@@ -2,7 +2,7 @@
 
 - 状态：**已接受（2026-09-10）**
 - 决定日期：2026-09-10
-- 关联 ADR：ADR-0001（不引向量库——本 ADR **承接其 Notes 的口子**，不改其正文）、ADR-0043（Shadow Contract：Atom / Projection / Evidence / Mutation）、ADR-0047/0048（PageIndex / zg 思想，本 ADR 与它们同法）、ADR-0049（缺件不静默）、ADR-0046（Evidence Lineage 计划，Phase 2 Index Engine）
+- 关联 ADR：ADR-0001（不引向量库——本 ADR **承接其 Notes 的口子**，不改其正文）、ADR-0043（Shadow Contract：Atom / Projection / Evidence / Mutation）、ADR-（PageIndex / zg 思想，本 ADR 与它们同法）、ADR-0049（缺件不静默）、ADR-0046（Evidence Lineage 计划，Phase 2 Index Engine）
 - 关联术语：`../CONTEXT.md`（Index Engine / 候选生成 / Evidence Gateway / 缺件不静默）
 
 ## Context
@@ -28,7 +28,7 @@ ADR-0001 决定「自建投影文件树，**而非** OpenViking / 向量库」�
 
 新增 `config.indexEngine.provider = "semble"`（第三个值），与既有 `zg` 分支同形：产候选 → `rankRefs` 词汇级重排 → `authorizeScope` 授权过滤 → **交回 Shadow Core 裁决**。默认值仍是 `fs`（行为不变）。
 
-**为什么不能进裁决层（实测证据）**：Semble **没有「无匹配」信号，也没有阈值参数**。用 4 个中文记忆夹具实测 4 次查询：
+**为什么不能进裁决层（实测证据）**：Semble **没有「无匹配」信号，也没有阈值参数**。用 中文记忆夹具实测 查询：
 
 | 查询 | #1 | #2 | #3 |
 |---|---|---|---|
@@ -37,7 +37,7 @@ ADR-0001 决定「自建投影文件树，**而非** OpenViking / 向量库」�
 | 支付退款（语料里没有） | `db` **0.009836** | `auth` 0.009677 | `_index` 0.009524 |
 | 量子纠缠/哈勃常数（无关） | `db` **0.009836** | `auth` 0.009677 | `ui` 0.009524 |
 
-- 分数三元组**逐次完全相同**（`3/305`、`3/310`、`3/315`），只有排序轮转 ⇒ **分数不可跨查询比较**；
+- 分数三元组**逐次完全相同**（``、``、``），只有排序轮转 ⇒ **分数不可跨查询比较**；
 - **语料中不存在的话题照样返回最高分** ⇒ **无负信号**；
 - `semble search --help` 只有 `-k/--top-k`、`--max-snippet-lines`、`--content`、`--include-text-files` ⇒ **无 `--threshold`/`--min-score`**。
 
@@ -68,7 +68,7 @@ Semble 的嵌入模型是**代码专用**（`minishlab/potion-code-16M-v2`，tre
 1. **接 Evidence Gateway 的 `verify()`**（复用 `EvidenceProvider` 形状）
    - **否决**：`verify` 必须回答「这条路径是否属实」，而 Semble 只会返回近似命中且无阈值。放进去必然违反 ADR-0049「绝不把缺件/近似说成 verified」——正是上面那组「无关查询也返回最高分」的实测所指。
 2. **新增一个 `read_shadow({ mode: "semble" })`**
-   - **否决**：本仓有明确纪律——「外部**仍是单一 `read_shadow`**（Query Router 在内部，**别拆 8 个工具炸选择空间**）」，且 mode 已有 61 个。Index Engine 是**既有的**候选生成 seam（ADR-0046 Phase 2），无需新 mode。
+   - **否决**：本仓有明确纪律——「外部**仍是单一 `read_shadow`**（Query Router 在内部，**别拆 工具炸选择空间**）」，且 mode 已有 。Index Engine 是**既有的**候选生成 seam（ADR-0046 Phase 2），无需新 mode。
 3. **改 ADR-0001 正文，把「不引向量库」改写为「不引外部重服务」**
    - **否决（本轮）**：ADR-0001 的 Notes 已留口子，**承接优于改写**；改写会动一条已冻结决策的正文，收益不抵风险。本 ADR 即那条承接件。
 4. **同时接 S1（代码）+ S2（`.shadow/` 记忆）**
@@ -97,6 +97,6 @@ Semble 的嵌入模型是**代码专用**（`minishlab/potion-code-16M-v2`，tre
 - [x] 与 ADR-0001 自洽：**承接其 Notes**（增强层，不推倒文件树），未改其正文。
 - [x] 与 ADR-0043 自洽：Semble 不写任何文件（Atom 不受影响）；其索引缓存是**可 `rm -rf` 的 Projection**；`relations` 不变。
 - [x] 与 ADR-0049 自洽：未装/超时 → `unavailable` 且**可见**，绝不 fallback 成 verified。
-- [x] 与 ADR-0047/0048 自洽：与 zg 同法（检索层 / 裁决层分离）。
+- [x] 与 ADR- 自洽：与 zg 同法（检索层 / 裁决层分离）。
 - [x] 与「单一 `read_shadow`」纪律自洽：不新增 mode、不新增工具。
 - [ ] **未验证**：`--content code` 在大仓库的首次索引耗时；S2（`.shadow/` 语料）未接。

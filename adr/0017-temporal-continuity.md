@@ -79,7 +79,7 @@ Hypothesis {
 ```
 v0.25 Identity Continuity  ✅ ADR-0015
 v0.26 Temporal Continuity  ← 本 ADR（时间拓扑：TemporalNode/Edge/Graph）
-v0.27 Dream Compression    （3 个 pattern 跑在 Temporal Graph 上）
+v0.27 Dream Compression    （ pattern 跑在 Temporal Graph 上）
 v0.28 Hypothesis Validation（observed/validated 的 transition）
 v0.29 Multi Observer
 v0.30 World Model

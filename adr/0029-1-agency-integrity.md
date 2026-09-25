@@ -78,7 +78,7 @@ v0.36 Delegated Autonomy        ← 推迟：直到 Agency 边界证明不可越
 
 ## 附录：v0.35.1 实现说明（Invariant Lock）
 
-- 7 条边界固化为不可回退测试（mock 174–180）：AgencyContext Immutable / Authority Lineage Required / Feedback Cannot Expand Agency / Selection History ≠ Preference / Authority ≠ Ownership / Agency ≠ Identity / Autonomous Transition Forbidden。
+- 边界固化为不可回退测试（mock 174–180）：AgencyContext Immutable / Authority Lineage Required / Feedback Cannot Expand Agency / Selection History ≠ Preference / Authority ≠ Ownership / Agency ≠ Identity / Autonomous Transition Forbidden。
 - 最小 runtime enforcement：`agency/guards.ts` 扩展 executionResult 守卫（内部理由 / agency 扩权 / 所有权声称 / 身份声称 / 自主转换），`agency/engine.ts` 在 `buildAgencyEvent` 逐一拦截并返回可读原因。
 - 无新增 capability；全量 mock 1–180 全绿；tag `v0.35.1 Agency Integrity Lock`。
 - 通过后才考虑 v0.36 Delegated Autonomy（授权/代理的更多形态），在此之前 Agency 边界保持冻结。
