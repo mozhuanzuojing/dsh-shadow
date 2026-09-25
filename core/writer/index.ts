@@ -66,7 +66,11 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
 
   const getFlushWarn = () => {
     const parts: string[] = [];
-    if (core.lastFlushError) {
+    // T6 ②：兜底根写入的**未受会话授权**告知（与 lastFlushError 并列，同为读侧可见的降级说明）。
+  if (core.lastScopeNotice) {
+    parts.push(`\n\n> ⚠ shadow 本次写入落在**兜底根**（${new Date(core.lastScopeNotice.at).toISOString()}）：${core.lastScopeNotice.note}`);
+  }
+  if (core.lastFlushError) {
       parts.push(`\n\n> ⚠ shadow 最近一次落盘失败（${new Date(core.lastFlushError.at).toISOString()}：${core.lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`);
     }
     // 索引重建失败**也必须提示**：此时无参读路径会 serve 磁盘上的**陈旧** `_index.md`，

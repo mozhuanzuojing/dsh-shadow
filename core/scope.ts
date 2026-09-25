@@ -35,3 +35,22 @@ export function resolveShadowScope(agent: AgentLike | undefined, cwdBySession: R
 export function resolveWorkspace(agent: AgentLike | undefined, cwdBySession: ReadonlyMap<string, string>, config: ShadowConfig = {}): string {
   return resolveShadowScope(agent, cwdBySession, config).ws;
 }
+
+/**
+ * **兜底根场景的可见信号（`T6` ②）**：`resolveShadowScope` 落到 `DEFAULT_SHADOW_ROOT` 时**没有 session 可问** ⇒
+ * 该次写入**未受会话授权**（`adr/0074` 的已知空白）。按 `ADR-0049`「缺件不静默」，这件事**必须可见**。
+ *
+ * 形态对齐 `core/writer/core.ts` 的 `lastFlushError`（置字段 + 由写侧 `console.error` + 读侧提示三件套）。
+ * 返回 `true` = 确实置了信号（调用方据此打日志）；**非 fallback 一律不写**（否则告警变噪声，会被习惯性忽略）。
+ */
+export const noteFallbackScope = <T extends { lastScopeNotice?: { at: number; note: string } }>(
+  core: T,
+  scope: ShadowScope,
+): boolean => {
+  if (scope.scope !== "fallback") return false;
+  core.lastScopeNotice = {
+    at: Date.now(),
+    note: `写入落在**兜底根** \`${scope.ws}\`：**本次写入未受会话授权**（既无显式 shadowRoot/projectRoot，也解析不出 session cwd）`,
+  };
+  return true;
+};
