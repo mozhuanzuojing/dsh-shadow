@@ -404,7 +404,7 @@
   | `isExchangeable` / `EXCHANGEABLE_KINDS` | **收敛** | 唯一源已存在却被重写；类型系统管不到内联字面量 |
   | `renderIntent` | **保留并注明** | 完整形态渲染器（`question`/`desired_outcome`/`constraints`），实际读侧在 `subject/observer/core.ts:31` **内联**只取 `goal`；删除会让完整形态失去唯一落点 |
   | `renderIdentityModel` | **保留并注明** | 同上型：渲染 `IdentityModel`（时间线版本模型），而 `read_shadow` 的身份输出走 `subject/soul/identity.ts` 的 `renderIdentity`（**不是同一对象**）⇒ 写完的模型无专属渲染出口 |
-  | `relationForProposal` | **保留并注明**（+ 新风险） | 原文已注「留接口」；**本轮新发现它忽略入参** ⇒ 升 **T7** |
+  | `relationForProposal` | ~~保留并注明~~ ⇒ **已改判删除（`v1.21.20`）** | 原文注「留接口」；后发现它**忽略入参**（升 `T7`）；最终按「零消费方 + 恒返回常量」删除 —— 见 `adr/0062` 补记 |
   | `writeMeta` | **保留并注明** | `meta.ts:92` 已声明是「明确要覆盖」的逃生舱；生产写 meta 一律走 `mutateMeta`（ADR-0068） |
   | `isMetadataMemoryText` | **保留并注明** | ADR-0066 已决定保留（服务不 `parseMemory` 的读路径） |
   | `hasNoUpgradeApi` | **保留（暂不处置）** | `stance/agency/guards.ts` **唯一**未被 `stance/agency/engine.ts:4` import 的导出（同文件另 15 个都被用）；「遗漏接线」还是「有意保留」**本轮未判定**，且删它要动 invariant 面 |
@@ -440,7 +440,7 @@
   本条是「边角路径（兜底根）未覆盖」。真机上主路径一旦恢复，本条可能长期不被触及。
 - **完成判据**：三选一落定；若选 ①②，须附一条能复现该场景的测试（无 session + 无显式 root）。
 
-### T7. `relationForProposal` **忽略入参**（本轮新发现，零引用所以当前无害）
+### ✅ T7. `relationForProposal` **忽略入参** —— **已改判并执行（`v1.21.20`）：删除**。依据：零消费方（生产与测试引用皆 0 → `ADR-0087` 不允许建没有消费方的机制）+ **恒返回常量**（留着=假接口，真接线时会**静默给错答案**）+「让它用入参」需要尚未实现的 reflection 语义（=臆造）。改判留档见 `adr/0062` 补记
 
 - **依据**：`adr/0062-wiring-audit.md`「补记（v1.15.33）」§5；T4 分诊时顺带发现。
 - **现状（读源码核实）**：`selfhood/temporal/edge.ts:30`

@@ -26,5 +26,6 @@ export const buildEdges = (nodes: TemporalNode[], traces: Partial<ObservationTra
   return edges;
 };
 
-// 保留：把结论标记为 evolved_into（accepted reflection）——v0.26 不跑 reflection，留接口。
-export const relationForProposal = (_n: any): TemporalEdge["relation"] => "evolved_into";
+// v1.21.20（T7 改判 · 已授权）：`relationForProposal` 已删除 —— 它**零消费方**（生产与测试引用皆 0）
+// 且**恒返回常量**（参数从不使用）⇒ 留着就是一个「假接口」：将来真接线时会**静默给出错答案**。
+// 若 reflection 泳道将来落地，**重新立条目 / ADR 再实现**，而不是复活一个恒返回常量的占位。
