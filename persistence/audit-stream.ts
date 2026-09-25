@@ -19,6 +19,7 @@
 // 进程被杀时最后一行可能被截断）。
 import { SHADOW_ROOT } from "../core/paths.js";
 import { isNotFound, errText } from "../core/util.js";
+import type { AtomEvidenceRef } from "../core/lineage/index.js";
 
 export interface AuditStreamSummary {
   ok: boolean;
@@ -30,6 +31,15 @@ export interface AuditStreamSummary {
   tornLines: number;
   /** 去重后的材料（`materials` 字段 ∪ 从 `改/读 <path>` 文本推断）。 */
   materials: string[];
+  /**
+   * 材料里**能当线索键**的那些，已升成类型化证据引用（`T27`，`v1.21.34`）。
+   * 「能当线索键」= 能给定位符：路径 → `type:"file"`；URL → `type:"url"`。
+   */
+  evidence: AtomEvidenceRef[];
+  /** 给不出定位符的材料（**归不了**）：只登记，**绝不硬塞成 ref**（宁可说不知道，不许错配）。 */
+  unattributable: string[];
+  /** 归不了的条数（`unattributable` 会被截断）。 */
+  unattributableCount: number;
   /** 有记录的日期（升序）。 */
   dates: string[];
   /** 材料清单的截断前的总数（`materials` 会被截到 `MATERIAL_LIMIT`）。 */
@@ -52,6 +62,48 @@ const materialsOfRecord = (rec: any): string[] => {
   return out;
 };
 
+const URL_RE = /^(https?|file):\/\//i;
+
+/**
+ * 一条材料能不能当**线索键**（`T27`）：能给出定位符才算。
+ * **判据故意窄**（宁可说「归不了」，不许错配）：URL ⇒ `url`；无空白的路径串 ⇒ `file`；其余 ⇒ `undefined`（归不了）。
+ * ⚠ 为什么窄：审计记录与记忆之间**本来只有 `agent` + 日期两个弱键**（`BACKLOG` T27 记的就是这个卡点），
+ * 拿「猜出来的」键去归并 = 制造错配的证据链，比不归更坏。
+ */
+const refOfMaterial = (raw: string): AtomEvidenceRef | undefined => {
+  const s = raw.trim();
+  if (!s) return undefined;
+  if (URL_RE.test(s)) return { type: "url", locator: s };
+  if (/[\\/]/.test(s) && !/\s/.test(s)) return { type: "file", locator: s };
+  return undefined;
+};
+
+/**
+ * 把材料清单**分成两堆**：能当线索键的（类型化证据引用）与归不了的（无路径）。
+ * 纯函数、判据只有这一份 ⇒ 由 `readAuditStream` 调用（标定测试经它走端到端，**不导出**：
+ * 本模块与 `MATERIAL_LIMIT` 同一条约定 —— 只在本模块用的东西不导出，免给 A1「导出但生产无调用点」添条目）。
+ */
+const auditEvidenceSplit = (
+  materials: readonly string[],
+): { refs: AtomEvidenceRef[]; unattributable: string[]; unattributableCount: number } => {
+  const refs: AtomEvidenceRef[] = [];
+  const unattributable: string[] = [];
+  const seen = new Set<string>();
+  let unattributableCount = 0;
+  for (const raw of materials) {
+    const m = String(raw ?? "").trim();
+    if (!m || seen.has(m)) continue;
+    seen.add(m);
+    const ref = refOfMaterial(m);
+    if (ref) refs.push(ref);
+    else {
+      unattributableCount++;
+      if (unattributable.length < MATERIAL_LIMIT) unattributable.push(m);
+    }
+  }
+  return { refs, unattributable, unattributableCount };
+};
+
 /**
  * 读审计流。
  * `dates` 给了就只读那几个日期（`YYYY-MM-DD`）；不给则读 `audit/` 下全部日期文件（按名升序）。
@@ -63,6 +115,9 @@ export const readAuditStream = async (fs: any, ws: string, opts: { dates?: strin
     records: 0,
     tornLines: 0,
     materials: [],
+    evidence: [],
+    unattributable: [],
+    unattributableCount: 0,
     dates: [],
     materialCount: 0,
     ...over,
@@ -124,22 +179,35 @@ export const readAuditStream = async (fs: any, ws: string, opts: { dates?: strin
     if (count) dates.push(DATE_FILE_RE.exec(name)![1]);
   }
 
+  const split = auditEvidenceSplit(materials); // 判据一份：材料 → 证据引用 / 归不了
   return {
     ok: true,
     files: names.length,
     records,
     tornLines,
     materials: materials.slice(0, MATERIAL_LIMIT),
+    evidence: split.refs.slice(0, MATERIAL_LIMIT),
+    unattributable: split.unattributable,
+    unattributableCount: split.unattributableCount,
     dates,
     materialCount: materials.length,
   };
 };
 
-/** 渲染成一行诊断（`read_shadow({debug:true})` 用；缺件与读失败**分得开**）。 */
+/**
+ * 渲染成一行诊断（`read_shadow({debug:true})` 用；缺件与读失败**分得开**）。
+ * `T27` 起多了两段：**能当线索键的条数**（证据面）与**归不了的条数**（显式可见，不静默）。
+ */
 export const renderAuditStreamDiag = (s: AuditStreamSummary): string => {
   if (!s.ok) return `审计流：**读失败**（${s.reason}）—— 动作回声与材料当前不可见，**别把它当「没有」**`;
   if (!s.records) return "审计流：尚无记录（正常：本工作区还没写入审计流）";
   const mats = s.materials.length ? ` · 材料 ${s.materials.slice(0, 6).join("、")}${s.materialCount > 6 ? ` 等 ${s.materialCount} 个` : ""}` : "";
   const torn = s.tornLines ? ` · ⚠ 不可解析行 ${s.tornLines}` : "";
-  return `审计流（系统派生记录，**不进索引/不计 hits**）：${s.files} 个日期文件 / ${s.records} 条动作回声${mats}${torn}`;
+  const keys = s.evidence?.length
+    ? ` · 线索键 ${s.evidence.length} 条（${s.evidence.slice(0, 3).map((r) => `${r.type} ${r.locator}`).join("、")}${s.evidence.length > 3 ? "…" : ""}）`
+    : "";
+  const un = s.unattributableCount
+    ? ` · ⚠ 归不了 ${s.unattributableCount} 条（无路径，如 ${s.unattributable.slice(0, 3).join("、")}）`
+    : "";
+  return `审计流（系统派生记录，**不进索引/不计 hits**）：${s.files} 个日期文件 / ${s.records} 条动作回声${mats}${keys}${un}${torn}`;
 };
