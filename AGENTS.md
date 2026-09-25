@@ -74,6 +74,10 @@
   凡改 `forget` / `retention` / `compact` 这类**默认值**（不是改代码）的变更，都要重跑「假日期 × 全部测试」这道判定：
   v1.15.43 的判定前提被 v1.15.85「默认全开」悄悄翻掉、没人重跑，直到 v1.15.98 才发现 6 个测试到期必炸。
   分钟级，**刻意不进 `verify`**（`verify` 要的是快速缝合线）。
+- **目录级 sidecar 的规模与耗时**：`npm run sidecar:cost -- <工作区根>`（= `tools/sidecar-cost.ts`，`T9` ② 的读数来源）。
+  它**驱动产品面**（`createShadowCollector(...).ensureIndex(ws)` ⇒ 真实 `writeAbstracts`），**读真实语料、写全部重定向到临时沙箱**
+  （跑完自检「写越界 0 次 / 语料文件数未变」，两个口径各用独立沙箱）。同样**刻意不进 `verify`**（要真语料）——
+  改了 `abstracts` / `showInIndex` / Episode 收口（`compact`）之后重跑它。
 
 ## 脚本一律 TypeScript
 

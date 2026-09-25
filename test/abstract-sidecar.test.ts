@@ -196,8 +196,11 @@ mod.apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: fal
 
 console.log("");
 console.log("未在本文件验证（诚实标注）：");
-console.log("  · 真机语料上的**规模与耗时**（每日期目录一次写；本测试只用 1–2 条记忆）；");
-console.log("  · sidecar **读路径的召回收益**未测 —— 本轮只做到「`_index.md` 引用 L0」，未改检索排序；");
-console.log("  · **L0 抽取质量**（它只是 L1 的确定性首段，不含判断）：相关性判断仍属读侧，未经评测；");
-console.log("  · 存量 `_index.md` 的回填未做（旧目录的 sidecar 要等各自索引重建才生成）。");
+console.log("  · 真机语料上的**规模与耗时** —— 已补**可重放**读数工具：`node tools/sidecar-cost.ts <工作区根>`（`T9` ②，`v1.21.27`）：");
+console.log("    本机 net1 = 460 个记忆文件 / 2 个日期桶 / 2 份 sidecar（单份 1.2–3.1 KB）/ 一次重建 65–69 ms；");
+console.log("  · sidecar **读路径的召回收益** —— **已决定「不接检索」**（要接需先有评测口径 + 留出集，见 `T11` ①）；");
+console.log("    故它**仍不得表述为已验证**；");
+console.log("  · **L0 抽取质量**（它只是 L1 的确定性首段，不含判断）—— 真机读数：两条 L0 都**恰好 256 字**（`L0_MAX` 顶格 ⇒ 都被截断）；");
+console.log("    相关性判断仍属读侧、未经评测；");
+console.log("  · 存量回填 —— **已决定「不回填」**（`_index.md` 只引最近 `showInIndex` 个桶 ⇒ 旧桶 sidecar 写了没人读；见 `adr/0075` 补记）。");
 console.log("ALL PASS ✅");
