@@ -90,6 +90,23 @@ export const currentStateDocs = (root: string): string[] => {
   return docs;
 };
 
+/**
+ * 归档层文档（`CHANGELOG.md` + **全部** `adr/*.md`，**含冻结**）。
+ *
+ * 只在显式要求时度量（`--include-archive`）；**默认门不用它** —— 归档层的行号是「当时」语义，
+ * 拿它报红等于要求改写历史。要问「归档层现在有多少越界」，这是唯一的入口。
+ */
+export const archiveDocs = (root: string): string[] => {
+  const docs: string[] = [];
+  const changelog = join(root, CHANGELOG_DOC);
+  if (existsSync(changelog)) docs.push(changelog);
+  const adrDir = join(root, "adr");
+  if (existsSync(adrDir)) {
+    for (const f of readdirSync(adrDir).filter((f) => f.endsWith(".md"))) docs.push(join(adrDir, f));
+  }
+  return docs;
+};
+
 /** 状态行里出现「冻结」⇒ 该 ADR 正文的行号属冻结层（只改补记，不改正文）。 */
 export const isFrozenAdr = (text: string): boolean => {
   for (const line of norm(text).split("\n").slice(0, 24)) {
@@ -147,26 +164,30 @@ const indexByBasename = (dir: string, needed: Set<string>, into: Map<string, str
   }
 };
 
-export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): CiteResult => {
-  const ROOT = resolve(root);
-  const MATERIALS = resolve(ROOT, "..", "_src");
-  const docs = currentStateDocs(ROOT);
-  if (!docs.length) {
-    return {
-      ok: false,
-      code: 2,
-      counts: { total: 0, judged: 0, unjudged: 0, external: 0, overflow: 0 },
-      lines: ["❌ ⑥ **结构缺失**：当前态文档一个都没找到（顶层无 `*.md`）。**这不是「通过」**（ADR-0049）。"],
-    };
-  }
+/** 判定结果（判定本体的输出；**呈现**由 `checkCitations` / `checkArchiveCitations` 各自负责）。 */
+type Judged = {
+  cites: Cite[];
+  judged: number;
+  unjudged: number;
+  external: number;
+  overflow: { cite: Cite; total: number; isExternal: boolean }[];
+  unjudgedList: string[];
+};
 
+/**
+ * **判定本体 —— 判据只有这一份实现。**
+ *
+ * 解析顺序：本仓相对 → `_src` 材料根 → 裸文件名兜底（**唯一**命中才算）→ 其余「未判定」；
+ * 能唯一解析的才比行数。呈现（文案 / 退出码 / 报不报红）由调用方决定 —— 当前态门与归档层度量
+ * **共用它**，这样「什么算引用」「什么算越界」不会在两处各写一遍而漂移（本仓反复吃过的亏）。
+ */
+const judge = (ROOT: string, docs: string[], MATERIALS: string): Judged => {
   const cites = collectCites(ROOT, docs);
   const unjudgedList: string[] = [];
-  const failures: string[] = [];
+  const overflow: { cite: Cite; total: number; isExternal: boolean }[] = [];
   let judged = 0;
   let unjudged = 0;
   let external = 0;
-  let overflow = 0;
 
   type Resolved = { path: string; isExternal: boolean } | null;
   const direct = new Map<string, Resolved>();
@@ -232,7 +253,6 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
     }
 
     const isExternal = hit.isExternal;
-    const note = isExternal ? " [外部材料：只判越界，不判内容位移]" : "";
     if (isExternal) external++;
 
     let total: number;
@@ -245,13 +265,29 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
     }
     judged++;
     if (c.from < 1 || c.to < c.from || c.to > total) {
-      overflow++;
-      failures.push(
-        `  ✗ **行号越界**  ${c.doc}:${c.docLine}  →  ${c.raw}${note}\n` +
-          `      该文件实际只有 ${total} 行（引的是 ${c.from}-${c.to}）`,
-      );
+      // 只**记录**越界，不在判定层决定「红不红」—— 那是呈现层的事
+      //（归档层的越界是「当时」的历史事实，不得据此让门变红）。
+      overflow.push({ cite: c, total, isExternal });
     }
   });
+
+  return { cites, judged, unjudged, external, overflow, unjudgedList };
+};
+
+export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): CiteResult => {
+  const ROOT = resolve(root);
+  const MATERIALS = resolve(ROOT, "..", "_src");
+  const docs = currentStateDocs(ROOT);
+  if (!docs.length) {
+    return {
+      ok: false,
+      code: 2,
+      counts: { total: 0, judged: 0, unjudged: 0, external: 0, overflow: 0 },
+      lines: ["❌ ⑥ **结构缺失**：当前态文档一个都没找到（顶层无 `*.md`）。**这不是「通过」**（ADR-0049）。"],
+    };
+  }
+
+  const { cites, judged, unjudged, external, overflow, unjudgedList } = judge(ROOT, docs, MATERIALS);
 
   const head =
     `引用 ${cites.length} 处（当前态文档；\`CHANGELOG.md\` 与冻结 ADR **不在范围内**）` +
@@ -261,11 +297,17 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
     "    也不判外部材料的内容位移（材料随上游移动）—— 未判定**不是**「已验证」（ADR-0049）。",
   ];
 
-  if (failures.length) {
+  if (overflow.length) {
+    const failures = overflow.map(
+      (o) =>
+        `  ✗ **行号越界**  ${o.cite.doc}:${o.cite.docLine}  →  ${o.cite.raw}` +
+        `${o.isExternal ? " [外部材料：只判越界，不判内容位移]" : ""}\n` +
+        `      该文件实际只有 ${o.total} 行（引的是 ${o.cite.from}-${o.cite.to}）`,
+    );
     return {
       ok: false,
       code: 1,
-      counts: { total: cites.length, judged, unjudged, external, overflow },
+      counts: { total: cites.length, judged, unjudged, external, overflow: overflow.length },
       lines: [`❌ ⑥ **有 \`文件:行号\` 引用越界**`, `  （${head}）`, "", ...failures, "", ...boundary,
         "",
         "  怎么修：引**符号名**（本仓首选），或核对该文件当前行数后订正行号；",
@@ -276,11 +318,67 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
   return {
     ok: true,
     code: 0,
-    counts: { total: cites.length, judged, unjudged, external, overflow },
+    counts: { total: cites.length, judged, unjudged, external, overflow: 0 },
     lines: [
       `✔ ⑥ 没有越界的 \`文件:行号\` 引用（${head}）`,
       ...boundary,
       ...(opts.verbose ? ["", ...unjudgedList] : []),
     ],
+  };
+};
+
+/**
+ * **归档层度量**（CLI 的 `--include-archive`）：量 `CHANGELOG.md` + **全部** ADR（含冻结）。
+ *
+ * 与当前态门**共用 `judge`** —— 所以「什么算引用 / 什么算越界 / 什么算未判定」**只有一份实现**。
+ * 差别只在**呈现与退出码**：
+ * - **只报不判**：归档层行号是「**当时**」语义 ⇒ 越界是**历史事实**，`exit 0`，绝不据此报红；
+ * - **缺件不静默**：归档层文档一个都没有 ⇒ `exit 2`（**不是「通过」**，ADR-0049）。
+ */
+export const checkArchiveCitations = (root: string, opts: { verbose?: boolean } = {}): CiteResult => {
+  const ROOT = resolve(root);
+  const MATERIALS = resolve(ROOT, "..", "_src");
+  const docs = archiveDocs(ROOT);
+  if (!docs.length) {
+    return {
+      ok: false,
+      code: 2,
+      counts: { total: 0, judged: 0, unjudged: 0, external: 0, overflow: 0 },
+      lines: [
+        "❌ **结构缺失**：归档层文档一个都没找到（无 `CHANGELOG.md`，也无 `adr/*.md`）。**这不是「通过」**（ADR-0049）。",
+      ],
+    };
+  }
+
+  const r = judge(ROOT, docs, MATERIALS);
+  const lines = [
+    `归档层引用 ${r.cites.length} 处（\`CHANGELOG.md\` + **全部** ADR，含冻结）` +
+      ` ⇒ 可唯一解析并判定 ${r.judged} 处（其中外部材料 ${r.external} 处）` +
+      ` · 未判定 ${r.unjudged} 处 · **越界 ${r.overflow.length} 处**`,
+    "  ⚠ **只报不判**：归档层的行号是「**当时**」语义 ⇒ 越界是历史事实，**不构成本门失败**（exit 0）。",
+    "  ⚠ 「未判定」**不是**「死链」：带目录的路径常属**别的根**（平台克隆等），判它 = 假阳性（ADR-0059）。",
+  ];
+  if (r.overflow.length) {
+    lines.push("", `--- 越界逐条（${r.overflow.length} 处）---`);
+    for (const o of r.overflow) {
+      lines.push(
+        `  ✗ ${o.cite.doc}:${o.cite.docLine}  →  ${o.cite.raw}${o.isExternal ? " [外部材料]" : ""}\n` +
+          `      该文件实际只有 ${o.total} 行（引的是 ${o.cite.from}-${o.cite.to}）`,
+      );
+    }
+  }
+  if (opts.verbose) lines.push("", ...r.unjudgedList);
+
+  return {
+    ok: true,
+    code: 0,
+    counts: {
+      total: r.cites.length,
+      judged: r.judged,
+      unjudged: r.unjudged,
+      external: r.external,
+      overflow: r.overflow.length,
+    },
+    lines,
   };
 };
