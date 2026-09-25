@@ -82,3 +82,22 @@ Get-ChildItem tools\*.json, docs\*.json | Select-Object -ExpandProperty Name    
 Select-String -LiteralPath package.json -Pattern '"dsh"' -Context 0,3           # 面向宿主的那个出口
 Select-String -LiteralPath ..\_src\strix\AGENTS.md -Pattern 'Exit codes|findings.sarif|run.json'
 ```
+
+## 补记（2026-09-25，`v1.21.8`）：§1 的「图与检查产物（4 份）」缩为 2 份，且**不再随包发布**
+
+**触发**：用户指令「历史文档也没有清理吗」⇒ 追问后定案「4 个签入产物**留仓但移出发布面**；12 个本地产物**直接删**」。
+
+- **§1 那一行的更正（本补记即更正，§1 正文不改写）**：`docs/{absorb-verdict,architecture-seams}.{candidate,visual-check}.json`
+  的 **4 份** ⇒ 现只剩 **2 份** `*.candidate.json`。两份 `*.visual-check.json`（连同 2 份 `*.visual-check.html`
+  与 8 张 PNG）**已删除**：它们是 `.gitignore` L9 `docs/*.visual-check.*` 明确排除的**本地产物**，
+  **未进版本控制 ⇒ 删除不可恢复**（该代价在用户选项里已明示）。§1 该行的「4 份」与本文件 L81 的重放命令
+  （`docs\*.json` 现在只列 2 个）都以此为准。
+- **发布面（本条更实质的一半）**：`package.json` 的 `files` 由 `"docs"` 改为 **`"docs/*.md"`**。两个效果：
+  ① 4 份 `candidate.json` / `html`（1.27 MB）**留在仓内**（§1 登记的证据不丢）但**不再随包分发**；
+  ② 顺带修掉一个**真实缺陷** —— npm 的 `files` 白名单**无视 `.gitignore`**，所以原先的 `"docs"` 把 12 个
+  「本意不入库」的 `visual-check.*`（0.96 MB）**也打进了包**。
+  实测：包 **1.8 MB → 621.5 kB**、unpacked **4.0 MB → 1.7 MB**、files **513 → 497**（−16 正好是那 16 个产物）。
+- **根因（为什么这块长期没被任何门发现）**：引用门 `tools/citation-audit.lib.ts` 的 `CITE` 正则只认
+  `md|ts|mts|json|ya?ml|py|sh|ps1` ⇒ **`.html` / `.png` 永远在扫描面之外**。这类产物只能靠人 / ADR 级决定；
+  已在 `AGENTS.md` 记一笔。
+- **未做**：**不给 HTML/PNG 建扫描** —— 那要造一个**没有消费方**的机制，正是本 ADR §2 第一问否掉的东西。
