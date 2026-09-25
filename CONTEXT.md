@@ -77,7 +77,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | `core/` G2 职责粗桶（v1.20.12，ADR-0105） | 再增导航子目录：`retention/` · `view/` · `admission/`；`index-engine`/`semble` 并入 `candidate/`。根上留 `paths`/`util`/`types`/`fs-scope`/`scope`/`manifest`/`polarity`。`layerOf` 仍 = `core` |
 | selfhood（v1.20.11，ADR-0103） | 第四**导航伞**（不是 mode、不是结构层）：叶子 `identity` · `dream` · `temporal`。`layerOf` 在伞下取第二段。**≠** personality；**≠** curated 灵魂锚（锚在 `subject/soul`） |
 | subject（v1.20.12，ADR-0104） | 第五**导航伞**：叶子 `soul` · `observer`（curated 锚 + 「谁在看」根）。与 `selfhood` 对仗。`layerOf` 取第二段。**≠** personality |
-| `browser-use`（既有指称 = **外部项目**） | **外部第三方**：组织 `browser-use/browser-use` 及其 CDP harness `browser-harness`（MIT）。本仓只**登记为材料**、**不引依赖**（`references.md`；ADR-0089「本仓不操作浏览器」）。**不是** DSH 能力。单说 `browser-use` 一律指这一行 |
+| `browser-use`（既有指称 = **外部项目**） | **外部第三方**：组织 `browser-use/browser-use` 及其 CDP harness `browser-harness`（MIT）。本仓只**登记为材料**、**不引依赖**（`references.md`；ADR-0089「本仓不操作浏览器」）。**不是** DSH 能力。单说 `browser-use` 一律指这一行；其中 `browser-harness` 本体自 **2026-09-25** 起降级为「**已被宿主原生面取代**」的**历史登记**（保留不删，见 `MATERIALS.md` §2.10） |
 | dsh 原生 browser-use | **DSH 第一方能力**：seam 包 `@deepseek-ai/dsh-browser-use`（**独占命名** provider 注册，同一作用域只能挂一个）+ 一个浏览器 provider（chrome-devtools-mcp / playwright-mcp / stagehand-native，**择一**）。与上一行**同名不同物** —— 这个指宿主提供的浏览器工具，不指外部项目；指它时**必须**带「dsh 原生」限定 |
 | dsh 原生 computer-use | **DSH 第一方能力**：seam 包 `@deepseek-ai/dsh-computer-use`（同样**独占**注册）+ 一个桌面 provider（`cua-driver-native` 内嵌 Cua Driver SDK / `cua-driver-mcp` 连外部可执行，**择一**）。与 `dsh 原生 browser-use` 对仗；两者都是**宿主能力**，与 dsh-shadow 的记忆/投影面**并列**，**不是**其从属 |
 

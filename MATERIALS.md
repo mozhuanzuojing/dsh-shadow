@@ -62,7 +62,7 @@ node tools/materials-ledger.ts          # 默认根 = D:\project\dsh1\vendor\_sr
 |---|---|---|---|---|---|---|---|
 | `agent-skills` | addyosmani/agent-skills | `dc27a9c` 2026-09-20 · Merge #579: move security-and-hardening code p… **(浅)** | **≠ HEAD**：57 处 | **MIT** | 225 文件 / 1.27 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
 | `archify` | tt-a1i/archify | `29f1ff5` 2026-09-21 · docs: broaden README introduction beyond devel… **(浅)** | **≠ HEAD**：176 处 | **MIT** | 500 文件 / 52.94 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
-| `browser-harness` | browser-use/browser-harness | `afbcc38` 2026-09-07 · Merge pull request #757 from warun7/fix/video-… **(浅)** | **≠ HEAD**：9 处 | **MIT** | 216 文件 / 5.57 MB | **187 文件 / 3,438 KB** | 未核（本表未逐项复核，**不编**） |
+| `browser-harness` | browser-use/browser-harness | `afbcc38` 2026-09-07 · Merge pull request #757 from warun7/fix/video-… **(浅)** | **≠ HEAD**：9 处 | **MIT** | 407 文件 / 8.09 MB | **187 文件 / 3,438 KB** | **已被宿主原生面取代**（§2.10；历史登记，不删） |
 | `data-engineer-handbook` | DataExpert-io/data-engineer-handbook | `103edb0` 2026-08-03 · Adding Day 1 link **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 153 文件 / 294.40 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
 | `ECC` | affaan-m/ECC | `2b6e839` 2026-09-20 · Fix/proximity a11y risk cues (#3193) **(浅)** | **≠ HEAD**：508 处 | **MIT** | 3549 文件 / 81.07 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
 | `hackingtool` | Z4nzu/hackingtool | `ef5334f` 2026-08-23 · Add context7.json with URL and public key **(浅)** | **干净（= HEAD）** | **MIT** | 164 文件 / 4.55 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
@@ -257,6 +257,21 @@ the configured root is the fallback for agentless calls and sessions without a c
 > Get-ChildItem D:\project\dsh1\vendor\_src -Directory |
 >   Where-Object { $m -notmatch [regex]::Escape($_.Name) } | Select-Object -ExpandProperty Name   # ⇒ 空
 > ```
+
+---
+
+### 2.10 `browser-harness`（**已被宿主原生面取代**；历史登记，不删）
+
+| 面 | 状态 |
+|---|---|
+| **定位** | 外部第三方浏览器 / CDP harness（`browser-use/browser-harness`，MIT）。曾是「真实浏览器 + 登录态」的参考实现。 |
+| **降级（2026-09-25，用户指令）** | **已被宿主原生面取代** —— DSH 第一方发布了 `dsh 原生 browser-use` / `dsh 原生 computer-use`（npm `@deepseek-ai/*`，需作为 profile bundle **显式挂载**）。需要浏览器 / 桌面能力时**首选宿主原生 provider**；本材料**不再是引入对象**。判据与边界见 `references.md` §宿主原生能力 · `CONTEXT.md` 的 `dsh 原生 browser-use` 词条 · `adr/0089` 补注二。 |
+| **本体** | **保留不删**。⚠ 与上游 HEAD **差 9 处**（本机裁剪：3 个测试文件被删、5 个源文件被改）⇒ **删掉后重新 clone 只能得回上游版，这些裁剪会丢**。完整文件清单与许可见 **§1.1**（生成器输出）。 |
+| **未核 / 未运行** | 本机**未安装、未运行过**该 harness；本轮只读其 git 状态，**未执行任何 harness 命令**，也**未联网核对**其上游现状（按 `AGENTS.md`「访问前先查最新」：真要用它之前先跑 `node tools/materials-freshness.ts --only browser-harness`）。 |
+
+> ⚠ **口径边界**：本节只写这一份的**状态面**；名册面（版本 / 许可 / 规模）在 **§1.1**（生成器输出，勿手改）。
+> ⚠ **§1.1 该行「含 `.git`」字节数上涨**（216 文件 / 5.57 MB → 407 / 8.09 MB）是**本轮只读 git 命令的副产物**
+> （`status` / `log` / `rev-list` 触发 index 刷新与 auto-gc），**不是材料内容变化** —— 对照列「不含 `.git`」两轮**完全一致**（187 文件 / 3,438 KB）。
 
 ---
 

@@ -110,6 +110,7 @@ const licenseOf = (dir: string): string => {
 const STATUS: Record<string, string> = {
   OpenViking: "**吸收最深**（§2.3）",
   archify: "**在用工具**（§2.4）",
+  "browser-harness": "**已被宿主原生面取代**（§2.10；历史登记，不删）",
   hl_mem: "重点材料（§2.2；本体已不在本机）",
   "jev-ultrafast": "**已吸收**（§2.9；`adr/0096`）",
   openclaw: "见 `references.md` §17/§19",

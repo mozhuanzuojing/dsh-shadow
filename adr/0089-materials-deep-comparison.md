@@ -97,7 +97,7 @@ ADR-0042/0043/0051（纯函数派生）、ADR-0049（缺件不静默）。
 | **taste-skill** | 「品味」技能（64 文件 / 1.7 MB） | 本仓的对应面是 `soul/`（身份/价值观/品味投影）—— 但本仓**纯函数派生**，它是**给模型的散文指令** | 仅登记。**痕迹 2** |
 | **OpenSpec** | 规格驱动开发（`@fission-ai/openspec@1.12.0`，specify → generate → verify） | 它把意图落成**可生成的工件**；本仓把意图落成**决策留档 + 门禁**（`adr/` 99 篇 + `audit:*`）⇒ **一个生成产物、一个守判据** | 仅登记。**痕迹 2** |
 | **codegraph** | 预索引代码知识图谱（一次 `codegraph_explore` 返回"手术式上下文" + 影响半径） | **组织轴不同**：它按**符号/调用图**（结构轴），本仓的记忆按**入口点 + 时间**（时间轴）；两者都在回答"这条信息还成立吗"——它用 `impact`，本仓用**证据路径是否还存在** | 仅登记 ⚠ **本体不在盘**（§1-1）。**痕迹 3** |
-| **web-access** · **browser-harness** · **browser-use** | 浏览器/CDP 自动化（**web-access 无许可文件**） | 本仓**不操作浏览器** ⇒ **无可比面**；唯一同构的「把观察回传、别信模型自述」已由 §C-下 的 OpenAI 指南覆盖。**补注（2026-09-25）：判词与「仅登记」结论均不变**；新增的是**宿主**事实 —— 已有第一方原生面（`dsh 原生 browser-use` / `dsh 原生 computer-use`，需作为 profile bundle 显式挂载）⇒ 要浏览器/桌面能力时**首选宿主原生面**，外部材料仍只作「看」的参考。见 `references.md` §宿主原生能力 | 仅登记（web-access 无许可 ⇒ 引用前先查）。**痕迹 2 / 3 / 4** |
+| **web-access** · **browser-harness** · **browser-use** | 浏览器/CDP 自动化（**web-access 无许可文件**） | 本仓**不操作浏览器** ⇒ **无可比面**；唯一同构的「把观察回传、别信模型自述」已由 §C-下 的 OpenAI 指南覆盖。**补注（2026-09-25）：判词与「仅登记」结论均不变**；新增的是**宿主**事实 —— 已有第一方原生面（`dsh 原生 browser-use` / `dsh 原生 computer-use`，需作为 profile bundle 显式挂载）⇒ 要浏览器/桌面能力时**首选宿主原生面**，外部材料仍只作「看」的参考。见 `references.md` §宿主原生能力。**补注二（2026-09-25）**：`browser-harness` 由「参考实现」**降级为「已被宿主原生面取代」的历史登记**（本体与登记**保留不删**）—— 本案「仅登记」判定**不变** | 仅登记（web-access 无许可 ⇒ 引用前先查）。**痕迹 2 / 3 / 4** |
 
 ### D. 无可比面（登记备查，9 份）
 
@@ -164,7 +164,7 @@ OpenViking 把权威放 DB、hl_mem 放 SQLite、zvec-grep 放索引 —— 本�
 | **已吸收（落代码/门禁/体例）** | OpenViking（概念）· hl_mem（治理与门禁形态）· PageIndex（信封）· zvec-grep（作为 `zg` 传感器）· MemoryBank（hotness 出处）· 工具拐点（台账判据） | 见各自 ADR |
 | **已判定、只登记不实装** | rtk · langextract（`adr/0087`） | 待下一版 |
 | **已一手读完、未复现** | MemStrata（`adr/0080`） | 分数未复现 |
-| **仅登记（已定位）** | archify（在用工具）· superpowers · agent-skills · taste-skill · OpenSpec · codegraph（无本体）· web-access · browser-harness · browser-use | — |
+| **仅登记（已定位）** | archify（在用工具）· superpowers · agent-skills · taste-skill · OpenSpec · codegraph（无本体）· web-access · browser-harness（**已被宿主原生面取代**，2026-09-25 补注二）· browser-use | — |
 | **无可比面（登记备查）** | system_prompts_leaks · ui · marker · MoneyPrinterTurbo · hackingtool · ECC · data-engineer-handbook · open-lovable · strix | — |
 | **仍在读** | 两篇综述 · Scrub Jay（**只检索未读全文**） | — |
 | **⚠ 台账失效** | `MATERIALS.md` 名册（8 项的旧口径）· `hl_mem` 本体（已不在本机） | 见 §1-2 |

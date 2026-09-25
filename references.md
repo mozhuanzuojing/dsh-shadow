@@ -35,6 +35,13 @@
 —— 这条**不变**（它确实只是参考实现）。变的只是**决策前提**：需要浏览器 / 桌面能力时，**首选开启宿主原生 provider**，
 而不是引入 `browser-harness` 这类第三方。一句话：**外部材料是「看」的，宿主原生面是「用」的。**
 
+**本材料的状态变更（2026-09-25，用户指令「参考资料删除」→ 裁决为降级）**：`browser-harness` 由「参考实现」
+**降级**为「**已被宿主原生面取代**」的**历史登记** —— 本体（`vendor/_src/browser-harness`）与全部登记
+**一律保留、不删**（可追溯性优先于清理），但**不再作为引入对象**。状态面记在 `MATERIALS.md` §2.10；
+§1.1 台账的「台账状态」列由生成器输出（改它走 `tools/materials-ledger.ts` 的 `STATUS` 映射，不手改表）。
+⚠ 该材料与上游 HEAD **差 9 处**（本机裁剪，含 3 个被删的测试文件）⇒ **删了重新 clone 只能得回上游版**，
+这也是本次选择「保留」而非「删除」的一条实证理由。
+
 **实测（本机 `web` profile，2026-09-25；宿主 `dsh 0.1.7-rc.2`，四包同为 `0.1.7-rc.2`）**——
 ⚠ **本节不写「插件总数」「目录条目数」这类会随装件漂移的派生计数**（本仓规矩：能推出来的字段不手写），只给断言 + 口径：
 
@@ -122,7 +129,7 @@
 - `obra/superpowers` / `leonxlnx/taste-skill` — skills 体系/元技能（design 与能力沉淀参考）。
 - `addyosmani/agent-skills` — agent skills 汇总。
 - `usestrix/strix` — （需查，疑似 agent 相关）。
-- `eze-is/web-access` / `browser-use/browser-harness` — 浏览器自动化/CDP（参考实现）。
+- `eze-is/web-access` / `browser-use/browser-harness` — 浏览器自动化/CDP（参考实现）。⚠ **2026-09-25**：`browser-harness` **降级**为「**已被宿主原生面取代**」的历史登记（**本体与登记都保留、不删**）—— 见本文 §宿主原生能力 与 `MATERIALS.md` §2.10。
 - `Fission-AI/OpenSpec` / `colbymchenry/codegraph` — 规格/代码图谱（工程化参考）。
 
 **其它（一般技术/工具参考）**

@@ -3,6 +3,25 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.2] browser-harness 降级为「已被宿主原生面取代」的历史登记
+
+**无行为改动**（不改 mode / 召回 / `.shadow/` 落盘；`tools/materials-ledger.ts` 只改台账的 `STATUS` 映射 ⇒ 只影响生成表的那一格）。
+
+- **指令与裁决**：用户指令「参考资料删除 `<browser-use/browser-harness>`」。**裁决为降级而非删除** —— 本体
+  （`vendor/_src/browser-harness`）与全部登记**保留**。理由是**实测**：该拷贝带 **9 处本机改动**
+  （3 个测试文件被删、5 个源文件被改）⇒ 删掉后重新 clone **只能得回上游版**，**可追溯性优先于清理**。
+- **状态按层落点**（每层只答自己那一问）：`MATERIALS.md` **§2.10**（逐项状态，人工维护）+
+  **§1.1「台账状态」列**（**生成器输出**：`tools/materials-ledger.ts` 的 `STATUS` 映射加 `browser-harness`
+  一条，**重跑生成器**取得，不手改表）；`references.md` **§宿主原生能力**（判据与边界）+ §关联度粗分标注；
+  `CONTEXT.md` 的 `browser-use` 词条补一句；`adr/0089` **补注二**（本案「仅登记」判定**不变**）。
+- **不动**：`CHANGELOG` 历史条目（**归档层改写＝伪造历史**）；`MATERIALS.md` §1（换盘前快照，判据是「当前态只认 §1.1」）。
+- **口径诚实（一条副作用自我披露）**：§1.1 该行「含 `.git`」由 216 文件 / 5.57 MB 变为 **407 / 8.09 MB**
+  —— 那是**本轮只读 git 命令**（`status` / `log` / `rev-list`，触发 index 刷新与 auto-gc）的**副产物**，
+  **不是材料内容变化**；对照列「不含 `.git`」两轮**完全一致**（187 文件 / 3,438 KB）。同一说明记在 §2.10 的口径边界。
+- **未做**：未安装、未运行过该 harness；未联网核对其上游现状（按 `AGENTS.md`「访问前先查最新」，真要用它之前先跑
+  `node tools/materials-freshness.ts --only browser-harness`）。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`（含 `typecheck:tools` —— 本次改了 `tools/` 下的 `.ts`）。
+
 ## [v1.21.1] 登记宿主原生 browser-use / computer-use（术语消歧 + 边界不变）
 
 文档与术语层，**无代码、无行为改动**（不改 mode / 召回 / `.shadow/` 落盘 / 依赖）。
