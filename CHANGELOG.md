@@ -3,6 +3,25 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.3] 刷新 mattpocock/skills 读数（§4 已登记，只刷新不重写）
+
+**纯文档、无行为改动**（未动代码 / mode / 召回 / `.shadow/` 落盘；`MATERIALS.md` 未变 —— 该条无本地本体，不进磁盘枚举台账）。
+
+- **指令与口径**：用户指令「参考资料 add `<https://github.com/mattpocock/skills>`」。**该条已在 §4 完整登记（2026-09-08）**
+  ⇒ 按 `references.md` 自己的口径（「同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里
+  补核实或刷新读数」）新增 `## 补充材料（2026-09-25 用户提供，本轮已核实）` 的 **§21**，**§4 正文一字不改**。
+- **读数刷新**（实测 **2026-09-25 09:11 +08:00**，GitHub API + `main` 的 README）：Star 256,453 → **269,137**；
+  Fork 21,605 → **22,689**；最近提交 2026-09-04 → **2026-09-24**；许可 / 语言未变（MIT / Shell）。
+- **实质变化三条（比数字重要）**：① **分发面变宽** —— 新增 Claude Code 官方市场插件与 skills.sh
+  （`npx skills@latest add mattpocock/skills`，须含 `setup-matt-pocock-skills`）；② 「**user-invoked vs model-invoked**」
+  那条权限轴**升格为 README 的唯一分轴与总纲**（user 可调 model、**反之不可**、user 之间**不互调**）；
+  ③ 技能面扩张，并新增把「追问」抽成**可复用原语**的 `grilling`。
+- **编号口径（防误读）**：新节取 **§21**；**19 / 20 不是缺失的材料** —— 它们是「落地核实（2026-09-20）」与
+  「吸收落地（2026-09-20）」的**子节前缀**。材料序号与派生小节**共用一套数字**是本文历史形态（另有 10–12 / 14 / 15 / 17 同形）。
+- **未核 / 未做**：**未克隆、未安装、未运行**其任何技能；`skills/*/SKILL.md` **未逐篇读**。该条**不在** `vendor/_src`
+  ⇒ **未进** `MATERIALS.md`（那份台账的口径是**磁盘枚举**），也不适用 `materials-freshness.ts`。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+
 ## [v1.21.2] browser-harness 降级为「已被宿主原生面取代」的历史登记
 
 **无行为改动**（不改 mode / 召回 / `.shadow/` 落盘；`tools/materials-ledger.ts` 只改台账的 `STATUS` 映射 ⇒ 只影响生成表的那一格）。

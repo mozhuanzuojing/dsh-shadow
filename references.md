@@ -1083,6 +1083,53 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 - **`rawOutput` 里的数字会渲染给模型看**；模型要不要据此行动**不在本层管辖内**
   （那是 agent 的推理，不是 shadow 的记录）⇒ 见 `adr/0096` §12.5，本层**不声称**覆盖这一段。
 
+## 补充材料（2026-09-25 用户提供，本轮已核实）
+
+> 用户 2026-09-25 指令「参考资料 add `<https://github.com/mattpocock/skills>`」。**该条已在 §4 完整登记（2026-09-08）**
+> ⇒ 按本文自己的口径（「同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数」）：
+> **§4 正文一字不改**，本节只**刷新读数**并记**实质变化**。
+>
+> **编号口径（先说清，免得读成漏登记）**：本节沿用材料序号，故取 **21**。**19 / 20 不是缺失的材料** ——
+> 它们已被「落地核实（2026-09-20）」与「吸收落地（2026-09-20）」用作**子节前缀**（`### 19.x` / `### 20.x`）：
+> 材料序号与派生小节**共用一套数字**是本文的历史形态（另有 10–12 / 14 / 15 / 17 同形），不是缺口。
+
+### 21. mattpocock/skills —— **§4 已完整登记（2026-09-08）；本条只刷新读数，不重复事实**
+
+- **链接**：https://github.com/mattpocock/skills · **抓取时刻 2026-09-25 09:11 +08:00**（GitHub API + `main` 的 `README.md`）
+- **读数刷新**（§4 原值 → 本次；star / fork 按 API 原样记录）：
+
+| 字段 | §4（2026-09-08） | **本次（2026-09-25）** |
+|---|---|---|
+| Star | 256,453 | **269,137** |
+| Fork | 21,605 | **22,689** |
+| 最近提交 | 2026-09-04 | **2026-09-24**（`pushed_at`） |
+| 许可 / 语言 | MIT / Shell | 未变 |
+| 其它 | — | `created_at` 2026-02-03（未动）· `archived: false` · `default_branch: main` · `open_issues: 528` · `subscribers: 1,490` · `size: 1,827 KB` · `topics: []` |
+
+- **实质变化（比数字重要）——三条**：
+
+  1. **分发面变宽**：新增 **Claude Code 官方市场插件**（`claude plugins install mattpocock-skills`）与 **skills.sh**
+     （`npx skills@latest add mattpocock/skills`；可选装，且 README 明文要求**必须包含 `setup-matt-pocock-skills`**）。
+     §4 当时只记「技能集」这一种形态。
+  2. **「谁能调用」那条轴**已**升格为总纲**：README 的 Reference 现以 **user-invoked vs model-invoked 为唯一分轴**，
+     并明文「user-invoked 可调 model-invoked，**反之不可**，且 user-invoked 之间**不互调**」——
+     与 §4 记的「前者可调后者、后者不能调前者」一致，但**从一条注记变成了结构性总纲**。
+  3. **技能面扩张**（§4 只点了 `grill-me` / `grill-with-docs` / `writing-for-agents`）：
+     engineering **user-invoked** = `ask-matt`（路由）· `grill-with-docs` · `triage` · `improve-codebase-architecture` ·
+     `setup-matt-pocock-skills` · `to-spec` · `to-tickets` · `implement` · `wayfinder`；
+     engineering **model-invoked** = `prototype` · `diagnosing-bugs` · `research` · `tdd` · `domain-modeling` ·
+     `codebase-design` · `code-review` · `resolving-merge-conflicts` · `wizard`；
+     productivity **user-invoked** = `grill-me` · `handoff` · `teach` · `to-questionnaire` · `wait-what`；
+     productivity **model-invoked** = **`grilling`**（把「追问」抽成**可复用原语**，`grill-me` / `grill-with-docs` /
+     `triage` / `wayfinder` / `improve-codebase-architecture` 共用它）· `writing-for-agents`。
+
+- **本仓已吸收面（未变，故不重写）**：`CONTEXT.md` 的 mode 描述下沉（context-load 尺子）·
+  `docs/maintainers.md` 的权限轴 · §4 记的「为什么存在 → 失败模式 → 修法」结构。
+- **未核 / 未做**：**未克隆、未安装、未运行**其任何技能（本节只读公开 API + README）；`skills/*/SKILL.md` 正文
+  **未逐篇读**。⇒ 若要从「登记」走到「吸收」，先按 `AGENTS.md`「访问前先查最新」跑
+  `node tools/materials-freshness.ts --only mattpocock`（**前提是先有本地本体 —— 现在没有**：它**不在** `vendor/_src`，
+  也因此**未进** `MATERIALS.md`（那份台账的口径是**磁盘枚举**））。
+
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
 > 用户 2026-09-14 指令「这两个**拉取后，学习，吸收**」。本轮完成**拉取 + 学习 + 判定**，
