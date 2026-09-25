@@ -216,8 +216,8 @@ npm run verify
 
 | 项 | 值 |
 |---|---|
-| 验证基线 | **DSH `0.1.7-alpha.2`**（在这一版上验证并运行） |
-| 声明 | `package.json` → `engines.dsh: ">=0.1.7-alpha.2"` |
+| 验证基线 | **DSH `0.1.7-rc.2`**（在这一版上验证并运行） |
+| 声明 | `package.json` → `engines.dsh: ">=0.1.7-rc.2"` |
 | 更早版本 | **未经验证，不承诺可用** |
 
 **这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：**无任何代码读取**，仅散文注释提及；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**能观测到的防线是能力探测**——它只**报告**、不拦截：插件探测自己需要的宿主接口，缺哪个就报哪个：
@@ -230,6 +230,8 @@ npm run verify
 探测**不放在 `apply()`、也不放在 `inject` 回调**：Cordis 的服务是异步挂载的，`apply()` 时可能尚未 provide（会误报）；而 `ctx.inject(deps, cb)` **只在依赖就绪时才回调** —— 依赖缺失时回调根本不执行，把「缺 X」写进去等于「缺了就不报」（v1.15.3 修正的正是这一点）。故服务面检查**统一在首个 `agent/turn-stopping`**（此时宿主已完全挂载，且只报一次）。
 
 **为什么基线从 `0.1.5-rc.1` 抬到 `0.1.7-alpha.1`、又随 `v1.20.1` 抬到 `0.1.7-alpha.2`（ADR-0098）**：抬升的**唯一**理由是**预设形态**。0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的 `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录**没有任何读取者**（官方 shipped skill 原文 *Nothing reads that directory any more*）⇒ 随包预设的形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。**插件体本身没坏**——实测（对 0.1.5-rc.2 与 0.1.7-alpha.1 的 `.d.ts` 逐文件比对）：`dsh-goal` 逐字未变；`user/message` / `assistant/message` 事件形状未变（新增的 `developer/message` 被 `core/retention/collect.ts` 直接忽略）；`fs` 只**新增** `watch`；`systemPrompt.context({name,order,text})` 未变；`session.header.cwd` 仍在。所以这是一次**声明上的硬切**，不是插件面破坏。完整证据与隔离实测见 `adr/0098`。
+
+**基线在 `v1.21.4` 再抬到 `0.1.7-rc.2`（`adr/0098` §7 补记）**：判据与上面同源，且这次是**逐字节比对**的 —— 本机两代 dlx 树（alpha.2 vs rc.2）的**实质面**（`lib/**` / `presets/**` / `locale/**`）里，**`dsh-agent-preset` 与 `dsh-web-app`（含随包 `presets/standard.patch.yml`）均 0 处差异**（后者 7511 字节 / MD5 与 alpha.1 / alpha.2 / rc.1 **四代相同** ⇒ 本仓那份「faithful copy」**无需重同步**），`dsh-experimental-tool-agent-team` 也 0 处；rc.2 上 `preset-projection` 行 active，且**本会话的人格文本即它注入**（⇒ 声明行确被读取）。⚠ **未核**：`dsh-tools` / `dsh-session` / `dsh-experimental-agent-team` / `dsh-goal` 的 `lib/**` **确有变化**，本仓只经**注入的服务**消费它们，**「这四个包的变化对本仓有无影响」本次未逐行核对**（详见 `adr/0098` §7）。
 
 ## 安装（持久化）
 
@@ -272,4 +274,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.3`**（刷新 mattpocock/skills 读数（纯文档）—— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.4`**（基线抬到 DSH `0.1.7-rc.2`（声明面，无行为改动）—— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

@@ -1,7 +1,9 @@
 # Agent preset projection: one `@deepseek-ai/dsh-agent-preset` declaration.
 #
-# Faithful copy of the SHIPPED `standard` preset (`dsh-web-app@0.1.7-alpha.2`
+# Faithful copy of the SHIPPED `standard` preset (`dsh-web-app@0.1.7-rc.2`
 # `presets/standard.patch.yml`) with exactly two deliberate deltas:
+#   · 基体本身在 alpha.1 / alpha.2 / rc.1 / rc.2 **四代逐字节相同**
+#     （7511 字节 / MD5 25BD75AC…，实测见 `adr/0098` §7）⇒ 跨代无需重同步。
 #   1. `persona` carries the projection-mode text — this is the whole point.
 #   2. the `delegation` group drops every `tool-subagent*` row.
 #      **Agent Teams is the only delegation mechanism** —— 用户 2026-09-16 定调

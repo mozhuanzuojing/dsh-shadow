@@ -3,6 +3,32 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.4] 基线抬到 DSH `0.1.7-rc.2`
+
+**声明面变更 + 无行为改动**（不改 mode / 召回 / `.shadow/` 落盘；`package.json` 无运行期依赖 ⇒ 无依赖上抬）。
+
+- **指令**：用户指令「dsh-shadow 修改兼容为 0.1.7-rc.2」。按 `adr/0098` 的先例，**ADR 正文不改写**，追加 **§7 补记**。
+- **判据面（`adr/0098` §1 的三条）在 rc.2 上继续成立 —— 且这次是逐字节比的**：照 `adr/0099` §1 的方法，对本机两代
+  dlx 树（`e1472f28…` = alpha.2，`d1523a95…` = rc.2）逐文件比 MD5，取**实质面**（`lib/**` · `presets/**` · `locale/**`）：
+  **`dsh-agent-preset` 0 处差异**（预设声明行契约未变 —— 这正是抬基线的**唯一**理由）；
+  **`dsh-web-app` 0 处**（含随包 `presets/standard.patch.yml`：7511 字节 / MD5 `25BD75AC…`，与 alpha.1 / alpha.2 / rc.1
+  **四代完全相同** ⇒ 本仓 `presets/projection.patch.yml` 那份「faithful copy」**未过期、无需重同步**）；
+  **`dsh-experimental-tool-agent-team` 0 处**（⇒ `presets/README` 引用它的内部行号快照**仍成立**）；`dsh-system-prompt` 0 处。
+- **rc.2 上的实测（用户 live 环境，2026-09-25）**：宿主 `dsh --version` = **`0.1.7-rc.2`**；live profile 的 `--dump-config`
+  含 `preset-projection`（`fiberPhase: active`）；**本会话的人格文本即该声明行注入的投影模式 persona** ⇒ 声明行
+  **确被读取**（比「版本号对得上」强的判据）；持续落盘，`read_shadow` / `recall_shadow` / `shadow_query` 均可用；
+  `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` **exit 0**。
+- **⚠ 未核（诚实标注，勿读成「已逐包对齐」）**：同一次比对显示 **`dsh-tools`（4 处）· `dsh-session`（6 处）·
+  `dsh-experimental-agent-team`（18 处）· `dsh-goal`（1 处）** 的 `lib/**` **确有变化**。本仓对宿主只经**注入的服务**消费
+  （无运行期依赖），故模块级差异不直接作用于本仓；但**「这四个包的变化对本仓有无影响」本次未逐行核对**。
+  同理 `presets/README` 里以 **alpha.2** 为准的归一化行号读数未在 rc.2 上重跑（其载体包逐字节未变 ⇒ 结论不变，
+  但「在哪一代量的」这层标注仍是 alpha.2）。要做那一层，属 `adr/0099` 规模的独立轮次。
+- **跳版**：`0.1.7-rc.1` 存在（本机 `5caa8fc4…` 树）但**本仓从未声明过它** ⇒ alpha.2 → rc.2 是一次**跨版抬升**。
+- **同步改动（`audit:docs` ⑦ 的门就是过门条件本身）**：`index.ts` 的 `HOST_BASELINE` · `package.json` 的 `engines.dsh` ·
+  `README` 的 `| 验证基线 |` 与 `| 声明 |` 行 · `CONTEXT` 的「验证基线」术语行；另同步 `presets/projection.patch.yml`
+  的出处注释（并记下基体四代逐字节相同）与 `presets/README` 的「current as of」。
+- **验证**：`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+
 ## [v1.21.3] 刷新 mattpocock/skills 读数（§4 已登记，只刷新不重写）
 
 **纯文档、无行为改动**（未动代码 / mode / 召回 / `.shadow/` 落盘；`MATERIALS.md` 未变 —— 该条无本地本体，不进磁盘枚举台账）。

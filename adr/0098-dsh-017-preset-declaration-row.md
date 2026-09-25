@@ -193,3 +193,31 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   `cordis.patch.yml`）里整条 override 删除，`headless` 本来就没设过 ⇒ 两 profile 一致。§2.2 正文按「决策当时」保留，
   **但那条「漏写一个键 = 静默回落」的长期维护面在本部署已不存在**。同名事实的另一半（`0.1.7` 线的包读数已变、
   alpha.2 新增 teammate 身份提示）见 `adr/0099` §2。
+
+## 7. 补记（2026-09-25）：基线再抬到 `0.1.7-rc.2`，落成 `v1.21.4`
+
+上游在 `0.1.7-alpha.2` 之后发了 `0.1.7-rc.1` 与 **`0.1.7-rc.2`**（本机 live 宿主 = `0.1.7-rc.2`）。
+用户 2026-09-25 指令「dsh-shadow 修改兼容为 0.1.7-rc.2」。**本 ADR 正文仍不改写**；此处只记后续。
+
+- **判据面（§1 的三条）在 rc.2 上继续成立 —— 且这次是逐字节比的**：照 `adr/0099` §1 的方法，对本机两代 dlx 树
+  （`e1472f28…` = alpha.2，`d1523a95…` = rc.2）逐文件比 MD5，取**实质面（`lib/**` · `presets/**` · `locale/**`）**：
+  **`dsh-agent-preset` 0 处差异**（预设声明行契约未变 ⇒ §1 的「唯一硬断裂」判据不变）；
+  **`dsh-web-app` 0 处**（含随包 `presets/standard.patch.yml` —— **7511 字节 / MD5 `25BD75AC…`，与 alpha.1 / alpha.2 / rc.1 四代完全相同**
+  ⇒ 本仓 `presets/projection.patch.yml` 那份「faithful copy」**未过期、无需重同步**）；
+  **`dsh-experimental-tool-agent-team` 0 处**（⇒ `presets/README` 引用它的内部行号快照**仍成立**）；**`dsh-system-prompt` 0 处**。
+- **rc.2 上的实测（用户 live 环境，2026-09-25）**：`dsh --version` = **`0.1.7-rc.2`**；live profile 的 `--dump-config`
+  含 `agent-preset-registry` / `preset-standard` / **`preset-projection`（`fiberPhase: active`）**；
+  本会话**人格文本即为 `preset-projection` 注入的投影模式 persona** ⇒ 声明行在 rc.2 上**确被读取**（这是抬基线的实质判据，
+  比「版本号对得上」强）；持续落盘，`read_shadow` / `recall_shadow` / `shadow_query` 均可用；
+  `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` **exit 0**。
+- **⚠ 未核（诚实标注，勿读成「已逐包对齐」）**：同一次比对显示 **`dsh-tools`（4 处）· `dsh-session`（6 处）·
+  `dsh-experimental-agent-team`（18 处）· `dsh-goal`（1 处）** 的 `lib/**` **确有变化**。本仓对宿主只经**注入的服务**消费
+  （`ctx.tools` / `systemPrompt` / `goal` / session 事件 / `fs` / `sandboxPolicy`），**无运行期依赖**，故模块级差异
+  不直接作用于本仓；但**「这四个包的变化对 dsh-shadow 有无影响」本次未逐行核对** —— 本次抬的是**声明**，
+  不是「已逐包审过」。要做那一层，属 `adr/0099` 规模的独立轮次。
+- **⚠ 另一条未核**：`presets/README` 里以 **alpha.2 为准**的**归一化读数**（`538` / `231` 一类行号）未在 rc.2 上重跑；
+  其载体包 `dsh-experimental-tool-agent-team` 实测**逐字节未变** ⇒ 结论不变，但「在哪一代量的」这层标注仍是 alpha.2。
+- **基线口径**：`engines.dsh` 与 `HOST_BASELINE` 一并抬到 `0.1.7-rc.2`；`README` / `CONTEXT` / `presets/README`
+  的**当前态取值**同步（即 `v1.21.4`）。§6 配的 `audit:docs` ⑦ 门继续生效 —— 本次三处同步改动就是**过门条件**本身。
+- **跳版**：`0.1.7-rc.1` 存在（本机 `5caa8fc4…` 树）但**本仓从未声明过它** ⇒ alpha.2 → rc.2 是一次**跨版抬升**，
+  中间那一代未单独出过声明。

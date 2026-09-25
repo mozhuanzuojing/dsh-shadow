@@ -333,7 +333,7 @@ The preset only configures how an agent uses `read_shadow` / shadow memory. It d
 DSH built-in plugins (`@deepseek-ai/dsh-*`) and `{{model}}` / `{{cwd}}`; it carries
 no user-machine-specific paths or keys, so it is portable.
 
-## Note on DSH preset management (current as of 0.1.7-alpha.2)
+## Note on DSH preset management (current as of 0.1.7-rc.2)
 
 `dsh` still exposes **no** `dsh preset install/doctor` subcommand (verified: `dsh preset --help`
 treats the args as profile boot args). An agent preset is declared as an
