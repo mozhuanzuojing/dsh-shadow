@@ -81,6 +81,11 @@
   它**驱动产品面**（`createShadowCollector(...).ensureIndex(ws)` ⇒ 真实 `writeAbstracts`），**读真实语料、写全部重定向到临时沙箱**
   （跑完自检「写越界 0 次 / 语料文件数未变」，两个口径各用独立沙箱）。同样**刻意不进 `verify`**（要真语料）——
   改了 `abstracts` / `showInIndex` / Episode 收口（`compact`）之后重跑它。
+- **派生索引（SQLite）的三个基准数字 + 二进程并发**：`npm run bench:derived-index -- [--atoms 8800]`
+  （= `tools/derived-index-bench.ts`，`T17-C` 矩阵第 8/9 项的读数来源）。它**自己造合成语料**（不进仓库、不碰真实记忆），
+  在真临时目录上驱动**真 provider**，报 cold rebuild / startup / incremental 三个数字，并起两个子进程做同机并发探针。
+  **刻意不进 `verify`**（要造 8800 个文件）；改了 `core/candidate/sqlite.ts` 或索引新鲜度逻辑之后重跑它。
+  ⚠ 并发读数**时序相关**（同一份代码两次运行可能一次撞锁一次不撞）⇒ **别拿单次运行当结论**（见 `adr/0095` 补记）。
 
 ## 脚本一律 TypeScript
 

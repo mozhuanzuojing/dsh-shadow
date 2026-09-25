@@ -1200,7 +1200,7 @@
 
 ---
 
-### T17. **派生索引层一期**（`.shadow` 权威 + SQLite 派生索引）—— 边界已冻结 · T17-A 已跑 · **T17-B 已实现（`v1.15.96`，默认仍是 `fs`）** · **T17-C 待跑**
+### T17. **派生索引层一期**（`.shadow` 权威 + SQLite 派生索引）—— 边界已冻结 · T17-A 已跑 · **T17-B 已实现（`v1.15.96`）** · **T17-C：矩阵逐项落点已写清（`v1.21.30`）**——8.8k 冷建/增量/启动三数字 + 同机二进程并发已测；**默认仍 `fs`**（跨平台锁未测，见 `adr/0095` 补记）
 
 - **内容**：按 **`adr/0095-derived-index-layer-sqlite.md`** 做**一期** —— 用 Node 内置 `node:sqlite` 承载
   **元数据 + 关系 + 证据链 + FTS5**，把读侧的「扫目录 → 解析 → 打分」换成索引查询，**读侧输出逐字不变**。
@@ -1247,6 +1247,23 @@
 - **T17-C 的入口（未做）**：§七那份 9 项验证矩阵（`fs` / `sqlite` / unavailable / corrupt / schema mismatch /
   source changed / rebuild / 8.8k cold build / incremental）**全过之后**才考虑把 `sqlite` 设为默认；
   并发/多进程同读同写、跨平台（WSL/容器）锁与 WAL 也归这一期。
+
+#### ⏳ T17-C 进度（`v1.21.30`）：**矩阵逐项落点已写清** + 第 8/9 项有了读数 + 同机并发已测
+
+- **逐项落点表在 `adr/0095` 的「补记（T17-C 验证矩阵）」§一**（每项都指到可跑的东西）。摘要：
+  1-2 `fs`/`sqlite` ⇒ `test/derived-index.test.ts` ①/①b（canonical diff 两路逐字段比）；
+  3 `unavailable` ⇒ ②a/②b；**5 `schema mismatch`** ⇒ ②c（`index_meta.schema_version='bogus-0'` ⇒ 回退 + 挪走 + 下次整体重建）；
+  **4 `corrupt`（表缺失/坏件）** ⇒ 同态同路径（`readSchema` 的表缺失分支）——**未单独断言**（诚实标注）；
+  6 `source changed` ⇒ ⑤（新增/删除/原地改/full 逃生口）；7 `rebuild` ⇒ ②c 的第二次读；9 `incremental` ⇒ ⑥/⑦ + 本轮 bench ③。
+- **第 8 项（`8.8k cold build`）本轮补上**：新增 `tools/derived-index-bench.ts`（`npm run bench:derived-index`）——
+  **合成语料 + 真临时目录 + 真 provider**，本机读数：**cold rebuild 512.6 ms**（8800 行 · 索引 6.9 MB）·
+  **startup 68.9 ms** · **incremental 302.5 ms**。⚠ 合成语料分布均匀 ⇒ 只当**量级**看。
+- **同机二进程并发（§补记七 的「未测」之一）本轮测了**：两个子进程同读同写同一份索引 ——
+  300 条那次 writer 出现 **`query-error`**（撞锁 ⇒ 本次回退 fs + 可见，不崩不静默），8800 条那次 12/12 全 `ok`
+  ⇒ **撞锁是时序相关的，不能靠单次运行断言**。⚠ 关键更正：`writable:false` **不是并发读**（守卫②直接返回 unavailable）。
+- **默认值：仍 `fs`**（本轮**不改**）。理由不是「矩阵没过」，而是**跨平台那一半没测**：§补记七 的四条「未核实」里，
+  本轮只关掉了同机并发；**跨平台锁 / 真实流量漏召回 / 外部进程原地改的频率 / 非本地后端 `processPath`** 仍未测
+  ⇒ 按 §七 判据原文（「**全部通过之后**才考虑」），不改默认。**改默认需要**：跨平台环境 + 真实流量 query-log 样本。
 
 ### T18. `decision/` 层**接进读路径与 outcome**（`adr/0096` 里的 T3）—— 🟡 **outcome 半边已接线（v1.20.6）**
 
