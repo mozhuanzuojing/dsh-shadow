@@ -9,6 +9,11 @@ This preset is **package-owned**. It is the **single source of truth** shipped w
 > **Do not edit the composed row directly.**
 > Modify the source patch here and republish / re-install.
 
+> **关于文中的 `0.1.7-alpha.2` 读数（`v1.21.18` 补）**：本文件里几处按行号给出的读数是在 `0.1.7-alpha.2` 上量的，
+> **标签保留**（那是「在哪一代量的」这一事实）。它们**在 `0.1.7-rc.2` 上不重跑也成立** ——
+> 载体包 `dsh-experimental-tool-agent-team` 在 `alpha.2` / `rc.1` / `rc.2` 三代**逐字节未变**（逐文件 MD5 相同），
+> 故任何按行号给出的读数都不可能因换代而变。**若要重新取证**：在那三代任一棵 dlx 树上重跑同一命令即可。
+
 ## Install (0.1.7+: the preset ships as a bundle patch)
 
 Since `v1.20.0` / ADR-0098 this preset is a **`@deepseek-ai/dsh-agent-preset`
