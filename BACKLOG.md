@@ -252,7 +252,30 @@
   （`projection-store.ts:85` 的 store 工厂在生产被调用），而 **D1 说「未接线」仍然成立**
   （无生产**实例化点**）。两条不矛盾：一条说接口可达、一条说没人实例化 ⇒ **D1 维持原判**。
 
-### T2. 审计 B 类线索未逐条分诊（**85 条**）
+### 🟡 T2. 审计 B 类线索逐条分诊 —— **首批已分诊（2026-09-25）**：实测 **93 条**（台账原写 85 ⇒ **已过期**，工具读数随语料漂移，已更正标题）
+
+- **判据（本仓纪律，写在工具输出里）**：B 类问「该值是否真无写入者」，但**可能来自外部数据**
+  （宿主载荷 / 读进来的 JSON / 审批返回值）—— 此时分支**可达**，**不得凭静态分析定罪**。
+- **① 外部数据（宿主载荷 / 工具入参）⇒ 分支可达，非缺陷 —— 43 条**：
+  `mode=*` **37 条**（占多数）· `type=user/message` · `type=finish` · `type=text-delta`（宿主事件流）·
+  `code=ENOENT` · `code=ERR_CHILD_PROCESS_STDIO_MAXBUFFER` · `code=FS_STALE_VERSION`（Node / 宿主错误码）。
+  **证据**：`query/contverify.ts` 等一批文件的 `const mode = String(args?.mode || "")` ⇒ 值来自**工具入参**；
+  `core/retention/collect.ts` 对 `type` 做**载荷比较**（`type !== "user/message" && …`）。
+- **② 工具自身常量 / 夹具 ⇒ 误报形态 —— 22 条**：全部在 `tools/` 下 —— `c=\\ ` · `c=\`` · `c2=*` · `c2=/` ·
+  `dir=exact|higher|lower` · `rule=number(s)` · `bucket=A1|A2a|A2b` · `s=.` · `s=..` · `kind=builtin|relative` ·
+  `p=test` · `ledgerVerSrc=实测` · `rule=任何层 ↛ (root)` · `rule=noise_offtopic_mean 上涨`。
+  驱动来自 **argv / 夹具**，不是产品分支。
+- **③ 写侧用常量、工具按字面量匹配 ⇒ 误报（已知窗口盲区）—— 2 条**：`status=archived` / `status=superseded`。
+  写侧是常量（`ARCHIVED` / `SUPERSEDED`，见 `core/retention/lifecycle.ts`），工具的**单行字符串窗口**看不见 ——
+  这是 `audit-wiring` 的**已知盲区形态**，**不是缺陷**。
+- **④ 待逐条核 —— 26 条（如实列出，不冒充已判）**：
+  `alias=date` · `alias=citation` · `alias=conclusion` · `s=mem` · `outcome=ok|failed` · `kind=aborted` ·
+  `kind=metadata|session` · `lc=expired|revoked` · `explicitAnchor=historical|known-at-time` ·
+  `state=exists|undecidable` · `status=compared|explored` · `st=stale|validated` · `tier=L2` · `action=reject` ·
+  `o=rejected` · `operation=clear` · `type=directory` · `sub=decision` · `m=query`。
+- **完成判据**：④ 的 26 条逐条给出「外部数据 / 跨文件常量写入 / **真断线**」三选一；
+  **若出现真断线，另立条目**（那是缺陷修复，不是本条的分诊收口）。
+- **复现**：`npm run audit:wiring`（键清单按读点分组，见本条的读法）。
 
 - **依据**：同 T1；`npm run audit:wiring` 输出 B 段（**计数为 2026-09-11 实跑所得**）。
   **`v1.15.22` 起为 85 条**（原 81）：`tools/*.mjs` 切 `.ts` 后工具开始扫自己，
