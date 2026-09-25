@@ -26,7 +26,11 @@ const ROOT = process.argv[2] ?? "D:\\project\\dsh1\\vendor\\_src";
 /** 跑 git 并取 stdout；失败返回 undefined（由调用方决定是降级还是标缺件）。 */
 const git = (dir: string, args: string[]): string | undefined => {
   try {
-    const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    // `core.abbrev=8` **钉死缩写位数**：`%h` 的长度由 git 自适应（随仓变大而变长），
+    // 于是同一份台账**每次重跑都无谓地产生 diff**——实测 2026-09-25：三个仓同时给出
+    // 7 位（agent-skills）与 9 位（openclaw / OpenViking）三代长度，而这**不是**材料变了。
+    // 钉住之后输出确定 ⇒ 重跑只在真有变化时才 diff（本表是生成物，diff 噪声=维护负担）。
+    const r = spawnSync("git", ["-c", "core.abbrev=8", "-C", dir, ...args], { encoding: "utf8" });
     if (r.status !== 0 || typeof r.stdout !== "string") return undefined;
     return r.stdout.trim();
   } catch {

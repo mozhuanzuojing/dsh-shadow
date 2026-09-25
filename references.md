@@ -1199,14 +1199,14 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 |---|---|---|
 | 本文件 §完整清单 的裸 URL（2026-09-02 那一批） | **21** | `(Select-String -LiteralPath references.md -Pattern '^- https://github.com/').Count` |
 | `../../references-agents/*/AGENTS.md`（**仓库之外**的第三份清单） | **19** | `(Get-ChildItem ..\..\references-agents -Directory).Count` |
-| `../_src` 磁盘本体 | **22 个目录 = 21 份材料 + 1 份上版快照** | `(Get-ChildItem ..\_src -Directory).Count` |
+| `../_src` 磁盘本体 | **只认命令输出**（本行**不写死数**：2026-09-15 那次 = 22，**2026-09-25 实测 = 24** ⇒ 这是**会腐烂的派生计数**，写死必烂） | `(Get-ChildItem ..\_src -Directory).Count` |
 | `MATERIALS.md` §1 名册（**换盘前**口径） | **8** | 该表的枚举根 `G:\project\dsh1` **本机已不存在** ⇒ **不可复核** |
 
 - **⚠ 两个路径不是同一级**（本轮实测踩过）：`.docs/` 在 `vendor/` 下（`..\.docs\fix\<日期>\`），
   而 `references-agents/` 在 `dsh1/` 下（`..\..\references-agents`）。
 - **三件对不上的事**（逐份判定见 `adr/0089` §1）：`codegraph` **有清单、有笔记、没有本体**；
   `MATERIALS.md` 的名册是**换盘前**口径（8 项里 5 项本机已无）；
-  **21 份材料里只有 4 份带 `.git`**（`langextract` / `PageIndex` / `rtk` / `zvec-grep`）⇒ 其余 HEAD 无法复算。
+  **「只有 4 份带 `.git`」这条已被推翻** —— `MATERIALS.md` §1.1（生成器输出）实测 **24/24 都有 `.git` 且都取到 HEAD**（v1.18.1 补的 `.git`）⇒ **HEAD 可复算性以 §1.1 为准，不以本行为准**。
 - **由此立的判据**（与 `AGENTS.md`「能推出来的字段不要手写」同源，事故见 `adr/0085` §8.7）：
   **凡「清单」这类可由磁盘推出来的字段，登记时必须带「枚举根 + 枚举时刻」**；
   否则它会在换机之后变成一句**看起来权威、实际不可复核**的话（`MATERIALS.md` §1 就是现成的样本）。

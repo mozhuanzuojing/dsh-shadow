@@ -3,6 +3,67 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.6] 清理过期内容：归档层去行号 + 当前态修正 + 台账生成器钉死 abbrev
+
+**文档与工具面；无产品行为改动**（不改 mode / 召回 / `.shadow/` 落盘）。
+
+### 口径（经三轮追问达成，与仓库既有表格冲突之处按用户决定执行）
+
+用户指令「清理历史过期的内容」，并明确「**不管是否冻结，错误的过期的都不要，要减轻负担**」。`AGENTS.md` 的
+「历史文档 vs 当前态文档」表原本禁止改写归档层（`CHANGELOG` / 冻结 ADR）—— **本条按用户决定覆盖该禁令**，
+但**只覆盖「去掉会腐烂的定位符」这一件事**。
+
+### 先测后动（本次最重要的一步）
+
+「归档层有多少真错」此前**没有工具能回答**（`audit:docs` ⑥ 把归档层排除在外）。本次用
+`tools/citation-audit.lib.ts` 的 `collectCites` / `countLines` / `isFrozenAdr` **逐条复刻** `checkCitations`
+的判定顺序，量了归档层（`CHANGELOG.md` + **118 篇 ADR**，其中冻结 **12** 篇）：
+
+| 归档层引用 | 数量 |
+|---|---|
+| 引用总数 | 594 |
+| 判定通过（未越界） | 313（含外部材料 54，只判越界） |
+| **未判定（不判）** | **270** |
+| **越界 = 唯一机械可判的「错」** | **11** |
+
+**11 处全部在 `CHANGELOG.md`，受影响 9 条版本条目；ADR 一篇未受影响。** 根因集中在 `query/query.ts`
+（该文件从 ~400 行缩到 **130** 行的过程中 8 处引用越界），另有 `README.md`（277 行）2 处、
+`reflection/patterns/success-rate.ts`（27 行）1 处。
+
+**⚠ 未判定的 270 处刻意不动**：其中 **192 处**是「带目录的路径在本仓 / 材料里都找不到」—— 那**很可能是别的根**
+（平台克隆等），判它们就是 `adr/0059` 记过的**假阳性**；另 78 处是「同名 N 个不猜」（N 高达 155）。
+**不判 ≠ 遗漏**，判据结论如此。
+
+### 做了什么
+
+- **归档层去行号（11 处，越界 11 → 0）**：按**规则 R** —— 删 `:<n>` / `:<n>-<m>` 后缀，**仅在句子不成句时补最少的字**，
+  不引入新断言、不动其它数字。执行用一次性脚本，**逐条打印匹配数、任何一条 ≠1 即拒绝写盘**，改完核对
+  「`## [` 版本条目 168 → 168」「行数不变」。
+  - **4 处属「行号是句子主语」**（描述缺陷 / 证伪判据的实测例 / 决策记录 / 审计记录），按规则 R 补了最少字；
+    例如 L831 由「引 `success-rate.ts:1-29`」改为「引 `success-rate.ts` 的**行号区间**」。
+  - **附带（如实披露，超出 11 处）**：同句**配对引用** 1 处（`test/recall-envelope.test.ts:104`）与
+    **三个裸 `:N` 片段**（`:279` / `:284-285` / `:288` —— 它们依附于已去号的前缀，留着即悬空）一并去掉
+    ⇒ 引用总数 594 → 582。
+- **当前态层（本就属「必须修」）**：
+  - `AGENTS.md` 语料根：原文写死 `D:\project\dsh1`，而该根 `.shadow/atoms` 实测只剩 **87** 条 < 协议常量
+    `min_corpus_files=100` ⇒ 该门**拒出读数**；改为**带实测证据的判据**（取「有 `.shadow` 且语料够大」的根；
+    本机可用的是 `D:\project\net1`，**161** 条），避免再写死一个会过期的路径。
+  - `references.md` §14：`../_src` 由写死「22 个目录」改为**只认命令输出**（2026-09-25 实测 = **24**）；
+    同节「21 份材料里只有 4 份带 `.git`」**已被 `MATERIALS.md` §1.1 推翻**（实测 **24/24** 都有 `.git`），
+    改为以 §1.1（生成器输出）为准。
+- **工具：台账生成器钉死 sha 缩写（真减负）**：`tools/materials-ledger.ts` 的 git 调用加 `-c core.abbrev=8` ——
+  `%h` 长度由 git 自适应（随仓变大而变长），实测同一批仓同时给出 **7 位与 9 位三代长度**，使这张生成表
+  **每次重跑都无谓产生 diff**。钉死后输出确定；`MATERIALS.md` §1.1 已按生成器输出重新对齐（**24/24 逐行一致**）。
+
+### 验证
+
+- 归档层复测（同判据、同脚本）：**越界 11 → 0**；未判定 **270 → 270**（未动，如期）；ADR 始终 0。
+- 结构不变量：`CHANGELOG` 版本条目 **168 → 168**；`MATERIALS.md` 总行数 **419 → 419**、`## ` 标题数 **6 → 6**。
+- `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+- **可复现性说明**：本次的归档层度量脚本是**一次性取证脚本**（未入库）。要让它长期可复现，正解是给
+  `tools/citation-audit.ts` 加一个 `--include-archive` 开关（**判据仍只有一份实现**），而不是再养第二个实现
+  —— 列为后续项，不在本次。
+
 ## [v1.21.5] 投影模式人格新增 ⑧：真实浏览器 / 桌面操控优先用宿主原生面
 
 **行为变更（prompt 面）** —— persona 文本变化会改变 agent 行为；无代码行为改动（不改 mode / 召回 / `.shadow/` 落盘 / 依赖）。
@@ -828,7 +889,7 @@ tag —— 于是 `v1.20.0` 那个 tag 指向的提交里 `engines.dsh` 是 `alp
 
 ### ③ 顺手修掉两类**当前态**腐烂（**修一类，不是修一条**）
 
-- `adr/0081` 引 `reflection/patterns/success-rate.ts:1-29`，而该文件实际**只有 28 行**
+- `adr/0081` 引 `reflection/patterns/success-rate.ts` 的**行号区间**，而该文件实际**只有 28 行**
   （且它引的 `ReflectionDecisionOutcome` **根本不在这个文件里**）⇒ 改成**符号引用**
   （`decisionOutcomeCorrelation` + 指明该类型定义在 `reflection/types.ts`）。**这是新门抓出的第一处。**
 - `adr/0081` 同一张表把**注释**当判据引（`reflection/types.ts:22`、`reflection/engine.ts:20`）——
@@ -841,7 +902,7 @@ tag —— 于是 `v1.20.0` 那个 tag 指向的提交里 `engines.dsh` 是 `alp
 **判据只有一条、故意窄**：当前态文档里**能唯一解析**的 `文件:行号`，其区间必须落在该文件**现在的行数**之内。
 
 - **先量后建**（本版最重要的一条方法）：第一版判据是「引用后的引文必须出现在被引行上」⇒
-  实测 **139 处「不符」、几乎全是误报**（例：`README.md:314` 引 `test/recall-envelope.test.ts:104`，
+  实测 **139 处「不符」、几乎全是误报**（例：`README.md` 引 `test/recall-envelope.test.ts`，
   该行确为 `assert.equal(modes.size, 62, …)` —— 引用**是对的**）；收紧成只认紧跟引用的 `「…」` 之后 ⇒
   **误报 0、覆盖也 0**（带引文的引用全落在冻结 ADR 与外部材料上）。**覆盖 0 的判据等于没有判据** ⇒
   只保留可机械化的那一半。
@@ -1241,7 +1302,7 @@ v1.16.0 交付后按用户要求做了一轮**对抗性自审**。**查出 7 处
   真判据在 `reflection/types.ts:35` 的 `completenessOf`（`reflectionEligible: hasDecision && hasOutcome`），
   使用点在 `reflection/engine.ts:22`。两处**均已改正**，并把这次经过**写进 ADR**（只改掉不写下来 ⇒ 下一个人还会重犯）。
 - **低估了一道门**。`adr/0096` §7.1 把 `tool-name-v1` 的守卫写成「**部分**」，
-  而 `README.md:335` 把它列在**有强门**（`test/host-probe.test.ts:104` 断言三个名字都在注册表里）。
+  而 `README.md` 把它列在**有强门**（`test/host-probe.test.ts:104` 断言三个名字都在注册表里）。
   真正的限制**不是**「门弱」，而是**那个断言把三个名字写死了** ⇒ **新增**工具名不会被它覆盖。
   已改写为「门是真的、覆盖面就那么大」。
 
@@ -2142,7 +2203,7 @@ README 正文里仍有多处**维护者面**（受保护契约面 / 模块归属
 本版**不动契约面**（`adr/0086`）· 召回打分与渲染层未改 ⇒ **没有任何「召回变好了」的说法**。
 **文档核对（引用纪律）**：本轮的改动位移了 `core/forget.ts`（+1 行）· `core/types.ts`（`retention` 注释 +1 行）· `query/query.ts`（`max_tokens` 上移 ⇒ 其后行号位移）。
 按 `AGENTS.md` 给的命令对这几个文件跑了一遍引用扫描，**只修当前态文档里被本次改动影响的**：`README` 表注③ 的两处
-（`query/query.ts:275-276` 与 `:279`）**在本轮之前就已过期**（当时真值是 `:284-285` 与 `:288`）⇒ 改成**不依赖行号的形态**
+（`query/query.ts` 的引用）**在本轮之前就已过期**（当时所引行号已与内容不符）⇒ 改成**不依赖行号的形态**
 （直接引出那两行语句本身）；`CONTEXT.md` 与 `BACKLOG`（T3 那两张读点表）里的 `core/forget.ts:17` / `:18` 本轮之前是对的、
 被本次改动推移 ⇒ 同样改成符号引用（`m.pinned` 分支 / `archived/superseded` 分支）。**故意不动的**：`BACKLOG` §〇/§六 与
 `README` 版本历史表（`AGENTS.md` 明列为**归档区间**，「一处不改」）· `BACKLOG` 里那两处**当时审计输出的引文**（改写 = 伪造引文）·
@@ -3770,7 +3831,7 @@ zg 报错→`not_found` · `filesystem.ts` 读失败/不存在不分 · 缺 loca
 | ③ | **validation timeline 坏件被覆盖**：解析失败返回空历史，`appendValidationEvent` 用 1 条新事件覆盖文件 ⇒ **append-only 历史永久销毁** | 新增 `readTimelineDetailed` 区分「还没有」/「读不出」；坏件**拒绝覆盖**；读路径显式播报 |
 | ④ | **写失败报成功**：`writeMetaGuarded` 非冲突错误时 `return true`，而 `true` 的契约是「落盘成功」 | 三态 `MetaWriteOutcome = "ok" \| "stale" \| "failed"`；`failed` 立刻返回 false |
 | ⑤ | **未知枚举落回默认值**：枚举外的 `disposition` 静默落进 `open` 桶 ⇒ 污染 buckets/最老/p90（**本轮新加的字段，审查当场指出**） | 只有明确 `open`（含缺省）才算在等；非法值单列 `invalidDisposition` 且**不进任何桶** |
-| ⑥ | **证据路径漏一道过滤**：`query/query.ts:220` 漏 `isConcreteLocator`（另三处都有）⇒ glob 被当路径去验，必然 `not_found` | 补 `.filter(isConcreteLocator)` |
+| ⑥ | **证据路径漏一道过滤**：`query/query.ts` 漏 `isConcreteLocator`（另三处都有）⇒ glob 被当路径去验，必然 `not_found` | 补 `.filter(isConcreteLocator)` |
 | ⑦ | **测试面从不被类型检查**（`test/*.ts` 不被任何 tsconfig 覆盖，而用 `node x.ts` 跑）⇒ v1.15.52 手写 fixture 少一个必填字段，**静默变成错的语义** | 新增 `tsconfig.test.json` + `typecheck:tests`，**接入 `verify`** |
 
 ### 2. 由此新增的三条纪律（`adr/0083` §2）
@@ -4731,7 +4792,7 @@ hl_mem `docs/adr/0004` 原文：**「并存噪音是可观察问题；错误关�
   `YYYY-MM-DD HH:MM:SS` ⇒ 取到 `"09:00:"` ⇒ `"0900"` —— **4 位，根本不是 HHMMSS**（全仓其它记忆都是 6 位）。
 - **读侧**（重启后磁盘重扫）：从**文件名**反解 `^\d{4}-\d{2}-\d{2}--(\d{6})`，而 consolidated 文件名
   `ep-<id>-consolidated.md` **不含时间戳** ⇒ `time = ""`。
-- **后果不是显示不准**：`time` 是**取代裁决**的输入（`query/query.ts:299` → `arbitrate.ts:63`，**严格** `t < newest`），
+- **后果不是显示不准**：`time` 是**取代裁决**的输入（`query/query.ts` → `arbitrate.ts:63`，**严格** `t < newest`），
   裁决决定打分（×0.7）与生命周期标签 ⇒ 两个**同日同 `entry`** 的 consolidated 在磁盘路径上**并列**、
   谁都不被判取代，而较早的那个**应当**被取代 ⇒ **本进程与重启后裁决不同**。
 - **修法（判据收一处）**：`persistence/files.ts` 导出 `timeFromName`（读侧反解，唯一正则源）与
@@ -4744,7 +4805,7 @@ hl_mem `docs/adr/0004` 原文：**「并存噪音是可观察问题；错误关�
 
 场景 30 要逐个暴露 8 个生命周期状态，`OBSERVED` / `VERIFIED` / `TRUSTED` 全缺。**根因可核对**：
 
-1. `query/query.ts:276` `stale = ageDaysOf(rel) >= staleDays`（默认 **7**）；
+1. `query/query.ts` `stale = ageDaysOf(rel) >= staleDays`（默认 **7**）；
 2. `core/lifecycle.ts` 里 `if (stale) return "DECAYING"` **排在** `hits>0 → OBSERVED` / `confirms>=1 → VERIFIED` **之前**；
 3. fixture 硬编码 **`2026-09-05`**；4. `core/util.ts:4` 的 `today()` 用**本地**日期。
 
@@ -5160,7 +5221,7 @@ D8 要求补 **成熟度 / 降级行为 / 晋级标准**。前两列好填，**�
 | 盲区 | 本仓实例 |
 |---|---|
 | 调用点只在**注释**里 | `progressiveDisclosure` / `refineTree`（`core/knowledge-engine.ts:8` 的清单式注释） |
-| 经**数组/变量间接调用** | 4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards`、`:43` 循环调用）；`renderExperience`（`query/query.ts:251` 作回调传入）；`sembleCandidates`（`index-engine.ts:45` 默认参数注入） |
+| 经**数组/变量间接调用** | 4 个长程 `assertResultNo*`（`long-horizon/engine/interaction.ts:11-17` 入 `resultGuards`、`:43` 循环调用）；`renderExperience`（`query/query.ts` 作回调传入）；`sembleCandidates`（`index-engine.ts:45` 默认参数注入） |
 | 「成对导出、只接一半」的**平行 API** | delegation 的 7 个 `assert*` 包装（引擎只用谓词） |
 
 ### 2. 真断线（唯一一处，**已修**）：`countInconsistency` 从未被执行
@@ -5373,7 +5434,7 @@ scopedFs(rawFs, policy)          // 只把 writeText 的第 5 参补齐；无策
 | # | 位置 | 会话来源 |
 |---|---|---|
 | ① | `core/writer-materialize.ts` `flush(agent)` | 事件载荷的 `agent.session` |
-| ② | 同文件 `ensureIndex(ws, session?)` | 新增可选参，由读侧入口透传（`query/query.ts:140`） |
+| ② | 同文件 `ensureIndex(ws, session?)` | 新增可选参，由读侧入口透传（`query/query.ts`） |
 | ③ | `index.ts`：`queryDeps` 由 `const` 改为 `makeQueryDeps(exec)` | 本次 `exec.agent.session` |
 
 **为什么不逐点改**：全部写入经由**同一个 fs 对象**向下传递 ⇒ 在取得处包一次 ≡ 全写入点都补齐，
@@ -6251,7 +6312,7 @@ T4 从 9 个降为 **8 个**（`isCognitiveAtom` 已删、`isMetadataMemoryText`
 ### T3 分诊结论：不是「接线断了」，是「已文档化但无入口的能力」
 
 - 原线索只有审计 B 类报的 `status=archived` 无写入者。本轮**扩展**：**`pinned` 同样无写入者** ——
-  生产代码只写 `pinned: false`（`core/memory.ts:74`、`core/writer-materialize.ts:88`、`query/query.ts:401`），
+  生产代码只写 `pinned: false`（`core/memory.ts:74`、`core/writer-materialize.ts:88`、`query/query.ts`），
   **`pinned: true` 全仓零处**（三路 grep 核实：字面量 / `pinned:` / `pinned =`）。
 - 两者的读点与语义：
 
@@ -6325,7 +6386,7 @@ T4 从 9 个降为 **8 个**（`isCognitiveAtom` 已删、`isMetadataMemoryText`
 
 ### 准确性核对（本轮实做，不是照抄 ADR）
 
-- 待办里引用的 **8 处行号逐个核实通过**：`core/memory.ts:74`、`query/query.ts:401`、
+- 待办里引用的 **8 处行号逐个核实通过**：`core/memory.ts:74`、`query/query.ts`、
   `core/writer-materialize.ts:88` 与 `:213`、`core/forget.ts:18`、`core/lifecycle.ts:28`、
   `retrieval/rank.ts:103`、`delegation/engine/delegated-execution.ts:6`。
 - T1/T2 的计数为 **2026-09-11 实跑** `node tools/audit-wiring.ts .` 所得（**30 / 81**），

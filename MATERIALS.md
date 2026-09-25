@@ -60,30 +60,30 @@ node tools/materials-ledger.ts          # 默认根 = D:\project\dsh1\vendor\_sr
 <!-- 以下表格由 tools/materials-ledger.ts 输出；改它请重跑命令，勿手改 -->
 | 目录 | 远端 | HEAD | 工作树 vs HEAD | 许可 | 含 .git | 不含 .git | 台账状态 |
 |---|---|---|---|---|---|---|---|
-| `agent-skills` | addyosmani/agent-skills | `dc27a9c` 2026-09-20 · Merge #579: move security-and-hardening code p… **(浅)** | **≠ HEAD**：57 处 | **MIT** | 225 文件 / 1.27 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
-| `archify` | tt-a1i/archify | `29f1ff5` 2026-09-21 · docs: broaden README introduction beyond devel… **(浅)** | **≠ HEAD**：176 处 | **MIT** | 500 文件 / 52.94 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
-| `browser-harness` | browser-use/browser-harness | `afbcc38` 2026-09-07 · Merge pull request #757 from warun7/fix/video-… **(浅)** | **≠ HEAD**：9 处 | **MIT** | 407 文件 / 8.09 MB | **187 文件 / 3,438 KB** | **已被宿主原生面取代**（§2.10；历史登记，不删） |
-| `data-engineer-handbook` | DataExpert-io/data-engineer-handbook | `103edb0` 2026-08-03 · Adding Day 1 link **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 153 文件 / 294.40 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
-| `ECC` | affaan-m/ECC | `2b6e839` 2026-09-20 · Fix/proximity a11y risk cues (#3193) **(浅)** | **≠ HEAD**：508 处 | **MIT** | 3549 文件 / 81.07 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
-| `hackingtool` | Z4nzu/hackingtool | `ef5334f` 2026-08-23 · Add context7.json with URL and public key **(浅)** | **干净（= HEAD）** | **MIT** | 164 文件 / 4.55 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
-| `jev-ultrafast` | browser-use/jev-ultrafast | `1231850` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **干净（= HEAD）** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
-| `langextract` | google/langextract | `3fa926d` 2026-09-20 · Clarify suppressed parsing errors (#521) **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 194 文件 / 23.84 MB | **150 文件 / 12,824 KB** | 见 `adr/0090` |
-| `langextract--snapshot-v1.6.0` | google/langextract | `62a2576` 2026-07-02 · Prepare v1.6.0 release (#484) **(浅)** | **≠ HEAD**：19 处 | **Apache-2.0** | 177 文件 / 22.76 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
-| `marker` | datalab-to/marker | `8a1d234` 2026-09-13 · @tryingET has signed the CLA in datalab-to/mar… **(浅)** | **≠ HEAD**：1 处 | **Apache-2.0** | 294 文件 / 18.50 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
-| `MoneyPrinterTurbo` | harry0703/MoneyPrinterTurbo | `919170b` 2026-09-20 · fix(api): parse subtitle enabled as boolean **(浅)** | **≠ HEAD**：99 处 | **MIT** | 243 文件 / 335.84 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
-| `open-lovable` | firecrawl/open-lovable | `69bd93b` 2025-11-19 · v3 **(浅)** | **干净（= HEAD）** | **MIT** | 365 文件 / 3.58 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
-| `openclaw` | openclaw/openclaw | `052d26ee` 2026-09-20 · fix: apply Labs settings without restarting th… **(浅)** | **干净（= HEAD）** | **MIT** | 47208 文件 / 789.99 MB | **47169 文件 / 615,927 KB** | 见 `references.md` §17/§19 |
-| `OpenSpec` | Fission-AI/OpenSpec | `bae58cf` 2026-09-17 · docs: fix Docslab links to unfinished pages (#… **(浅)** | **≠ HEAD**：216 处 | **MIT** | 1191 文件 / 11.76 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
-| `OpenViking` | volcengine/OpenViking | `f6010a5` 2026-09-20 · fix(storage): lazily replay delta table during… **(浅)** | **≠ HEAD**：1470 处 | **AGPL-3.0** | 4071 文件 / 160.93 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
-| `PageIndex` | VectifyAI/PageIndex | `71714e8` 2026-09-20 · get_document_id accepts a path: strip the fold… **(浅)** | **干净（= HEAD）** | **MIT** | 281 文件 / 56.55 MB | **177 文件 / 31,283 KB** | 未核（本表未逐项复核，**不编**） |
-| `rtk` | rtk-ai/rtk | `727ee6e` 2026-09-20 · Merge pull request #4117 from KuSh/fix/3681-gi… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 618 文件 / 17.15 MB | **582 文件 / 6,447 KB** | 见 `adr/0087`/`adr/0090` |
-| `strix` | usestrix/strix | `56e9ae9` 2026-09-20 · runtime: read_only local sources become :ro bi… **(浅)** | **≠ HEAD**：40 处 | **Apache-2.0** | 534 文件 / 12.59 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
-| `superpowers` | obra/superpowers | `5bf4e78` 2026-09-18 · Release v6.4.1: diagnosing-superpowers, Native… **(浅)** | **≠ HEAD**：80 处 | **MIT** | 224 文件 / 2.43 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
-| `system_prompts_leaks` | asgeirtj/system_prompts_leaks | `c7b2c31` 2026-09-17 · Update claude-fable-5.1.md **(浅)** | **≠ HEAD**：121 处 | LICENSE · 首行「」 | 503 文件 / 18.92 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
-| `taste-skill` | Leonxlnx/taste-skill | `5217fb4` 2026-09-20 · Merge pull request #120 from Leonxlnx/cursor/r… **(浅)** | **≠ HEAD**：2 处 | **MIT** | 183 文件 / 4.44 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
-| `ui` | shadcn-ui/ui | `a87a63b` 2026-09-17 · feat(registry): add nine community registries … **(浅)** | **≠ HEAD**：24 处 | **MIT** | 5828 文件 / 62.59 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
-| `web-access` | eze-is/web-access | `33eef84` 2026-08-19 · fix: stabilize CDP page readiness (v2.5.4) **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 61 文件 / 0.16 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
-| `zvec-grep` | zvec-ai/zvec-grep | `b1d0ce9` 2026-09-20 · chore: integrate Rust workspace alongside Type… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 767 文件 / 37.54 MB | **731 文件 / 22,097 KB** | 未核（本表未逐项复核，**不编**） |
+| `agent-skills` | addyosmani/agent-skills | `dc27a9c2` 2026-09-20 · Merge #579: move security-and-hardening code p… **(浅)** | **≠ HEAD**：57 处 | **MIT** | 242 文件 / 2.25 MB | **196 文件 / 860 KB** | 未核（本表未逐项复核，**不编**） |
+| `archify` | tt-a1i/archify | `29f1ff53` 2026-09-21 · docs: broaden README introduction beyond devel… **(浅)** | **≠ HEAD**：176 处 | **MIT** | 500 文件 / 52.94 MB | **471 文件 / 39,118 KB** | **在用工具**（§2.4） |
+| `browser-harness` | browser-use/browser-harness | `afbcc381` 2026-09-07 · Merge pull request #757 from warun7/fix/video-… **(浅)** | **≠ HEAD**：9 处 | **MIT** | 407 文件 / 8.09 MB | **187 文件 / 3,438 KB** | **已被宿主原生面取代**（§2.10；历史登记，不删） |
+| `data-engineer-handbook` | DataExpert-io/data-engineer-handbook | `103edb0c` 2026-08-03 · Adding Day 1 link **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 153 文件 / 294.40 MB | **124 文件 / 239,539 KB** | 未核（本表未逐项复核，**不编**） |
+| `ECC` | affaan-m/ECC | `2b6e8397` 2026-09-20 · Fix/proximity a11y risk cues (#3193) **(浅)** | **≠ HEAD**：508 处 | **MIT** | 3549 文件 / 81.07 MB | **3520 文件 / 50,871 KB** | 未核（本表未逐项复核，**不编**） |
+| `hackingtool` | Z4nzu/hackingtool | `ef5334f8` 2026-08-23 · Add context7.json with URL and public key **(浅)** | **干净（= HEAD）** | **MIT** | 164 文件 / 4.55 MB | **135 文件 / 2,701 KB** | 未核（本表未逐项复核，**不编**） |
+| `jev-ultrafast` | browser-use/jev-ultrafast | `1231850a` 2026-09-18 · docs: announce the Cloud waitlist below the RE… **(浅)** | **干净（= HEAD）** | **MIT** | 69 文件 / 4.67 MB | **40 文件 / 2,500 KB** | **已吸收**（§2.9；`adr/0096`） |
+| `langextract` | google/langextract | `3fa926de` 2026-09-20 · Clarify suppressed parsing errors (#521) **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 194 文件 / 23.84 MB | **150 文件 / 12,824 KB** | 见 `adr/0090` |
+| `langextract--snapshot-v1.6.0` | google/langextract | `62a25764` 2026-07-02 · Prepare v1.6.0 release (#484) **(浅)** | **≠ HEAD**：19 处 | **Apache-2.0** | 177 文件 / 22.76 MB | **150 文件 / 12,784 KB** | 未核（本表未逐项复核，**不编**） |
+| `marker` | datalab-to/marker | `8a1d2344` 2026-09-13 · @tryingET has signed the CLA in datalab-to/mar… **(浅)** | **≠ HEAD**：1 处 | **Apache-2.0** | 294 文件 / 18.50 MB | **265 文件 / 14,112 KB** | 见 `references.md` §15 |
+| `MoneyPrinterTurbo` | harry0703/MoneyPrinterTurbo | `919170b0` 2026-09-20 · fix(api): parse subtitle enabled as boolean **(浅)** | **≠ HEAD**：99 处 | **MIT** | 243 文件 / 335.84 MB | **214 文件 / 206,440 KB** | 未核（本表未逐项复核，**不编**） |
+| `open-lovable` | firecrawl/open-lovable | `69bd93ba` 2025-11-19 · v3 **(浅)** | **干净（= HEAD）** | **MIT** | 365 文件 / 3.58 MB | **336 文件 / 2,874 KB** | 未核（本表未逐项复核，**不编**） |
+| `openclaw` | openclaw/openclaw | `052d26ee` 2026-09-20 · fix: apply Labs settings without restarting th… **(浅)** | **干净（= HEAD）** | **MIT** | 47233 文件 / 1381.19 MB | **47169 文件 / 615,927 KB** | 见 `references.md` §17/§19 |
+| `OpenSpec` | Fission-AI/OpenSpec | `bae58cf6` 2026-09-17 · docs: fix Docslab links to unfinished pages (#… **(浅)** | **≠ HEAD**：216 处 | **MIT** | 1191 文件 / 11.76 MB | **1162 文件 / 8,769 KB** | 未核（本表未逐项复核，**不编**） |
+| `OpenViking` | volcengine/OpenViking | `f6010a5a` 2026-09-20 · fix(storage): lazily replay delta table during… **(浅)** | **≠ HEAD**：1470 处 | **AGPL-3.0** | 4237 文件 / 365.72 MB | **4042 文件 / 101,116 KB** | **吸收最深**（§2.3） |
+| `PageIndex` | VectifyAI/PageIndex | `71714e86` 2026-09-20 · get_document_id accepts a path: strip the fold… **(浅)** | **干净（= HEAD）** | **MIT** | 281 文件 / 56.55 MB | **177 文件 / 31,283 KB** | 未核（本表未逐项复核，**不编**） |
+| `rtk` | rtk-ai/rtk | `727ee6e6` 2026-09-20 · Merge pull request #4117 from KuSh/fix/3681-gi… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 618 文件 / 17.15 MB | **582 文件 / 6,447 KB** | 见 `adr/0087`/`adr/0090` |
+| `strix` | usestrix/strix | `56e9ae98` 2026-09-20 · runtime: read_only local sources become :ro bi… **(浅)** | **≠ HEAD**：40 处 | **Apache-2.0** | 534 文件 / 12.59 MB | **505 文件 / 9,310 KB** | 未核（本表未逐项复核，**不编**） |
+| `superpowers` | obra/superpowers | `5bf4e780` 2026-09-18 · Release v6.4.1: diagnosing-superpowers, Native… **(浅)** | **≠ HEAD**：80 处 | **MIT** | 224 文件 / 2.43 MB | **195 文件 / 1,674 KB** | 未核（本表未逐项复核，**不编**） |
+| `system_prompts_leaks` | asgeirtj/system_prompts_leaks | `c7b2c31d` 2026-09-17 · Update claude-fable-5.1.md **(浅)** | **≠ HEAD**：121 处 | LICENSE · 首行「」 | 503 文件 / 18.92 MB | **474 文件 / 14,820 KB** | 未核（本表未逐项复核，**不编**） |
+| `taste-skill` | Leonxlnx/taste-skill | `5217fb45` 2026-09-20 · Merge pull request #120 from Leonxlnx/cursor/r… **(浅)** | **≠ HEAD**：2 处 | **MIT** | 183 文件 / 4.44 MB | **64 文件 / 1,721 KB** | 未核（本表未逐项复核，**不编**） |
+| `ui` | shadcn-ui/ui | `a87a63b2` 2026-09-17 · feat(registry): add nine community registries … **(浅)** | **≠ HEAD**：24 处 | **MIT** | 5828 文件 / 62.59 MB | **5799 文件 / 46,589 KB** | 未核（本表未逐项复核，**不编**） |
+| `web-access` | eze-is/web-access | `33eef84a` 2026-08-19 · fix: stabilize CDP page readiness (v2.5.4) **(浅)** | **干净（= HEAD）** | （无 LICENSE 文件） | 61 文件 / 0.16 MB | **14 文件 / 94 KB** | 未核（本表未逐项复核，**不编**） |
+| `zvec-grep` | zvec-ai/zvec-grep | `b1d0ce9a` 2026-09-20 · chore: integrate Rust workspace alongside Type… **(浅)** | **干净（= HEAD）** | **Apache-2.0** | 767 文件 / 37.54 MB | **731 文件 / 22,097 KB** | 未核（本表未逐项复核，**不编**） |
 
 共 **24** 个目录（= 材料 + 可能存在的版本快照，如 `langextract--snapshot-v1.6.0`）。
 

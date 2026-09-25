@@ -47,7 +47,7 @@
   会得到「明明改了却没生效」的假象（v1.15.65 实测踩过一次）。缺 `dist/index.js` 时 `run-tests` **exit 2**。
 - **语料根（v1.15.83）**：`eval:retrieval:check` 要一个带 `.shadow` 的**工作区根** —— 默认由 `tools/retrieval-eval.ts` 的位置**往上找**（最多三级，取第一个存在的）。
   一个都没有 ⇒ **exit 2，且后面 3 步（分诊棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。
-  兜底：`SHADOW_EVAL_ROOT=<工作区> npm run verify`（本机 = `D:\project\dsh1`）。
+  兜底：`SHADOW_EVAL_ROOT=<工作区> npm run verify`。**取「有 `.shadow` 且语料够大」的那个根，别照抄写死的路径** —— 本机实测（2026-09-25）：`D:\project\dsh1` 的 `.shadow/atoms` 只剩 **87** 条 < 协议常量 `min_corpus_files=100` ⇒ 该门**拒出读数**（不是"通过"，也不是"失败"）；可用的是 `D:\project\net1`（**161** 条）。
 - **`dist/` 出现在 `git status` 里 ⇒ 说明 ignore 坏了**（v1.20.6 起它应被忽略）。若误 `git add`，
   `.gitattributes` 仍钉 `dist/** text eol=lf`，避免 Windows 下 CRLF 假脏。
 - 源码入口：`index.ts`（Cordis adapter）→ tsc → `dist/index.js`（DSH 加载编译后 JS）。
