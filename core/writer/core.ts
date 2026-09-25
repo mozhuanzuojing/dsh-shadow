@@ -92,8 +92,6 @@ export interface WriterCore {
   cwdBySession: Map<string, string>;
   // 落盘可靠性 + L2 增量索引缓存
   lastFlushError: { at: number; err: string } | undefined;
-  /** 兜底根写入未受会话授权（T6 ②）；读侧据此提示。与 lastFlushError 分开：这是 **scope 面**的告知。 */
-  lastScopeNotice: { at: number; note: string } | undefined;
   /** 索引重建失败（读侧据此提示「你读到的索引可能是旧的」）。与 lastFlushError 分开：这是**读路径**的失败。 */
   lastIndexError: { at: number; err: string } | undefined;
   /** 元数据（`_meta.json`）登记失败：记忆文件已写入但 meta 没有它 ⇒ hits/生命周期/遗忘判据都看不到。 */
@@ -176,7 +174,6 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     goalByAgent: new Map(),
     cwdBySession: new Map(),
     lastFlushError: undefined,
-    lastScopeNotice: undefined,
   lastIndexError: undefined,
   lastMetaError: undefined,
     indexCache: new Map(),

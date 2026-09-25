@@ -6,7 +6,7 @@
 import { atomsRel, indexesRel } from "../paths.js";
 import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../view/abstract.js";
 import type { AgentLike } from "../types.js";
-import { noteFallbackScope, resolveShadowScope, resolveWorkspace } from "../scope.js";
+import { resolveWorkspace } from "../scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
 import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
 import { readRel, listMemories, memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";
@@ -289,11 +289,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     // 一旦取不到 ws/fs（会话工作区解析失败 / 无沙箱策略），**整批记录已经被消费掉了**，
     // 既没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空 ⇒
     // 「你读到的可能是旧/不完整记忆」这条告警**在最需要它的时候失效**）。
-    const scope = resolveShadowScope(agent, core.cwdBySession, core.config);
-    const ws = scope.ws;
-    // T6 ②：落到兜底根 ⇒ **本次写入未受会话授权** ⇒ 必须**可见**（ADR-0049 缺件不静默）。
-    // 形态对齐紧邻的 lastFlushError（同文件、同「置字段 + console.error」两件套）。
-    if (noteFallbackScope(core, scope)) console.error("[dsh-shadow][warn] scope FALLBACK:", core.lastScopeNotice?.note);
+    const ws = resolveWorkspace(agent, core.cwdBySession, core.config);
     // 会话作用域的 fs（ADR-0074）：写入必须携带**该会话自己的**沙箱策略 ——
     // 省略该参数会让沙箱退回部署 fallback（mode=workspace-write + `process.cwd()`），
     // 会话工作区一旦不等于服务启动目录，写入即被围栏拒绝（记忆一条都落不了盘）。
