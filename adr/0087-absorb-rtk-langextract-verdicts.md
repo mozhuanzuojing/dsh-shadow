@@ -165,7 +165,7 @@
   **只在默认 `RegexTokenizer` 假设下成立**、`providers/*_batch.py` 未读、
   「`langextract/` 下没有 `extraction_text` 与源切片比较的代码」**只是 grep 未搜到**（grep 不能证明不存在）。
 - **甲-2 的 CJK 结论是推断**（编码事实 + 源码事实推出），**不是 rtk 的陈述** —— 已在 §C 标注。
-- **甲-7 的风险**：rtk 的 `--self-test` 会往源码树写文件（靠 `trap rm -f` 清理，`CHANGELOG.md:163-164` 记过一次
+- **甲-7 的风险**：rtk 的 `--self-test` 会往源码树写文件（靠 `trap rm -f` 清理，`CHANGELOG.md` **曾记过一次**（该历史条目已于 v1.21.15 随历史清除一并删除）
   「benchmark 脚本删掉工作树里的 harness」）。本仓若采纳，自证门**必须写临时目录且不触碰受保护契约区**（ADR-0086）。
 - **两仓的 star / 活跃度读数有保鲜期**（抓取 2026-09-14）；本 ADR 引用的是 **HEAD 快照**（已写死）。
 
