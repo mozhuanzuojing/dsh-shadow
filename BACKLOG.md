@@ -268,11 +268,23 @@
 - **③ 写侧用常量、工具按字面量匹配 ⇒ 误报（已知窗口盲区）—— 2 条**：`status=archived` / `status=superseded`。
   写侧是常量（`ARCHIVED` / `SUPERSEDED`，见 `core/retention/lifecycle.ts`），工具的**单行字符串窗口**看不见 ——
   这是 `audit-wiring` 的**已知盲区形态**，**不是缺陷**。
-- **④ 待逐条核 —— 26 条（如实列出，不冒充已判）**：
-  `alias=date` · `alias=citation` · `alias=conclusion` · `s=mem` · `outcome=ok|failed` · `kind=aborted` ·
-  `kind=metadata|session` · `lc=expired|revoked` · `explicitAnchor=historical|known-at-time` ·
-  `state=exists|undecidable` · `status=compared|explored` · `st=stale|validated` · `tier=L2` · `action=reject` ·
-  `o=rejected` · `operation=clear` · `type=directory` · `sub=decision` · `m=query`。
+- **④ 逐条核 —— 首批取证后（2026-09-25，`v1.21.21`）**：**26 条**按「有没有**写侧**」收紧为三组。
+  ⚠ **先记一处工具自身的教训**：第一版取证用 `[:=]\s*"lit"` 判写侧，把 `=== "lit"` 里的 `=` 当成赋值 ⇒
+  **示例行本身就是读**（`if (lc === "revoked")`）。改用**负向后顾**排除 `=!<>` 后重跑，读数**大幅改变**
+  （例：`rejected` 写侧 5 → **2**、`revoked` 写侧 2 → **0**）。⇒ 本仓「**工具必须先标定再用**」的又一实例。
+  - **B1 有真写侧 ⇒ 工具窗口盲区（跨文件写入）= 误报（8 个字面量 / 约 13 条）**：
+    `rejected`（`epistemic/validation/validate.ts:36 outcome = "rejected"`）· `decision`（`core/writer/capture.ts:97 kind: "decision"`）·
+    `stale` · `validated` · `undecidable`（`evidence/filesystem.ts:55`）· `ok` · `failed` · `query`。
+  - **B2 无简单写侧，但值是外部来源 ⇒ 分支可达**：`directory`（宿主 `listDir` 条目的 `type`，见 `core/space/world.ts:74`）·
+    `clear`（宿主载荷的 `change.operation`，见 `core/writer/capture.ts:94`）。
+  - **B3 ⚠ 无简单写侧、且看不出外部来源 ⇒ 必须读生产表达式再判（不冒充已判）**：
+    `expired` · `revoked` · `metadata` · `session` · `L2` · `mem` · `exists`。
+    其中 **`session` 已有在案判定**：`core/lineage/validator.ts:25` 注释写明 `kind === "session"` 这一支
+    **永不可达**（`ADR-0063` 实测）。
+  - **扫描面与已知盲区（如实标注）**：只扫了 `core` / `query` / `retrieval` / `evidence` / `epistemic` /
+    `persistence` / `stance` / `subject` 共 **157** 个 `.ts`，**且只认 `= "lit"` / `: "lit"` 两种形态** ⇒
+    **三元 / `return` / 数组里的字面量生产者会被漏判**（例：`evidence/filesystem.ts:55` 的 `return … ? "missing" : "undecidable"`）。
+    ⇒ **「无简单写侧」≠「无生产者」**；B3 那 7 条必须逐条读表达式。
 - **完成判据**：④ 的 26 条逐条给出「外部数据 / 跨文件常量写入 / **真断线**」三选一；
   **若出现真断线，另立条目**（那是缺陷修复，不是本条的分诊收口）。
 - **复现**：`npm run audit:wiring`（键清单按读点分组，见本条的读法）。
