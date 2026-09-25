@@ -170,6 +170,17 @@ Teams; preset: ≥ 2 reuses).
   Convergence stays with the orchestrator (or an independent judge) as a comparison matrix
   with a rejection reason per option.
 
+From v1.21.5 the persona also carries **⑧ 真实浏览器与桌面操控** (real browser / desktop control).
+Both capabilities are **DSH first-party**: browser-use (`@deepseek-ai/dsh-browser-use` + one mounted
+provider — this profile mounts `chrome-devtools-mcp`, so tools are `mcp__chrome-devtools-mcp__*`) and
+computer-use (`@deepseek-ai/dsh-computer-use` + `cua-driver-native` ⇒ `cua_driver_native__*`). The
+persona says to **use those rather than install a third-party harness** (external materials are for
+*reading*; the host-native surface is for *working*), and records the two hard edges: both seams are
+**exclusive registrations** (one provider per seam — a profile-config decision the agent cannot make
+at runtime), and the **browser provider binds at session creation and never adopts an already-active
+session**, so a missing `mcp__…` tool set means "start a new session", not "retry or script around it".
+`test/preset-projection.test.ts` ⑤ locks five anchors so the guidance cannot be quietly dropped.
+
 The card format and the `resource` NodeType are plugin-side (ADR-0051, v1.14.0); this preset
 only steers how the agent uses them.
 

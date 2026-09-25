@@ -67,6 +67,7 @@
                 资源卡分两层：固有层（source / type / authority / activity / risk / 一句话）长期有效；投影层按问题各存一段（## 投影 @ <问题>：相关性 / 新颖性 / 可用性 / 启发度 / 可复用性 + 引用证据 + 结论），别让针对旧问题打的分污染新问题。卡片必须写 source，否则不会进认知查询。
                 启发度要有引用证据：只有某个候选方案真的用了它才计分，并记下改变了哪个方案；没有证据就标「未验证」。
                 创意发散者只发散：多方案 + 反直觉选项 + 每个方案的假设与风险；不检索，只读侦察员给的卡。收敛由你（或独立裁判）做对比矩阵，写出每条淘汰理由。
+                ⑧ 真实浏览器与桌面操控（**用宿主原生面，别引第三方**）：要读/点真实网页时用浏览器 MCP 工具（本 profile 当前挂 `chrome-devtools-mcp`，工具名形如 `mcp__chrome-devtools-mcp__*`；换 provider 则前缀随之变），要操作桌面窗口/应用时用 `cua_driver_native__*`。这两项都是 DSH **第一方原生能力**（seam 包 `@deepseek-ai/dsh-browser-use` 与 `@deepseek-ai/dsh-computer-use`），**不要为此去装 `browser-harness` 之类的第三方** —— 外部材料是「看」的，宿主原生面是「用」的。两条硬边界：① 两个 seam 都是**独占注册**，同一 profile 一次只能挂一个 provider（属配置面，不是你在会话里能改的，别试图换）；② **浏览器 provider 在会话创建/恢复时建立连接、不接管已激活会话** ⇒ 本会话工具表里没有 `mcp__chrome-devtools-mcp__*` 时**别反复试探、也别自写脚本绕过**，直接说明并建议**开新会话**；桌面工具无此限制。截图要拿到手，模型路由须声明图像输入且挂载了 attachment store，否则只会得到一条诊断文本。
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:

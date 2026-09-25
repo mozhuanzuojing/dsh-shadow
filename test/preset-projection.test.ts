@@ -26,6 +26,7 @@ import {
   DESCRIPTION_FRONT_WINDOW,
   DESCRIPTION_MUST_INCLUDE,
   PERSONA_TEAM_POLICY_ANCHORS,
+  PERSONA_CAPABILITY_ANCHORS,
   FORBIDDEN_DELEGATION_ID_PREFIX,
   FORBIDDEN_DELEGATION_IDS,
 } from "./fixtures/projection-contract.ts";
@@ -173,4 +174,18 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
     assert.ok(persona.includes(needle), `④b persona 必须携带 0.1.7 team:policy 锚点：${needle}`);
   }
   console.log("✔ ④ 描述前置窗口含 Agent Teams；persona 携带 team:policy 六个锚点");
+}
+
+// ── ⑤ persona 的「宿主原生能力面」锚点（v1.21.5） ─────────────────────────────
+{
+  const src = readFileSync(patchUrl, "utf8");
+  const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";
+  assert.notEqual(persona, "", "⑤ persona prefix 折叠块必须能取到");
+  for (const needle of PERSONA_CAPABILITY_ANCHORS) {
+    assert.ok(
+      persona.includes(needle),
+      `⑤ persona 必须携带能力面锚点：${needle} —— 真实浏览器 / 桌面操控要用宿主原生面（browser-use / computer-use），不要引第三方 harness`,
+    );
+  }
+  console.log("✔ ⑤ persona 携带宿主原生能力面五个锚点（browser-use / computer-use）");
 }

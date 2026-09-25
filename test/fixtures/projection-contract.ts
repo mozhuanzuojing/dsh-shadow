@@ -22,5 +22,20 @@ export const PERSONA_TEAM_POLICY_ANCHORS = [
 export const FORBIDDEN_DELEGATION_ID_PREFIX = "tool-subagent";
 export const FORBIDDEN_DELEGATION_IDS = ["tool-agent-team"] as const;
 
+/**
+ * persona 必须携带的「宿主原生能力面」锚点（v1.21.5）。
+ *
+ * 意图：真实浏览器 / 桌面操控要用 **DSH 第一方原生面**，不是第三方 harness。
+ * ⚠ 这两个锚点与**当前挂载的 provider** 绑定（浏览器 = chrome-devtools-mcp，桌面 = cua-driver-native）——
+ * 换 provider 时本数组与 persona 文本**要一起改**，这正是「上游/配置漂移 → 测试红 → 人裁决」的用意。
+ */
+export const PERSONA_CAPABILITY_ANCHORS = [
+  "宿主原生",
+  "chrome-devtools-mcp",
+  "cua_driver_native__",
+  "不接管已激活会话",
+  "browser-harness",
+] as const;
+
 /** 插件对外工具名（与 host-probe / 契约面一致）。 */
 export const SHADOW_TOOL_NAMES = ["read_shadow", "recall_shadow", "shadow_query"] as const;

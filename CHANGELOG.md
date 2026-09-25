@@ -3,6 +3,29 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本；每个条目保留完整决策/边界/验证记录。
 
 
+## [v1.21.5] 投影模式人格新增 ⑧：真实浏览器 / 桌面操控优先用宿主原生面
+
+**行为变更（prompt 面）** —— persona 文本变化会改变 agent 行为；无代码行为改动（不改 mode / 召回 / `.shadow/` 落盘 / 依赖）。
+
+- **指令**：用户 2026-09-25 指令「在投影模式中强调这两个 use」（= `dsh 原生 browser-use` / `dsh 原生 computer-use`）。
+- **落点**：`presets/projection.patch.yml` 的 persona **新增 ⑧**（编号接在 ⑦ 之后、同一个 `prefix: >-` 折叠块内），四条内容：
+  ① 要读/点真实网页用浏览器 MCP 工具（本 profile 挂 `chrome-devtools-mcp` ⇒ `mcp__chrome-devtools-mcp__*`），要操控桌面窗口/应用用 `cua_driver_native__*`，
+  并点名两者都是 **DSH 第一方原生能力**（seam 包 `@deepseek-ai/dsh-browser-use` 与 `@deepseek-ai/dsh-computer-use`）；
+  ② **不要为此去装 `browser-harness` 之类第三方** —— 「外部材料是『看』的，宿主原生面是『用』的」；
+  ③ 两个 seam 都是**独占注册**（同一 profile 一次只能挂一个 provider，属配置面、会话内改不了）；
+  ④ **浏览器 provider 在会话创建/恢复时建立连接、不接管已激活会话** ⇒ 本会话缺 `mcp__…` 工具时**别反复试探、也别自写脚本绕过**，
+  直接说明并建议**开新会话**；桌面工具无此限制。另记截图前置（图像输入路由 + attachment store）。
+- **卡片 `description` 一字未改（有理由）**：预设选择器的可见窗口 ≈ **前 90 字**（`adr/0100` 实测：4 行 CSS clamp），
+  那里已被 `Agent Teams` 占用且由测试 ④a 锁住。把能力面塞进窗口 = 挤掉 Teams；塞到窗口外 = **界面上根本看不见**（正是 `adr/0100` 的教训）。
+  ⇒ 能力面只进 **persona**（agent 的真实指令面），并写入 `presets/README.md` 与 `docs/maintainers.md` 的 persona 结构说明。
+- **防退化（本仓「强调」一条纪律的形态）**：`test/fixtures/projection-contract.ts` 新增 `PERSONA_CAPABILITY_ANCHORS`
+  （五个：`宿主原生` / `chrome-devtools-mcp` / `cua_driver_native__` / `不接管已激活会话` / `browser-harness`），
+  `test/preset-projection.test.ts` 新增 **⑤** 断言 persona 必须携带它们 —— 掉了就红。
+  ⚠ 这两个锚点与**当前挂载的 provider** 绑定：换 provider 时 persona 与锚点**要一起改**（这正是「漂移 → 测试红 → 人裁决」的用意）。
+- **验证**：`node test/preset-projection.test.ts` **五条全过**（含新的 ⑤）；`dsh --profile web --dump-config` **exit 0**
+  且 **persona 新段确实进入合成配置**（证明 YAML 折叠块未被破坏）；`SHADOW_EVAL_ROOT=D:\project\net1 npm run verify`。
+- **生效面**：persona 按**会话注入** ⇒ 本改动对**新会话**生效；已激活的会话（含改这一版时的当前会话）仍是旧 persona。
+
 ## [v1.21.4] 基线抬到 DSH `0.1.7-rc.2`
 
 **声明面变更 + 无行为改动**（不改 mode / 召回 / `.shadow/` 落盘；`package.json` 无运行期依赖 ⇒ 无依赖上抬）。
