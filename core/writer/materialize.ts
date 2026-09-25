@@ -6,7 +6,7 @@
 import { atomsRel, indexesRel } from "../paths.js";
 import { deriveL0, deriveL1, renderSidecar, sidecarRel } from "../view/abstract.js";
 import type { AgentLike } from "../types.js";
-import { resolveWorkspace } from "../scope.js";
+import { noteFallbackScope, resolveShadowScope } from "../scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
 import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
 import { readRel, listMemories, memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";
@@ -289,7 +289,15 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     // 一旦取不到 ws/fs（会话工作区解析失败 / 无沙箱策略），**整批记录已经被消费掉了**，
     // 既没落盘、也没留痕（`lastFlushError` 未设 ⇒ 读侧 `getFlushWarn()` 恒空 ⇒
     // 「你读到的可能是旧/不完整记忆」这条告警**在最需要它的时候失效**）。
-    const ws = resolveWorkspace(agent, core.cwdBySession, core.config);
+    const scope = resolveShadowScope(agent, core.cwdBySession, core.config);
+    const ws = scope.ws;
+    // T6 ②：落到兜底根 ⇒ **本次写入未受会话授权** ⇒ 必须**可见**（ADR-0049 缺件不静默）。
+    // 判据取「**scope 是 fallback**」而不是「无 session」：**有 agent、但 cwd 解析不出**时同样落到兜底根、
+    // 同样未受授权；只钉「无 session」会把这一类留成静默。v1.21.26 第一版正是带着这个判据把两条既有负对照
+    // 的 fixture 撞红（那两条的 fixture 恰好「有 agent、无 cwd」）—— 处理方式是**把 fixture 的 scope 显式化**，
+    // 不是把判据收窄；理由与证据见 `test/scope-fallback-notice.test.ts` 文件头。
+    // 形态对齐紧邻的 lastFlushError（同文件、同「置字段 + console.error」两件套）。
+    if (noteFallbackScope(core, scope)) console.error("[dsh-shadow][warn] scope FALLBACK:", core.lastScopeNotice?.note);
     // 会话作用域的 fs（ADR-0074）：写入必须携带**该会话自己的**沙箱策略 ——
     // 省略该参数会让沙箱退回部署 fallback（mode=workspace-write + `process.cwd()`），
     // 会话工作区一旦不等于服务启动目录，写入即被围栏拒绝（记忆一条都落不了盘）。

@@ -161,7 +161,7 @@ npm run verify
 
 | 能力 | 默认 | 成熟度 | 降级行为（关闭 / 缺件时退到哪） | 晋级 / 启用标准 | 开着会怎样 · 怎么开 |
 |------|------|--------|--------------------------------|------------------|----------------------|
-| 采集与落盘 | **开**（无总开关） | **无开放未验证项**（ADR-0074 已于 `v1.15.40` 第 4 轮真机复核，**B3 闭环**） | 写失败 → `lastFlushError` + `console.error` → **读侧顶部横幅**（可见） | 仓库未定义 | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」（注②） |
+| 采集与落盘 | **开**（无总开关） | **无开放未验证项**（ADR-0074 已于 `v1.15.40` 第 4 轮真机复核，**B3 闭环**；`T6` ② `v1.21.26`：信号面结案，**围栏行为本身未真机复核**） | 写失败 → `lastFlushError` + `console.error` → **读侧顶部横幅**（可见）；落到**兜底根**（无显式 root 且解析不出 session cwd）→ `lastScopeNotice` + **读侧横幅**告知「本次写入未受会话授权」✅**可见**（`T6` ②，`v1.21.26`） | 仓库未定义 | 每回合压成一条记忆文件；`writeConsent: true` 改成「仅用户明说才落盘」（注②） |
 | 一句话摘要 `summary` | **开** | 无开放未验证项 | 缺 `llm` / 缺 route / finish 出错 → `streamText` 返回 `""` → 文件里**只是没有** `> 摘要：` ✅**可见**（T8 第 2 条，v1.15.65：降级台账 → 横幅，含原因与后果；`v1.15.94`：横幅改取 `reason.failure` 的 code/message —— 原先取 `reason.message` 而 aborted 的 reason **只有 `failure`** ⇒ detail **恒空**、无法判断是「本插件超时」还是外部中断） | 仓库未定义 | 落盘后后台 LLM 生成一两句摘要；`summary.enabled: false` 关 |
 | 查询观测 `queryLog` | **开** | 无开放未验证项 | 写失败 → 观测丢弃，读侧横幅**带真实原因** ✅**可见**（T8 第 4 条，v1.15.65；`v1.15.94`：`recordQueryObservation` 的返回值由 `boolean` 进一步收紧为 `{ok, reason?}` —— 原来只有真假、说不出「为什么」，横幅只能**猜**原因，一度把「读不到」写成「不可写」把排障引向错方向） | 仓库未定义 | 旁路写 `.shadow/query-log/<date>.jsonl`；`queryLog.enabled: false` 关 |
 | Episode 回溯 `episodes` | **开**（`showInIndex: 0` 关，注①） | 无开放未验证项 | derive 抛错 → 索引不列 Episodes 段（与「暂无连续任务片段」**渲染成同一句**）✅**可见**（T8 第 7 条，v1.15.65）；写 `indexes/_index.md` 失败 → `lastIndexError` → 读侧横幅（`v1.15.55`） | 仓库未定义 | `indexes/_index.md` 生成任务回溯段；聚合间隔 `gapMinutes` 默认 60 |
@@ -274,4 +274,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.25`**（`T6` 实施设计入台账 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.26`**（`T6` ② 结案 + 发版闸门 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

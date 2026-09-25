@@ -66,6 +66,11 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
 
   const getFlushWarn = () => {
     const parts: string[] = [];
+    // T6 ②（v1.21.26）：兜底根写入的**未受会话授权**告知 —— 与 `lastFlushError` 并列（同一条横幅的两种事实：
+    // 「没写进去」与「写到了不受本会话围栏保护的地方」）。信号只由写侧在落到兜底根时置，见 `core/writer/materialize.ts`。
+    if (core.lastScopeNotice) {
+      parts.push(`\n\n> ⚠ shadow 本次写入**未受会话授权**（${new Date(core.lastScopeNotice.at).toISOString()}）：${core.lastScopeNotice.note}。请确认 shadowRoot / 会话 cwd，勿把「写到了别处」当成「已按本会话落盘」。`);
+    }
     if (core.lastFlushError) {
       parts.push(`\n\n> ⚠ shadow 最近一次落盘失败（${new Date(core.lastFlushError.at).toISOString()}：${core.lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`);
     }

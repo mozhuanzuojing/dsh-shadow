@@ -196,9 +196,14 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
   console.log("✔ ③ 写侧三条生产者（summary / llmRecall / recallExpansion）在缺 llm 时各留一条痕，且读得清是哪一条降级");
 
   // **负对照 2**：把三者都显式关掉 ⇒ 不许留痕（「用户关掉」不是降级）
+  // v1.21.26（T6 ②）：这里的 `shadowRoot` 是**显式 scope**，与「关掉」这件事无关 ——
+  // 上面 `off.push` + `onTurnStopping` 会走到真实 flush，而 agent `{ id: "a2" }` 没有 cwd：
+  // 不给显式 root 就落到兜底根，写侧照 T6 ② 置 `lastScopeNotice`，横幅就不再逐字节为空。
+  // 本负对照要证明的是「关掉 ≠ 降级」，不是 scope ⇒ 把 scope 说出来（判据本身另有
+  // `test/recall-attribution.test.ts` 场景 12 与 `test/scope-fallback-notice.test.ts` 钉住）。
   const off = createShadowCollector({
     context: { get: (k: string) => (k === "fs" ? fs : undefined) },
-    config: { summary: { enabled: false }, recall: { enabled: false }, llmRecall: { enabled: false }, writeConsent: false, forget: { enabled: false }, compact: {}, retention: { enabled: false } },
+    config: { summary: { enabled: false }, recall: { enabled: false }, llmRecall: { enabled: false }, writeConsent: false, forget: { enabled: false }, compact: {}, retention: { enabled: false }, shadowRoot: "D:/ws" },
     getAgentById: (id: string | undefined) => ({ id }),
   });
   off.push("a2", { kind: "action", text: "改/读 spec/y.md", comp: "spec/y.md", source: "fs" });
