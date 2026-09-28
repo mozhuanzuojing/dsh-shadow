@@ -3,63 +3,48 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.21.34] `T27` 执行：审计材料按**文件路径**当线索键接进证据面（缺路径标「归不了」）
+## [v1.21.35] 两份外来补充材料登记（`open-code-review` · Everything Claude Code）与用户转述的事实分层
 
-**用户裁定（2026-09-25）**：`T27` 的三个方向里选 **① 用记录里出现的文件路径当线索键**，并明确
-**缺路径时要标「归不了」**（宁可说不知道，不许错配）。上一版（`v1.21.33`）只把这条定义清楚，本版**落地**。
+**用户提供（2026-09-28）**：一条**新材料** `alibaba/open-code-review`，一条**旧材料的新名字**
+（Everything Claude Code）。本版只做**联网核实 + 登记**：**不改任何代码、不含吸收裁决**。
 
-### 1. 做了什么（只动读侧，`persistence/audit-stream.ts`）
+### 1. 做了什么
 
-之前：审计流的材料是一串**裸字符串**（只是给人看的路径清单）。
-现在：判据 `auditEvidenceSplit`（纯函数）把材料分成**两堆** ——
+- `references.md` 追加 **§22 / §23**（+183 行）：新材料登记（是什么 / 读数 / 核心设计 / 边界 / 未核实）、
+  旧材料**别名证实**与读数刷新、**逐条事实分层表**、与 dsh-shadow 的关系（同族判据，**不构成待办**）。
+- 证据落 `../.docs/fix/2026-09-28/`：取证脚本 + 两份 README 全文 + 关键词抽行（36 行）+ 三个榜徽章 SVG
+  + `INDEX.md`（怎么重放 / 产物清单 / 未做清单）。
+- 核实链路图落 `../../_reports/2026-09-28-materials-verification.html`（archify，`showcase`）。
 
-| 材料形态 | 归属 |
+### 2. 核实结论（三分类 —— 本版最要紧的产出）
+
+| 分类 | 结论 |
 |---|---|
-| 路径（`core/writer/core.ts`、`D:\ws\src\a.ts`） | `AtomEvidenceRef` `{type:"file", locator}` → **进证据面** |
-| URL（`https://…`） | `AtomEvidenceRef` `{type:"url", locator}` |
-| 裸词 / 带空格的散文（`redis`、`改/读 了三个文件`） | **`unattributable`（归不了）**：原值保留 + 计数，**绝不硬塞成 ref** |
+| **可核** | 「日 / 周 / 月 三榜第一」：徽章 SVG 原文为 `#1 Repository Of The Day` / `Of The Week` / `Of The Month`；「Everything Claude Code」= `affaan-m/ECC`（API 重定向后的 `full_name` 就是 ECC） |
+| **需更正** | 夺冠场次是 **2025-09 的 Anthropic × Forum Ventures Hackathon**，不是 26 年（2026-02 那场产出的是 ECC 子件 AgentShield）；`+861%` 是 code churn，不是「返工率」；36kr 的 38 agents / 156 skills 是 2026-05 读数 |
+| **未核到** | 「立项背景」四数字**不在** open-code-review README 里（一手出处是 Faros AI《The Acceleration Whiplash》，`441.5%` 未在其落地页出现）；8 小时黑客松四项成果数字在两份 README 与 36kr 报道里 **0 命中** |
 
-`AuditStreamSummary` 因此多了 `evidence` / `unattributable` / `unattributableCount` 三个字段；
-`renderAuditStreamDiag` 同时报**两个数**（`线索键 N 条` / `⚠ 归不了 M 条`）—— 「归不了」不许静默。
+### 3. 验证
 
-### 2. 判据为什么故意窄（本版最要紧的一条）
+- 取证脚本可重放（怎么跑写在 `fetch-materials-20260928.ts` 的文件头注释里）；
+- `npm run audit:docs` → 七项全绿（**⑥ 引用门**：引用 607 处 · 可判 410 · 未判定 197 · **越界 0**）；
+- `npm run audit:scripts` → 扫 496 文件 / 79 目录，扩展名命中 **0**；
+- archify：`validate --quality showcase` = **9/9 检查 · 0 错 0 警**；`visual-check` 四档视口
+  （1440×900 / 1600×1000 / 1920×1080 / 2048×1320）containment **全通过**；
+- `npm run release` 的闸门 `npm run verify`（`SHADOW_EVAL_ROOT=D:\project\net1`）⇒ **exit 0**（`run-tests` **70/70**）。
 
-本版**没有**用「时间窗 + agent」那类归并（方向 ②），也**没有**把判不准的硬归进去。理由：
-`adr/0097` 把审计流与记忆分成两层，而两层之间**本来只有 `agent` + 日期两个弱键**
-（这正是 `T27` 起这条时的卡点）⇒ 任何**猜出来的**归并都等于**制造错配的证据链**，**比「归不了」更坏**。
-故：只认**能给定位符**的形态；判不准的原样落进 `unattributable`，留给人看。
+### 4. 诚实标注
 
-### 3. 边界没破（`adr/0097` D2/D4 仍然成立）
-
-- 审计流**仍不进** `_meta.json` / 索引 / hits（诊断行里明写这一点，测试也钉住）；
-- 材料仍只在 **`debug` 面**，**不注入**正常召回正文；
-- **仍未做（如实标注）**：这些 ref **没有写进 atom 的 `lineage.evidence`** ——
-  那会改**记忆文件内容**（属契约面，要过 `adr/0086` 的登记册流程），是**另一次决策**。
-  当前唯一消费者仍是 `read_shadow({debug:true})` 的诊断面。
-
-### 4. 验证
-
-- 新增 `test/audit-lineage-key.test.ts`，五组，**含两条负对照**（这是本条的判据核心）：
-  ① 判据：路径→`file` · URL→`url` · 去重 · 裸词/散文→归不了（原值保留）；
-  ② **负对照**：无可定位材料 ⇒ **0 条 ref**（不硬塞）；
-  ③ 端到端：真 `.jsonl` ⇒ 3 条 ref（`materials` 字段与 `改/读 <path>` 文本推断**两种来源都要进**）+ 1 条归不了，
-     且诊断行两个数都在；
-  ④ **缺件不静默**：目录不存在 ⇒ 0 ref / **0 条归不了**（「没有记录」≠「归不了」），诊断说「尚无记录」；
-  ⑤ 读失败与「没有」分得开（`adr/0049`）。
-- `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` → **exit 0**（`run-tests` **70/70**：上版删 1 个测试文件、本版加 1 个）。
-- `npm run audit:ratchet` → 两个消费者都 `NORMAL` / **逐桶相等**：
-  wiring `findings 25+102`（**未因本版新增 A 段条目** —— 新判据函数**刻意不导出**，与同文件 `MATERIAL_LIMIT` 同一条约定，
-  免给 A1「导出但生产无调用点」添条目）。
-
-### 5. 诚实标注
-
-- 本版是**证据面的第一步**，不是终点：ref 产出并可见，但**尚未**进入任何 atom 的 lineage（见 §3）。
-- 判据只覆盖「**能给定位符**」的形态，覆盖率**故意不追求高**；落在 `unattributable` 的比例会随真实语料变化，
-  本版**没有**统计真实语料上的比例（合成夹具不代表真实分布）。
+- 两条材料**都未安装、未运行**；`open-code-review` **未克隆**（故**不进** `MATERIALS.md` —— 那份台账的口径是**磁盘枚举**），
+  `vendor/_src/ECC` 本机已有但**本版未读其源码**；
+- 四项成果数字的出处**仍未找到**（口径：两份 README + 36kr 报道 0 命中；**未做全网穷举检索**）——
+  按本仓纪律，**未核到的数字不得当事实用**；
+- 归类为「可核」的那几条，依据都是**可复算的外部读数**，**不是本系统的证据**（同 `adr/0073` 与 `references.md` §3.2 的纪律）。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；
 治理 = ADR 登记册 · 棘轮 · 引用门 · 文档一致性门 · 分层方向门 · 复杂度预算门 · 脚本语言门；唯一验证入口 `npm run verify`；
 **发版唯一入口 `npm run release`（闸门在第一步）**；评测口径 = dev 切片（默认）/ 留出切片（报告，`--holdout-only`）。
-- **下一批**：`T17-C` 的默认值前置条件 ①（`query-error` 有界重试 + 退避）；审计 ref 进 atom lineage（需先过契约面决策）。
+- **下一批**：`T17-C` 的默认值前置条件 ①（`query-error` 有界重试 + 退避）；审计 ref 进 atom lineage（需先过契约面决策）；
+  两份外来材料若要**吸收**（而不是登记），需按惯例**先立 ADR**（判据见 `references.md` §22 / §23）。
 - **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料**（报告级基线）。

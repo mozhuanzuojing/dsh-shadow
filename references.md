@@ -1228,3 +1228,186 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 - ⇒ 由此**更正** `adr/0089` §2 D 的「一处都不落在」（那一条是**基于名称与首标题的推断**，补记已加在该节）。
 - **怎么重放**：`node ..\.docs\fix\2026-09-15\probe-dclass-digest.ts D:/project/dsh1/vendor/_src`
   （探针**只复现输入、不做判断**；判定在 ADR —— 这是本仓「判据与证据分层」的一贯口径）。
+
+---
+
+## 补充材料（2026-09-28 用户提供，本轮已核实）
+
+> 用户 2026-09-28 转来两条（群消息口径）：`alibaba/open-code-review`（**新**）与 **Everything Claude Code**
+> （本轮用 API 重定向证实它 = `affaan-m/ECC` 的可核旧仓名）。
+> **已核实**：GitHub API + `raw.githubusercontent.com` + 项目榜徽章 SVG + 两篇第三方报道，抓取 **2026-09-28 13:49 +08:00**。
+> **可重放**：`node ..\.docs\fix\2026-09-28\fetch-materials-20260928.ts`（怎么跑写在文件头注释里；
+> 入口与产物清单见同目录 `INDEX.md`）。
+> **口径**：同一条材料**只在一处完整登记** —— 重复指定**不重写旧段**，只在新日期段里补核实或刷新读数。
+> **编号口径**：材料序号接 §21，故取 **§22 / §23**（§19 / §20 已被用作派生小节的前缀，见 §21 段的说明）。
+> **本轮性质**：**登记备查 + 事实分层**，**不含吸收裁决**（与 §16 对 openclaw、§18 对 jev-ultrafast 同形）。
+> ⚠ **用户材料里被引用的两组数字，两个仓库里都没有** —— 逐条分层见 §22.4 / §23.1（本轮最要紧的产出）。
+
+### 22. alibaba/open-code-review（OpenCodeReview）—— **新**（AI 代码审查 CLI；确定性工程 × agent 混合）
+
+- 链接：https://github.com/alibaba/open-code-review ｜ 官网与文档：https://open-codereview.ai
+  ｜ npm：`@alibaba-group/open-code-review`（装上即得全局 `ocr` 命令）｜ 中文 README：该仓 `docs/i18n/README.zh-CN.md`
+- **是什么**：阿里集团内部用了两年的官方 AI 代码审查助手**开源化**后的 CLI 工具（README 自述：期内服务数万开发者、
+  识别数百万缺陷）。读 Git diff → 把改动文件交给**带工具调用能力的 agent** → 产出**行级精确**的结构化审查意见；
+  另有 `ocr scan` 对**整文件**审查（用于没有有意义 diff 的陌生代码库）。
+- **核实**（GitHub API + raw，抓取 2026-09-28；`main` HEAD = `1af527d7`，2026-09-28T05:24:16Z）：
+  **42,018**★ / 3,015 fork / **Go** / **Apache-2.0**（`LICENSE` 首行 = `Apache License` / `Version 2.0`）；创建 **2026-05-18**；
+  API `size` 54,938 KB；另有 **OpenSSF Best Practices Gold** 徽章（`bestpractices.dev/projects/13328`）。
+- **「登顶日榜 / 周榜 / 月榜均第一」—— 三榜全部可核**（证据 = README 顶部三个 Trendshift 徽章的 **SVG 文本**，
+  已落盘 `trendshift-badge-*.svg`）：
+
+  | 徽章 | SVG 里的原文 |
+  |---|---|
+  | 日榜 | `GITHUB TRENDING` · **`#1 Repository Of The Day`** |
+  | 周榜 | `1` · `TRENDSHIFT` · **`#1 Repository Of The Week`** |
+  | 月榜（`?language=Go`） | `1` · **`#1 Repository Of The Month`** |
+
+  ⚠ **日榜的文字在 `<foreignObject>` 里的 HTML 中**，只抽 `<text>` 节点会得到**空数组** ⇒ 本轮先得出「日榜抽不到」
+  后补抽才拿到（与 §6.5 的 junction 枚举同族：**工具静默缩小了范围**）；这条口径记在证据目录的 `INDEX.md`。
+- **核心设计：确定性工程 × agent 混合**（README「Why Open Code Review?」一节）—— 本条目最值钱的部分。
+  - **它对通用 agent 的三条失效模式**（原文）：**覆盖不完整**（大 changeset 上「偷工」，只审一部分文件）、
+    **位置漂移**（报出的问题与真实代码位置不符，行号 / 文件名漂移）、**质量不稳定**（纯语言驱动的 skill 难调试，
+    提示词微调即质量波动）。根因一句话：「**纯语言驱动的架构对审查过程没有硬约束**」。
+  - **确定性侧**（绝不能错的步骤交给工程逻辑，不交给模型）：精确文件选择与过滤 · **智能文件捆绑**
+    （把相关文件编成一个审查单元，例如 `message_en.properties` 与 `message_zh.properties` 捆在一起；
+    **每个捆绑跑成上下文隔离的子 agent**，天然支持并发、在超大 changeset 上仍稳定）· **模板引擎式细粒度规则匹配**
+    （比语言驱动的规则指导更稳、更可预测）· **独立的外部定位与反思模块**（把「评论落在哪一行」与「评论对不对」
+    从模型里拿出来单独做）。
+  - **agent 侧**（只留动态决策与动态取上下文）：场景化提示词 · 场景化工具集 —— 工具清单是**从大规模生产数据的
+    调用轨迹里蒸馏**出来的（含调用频次分布、单工具重复率、新工具对整条调用链的影响）。
+- **基准口径（它把取舍写在明面上）**：AACR-Bench = 50 个热门开源仓 / 200 个真实 PR / 10 种语言 /
+  80+ 资深工程师交叉校验 / **1,505 条标注真值**（数据集在 Hugging Face `Alibaba-Aone/aacr-bench`）。
+  自报同一底层模型下 **Precision 与 F1 显著更高、token 约 1/9、更快**，并**主动写明 Recall 低于通用 agent**，
+  且说明这是「**有意的取舍：要精度不要噪音**」。
+- **宿主面**：Claude Code / Codex / Cursor / Kimi Code / OpenCode / QCA Forward 各有插件，另有「skill 兼容宿主」的
+  通用技能；两种执行模式 —— **OCR 托管**（用它自己配的模型跑）与 **Delegation Mode**（**宿主 agent 用自己的 LLM 跑审查，
+  OCR 只做文件选择与规则解析，不需要 OCR 的 API key**）。集成面含 GitHub Actions / GitLab CI / GitFlic CI / Gerrit，
+  以及会话回放用的 Session Viewer 与 OpenTelemetry 遥测。
+
+#### 22.1 与 dsh-shadow 的关系（**同族判据，不构成吸收裁决**）
+
+1. ⭐ **「绝不能错的步骤交给工程逻辑、动态决策才交给模型」= 本仓核心取向在另一个领域的同判据实例**：对应
+   ADR-0042 / 0043 / 0051（纯函数派生、不猜字段、LLM 不能制造关系）与 ADR-0059（不把语义裁决交给 LLM / 相似度）。
+   差别是它把这条判据**写成了架构分界**（哪一步归确定性、哪一步归 agent），本仓写在 `decision/` 的 `choose`
+   原语与派生层里 —— 两者都把**信任边界放在结构上**，不靠提示词祈祷。
+2. ⭐ **「位置漂移」是本仓已有问题的一个外部命名**：它把「报出的问题对不上真实位置」列为通用 agent 三大失效之一，
+   并为此单独做了外部定位模块；本仓对应物是 `AGENTS.md` 的「引用纪律」（**行号是最易腐烂的引用形态**，
+   优先引符号名、改完代码回头核对引用）与 `citation-audit` 检查⑥（**只判越界、刻意窄**）。
+   ⇒ 两边都承认「位置」是**独立的失效面**；本仓的答案是「门的判据刻意窄 + 引用带符号名 / pin sha」，
+   它的答案是「把定位从模型里拿出来单独做」。**本仓不缺这条判据，故不构成待办** —— 但「位置漂移」这个说法可以借来用。
+3. **「模板引擎式规则匹配优于纯语言驱动的规则指导」** 与本仓「**判据收一处**（同一个判据只能有一份实现）」同族：
+   可复算的匹配规则比自然语言指导更可预测。
+4. **它自己的兑现口径**（Recall 低是有意的、token 约 1/9、benchmark 有标注真值）与本仓 **ADR-0072「标签不得强于事实」**
+   以及「数字要带范围与时刻」同向 —— **只作外部样本登记**。
+
+#### 22.2 边界（形态层面不可移植）
+
+- 它是**独立 CLI + 调 LLM**（必须配模型端点，或走 Delegation Mode 借宿主的模型）；本仓是**宿主内插件、零 LLM 调用**
+  （纯函数派生，ADR-0042 / 0043）⇒ **形态不同题**；能取的是**判据与失效模式的命名**，不是它的架构件或代码。
+- 它**不为 DSH 提供宿主形态**（README 自己列出的宿主里没有 DSH，条目见 §22 正文）——
+  要落到本机就是另装一个 CLI，属**外部环境决策，不在本仓代码面内**。**本条只登记，不代替那个裁决。**
+
+#### 22.3 未核实
+
+- **未克隆、未安装、未运行** `ocr`（以上全部取自 README / `LICENSE` / 徽章 SVG / GitHub API）；**未读其源码**；
+- **AACR-Bench 的分数未复现**（数据集未下载、README 里的 `imgs/benchmark-en.png` 未读）；
+- **未核它是否支持 DSH**，也未核它与本机宿主的任何兼容性；
+- **未克隆 ⇒ 不进 `MATERIALS.md`**（那份台账的口径是**磁盘枚举**、不由手写清单生成 —— 与 §21 对 mattpocock 的处置一致）；
+- 「阿里内部用了两年、数万开发者、数百万缺陷」是 **README 自述**，**无第三方证据**。
+
+#### 22.4 ⚠ 用户材料里那组「立项背景」数字**不在这份 README 里** —— 出处是 Faros AI 的遥测研究
+
+用户转述：「任务完成 **+34%**，但返工率 **+861%**、每 PR 生产事故 **+242.7%**、评审时长 **+441.5%**」。
+
+- **先说不能这么读**：这组数字**不是** open-code-review 的立项背景数据 —— **该 README 全文 0 命中**
+  （口径：关键词抽行 + 数字正则，产物 `keywords-20260928.txt` 共 36 行，无一条含这些百分比）。
+  它讲的「为什么做」是 22.1 的那**三条失效模式**，**不含任何行业统计**。
+- **一手出处（本轮找到）**：Faros AI《**The Acceleration Whiplash**》（*AI Engineering Report Q2 2026*，
+  https://www.faros.ai/research/ai-acceleration-whiplash ）—— 自述口径 **22,000 名开发者 / 4,000+ 团队 / 两年遥测 /
+  低 AI 采纳 vs 高 AI 采纳对照**，并明写「**Telemetry, not surveys**」。落地页可见读数
+  （**⚠ 报告 PDF 未读 ⇒ 只能说「落地页上写着的」**）：
+
+  | 用户转述 | Faros 落地页口径 | 分层 |
+  |---|---|---|
+  | 任务完成 +34% | **+33.7% tasks throughput**（同页另有 +66.2% epics/人、+16.2% PR merge rate、−11.7% 每周部署） | **对上**（转述取整） |
+  | 返工率 +861% | **+861% code churn** | **量纲不同**：churn 是**代码改动 / 返工量**，不是「返工**率**」；同页汇总口径另写 `10X Code Churn` |
+  | 每 PR 生产事故 +242.7% | **+242.7% incidents per PR**（同页另有 `3X Incidents per PR`、`+57.9% monthly incidents`） | **精确命中** |
+  | 评审时长 +441.5% | 落地页写的是 **`5X Median Review Time`**；**`441.5%` 未在落地页出现** | **未核到**（可能在报告 PDF 内页） |
+
+- **本仓口径提醒（比数字本身重要）**：① 它是**别家的遥测读数**，**不是本系统的证据**（同 `adr/0073` 与 §3.2 的纪律）；
+  ② 报告 PDF **未读全文** ⇒ 只能引「落地页可见的数字」，**不得写成「报告证明了 X」**；
+  ③ 转述里带着**小数点后一位**（242.7 / 441.5），说明至少经过一次转抄 —— 本仓对这类数字的一贯要求是
+  **带出处与时刻**，故此处把能核到的一手页面与原文一并记下。
+- **顺带一条同向的第三方结论**（**别家的因果主张，不是本仓结论**）：
+  [Atono《AI product development: it's an authoring problem, not a review problem》](https://atono.io/blog/ai-code-quality-authoring-problem)
+  （2026-07-06）引 Faros 数据后主张「**瓶颈从『写代码』移到了『供给上下文』**；审查是个过滤器，
+  补不回作者侧本来就缺的上下文」⇒ 与本仓的定位（**上下文投影**）同向，但**不能当本仓的立项证据**（ADR-0072 同族）。
+
+**本轮核实的链路图**（archify，`showcase` 质量：9/9 检查 · 0 错 0 警 · 四档视口 containment 全通过）：
+`../../_reports/2026-09-28-materials-verification.html`（规格 = 同目录同名 `.json`；截图 = 同目录
+`…materials-verification.visual-check.*.png`）。图只画「转述 → 一手证据 → 分层」的主干，**逐条判断仍以本节表格为准**。
+
+### 23. Everything Claude Code（= `affaan-m/ECC`）—— **别名本轮证实 + 读数刷新；§15 的登记不重写**
+
+- 链接：https://github.com/affaan-m/ECC ｜ 官网 https://ecc.tools ｜ npm `ecc-universal`（`npx ecc-universal@2.2.2 setup`）
+  ｜ Claude Code 插件 slug `ecc@ecc` ｜ 另有一条含该旧名的文档站路径（搜索命中 `mintlify.wiki/affaan-m/everything-claude-code/`，
+  **未实际打开核对**，只作旁证）。
+- **别名核实（本轮新增；判据 = API 重定向）**：`api.github.com/repos/affaan-m/everything-claude-code` 返回的
+  `full_name` 是 **`affaan-m/ECC`**（star / `pushed_at` 与 ECC 逐一相同）⇒ **「Everything Claude Code」是 ECC 的可核旧仓名**；
+  两个名为 `everything-claude-code` 的第三方仓（`zumizumi0625/…`、`kibotu/…`）的 `parent` 与 `source` **都是 `affaan-m/ECC`**
+  ⇒ 该名字确被使用过，**不是另一个项目**。
+- **读数刷新**（2026-09-28；`main` HEAD = **`d3b8a3e9`**，2026-09-28T00:38:49Z）：**268,530**★ / **40,119** fork /
+  **MIT**（`LICENSE` = `MIT License` / `Copyright (c) 2026 Affaan Mustafa`）/ 创建 **2026-01-18** / API `size` 53,919 KB。
+  **§15 的登记（它是 `adr/0091` D 类九份深读之一）不变，本条不重写它。**
+- **它自述是什么**（README 首图 alt）：**`the agent harness operating system`**；`v2.0.0` 段标题即
+  「**The Agent Harness Operating System**」（Jun 2026）；主张的循环是
+  `plan → test → implement → review → verify → remember → improve`，核心句
+  「**Optimize the context window. Persist everything else.**」。自报规模（2026-09）：**68 agents / 292 skills /
+  94 legacy commands** + hooks & memory + rules + AgentShield；支持 **7 个 harness**（Claude Code 最佳、Codex 有同步路径，
+  其余是**能力受限适配器** —— README 明写「别假定功能对等，先看支持矩阵」）。
+- **本轮新读到、与记忆面有关的一条**（补 §15 未覆盖的形态）：**Memory Vault** —— 跨 harness 共用的
+  **本地 Markdown 记忆格式**（项目 / 团队记忆在 `.ecc/memory/`，用户记忆在 `~/.ecc/memory/`），
+  由 `ecc memory search|…` 与可选的 MCP server（`ecc-memory-mcp`，**只暴露 `memory_save` / `memory_search` /
+  `memory_read` / `memory_doctor` 四个工具**）读写。两条自我约束值得登记：① **harness 身份由 server 绑定，
+  「不能由工具调用方提供」**（`ECC_MEMORY_HARNESS`）；② 触达 user scope 需要运维侧开关
+  `ECC_MEMORY_ALLOW_USER_SCOPE=1`。⇒ 与本仓「**source 由谁写是结构决定的，不由调用方自报**」
+  （ADR-0043 Shadow Contract 的 source 分层）**同一取向**；差别是它用**进程身份**，本仓用**文件所在层 + 派生关系**。
+  （引用口径：证据产物 `readme-ecc.md:1219-1267`，逐字等于 `affaan-m/ECC@d3b8a3e9` 的 `README.md` 同名段。）
+- **本机状态**：**已在** `vendor/_src/ECC`（`MATERIALS.md` §1.1 台账行：HEAD `2b6e8397`、工作树与 HEAD 差 **508 处**）
+  ⇒ 属「**有本地本体、可深读**」的材料；**本轮未动它**（未 fetch、未读源码）。
+
+#### 23.1 用户材料的**事实分层**（本轮最要紧的一节）
+
+用户转述：「**26 年 Anthropic 黑客松夺冠项目**，不再是医生 / 工程师 AI Coding 的小工具，而是 **Everything Claude Code**，
+一个**耗时 10 个月**的 Harness 架构」，并列了 8 小时黑客松的四项成果。
+
+| 用户转述 | 核实结果 | 依据 |
+|---|---|---|
+| 项目名 = Everything Claude Code | ✅ **成立** | API 重定向（见上） |
+| 「Anthropic 黑客松**夺冠**」 | ✅ **成立，但时间与场次要改**：夺冠是 **2025-09** 的 **Anthropic × Forum Ventures Hackathon**（硅谷；与 `@DRodriguezFX` 搭档，冠军项目是 AI 用户研究平台 **zenith.chat**）—— **不是 26 年** | ECC README 作者自述段（证据产物 `readme-ecc.md:1978`）+ [36kr 报道](https://eu.36kr.com/en/p/3823966768943239)（新智元 2026-05-25） |
+| 「26 年 Anthropic 黑客松」这一半其实存在 | 但那是**另一个** hackathon：ECC 的**子件 `AgentShield`** 自述「Built at the **Claude Code Hackathon (Cerebral Valley × Anthropic, Feb 2026)**」 | 证据产物 `readme-ecc.md:1880` |
+| 「耗时 10 个月」 | ✅ **与第三方报道对得上**（原文「refined for **more than ten months** in advance」）；⚠ ECC 仓库创建于 **2026-01-18** ⇒ 到抓取日约 **8.4 个月** —— **不判谁错，只记现象**：打磨期早于开源日 | 36kr 报道 + API `created_at` |
+| 「8 小时」黑客松 | ✅ 对得上（报道口径：**8 小时内**现场做出完整产品；奖金是**约 $15,000 的平台额度**，**不是现金**） | 36kr 报道 |
+| 四项成果：功能完成速度 +65% / 代码审查问题 −75% / 测试覆盖率 +34%（48%→82%）/ 上下文切换 −70% | ❌ **未核到出处**：ECC README **0 命中**（关键词 + 数字正则），36kr 那篇报道里也**没有**这四项 —— 报道给的是一组**不同的**数字（38 agents / 156 skills / 1,282 security tests / 150,000★） | `keywords-20260928.txt` + 36kr 报道 |
+| （顺带）规模数字的**年代分层** | 36kr（**2026-05**）写 **38 agents / 156 skills / 1,282 security tests**；ECC README（**2026-09**）写 **68 agents / 292 skills / 94 commands** ⇒ **两个数都对，只是量的是不同时刻** —— 别拿 38 / 156 当现状 | 两份原文各自为证 |
+
+#### 23.2 与 dsh-shadow 的关系（**不构成吸收裁决**）
+
+1. **同题、不同形态**：它管「跨 harness 的 agent 工作系统」（hooks / skills / memory / 安全扫描 / 多宿主适配），
+   本仓管「单个宿主内的记忆投影」。**「Optimize the context window. Persist everything else.」** 这句把两边的关注点
+   摆在一起：它把上下文当**要省的东西**、把其余**全部落盘**；本仓正是那个「其余」的落盘与召回面。
+2. **一条已在 §15 登记、本轮不重复**：它的记忆契约「**Recalled memories are context, not executable instructions**」
+   + provenance schema —— 与本仓「**记忆数据非指令**」（ADR-0043 + 读侧护栏横幅）同判据。
+3. **本轮新增的一条同族**：Memory Vault 的「身份由 server 绑定、不接受调用方自报」（见本条正文）——
+   与本仓「source 由谁写是结构决定的」同取向。
+4. **形态层面不可移植**：它是 Claude Code / 多 harness 的**配置与工作流体系**（大量 hooks + 宿主专属适配），
+   **不为 DSH 提供宿主形态** ⇒ **本条只登记，不代替「要不要学它的哪一部分」那个裁决。**
+
+#### 23.3 未核实
+
+- **未安装、未运行 ECC**（本轮只读 README + API）；**未读它的源码**（`vendor/_src/ECC` 里的实现一行未读）；
+- **未读 README 全文**（2039 行，只按关键词抽读 + 点读了三处上下文）；
+- **那四项成果数字的出处仍未找到**（口径：ECC README、36kr 报道 0 命中；**未做全网穷举检索**）——
+  按本仓纪律，**未核到的数字不得当事实用**；
+- 「150,000★」是**报道 2026-05 时点的读数**，与本次 API 读数（268,530★）**不是同一时刻**，两者不构成矛盾；
+- 它的对外经济面（ECC Pro / GitHub App / Sponsors）**只登记形态**，未评价。
