@@ -3,82 +3,50 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.21.36] 宿主换成 `0.2.0-rc.1`：验证基线随之抬升（本版不含行为改动）
+## [v1.21.37] 自纠：上一版把一个「未逐行核的差异数」写错了（`178` 实为 `170`），改为不写数
 
-**用户指令（2026-09-29）**：「dsh-shadow 插件修改兼容最低 0.2.0-rc.1」。本版**只动声明与文档**，
-**未改一行插件行为代码**；这么判是有证据的（见 §2 的两代宿主树逐文件比对），不是「看起来没问题」。
+### 1. 为什么要自纠
 
-### 1. 做了什么
+`v1.21.36` 的「诚实标注」段写了「其余 **178** 处差异多为 `dsh-client-*` UI 包……未逐行核」。
+用户 2026-09-29 追问这句是什么意思，我当场用命令复核，得到真值：
 
-| # | 文件 | 改动 |
-|---|---|---|
-| 1 | `package.json` | `engines.dsh` → `">=0.2.0-rc.1"`；`description` 里手写的版本号**改成引 `engines.dsh`** |
-| 2 | `index.ts` | `HOST_BASELINE` → `"0.2.0-rc.1"`；上方注释补本轮口径（首次跨 minor） |
-| 3 | `README.md` | 「兼容性（验证基线）」表的基线行与声明行 + 新增一段本轮判据；当前版本行 |
-| 4 | `CONTEXT.md` | 「验证基线」术语行（含历史链与本轮理由） |
-| 5 | `presets/README.md` | alpha.2 读数那条 NOTE 续补**第四代**；「current as of …」在本代**重核后**抬到 `0.2.0-rc.1` |
-| 6 | `adr/0098` | 新增 §8 补记（判据面 / 隔离判据 / §7 销账 / 诚实标注） |
-| 7 | `BACKLOG.md` | `V10`（基线项）结案 |
+| 口径 | 数 |
+|---|---|
+| 两代宿主树实质面**变化文件总数** | **180** |
+| 其中**逐行读过行为 diff** 的（`dsh-session` 5 · `dsh-agent-loop` 2 · `dsh-goal` 1 · `dsh-subagent` 1 · `dsh-agent-preset-registry` 1） | **10** |
+| **未逐行读**的 | **170**（不是 178） |
 
-**刻意未改**：`references.md` 的宿主读数（`dsh 0.1.7-rc.2`）—— 那是**带日期的当时实测登记**（归档层，
-属「历史文档」，改了等于伪造历史）。同批「当前态」文档才必须跟着动。
+`178` 是**顺手写的、没核**的（按 `180 − 2` 算的，而不是 `180 − 10`）。这恰好踩了本仓自己立的判据 ——
+**「能由其他数据推出来的字段：要么别手写，要么配一道门」，且「写了数就当场用命令核一遍并写下口径」**。
+按其中更严的那条（**最好只给规则与命令、不写数**），这句话**根本不该写这个数**：它随每次比对都在变。
 
-### 2. 判据（本版最要紧的产出）
+### 2. 改了什么
 
-两代 dlx 树（`d1523a95…` = `0.1.7-rc.2`、`f91e57c0…` = `0.2.0-rc.1`）的**实质面**
-（每个 `dsh-*` 包的 `lib/**` · `presets/**` · `locale/**`）**全包**逐文件 MD5：
-文件数 **2861 → 2901**，差异 **180 处**（其中非 client/host 面 **82 处**）。
+| 文件 | 改动 |
+|---|---|
+| `README.md` | 诚实标注段：**删掉该数**；不够白话的说法换成「**按行号给出的读数**」；示例改为文件里**真实存在**的那处读数（`installed` 在 `0.1.7-alpha.2` 上是第 `538` 行）；补一句「这里不写"剩下多少处"这个数」及理由 |
+| `adr/0098` §8 | 同上删数，并加 **自纠** 条目（口径 + 真值 + 为什么正确处置是「不给数」） |
+| `CHANGELOG.md` | 本条目（覆盖式） |
 
-| 面 | 读数 | 含义 |
-|---|---|---|
-| `dsh-tools` · `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt` | **0 处差异** | 本仓消费的**硬依赖面逐字节未变** |
-| `dsh-agent-preset` | **0 处差异** | 预设声明行契约未变（`adr/0098` §1 的「唯一硬断裂」判据不变） |
-| `dsh-web-app`（含随包 `standard.patch.yml`） | **0 处差异** | 本仓 `presets/projection.patch.yml` 那份 faithful copy **无需重同步** |
-| `dsh-experimental-tool-agent-team` | **0 处差异** | `presets/README` 的行号快照**仍成立** |
-| `dsh-goal` | 1 处（`lib/typert.host.js` 内嵌 `SessionEventMap` 声明 2 行） | 编解码面，契约未变 |
-| `dsh-session` · `dsh-agent-loop` | **本代唯一贴着本仓的变化** | 见下 |
-
-**新行为与本仓的隔离（代码级三条）**：`0.2.0-rc.1` 给 `dsh-session` / `dsh-agent-loop` 加了
-**pending tool-result 恢复**（新增 `ToolCallRecovery`；尾部修复合成收口事件；agent-loop 从 rc.2 的
-「不伪造 tool results」改成「由 owning step 记录保守恢复结果」）。
-
-1. 恢复路径写的是 `session.append("tool/result", …)` = **session log 事件**，**不是** `tools/result` 通知 ——
-   后者的唯一发射点在 `dsh-tools`（本代 **0 处差异**）⇒ 本仓「动作背景」采集面（`tools/result`）不受影响；
-2. 恢复只补 tool result 与**生命周期边界**（`step/end` / `turn/end`），**不合成 user / assistant 消息** ——
-   本仓 `session/event` 采集面只认 `user/message` 与 `assistant/message`（`core/retention/collect.ts`）⇒ 面不相交；
-3. 载入期（seed / fork 尾修复）的合成事件**不发布到 `session/event`**（`dsh-session` 的 `firstLiveSeq` 文档原文
-   *Seed events never publish on `session/event`*）⇒ 连发都发不到本仓。
-
-⇒ 与 `adr/0098` §7 同型：这次是**声明抬升**，不是插件面破坏。
-
-**§7 的销账**：§7 留了一条「`dsh-tools` / `dsh-session` / `dsh-experimental-agent-team` / `dsh-goal`
-四个包的变化对本仓有无影响 —— 本次未逐行核对」。本次有答案了：`dsh-tools` **0 处差异**，
-`dsh-experimental-tool-agent-team` **0 处差异**，`dsh-goal` 只变编解码面，`dsh-session` 的那处已按上面三条判定隔离。
+**同批修正的两个小问题**：① 我在 `v1.21.36` 里沿用了 §7 的「**归一化读数**」这个说法 —— 它不是本仓既有术语、不够白话；
+② 跟着 §7 抄的示例值 `231`，与 `presets/README` 里实际写的 `232` 不一致 ⇒ **等于在传播一个没核过的数**，一并去掉。
+§7 正文按「归档不改写」**保留原样**，纠正只记在 §8。
 
 ### 3. 验证
 
 | # | 检查项 | 手段 | 结果 |
 |---|---|---|---|
-| 1 | 宿主版本 | `dsh --version` | `0.2.0-rc.1`（`node -v` = `v26.10.0`） |
-| 2 | 预设声明行确被读取 | `dsh --profile web --dump-config`（exit 0 / 1586 行） | 含 `agent-preset-registry` · `preset-standard` · `preset-projection` |
-| 3 | 无 `dsh preset` 子命令（`presets/README` 的实质断言） | `dsh --help` | 只有 `dsh <profile>` 与 `dsh plugin --profile <name>` 两形态 |
-| 4 | 实质面差异 | 两代 dlx 树逐文件 MD5 | 2861 → 2901 文件 / **180 处**；硬依赖面 **0** |
-| 5 | 隔离判据 | 读宿主 `dsh-session/lib/types/repair.js` + `dsh-agent-loop/lib/index.js` + 本仓 `core/retention/collect.ts` | 恢复走 session 事件面，本仓只认 `user`/`assistant` |
-| 6 | 文档派生字段门 | `npm run audit:docs` | **七项全绿**：① 三方版本一致 = `1.21.36`；⑦ 三处基线 = `0.2.0-rc.1`；⑥ 引用 607 处 / 越界 **0** |
-| 7 | 全仓闸门 | `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` | **exit 0** · `[run-tests] 共 70 个检查（70 通过 / 0 失败）` · `ALL PASS ✅` |
-| 8 | 新基线在**运行时**生效（不是只改文件） | 闸门 stderr 里插件自己的探测横幅 | 打印「本插件的验证基线是 DSH **0.2.0-rc.1**（package.json engines.dsh）」 |
-
-**首次 `verify` 红过一处，留痕**：`audit:complexity` 报 `✗ 热点上涨：index.ts 368 → 373 行（热点只能降）` ——
-`index.ts` 是热点（>300 行、棘轮「只能降」），我那版注释净加了 5 行。修法是把注释**压回净值 0 行**（信息不丢），
-复跑即全绿。**给下一棒的提醒**：本文件的注释也受**行数预算**约束，别顺手把注释写长。
+| 1 | 计数复核 | 两代 dlx 树实质面逐文件 MD5 重算 | 变化 **180** · 其中非 client/host **82** · 逐行读 **10** ⇒ 未逐行读 **170** |
+| 2 | 错数已清除 | 全仓 `grep '178 处'` | 命中 **1** 处，且**仅在本条目引用旧错值的那一行**；`README` 与 `adr/0098` §8 **已清零**（改前 3 处） |
+| 3 | 不够白话的说法已换 | 全仓 `grep '归一化读数'` | `README` **0 命中**；剩 4 处全在「引用/纠正旧说法」或 §7 **归档**原句里（刻意不改） |
+| 4 | 三方版本一致 | `npm run audit:docs` ① | **`1.21.37`**（`package.json` / README 当前版本行 / CHANGELOG 首条） |
+| 5 | 三处基线声明 | `npm run audit:docs` ⑦ | `0.2.0-rc.1`（本版未动基线） |
+| 6 | 全仓闸门 | `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` | **exit 0** · `[run-tests] 共 70 个检查（70 通过 / 0 失败）` · `ALL PASS ✅` |
 
 ### 4. 诚实标注
 
-- `presets/README` 里以 **alpha.2** 为准的**归一化行号读数**（`538` / `231` 一类）**仍未在本代重跑**；
-  依据升级为「其载体包在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` **四代逐字节未变**」——
-  行号是**文件内容的函数**，内容不变则行号必不变。但「在哪一代量的」这层标注**仍是 alpha.2**。
-- 其余 **178 处**差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**。
-- 本版**未安装任何新包、未改 profile、未动行为代码**；`dist/` 之外只改声明与文档。
+- 本版**只改文案**（3 个文件），**不动任何行为代码、不动验证基线**；
+- 这条教训与 `v1.21.36` 记的「热点上涨」同源：**能推出来的东西别手写；手写了就当场核**。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；
