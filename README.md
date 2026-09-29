@@ -217,8 +217,8 @@ npm run verify
 
 | 项 | 值 |
 |---|---|
-| 验证基线 | **DSH `0.1.7-rc.2`**（在这一版上验证并运行） |
-| 声明 | `package.json` → `engines.dsh: ">=0.1.7-rc.2"` |
+| 验证基线 | **DSH `0.2.0-rc.1`**（在这一版上验证并运行） |
+| 声明 | `package.json` → `engines.dsh: ">=0.2.0-rc.1"` |
 | 更早版本 | **未经验证，不承诺可用** |
 
 **这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：**无任何代码读取**，仅散文注释提及；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**能观测到的防线是能力探测**——它只**报告**、不拦截：插件探测自己需要的宿主接口，缺哪个就报哪个：
@@ -233,6 +233,15 @@ npm run verify
 **为什么基线从 `0.1.5-rc.1` 抬到 `0.1.7-alpha.1`、又随 `v1.20.1` 抬到 `0.1.7-alpha.2`（ADR-0098）**：抬升的**唯一**理由是**预设形态**。0.1.7 起 agent 预设只能是 `@deepseek-ai/dsh-agent-preset` 声明行（随 bundle 的 `dsh.bundle.patch` **数组**发布），旧的 `$DSH_HOME/.agent-presets/<id>/` 目录**没有任何读取者**（官方 shipped skill 原文 *Nothing reads that directory any more*）⇒ 随包预设的形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。**插件体本身没坏**——实测（对 0.1.5-rc.2 与 0.1.7-alpha.1 的 `.d.ts` 逐文件比对）：`dsh-goal` 逐字未变；`user/message` / `assistant/message` 事件形状未变（新增的 `developer/message` 被 `core/retention/collect.ts` 直接忽略）；`fs` 只**新增** `watch`；`systemPrompt.context({name,order,text})` 未变；`session.header.cwd` 仍在。所以这是一次**声明上的硬切**，不是插件面破坏。完整证据与隔离实测见 `adr/0098`。
 
 **基线在 `v1.21.4` 再抬到 `0.1.7-rc.2`（`adr/0098` §7 补记）**：判据与上面同源，且这次是**逐字节比对**的 —— 本机两代 dlx 树（alpha.2 vs rc.2）的**实质面**（`lib/**` / `presets/**` / `locale/**`）里，**`dsh-agent-preset` 与 `dsh-web-app`（含随包 `presets/standard.patch.yml`）均 0 处差异**（后者 7511 字节 / MD5 与 alpha.1 / alpha.2 / rc.1 **四代相同** ⇒ 本仓那份「faithful copy」**无需重同步**），`dsh-experimental-tool-agent-team` 也 0 处；rc.2 上 `preset-projection` 行 active，且**本会话的人格文本即它注入**（⇒ 声明行确被读取）。⚠ **未核**：`dsh-tools` / `dsh-session` / `dsh-experimental-agent-team` / `dsh-goal` 的 `lib/**` **确有变化**，本仓只经**注入的服务**消费它们，**「这四个包的变化对本仓有无影响」本次未逐行核对**（详见 `adr/0098` §7）。
+
+**基线在 `v1.21.36` 跨 minor 抬到 `0.2.0-rc.1`（`adr/0098` §8 补记）**：这是第一次跨 minor（`0.1.x` → `0.2.0`），判据仍走**逐字节比对**，且**范围比 §7 更宽** —— 两代 dlx 树（`0.1.7-rc.2` vs `0.2.0-rc.1`）的实质面（`lib/**` / `presets/**` / `locale/**`）**全包**比对：文件数 **2861 → 2901**、差异 **180 处**（其中非 client/host 面 **82 处**）。结论：
+
+- **本仓消费的硬依赖面 0 处差异**：`dsh-tools`（`tools/result` 的唯一发射点）· `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`；
+- **预设声明行契约未变**（`dsh-agent-preset` 0 处差异 ⇒ §1 那条「唯一硬断裂」判据不变）；`dsh-web-app` 0 处差异（含随包 `presets/standard.patch.yml` ⇒ 本仓那份「faithful copy」**无需重同步**）；`dsh-experimental-tool-agent-team` 也 0 处（⇒ `presets/README` 的行号快照**仍成立**）；
+- **真正贴着本仓的变化只有一处**：`0.2.0-rc.1` 给 `dsh-session` / `dsh-agent-loop` 加了 **pending tool-result 恢复**（新增 `ToolCallRecovery`；尾部修复合成 `interrupt` 收口事件；agent-loop 从 rc.2 的「不伪造 tool results」改成「由 owning step 记录保守恢复结果」）。**它对本仓结构性无害**（代码级可证）：恢复写的是 `this.session.append("tool/result", …)` —— **session log 事件**，**不是** `tools/result` 通知；而本仓 `session/event` 采集面只认 `user/message` 与 `assistant/message`，恢复也只补 tool result 与生命周期边界、**不合成 user/assistant 消息**；
+- **§7 那两条「未核」本次销账**：`dsh-tools` 0 处差异、`dsh-goal` 只变了 `typert.host.js` 里内嵌的 `SessionEventMap` 声明 2 行、`dsh-experimental-tool-agent-team` 0 处差异。
+
+⚠ **仍未核（诚实标注）**：`presets/README` 里以 `0.1.7-alpha.2` 为准的**归一化读数**（`538` / `231` 一类行号）**未在本代重跑** —— 依据是载体包 `dsh-experimental-tool-agent-team` 逐字节未变（行号是文件内容的函数 ⇒ 读数必不变），但「在哪一代量的」这层标注仍是 alpha.2。其余 178 处差异多为 `dsh-client-*` UI 包，本仓不消费、未逐行核。
 
 ## 安装（持久化）
 
@@ -275,4 +284,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.35`**（两条补充材料登记：阿里 `open-code-review` 与 **Everything Claude Code = `affaan-m/ECC`**，含用户转述的逐条事实分层 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.36`**（**验证基线抬到 DSH `0.2.0-rc.1`**（首次跨 minor）：两代宿主树实质面全包比对，确认本仓消费的硬依赖面 0 处差异 ⇒ 本版**未改插件行为代码**；另把 `package.json` 的 `description` 改成**不手写版本号**（引 `engines.dsh`）—— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

@@ -221,3 +221,72 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   的**当前态取值**同步（即 `v1.21.4`）。§6 配的 `audit:docs` ⑦ 门继续生效 —— 本次三处同步改动就是**过门条件**本身。
 - **跳版**：`0.1.7-rc.1` 存在（本机 `5caa8fc4…` 树）但**本仓从未声明过它** ⇒ alpha.2 → rc.2 是一次**跨版抬升**，
   中间那一代未单独出过声明。
+
+## 8. 补记（2026-09-29）：基线**跨 minor** 抬到 `0.2.0-rc.1`，落成 `v1.21.36`
+
+上游在 `0.1.7` 线之后**跨了 minor**，发到 **`0.2.0-rc.1`**（本机 live 宿主 = `0.2.0-rc.1`）。
+用户 2026-09-29 指令「dsh-shadow 插件修改兼容最低 0.2.0-rc.1」。**本 ADR 正文仍不改写**；此处只记后续。
+口径沿用 §7，但**判据面比 §7 宽**：§7 只比四类关键包，本次是**全包实质面**。
+
+### 8.1 判据面：两代 dlx 树实质面**全包**逐文件 MD5
+
+- 两棵树（本机 pnpm dlx 缓存，各自取 `pkg/**/node_modules/.pacquet/node_modules/@deepseek-ai/`）：
+  `d1523a95…` = **`0.1.7-rc.2`**；`f91e57c0…` = **`0.2.0-rc.1`**。
+- **面**：每个 `dsh-*` 包的 `lib/**` · `presets/**` · `locale/**`，逐文件 MD5。
+- **读数**：文件数 **2861 → 2901**，差异 **180 处**（其中非 `dsh-client-*` / `dsh-host-*` 面 **82 处**）。
+- **本仓消费的硬依赖面 0 处差异**（逐字节）：`dsh-tools` · `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`。
+- **§1 的「唯一硬断裂」判据不变**：`dsh-agent-preset` **0 处差异** ⇒ 预设声明行契约未变。
+- **§7 的「faithful copy」判据不变**：`dsh-web-app` **0 处差异**（含随包 `presets/standard.patch.yml`）
+  ⇒ 本仓 `presets/projection.patch.yml` **无需重同步**。
+- **`presets/README` 的行号快照载体 `dsh-experimental-tool-agent-team` 0 处差异** ⇒ 那批 alpha.2 标注的读数**仍成立**。
+- **§7 的两条「未核」本次销账**：`dsh-tools` **0 处差异**（§7 记的「确有变化」属 alpha→rc 线，这一代没有）；
+  `dsh-goal` 只变 `lib/typert.host.js` 里内嵌的 `SessionEventMap` 声明 **2 行**（编解码面，契约未变）；
+  `dsh-experimental-tool-agent-team` **0 处差异**。
+
+### 8.2 本代唯一贴着本仓的新行为：pending tool-result 恢复（已逐行核，判为**隔离**）
+
+- **改了什么**：`dsh-session` 新增 `ToolCallRecovery`（`lib/types/repair.js` / `.d.ts`）与尾部修复
+  （原文 *Tail repair preserves closed steps and supplies only missing tool results and lifecycle boundaries*）；
+  `dsh-agent-loop` 从 rc.2 的「不伪造 tool results」改成「由 owning step 记录保守恢复结果」。
+- **本仓为何不受影响（代码级，三条）**：
+  1. 恢复路径是 `this.session.append("tool/result", event.data, …)`（`dsh-agent-loop/lib/index.js` 的 step catch）
+     = **session log 事件**，**不是** `tools/result` 通知；后者的唯一发射点在 `dsh-tools`（本代 **0 处差异**）
+     ⇒ 本仓「动作背景」采集面（`context.on("tools/result", …)`，`index.ts`）不受影响。
+  2. 恢复只补 **tool result 与生命周期边界**（`step/end` / `turn/end`），**不合成 user / assistant 消息**；
+     本仓 `session/event` 采集面只认 `user/message` 与 `assistant/message`（`core/retention/collect.ts`）⇒ **面不相交**。
+  3. 载入期（seed / fork 尾修复）的合成事件**不发布到 `session/event`**（`dsh-session` 的 `Session.firstLiveSeq`
+     文档原文 *Seed events never publish on `session/event`*）⇒ 连发都发不到本仓。
+- ⇒ 与 §7 同型：**声明抬升，不是插件面破坏**。本版**未改一行插件行为代码**。
+
+### 8.3 本代实测（用户 live 环境，2026-09-29）
+
+- `dsh --version` = **`0.2.0-rc.1`**；`node -v` = `v26.10.0`。
+- live profile `--dump-config`（`dsh --profile web --dump-config`，exit 0 / 1586 行）含
+  `agent-preset-registry` · `preset-standard` · **`preset-projection`** ⇒ 声明行在 `0.2.0-rc.1` 上**确被读取**
+  （这是抬基线的实质判据，比「版本号对得上」强）。
+- `dsh --help` 只有 `dsh <profile>` 与 `dsh plugin --profile <name>` 两形态，**无 `dsh preset` 子命令**
+  ⇒ `presets/README` 那句 *current as of …* 的**实质断言在本代重核过**，标注随之抬到 `0.2.0-rc.1`
+  （§7 那次只标了 alpha.2 与 rc.2 的读数，未重核这句）。
+- 本会话运行期间 `read_shadow` / `recall_shadow` / `shadow_query` 均在工具面、持续落盘。
+- **语料根**：`SHADOW_EVAL_ROOT=D:\project\net1`（`atoms` **483** 条 ≥ 门限 `min_corpus_files` = 100）。
+
+### 8.4 诚实标注（未核）
+
+- `presets/README` 里以 **alpha.2** 为准的**归一化行号读数**（`538` / `231` 一类）**仍未在本代重跑**。
+  依据从 §7 的「rc.2 逐字节未变」升级为「载体包在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` **四代逐字节未变**」——
+  行号是**文件内容的函数**，内容不变则行号必不变。但「在哪一代量的」这层标注**仍是 alpha.2**。
+- 其余 **178 处**差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**。
+- `references.md` 的宿主读数（`dsh 0.1.7-rc.2`）**刻意未改**：那是带日期的「当时实测」登记（归档层），
+  改它等于伪造历史（本仓引用纪律：归档层不修，只修当前态）。
+
+### 8.5 基线口径
+
+- `engines.dsh` 与 `HOST_BASELINE` 一并抬到 `0.2.0-rc.1`；`README` / `CONTEXT` / `presets/README` /
+  `package.json` 的 `description` 的**当前态取值**同步（即 `v1.21.36`）。§6 配的 `audit:docs` ⑦ 门继续生效 ——
+  本轮三处同步改动就是**过门条件**本身。
+- **`description` 不再手写版本号（本版新立）**：它原来是**第四处**手写基线版本的地方，而 `audit:docs` ⑦
+  **看不见它**（⑦ 的对象只有 `README` 两行 + `CONTEXT` 一行）—— `v1.21.4` 抬到 rc.2 时它就没跟上，
+  一直写着 `0.1.7-alpha.2`。按本仓「能推出来的字段不要手写」的判据，改为**引 `engines.dsh`**（符号引用），
+  而不是给它**再加一道门**（加门会把派生处从 3 处变 4 处，且要在长描述里做正则提取）。
+- **跳版**：`0.1.7-rc.1`（本机 `5caa8fc4…` 树）本仓从未声明过；本次是 `0.1.7-rc.2` → `0.2.0-rc.1`
+  的**跨 minor 抬升**。

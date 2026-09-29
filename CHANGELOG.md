@@ -3,43 +3,82 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.21.35] 两份外来补充材料登记（`open-code-review` · Everything Claude Code）与用户转述的事实分层
+## [v1.21.36] 宿主换成 `0.2.0-rc.1`：验证基线随之抬升（本版不含行为改动）
 
-**用户提供（2026-09-28）**：一条**新材料** `alibaba/open-code-review`，一条**旧材料的新名字**
-（Everything Claude Code）。本版只做**联网核实 + 登记**：**不改任何代码、不含吸收裁决**。
+**用户指令（2026-09-29）**：「dsh-shadow 插件修改兼容最低 0.2.0-rc.1」。本版**只动声明与文档**，
+**未改一行插件行为代码**；这么判是有证据的（见 §2 的两代宿主树逐文件比对），不是「看起来没问题」。
 
 ### 1. 做了什么
 
-- `references.md` 追加 **§22 / §23**（+183 行）：新材料登记（是什么 / 读数 / 核心设计 / 边界 / 未核实）、
-  旧材料**别名证实**与读数刷新、**逐条事实分层表**、与 dsh-shadow 的关系（同族判据，**不构成待办**）。
-- 证据落 `../.docs/fix/2026-09-28/`：取证脚本 + 两份 README 全文 + 关键词抽行（36 行）+ 三个榜徽章 SVG
-  + `INDEX.md`（怎么重放 / 产物清单 / 未做清单）。
-- 核实链路图落 `../../_reports/2026-09-28-materials-verification.html`（archify，`showcase`）。
+| # | 文件 | 改动 |
+|---|---|---|
+| 1 | `package.json` | `engines.dsh` → `">=0.2.0-rc.1"`；`description` 里手写的版本号**改成引 `engines.dsh`** |
+| 2 | `index.ts` | `HOST_BASELINE` → `"0.2.0-rc.1"`；上方注释补本轮口径（首次跨 minor） |
+| 3 | `README.md` | 「兼容性（验证基线）」表的基线行与声明行 + 新增一段本轮判据；当前版本行 |
+| 4 | `CONTEXT.md` | 「验证基线」术语行（含历史链与本轮理由） |
+| 5 | `presets/README.md` | alpha.2 读数那条 NOTE 续补**第四代**；「current as of …」在本代**重核后**抬到 `0.2.0-rc.1` |
+| 6 | `adr/0098` | 新增 §8 补记（判据面 / 隔离判据 / §7 销账 / 诚实标注） |
+| 7 | `BACKLOG.md` | `V10`（基线项）结案 |
 
-### 2. 核实结论（三分类 —— 本版最要紧的产出）
+**刻意未改**：`references.md` 的宿主读数（`dsh 0.1.7-rc.2`）—— 那是**带日期的当时实测登记**（归档层，
+属「历史文档」，改了等于伪造历史）。同批「当前态」文档才必须跟着动。
 
-| 分类 | 结论 |
-|---|---|
-| **可核** | 「日 / 周 / 月 三榜第一」：徽章 SVG 原文为 `#1 Repository Of The Day` / `Of The Week` / `Of The Month`；「Everything Claude Code」= `affaan-m/ECC`（API 重定向后的 `full_name` 就是 ECC） |
-| **需更正** | 夺冠场次是 **2025-09 的 Anthropic × Forum Ventures Hackathon**，不是 26 年（2026-02 那场产出的是 ECC 子件 AgentShield）；`+861%` 是 code churn，不是「返工率」；36kr 的 38 agents / 156 skills 是 2026-05 读数 |
-| **未核到** | 「立项背景」四数字**不在** open-code-review README 里（一手出处是 Faros AI《The Acceleration Whiplash》，`441.5%` 未在其落地页出现）；8 小时黑客松四项成果数字在两份 README 与 36kr 报道里 **0 命中** |
+### 2. 判据（本版最要紧的产出）
+
+两代 dlx 树（`d1523a95…` = `0.1.7-rc.2`、`f91e57c0…` = `0.2.0-rc.1`）的**实质面**
+（每个 `dsh-*` 包的 `lib/**` · `presets/**` · `locale/**`）**全包**逐文件 MD5：
+文件数 **2861 → 2901**，差异 **180 处**（其中非 client/host 面 **82 处**）。
+
+| 面 | 读数 | 含义 |
+|---|---|---|
+| `dsh-tools` · `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt` | **0 处差异** | 本仓消费的**硬依赖面逐字节未变** |
+| `dsh-agent-preset` | **0 处差异** | 预设声明行契约未变（`adr/0098` §1 的「唯一硬断裂」判据不变） |
+| `dsh-web-app`（含随包 `standard.patch.yml`） | **0 处差异** | 本仓 `presets/projection.patch.yml` 那份 faithful copy **无需重同步** |
+| `dsh-experimental-tool-agent-team` | **0 处差异** | `presets/README` 的行号快照**仍成立** |
+| `dsh-goal` | 1 处（`lib/typert.host.js` 内嵌 `SessionEventMap` 声明 2 行） | 编解码面，契约未变 |
+| `dsh-session` · `dsh-agent-loop` | **本代唯一贴着本仓的变化** | 见下 |
+
+**新行为与本仓的隔离（代码级三条）**：`0.2.0-rc.1` 给 `dsh-session` / `dsh-agent-loop` 加了
+**pending tool-result 恢复**（新增 `ToolCallRecovery`；尾部修复合成收口事件；agent-loop 从 rc.2 的
+「不伪造 tool results」改成「由 owning step 记录保守恢复结果」）。
+
+1. 恢复路径写的是 `session.append("tool/result", …)` = **session log 事件**，**不是** `tools/result` 通知 ——
+   后者的唯一发射点在 `dsh-tools`（本代 **0 处差异**）⇒ 本仓「动作背景」采集面（`tools/result`）不受影响；
+2. 恢复只补 tool result 与**生命周期边界**（`step/end` / `turn/end`），**不合成 user / assistant 消息** ——
+   本仓 `session/event` 采集面只认 `user/message` 与 `assistant/message`（`core/retention/collect.ts`）⇒ 面不相交；
+3. 载入期（seed / fork 尾修复）的合成事件**不发布到 `session/event`**（`dsh-session` 的 `firstLiveSeq` 文档原文
+   *Seed events never publish on `session/event`*）⇒ 连发都发不到本仓。
+
+⇒ 与 `adr/0098` §7 同型：这次是**声明抬升**，不是插件面破坏。
+
+**§7 的销账**：§7 留了一条「`dsh-tools` / `dsh-session` / `dsh-experimental-agent-team` / `dsh-goal`
+四个包的变化对本仓有无影响 —— 本次未逐行核对」。本次有答案了：`dsh-tools` **0 处差异**，
+`dsh-experimental-tool-agent-team` **0 处差异**，`dsh-goal` 只变编解码面，`dsh-session` 的那处已按上面三条判定隔离。
 
 ### 3. 验证
 
-- 取证脚本可重放（怎么跑写在 `fetch-materials-20260928.ts` 的文件头注释里）；
-- `npm run audit:docs` → 七项全绿（**⑥ 引用门**：引用 607 处 · 可判 410 · 未判定 197 · **越界 0**）；
-- `npm run audit:scripts` → 扫 496 文件 / 79 目录，扩展名命中 **0**；
-- archify：`validate --quality showcase` = **9/9 检查 · 0 错 0 警**；`visual-check` 四档视口
-  （1440×900 / 1600×1000 / 1920×1080 / 2048×1320）containment **全通过**；
-- `npm run release` 的闸门 `npm run verify`（`SHADOW_EVAL_ROOT=D:\project\net1`）⇒ **exit 0**（`run-tests` **70/70**）。
+| # | 检查项 | 手段 | 结果 |
+|---|---|---|---|
+| 1 | 宿主版本 | `dsh --version` | `0.2.0-rc.1`（`node -v` = `v26.10.0`） |
+| 2 | 预设声明行确被读取 | `dsh --profile web --dump-config`（exit 0 / 1586 行） | 含 `agent-preset-registry` · `preset-standard` · `preset-projection` |
+| 3 | 无 `dsh preset` 子命令（`presets/README` 的实质断言） | `dsh --help` | 只有 `dsh <profile>` 与 `dsh plugin --profile <name>` 两形态 |
+| 4 | 实质面差异 | 两代 dlx 树逐文件 MD5 | 2861 → 2901 文件 / **180 处**；硬依赖面 **0** |
+| 5 | 隔离判据 | 读宿主 `dsh-session/lib/types/repair.js` + `dsh-agent-loop/lib/index.js` + 本仓 `core/retention/collect.ts` | 恢复走 session 事件面，本仓只认 `user`/`assistant` |
+| 6 | 文档派生字段门 | `npm run audit:docs` | **七项全绿**：① 三方版本一致 = `1.21.36`；⑦ 三处基线 = `0.2.0-rc.1`；⑥ 引用 607 处 / 越界 **0** |
+| 7 | 全仓闸门 | `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` | **exit 0** · `[run-tests] 共 70 个检查（70 通过 / 0 失败）` · `ALL PASS ✅` |
+| 8 | 新基线在**运行时**生效（不是只改文件） | 闸门 stderr 里插件自己的探测横幅 | 打印「本插件的验证基线是 DSH **0.2.0-rc.1**（package.json engines.dsh）」 |
+
+**首次 `verify` 红过一处，留痕**：`audit:complexity` 报 `✗ 热点上涨：index.ts 368 → 373 行（热点只能降）` ——
+`index.ts` 是热点（>300 行、棘轮「只能降」），我那版注释净加了 5 行。修法是把注释**压回净值 0 行**（信息不丢），
+复跑即全绿。**给下一棒的提醒**：本文件的注释也受**行数预算**约束，别顺手把注释写长。
 
 ### 4. 诚实标注
 
-- 两条材料**都未安装、未运行**；`open-code-review` **未克隆**（故**不进** `MATERIALS.md` —— 那份台账的口径是**磁盘枚举**），
-  `vendor/_src/ECC` 本机已有但**本版未读其源码**；
-- 四项成果数字的出处**仍未找到**（口径：两份 README + 36kr 报道 0 命中；**未做全网穷举检索**）——
-  按本仓纪律，**未核到的数字不得当事实用**；
-- 归类为「可核」的那几条，依据都是**可复算的外部读数**，**不是本系统的证据**（同 `adr/0073` 与 `references.md` §3.2 的纪律）。
+- `presets/README` 里以 **alpha.2** 为准的**归一化行号读数**（`538` / `231` 一类）**仍未在本代重跑**；
+  依据升级为「其载体包在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` **四代逐字节未变**」——
+  行号是**文件内容的函数**，内容不变则行号必不变。但「在哪一代量的」这层标注**仍是 alpha.2**。
+- 其余 **178 处**差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**。
+- 本版**未安装任何新包、未改 profile、未动行为代码**；`dist/` 之外只改声明与文档。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；

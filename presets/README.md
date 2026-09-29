@@ -9,10 +9,11 @@ This preset is **package-owned**. It is the **single source of truth** shipped w
 > **Do not edit the composed row directly.**
 > Modify the source patch here and republish / re-install.
 
-> **关于文中的 `0.1.7-alpha.2` 读数（`v1.21.18` 补）**：本文件里几处按行号给出的读数是在 `0.1.7-alpha.2` 上量的，
-> **标签保留**（那是「在哪一代量的」这一事实）。它们**在 `0.1.7-rc.2` 上不重跑也成立** ——
-> 载体包 `dsh-experimental-tool-agent-team` 在 `alpha.2` / `rc.1` / `rc.2` 三代**逐字节未变**（逐文件 MD5 相同），
-> 故任何按行号给出的读数都不可能因换代而变。**若要重新取证**：在那三代任一棵 dlx 树上重跑同一命令即可。
+> **关于文中的 `0.1.7-alpha.2` 读数（`v1.21.18` 补；`v1.21.36` 续补）**：本文件里几处按行号给出的读数是在 `0.1.7-alpha.2` 上量的，
+> **标签保留**（那是「在哪一代量的」这一事实）。它们**在 `0.1.7-rc.2` / `0.2.0-rc.1` 上不重跑也成立** ——
+> 载体包 `dsh-experimental-tool-agent-team` 在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` 四代**逐字节未变**（逐文件 MD5 相同），
+> 故任何按行号给出的读数都不可能因换代而变。**若要重新取证**：在那四代任一棵 dlx 树上重跑同一命令即可。
+> （`0.2.0-rc.1` 那一代的核对见 `adr/0098` §8：实质面全包比对，该包 0 处差异。）
 
 ## Install (0.1.7+: the preset ships as a bundle patch)
 
@@ -349,7 +350,7 @@ The preset only configures how an agent uses `read_shadow` / shadow memory. It d
 DSH built-in plugins (`@deepseek-ai/dsh-*`) and `{{model}}` / `{{cwd}}`; it carries
 no user-machine-specific paths or keys, so it is portable.
 
-## Note on DSH preset management (current as of 0.1.7-rc.2)
+## Note on DSH preset management (current as of 0.2.0-rc.1)
 
 `dsh` still exposes **no** `dsh preset install/doctor` subcommand (verified: `dsh preset --help`
 treats the args as profile boot args). An agent preset is declared as an
