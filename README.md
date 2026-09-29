@@ -236,12 +236,12 @@ npm run verify
 
 **基线在 `v1.21.36` 跨 minor 抬到 `0.2.0-rc.1`（`adr/0098` §8 补记）**：这是第一次跨 minor（`0.1.x` → `0.2.0`），判据仍走**逐字节比对**，且**范围比 §7 更宽** —— 两代 dlx 树（`0.1.7-rc.2` vs `0.2.0-rc.1`）的实质面（`lib/**` / `presets/**` / `locale/**`）**全包**比对：文件数 **2861 → 2901**、差异 **180 处**（其中非 client/host 面 **82 处**）。结论：
 
-- **本仓消费的硬依赖面 0 处差异**：`dsh-tools`（`tools/result` 的唯一发射点）· `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`；
+- **本仓消费的宿主服务面 0 处差异**（实现这些服务的包）：`dsh-tools`（`tools/result` 的唯一发射点）· `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`；
 - **预设声明行契约未变**（`dsh-agent-preset` 0 处差异 ⇒ §1 那条「唯一硬断裂」判据不变）；`dsh-web-app` 0 处差异（含随包 `presets/standard.patch.yml` ⇒ 本仓那份「faithful copy」**无需重同步**）；`dsh-experimental-tool-agent-team` 也 0 处（⇒ `presets/README` 的行号快照**仍成立**）；
 - **真正贴着本仓的变化只有一处**：`0.2.0-rc.1` 给 `dsh-session` / `dsh-agent-loop` 加了 **pending tool-result 恢复**（新增 `ToolCallRecovery`；尾部修复合成 `interrupt` 收口事件；agent-loop 从 rc.2 的「不伪造 tool results」改成「由 owning step 记录保守恢复结果」）。**它对本仓结构性无害**（代码级可证）：恢复写的是 `this.session.append("tool/result", …)` —— **session log 事件**，**不是** `tools/result` 通知；而本仓 `session/event` 采集面只认 `user/message` 与 `assistant/message`，恢复也只补 tool result 与生命周期边界、**不合成 user/assistant 消息**；
 - **§7 那两条「未核」本次销账**：`dsh-tools` 0 处差异、`dsh-goal` 只变了 `typert.host.js` 里内嵌的 `SessionEventMap` 声明 2 行、`dsh-experimental-tool-agent-team` 0 处差异。
 
-⚠ **仍未核（诚实标注）**：`presets/README` 里那几处**按行号给出的读数**（例：`dsh-experimental-tool-agent-team/lib/index.js` 里 `installed` 在 `0.1.7-alpha.2` 上是第 `538` 行）**未在本代重跑** —— 依据是载体包在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` **四代逐字节未变**（行号是文件内容的函数 ⇒ 读数必不变），但「在哪一代量的」这层标注仍是 alpha.2。其余差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**；这里**不写「剩下多少处」这个数** —— 它随每次比对变化（`v1.21.36` 曾把它写成错值 `178`，`v1.21.37` 自纠删数）。
+⚠ **仍未核（诚实标注）**：`presets/README` 里那几处**按行号给出的读数**（`installed` = alpha.1 第 `530` 行 / alpha.2 第 `538` 行；`const scoped = agent.ctx` = 第 `231` 行；`team:policy` = 第 `238` 行）**未在本代重跑** —— 依据是**本轮实测**：载体包 `dsh-experimental-tool-agent-team` 的 4 个文件在 `alpha.2` / `rc.1` / `rc.2` 指纹一致（`88AF31B46A7B`）、`rc.2 → 0.2.0-rc.1` 0 处差异 ⇒ 这些读数**对当前代同样适用**（**`alpha.1` 不在这个区间**：载体 549 → 557 行，那条 +8 正是 `installed` 530 → 538 的来源）；但「在哪一代量的」这层标注**仍是 alpha.2**。其余差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**；这里**不写「剩下多少处」这个数**（它随每次比对变化）。⚠ `v1.21.37` 曾把 `231` 误判成「没核过的数」并删除，`v1.21.38` 已恢复并撤回那句 —— 详见 `adr/0098` §8.4。
 
 ## 安装（持久化）
 
@@ -284,4 +284,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.37`**（**自纠**：`v1.21.36` 的诚实标注段把「未逐行核的差异数」写成了 `178`（实为 `170`）⇒ 按本仓「能推出来的数要么别写」的判据**删掉这个数**，并把不够白话的说法换成**按行号给出的读数**、只引文件里真实存在的示例 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.38`**（**撤回一次判错的自纠 + 补核一处借错区间的旧账**：`v1.21.37` 曾把已核实的行号 `231` 误判成「没核过」而删掉（跨代比较所致）⇒ 恢复并撤回；另把 `v1.21.36`「用后一区间比对销前一区间旧账」改为**补测销账**（那 10 个文件已逐行读）、把 `--dump-config` 那条断言降级为「行被组合进 profile 树」 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

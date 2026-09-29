@@ -1907,7 +1907,7 @@ V/G/T6 真机与外部条件项
 - **现状**：`adr/0098` §7（`v1.21.4`）已如实标注：同代比对里 **`dsh-tools`（4 处）· `dsh-session`（6）·
   `dsh-experimental-agent-team`（18）· `dsh-goal`（1）** 的 `lib/**` **确有变化**。本仓对宿主只经**注入的服务**消费、
   **无运行期依赖**，故模块级差异不直接作用于本仓 —— 但**「这四个包的变化对本仓有无影响」未逐行核对**。
-- **连带**：`presets/README` 里以 **alpha.2** 为准的归一化行号读数（`538` / `231` 一类）未在 rc.2 上重跑；
+- **连带**：`presets/README` 里以 **alpha.2** 为准的按行号给出的读数（`538` / `231` 一类）未在 rc.2 上重跑；
   其载体包 `dsh-experimental-tool-agent-team` **逐字节未变** ⇒ 结论不变，但「在哪一代量的」这层标注仍是 alpha.2。
 - **结论（v1.21.10，逐包 diff `lib/**` 后判定）**：本仓消费的契约面**无破坏性变化** ——
   `dsh-tools` 的 `lib/types/index.d.ts` **847→852 行，新增仅 `locale` 相关**；`dsh-session` 的
@@ -1918,7 +1918,7 @@ V/G/T6 真机与外部条件项
 - **残余（未消，如实标注）**：只判了 **`.d.ts`（契约）** 与文件级相等，**没逐行读 `lib/index.js` 的行为 diff** ——
   服务方法**行为**可在类型不变的情况下改变（如 `session.header.cwd` 语义）；该风险由**运行面实测**部分覆盖
   （rc.2 上 `verify` exit 0、三个读工具可用、持续落盘）。
-- **连带（仍开）**：`presets/README` 以 **alpha.2** 为准的归一化行号读数未在 rc.2 上重跑；载体包
+- **连带（仍开）**：`presets/README` 以 **alpha.2** 为准的按行号给出的读数未在 rc.2 上重跑；载体包
   `dsh-experimental-tool-agent-team` **逐字节未变** ⇒ 结论不变，但「在哪一代量的」这层标注仍是 alpha.2。
 - **结案（v1.21.36，`adr/0098` §8）**：基线再抬一档到 **`0.2.0-rc.1`**（首次跨 minor，`0.1.x` → `0.2.0`），
   这次把 §7 的两条残余**一并处置**：① **「四个包的变化对本仓有无影响」已闭** —— 两代 dlx 树实质面
@@ -1930,6 +1930,16 @@ V/G/T6 真机与外部条件项
   `session.append("tool/result", …)`，本仓 `session/event` 只认 `user/assistant`）；
   ② **连带仍开、但依据更强**：读数仍未在本代重跑，依据从「rc.2 逐字节未变」升为「**载体包在四代
   （alpha.2 / rc.1 / rc.2 / 0.2.0-rc.1）逐字节未变**」⇒ 行号是文件内容的函数，必不变。
+- **V10 收尾更正与新增连带（`v1.21.38`）**：
+  - **① 那条「四个包」的销账原先口径错**：`v1.21.36` 用 `rc.2 → 0.2.0-rc.1` 的比对去销 `alpha.2 → rc.2` 的账（两段区间不相交）。
+    `v1.21.38` **把那 10 个文件逐行读了**：`dsh-tools` 4 处（只新增 `displayReason`；`tools/result`/`ToolResult`/`callId`/`content`
+    符号计数两代相同）· `dsh-session` 6 处（`ToolHistoryProjection` + `startsSeries`）· `dsh-goal` 1 处（schedule 类型注册）·
+    `dsh-experimental-agent-team` 18 处（本仓不消费）⇒ **销账这次成立**（见 `adr/0098` §8.1）。
+  - **② 新增连带（未核，本轮如实登记）**：**「live 会话到底跑哪个预设、`preset-projection` 有没有真被挂载/注入」未验** ——
+    `--dump-config` 不 mount（CLI 自述 *print the composed profile tree and exit*）、本轮 dump 里 `fiberPhase` **0 命中**、
+    且 `agent-preset-registry` 的 `config.default` 是 **standard**。要闭它得能读会话记录/系统提示面。
+  - **③ 另一条教训（`v1.21.38` 记）**：`v1.21.37` 的「自纠」自己判错了一次 —— 把已核实的 `231`（`const scoped` 在 alpha.1–0.2.0-rc.1
+    都是第 231 行）拿 `0.1.5-rc.2` 时代的 `232` 去比，判成「没核过」并删除。**跨代比较当判据 = 坐标轴接反**，见 `adr/0098` §8.4。
 
 ### V11. 宿主原生能力面的**会话生效面**未实测
 

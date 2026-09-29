@@ -234,14 +234,18 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   `d1523a95…` = **`0.1.7-rc.2`**；`f91e57c0…` = **`0.2.0-rc.1`**。
 - **面**：每个 `dsh-*` 包的 `lib/**` · `presets/**` · `locale/**`，逐文件 MD5。
 - **读数**：文件数 **2861 → 2901**，差异 **180 处**（其中非 `dsh-client-*` / `dsh-host-*` 面 **82 处**）。
-- **本仓消费的硬依赖面 0 处差异**（逐字节）：`dsh-tools` · `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`。
+- **本仓消费的宿主服务面 0 处差异**（逐字节；实现这些服务的包）：`dsh-tools` · `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt`。
 - **§1 的「唯一硬断裂」判据不变**：`dsh-agent-preset` **0 处差异** ⇒ 预设声明行契约未变。
 - **§7 的「faithful copy」判据不变**：`dsh-web-app` **0 处差异**（含随包 `presets/standard.patch.yml`）
   ⇒ 本仓 `presets/projection.patch.yml` **无需重同步**。
 - **`presets/README` 的行号快照载体 `dsh-experimental-tool-agent-team` 0 处差异** ⇒ 那批 alpha.2 标注的读数**仍成立**。
-- **§7 的两条「未核」本次销账**：`dsh-tools` **0 处差异**（§7 记的「确有变化」属 alpha→rc 线，这一代没有）；
-  `dsh-goal` 只变 `lib/typert.host.js` 里内嵌的 `SessionEventMap` 声明 **2 行**（编解码面，契约未变）；
-  `dsh-experimental-tool-agent-team` **0 处差异**。
+- **§7 的「未核」本次**补测**销账（`v1.21.38` 更正）**：`v1.21.36` 曾用 `rc.2 → 0.2.0-rc.1` 的比对去销 `alpha.2 → rc.2` 的账 ——
+  两段区间**不相交**（后一区间没变，推不出「前一区间变了但没影响」），那是**错**的。§7 问的那批变化本次**把那 10 个文件逐行读了**，
+  并逐字复现了 §7 的读数：`dsh-tools` **4** 处（只新增 `displayReason` —— 审批提示文案的本地化字段；`tools/result` / `ToolResult` /
+  `callId` / `content` 的符号计数两代**完全相同**）· `dsh-session` **6** 处（新增 `ToolHistoryProjection`、`startsSeries` 字段与注释重写）·
+  `dsh-goal` **1** 处（只多注册 schedule 相关类型）· `dsh-experimental-agent-team` **18** 处（Team 由 profile 层 bundle 提供，
+  本预设不含委派行 ⇒ **本仓不消费**）⇒ **全部与本仓消费面无关**，销账成立。另：载体 `dsh-experimental-tool-agent-team`
+  在 `alpha.2 → rc.2` 上 **0 处差异**（本轮实测）。
 
 ### 8.2 本代唯一贴着本仓的新行为：pending tool-result 恢复（已逐行核，判为**隔离**）
 
@@ -262,8 +266,11 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 
 - `dsh --version` = **`0.2.0-rc.1`**；`node -v` = `v26.10.0`。
 - live profile `--dump-config`（`dsh --profile web --dump-config`，exit 0 / 1586 行）含
-  `agent-preset-registry` · `preset-standard` · **`preset-projection`** ⇒ 声明行在 `0.2.0-rc.1` 上**确被读取**
-  （这是抬基线的实质判据，比「版本号对得上」强）。
+  `agent-preset-registry` · `preset-standard` · **`preset-projection`** ⇒ 本仓那条预设声明行**被组合进** `0.2.0-rc.1` 的 profile 树。
+  ⚠ **这条证明不了「被读取 / 被注入」（`v1.21.38` 更正）**：① `dsh --help` 自述 `--dump-config` = *print the composed profile tree
+  **and exit*** ⇒ **不 mount**；② 本轮 dump 里 **`fiberPhase` 出现 0 次**（§7 曾引 `preset-projection（fiberPhase: active）`）；
+  ③ dump 里 `agent-preset-registry` 的 **`config.default: standard`** ⇒ 这个 profile 的默认预设是 **standard**。
+  ⇒「本会话跑的是哪个预设、`preset-projection` 有没有真被挂载/注入」**本轮未验**（已记 `BACKLOG` V10 连带项）。
 - `dsh --help` 只有 `dsh <profile>` 与 `dsh plugin --profile <name>` 两形态，**无 `dsh preset` 子命令**
   ⇒ `presets/README` 那句 *current as of …* 的**实质断言在本代重核过**，标注随之抬到 `0.2.0-rc.1`
   （§7 那次只标了 alpha.2 与 rc.2 的读数，未重核这句）。
@@ -272,17 +279,26 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
 
 ### 8.4 诚实标注（未核）
 
-- `presets/README` 里以 **alpha.2** 为准的**归一化行号读数**（`538` / `231` 一类）**仍未在本代重跑**。
-  依据从 §7 的「rc.2 逐字节未变」升级为「载体包在 `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1` **四代逐字节未变**」——
-  行号是**文件内容的函数**，内容不变则行号必不变。但「在哪一代量的」这层标注**仍是 alpha.2**。
+- `presets/README` 里那几处**按行号给出的读数**（`installed` = alpha.1 第 `530` 行 / alpha.2 第 `538` 行；
+  `const scoped = agent.ctx` = 第 `231` 行；`team:policy` = 第 `238` 行）**未在本代重跑**。
+  依据从 §7 的「rc.2 逐字节未变」升级为**本轮实测**：载体包 `dsh-experimental-tool-agent-team` 的 4 个文件在
+  `alpha.2` / `rc.1` / `rc.2` 逐文件 MD5 一致（指纹 `88AF31B46A7B`），且 `rc.2 → 0.2.0-rc.1` **0 处差异**
+  ⇒ 这些读数**对当前代同样适用**。**注意区间**：`alpha.1` **不在**这个「逐字节未变」的区间里
+  （载体文件 549 → 557 行，那条 +8 的位移正是 `installed` 530 → 538 的来源）。但「在哪一代量的」这层标注**仍是 alpha.2**。
 - 其余差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**。
-- **自纠（`v1.21.37`）**：本处原先写「其余 **178** 处」—— **那是错的**。口径与真值：
-  实质面变化 **180** 处；其中**逐行读过行为 diff** 的 **10** 个文件全在 `dsh-session` / `dsh-agent-loop` /
-  `dsh-goal` / `dsh-subagent` / `dsh-agent-preset-registry` ⇒ 未逐行读的是 **170**。
-  按本仓「能推出来的数要么别写、要么当场用命令核」的判据，**正确处置是不写这个数**（它随每次比对都变），
-  故本处改为不给数。同一句里沿用的「归一化读数」也换成平白说法（**按行号给出的读数**），
-  并去掉一个从 §7 抄来、与 `presets/README` 实际写法（`232`）不一致的示例值 `231`。
-  §7 正文按「归档不改写」保留原样，纠正只记在这里。
+- **自纠 ×1（`v1.21.37`）—— 删掉一个写错的数**：本处原先写「其余 **178** 处」。口径与真值：实质面变化 **180** 处；
+  其中**逐行读过行为 diff** 的 **10** 个文件全在 `dsh-session` / `dsh-agent-loop` / `dsh-goal` / `dsh-subagent` /
+  `dsh-agent-preset-registry` ⇒ 未逐行读的是 **170**。按本仓「能推出来的数要么别写、要么当场用命令核」的判据，
+  **正确处置是不写这个数**（它随每次比对都变），故改为不给数。§7 正文按「归档不改写」保留原样，纠正只记在这里。
+- **自纠 ×2（`v1.21.38`）—— `v1.21.37` 那次自纠自己判错了，撤回**：`v1.21.37` 说示例值 `231`「与 `presets/README`
+  实际写的 `232` 不一致 ⇒ 没核过的数」并把它删掉 —— **那是错的，且错在跨代比较**。本轮实测（本机五棵 dlx 树的载体
+  `lib/index.js` 逐行数）：`const scoped = agent.ctx` 在 `alpha.1` / `alpha.2` / `rc.1` / `rc.2` / `0.2.0-rc.1`
+  **都是第 231 行**；而 `232` 是 **`0.1.5-rc.2` 时代的读数**（`presets/README` 原句自己写着 *those were `0.1.5-rc.2` readings*，
+  `adr/0099` L58 亦同）。⇒ 拿**更早一代**的值去判**当前代**的值「没核过」，是把坐标轴接反了：
+  **删掉的是一个已被验证的正确值**。`231` 已恢复，`v1.21.37` 的那句判断**撤回**。
+- **同批另一个教训（`v1.21.38`）**：`v1.21.37` 声称「换掉平白说法」时只改了 `README`，**本 §8.4 那句没改到** ——
+  那次 grep 用的是精确串 `归一化读数`，而本处中间多「行号」两字 ⇒ 漏。⇒ **查漏要按概念查（行号读数 / 数值 / 措辞），
+  不能拿一个字符串 grep 当「修完了」的证据。**
 - `references.md` 的宿主读数（`dsh 0.1.7-rc.2`）**刻意未改**：那是带日期的「当时实测」登记（归档层），
   改它等于伪造历史（本仓引用纪律：归档层不修，只修当前态）。
 
