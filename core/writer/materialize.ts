@@ -9,12 +9,13 @@ import type { AgentLike } from "../types.js";
 import { noteFallbackScope, resolveShadowScope } from "../scope.js";
 import { policyForAgent, scopedFs, sessionPolicy } from "../fs-scope.js";
 import { today, compact, slug, topicsInText, numOr, onByDefault } from "../util.js";
-import { readRel, listMemories, memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";
-import { readMeta, mutateMeta } from "../../persistence/meta.js";
+import { readRel, listMemories, memoryFileName } from "../../persistence/files.js";
+import { readMeta } from "../../persistence/meta.js";
 import { buildClueHeader, registerMeta, type AtomAxes } from "../retention/memory.js";
 import { traceOf } from "../retention/trace.js";
 import { streamText, textMessage } from "./llm.js";
-import { buildIndexText, consolidateText } from "./render.js";
+import { buildIndexText } from "./render.js";
+import { maybeCompact, runCompact } from "./compact.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "../view/episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "../retention/forget.js";
 import { sanitizeText, isUnsafe } from "../../security/scrub.js";
@@ -82,6 +83,9 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     core.indexCacheWarm.add(ws);
   };
 
+  // 收口所需的工厂作用域件（收口实现已迁至 `./compact.ts`，见该文件头）
+  const compactDeps = { core, recOf, cacheFor, ensureIndexCache };
+
   const summarizeTurn = async (agent: any, body: unknown) => {
     if (core.summaryCfg.enabled === false) return "";
     const route = routeFor(core);
@@ -98,48 +102,8 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
     return one ? one.slice(0, 120) : "";
   };
 
-  // ── Episode 收口归档（B）：一个 episode 结束时把其 turn 原子合并成一个 consolidated 文件，
-  //    个体原子 mark status=compacted 并移出活跃热集（文件保留、可回放；Forget≠Delete）。默认关。
-  const compactSlug = (id: string) => String(id || "ep").replace(/[^a-z0-9_-]+/gi, "-").slice(0, 32) || "ep";
-  const runCompact = async (fs: any, ws: string, cache: Map<string, any>) => {
-    if (!onByDefault(core.compactCfg.enabled)) return;   // v1.15.85「默认全开」
-    const parsed = [...cache.values()].map((r) => r.parsed).filter(Boolean);
-    if (!parsed.length) return;
-    const gap = numOr(core.compactCfg.gapMinutes, core.episodeGap);
-    const eps = deriveEpisodes(parsed, { gapMinutes: gap });
-    if (eps.length <= 1) return; // 只有当前打开的 episode，无已完成收口的
-    // **增量标记，不在陈旧快照上改**（ADR-0068）：本函数的写入窗口跨「重建索引 + 收口」，
-    // 拿开头读到的 meta 全量覆盖回去会丢掉期间别人的写入。故只收集 delta，最后在
-    // `mutateMeta` 的**新鲜快照**上应用。
-    const marks: string[] = [];
-    const dateOf = (rel: string) => dateFromName(String(rel).split("/").pop() || "") || today();
-    for (const ep of eps.slice(0, -1)) {
-      const atoms = (ep.memoryRefs || []).map((rel: string) => cache.get(rel)?.parsed).filter(Boolean);
-      if (!atoms.length) continue;
-      // 时间戳必须**从 `episode.startedAt` 同时产出「文件名里的」与「缓存里的」**（v1.15.38 修复）
-      const stamp = String(ep.startedAt || "").match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):?(\d{2}):?(\d{2})/);
-      const rdate = stamp ? stamp[1] : dateOf((ep.memoryRefs || [])[0]);
-      const rtime = stamp ? `${stamp[2]}${stamp[3]}${stamp[4]}` : "";
-      const name = memoryFileName(rdate, rtime, `ep-${compactSlug(ep.id)}-consolidated.md`);
-      const rel = `${atomsRel()}/${name}`;
-      const text = consolidateText(ep, atoms);
-      const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
-      await fs.writeText(t, text);
-      for (const a of atoms) {
-        marks.push(a.rel);
-        cache.delete(a.rel);
-      }
-      cache.set(rel, recOf({ date: rdate, time: timeFromName(name), name, rel }, text));
-    }
-    if (marks.length) {
-      await mutateMeta(fs, ws, (m) => {
-        for (const rel of marks) {
-          m[rel] = m[rel] || { hits: 0, status: "active", pinned: false };
-          m[rel].status = "compacted";
-        }
-      });
-    }
-  };
+  // Episode 收口归档已迁至 `./compact.ts`（本文件是复杂度热点，只能降）：`runCompact` + 写侧触发
+  // `maybeCompact` 都在那里，根因与判据见该文件头与 `adr/0038` 补记。
 
   // ── 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）────────────────────────────
   //  每条记忆一份摘要是 O(N) 写；**每个 when 日期桶一份**是 O(#dates) 写，故代价有界（见 types.ts 的注释）。
@@ -210,7 +174,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
         for (const rel of drop) cache.delete(rel);
       }
       // Episode 收口归档：关闭的 episode → 合并成一个 consolidated 文件 + 原子归档（文件变少）。
-      await runCompact(fs, ws, cache);
+      await runCompact(compactDeps, fs, ws, cache);
       const recs = [...cache.values()];
       const memories = recs.map((r) => ({ date: r.date, time: r.time, name: r.name, rel: r.rel }));
       const topicFiles: Record<string, string[]> = {};
@@ -393,6 +357,9 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
         core.lastMetaError = { at: Date.now(), err: `元数据未登记（${rel}）：hits/生命周期/遗忘判据都看不到这条记忆` };
         console.error("[dsh-shadow][error]", core.lastMetaError.err);
       }
+      // 写侧收口（v1.21.42）：文件爆炸发生在写侧 ⇒ 收敛也在写侧触发（根因见 `maybeCompact` 上方注释）。
+      // 它在 flush 的 `try` 内 ⇒ 失败经 `lastFlushError` **显式留痕**，不会静默。
+      await maybeCompact(compactDeps, fs, ws);
       void patchSummary(fs, ws, rel, entry, arr);
     } catch (e: any) {
       core.lastFlushError = { at: Date.now(), err: (e && e.message) || String(e) };

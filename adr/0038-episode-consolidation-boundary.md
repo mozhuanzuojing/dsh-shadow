@@ -52,3 +52,47 @@ dsh-shadow:   Observation → Memory Atom                （事实源）
 - [x] `node test/episode-lineage.test.ts` ALL PASS（含场景 7：收口生成 consolidated、原子压缩归档、决策可回放）
 - [x] `node test/recall-attribution.test.ts` ALL PASS（invariant 1–240 回归）
 - [x] `compact.enabled=false`（默认关）时行为不变（纯读取模型变化）
+
+## 补记（2026-09-30，落成 `v1.21.42`）：收口的**触发点**从读路径搬到写路径
+
+**本条正文不改写**；只记后续。**本补记不涉边界，只涉触发点。**
+
+### 现象
+
+本机真工作区（466 条原子 / 5 天）：`-consolidated.md` **0 个**、`_meta.json` 里 `status:"compacted"` **0 个**，
+而 `compact` 自 `v1.15.85` 起**默认开**。同一工作区里 `indexes/_index.md` 与 `indexes/abstracts/` **也不存在**。
+
+### 根因（实测，非推理；探针 `../.docs/fix/2026-09-30/probe-runcompact.ts`）
+
+调用链是**单向**的：
+
+```text
+无参 read_shadow  →  query/index-budget.ts  →  ensureIndex  →  rebuildIndex  →  runCompact
+（带 topic 的主题召回走 listMemories 每次读盘，**不碰索引**）        ↑
+                                        写路径明写「不在此处重建」（materialize.ts 的 flush）
+```
+
+⇒ **只要没人「无参读目录」，文件就永不收敛**。三条缺失（`_index.md` · `abstracts/` · `consolidated`）
+**全部**由 `rebuildIndex` 产出 ⇒ 一次解释三处，且**不需要任何异常**。
+本机旁证：`_meta.json` 里 `hits>0` 的有 113 条（主题召回**确实发生过**），但无参读目录从未发生。
+
+### 判据（由此立的规矩）
+
+**文件爆炸发生在写侧，收敛也必须在写侧发生。** 索引（`_index.md` / `abstracts/`）**仍保持懒构建**不变 ——
+本次只搬「收口」这一个动作的触发点。落地为 `core/writer/materialize.ts` 的 `maybeCompact`（flush 末尾调用），
+回归锁在 `test/compact-write-side.test.ts`（**从不调用 `read_shadow`**，只驱动一次写 ⇒ 必须出现 consolidated；
+同时断言 `_index.md` **仍不生成**，锁住「只搬了收口」这条边界）。
+
+### 与本 ADR §6「方向 A 不做」的关系（不冲突，逐条对照）
+
+§6 拒绝的是**写侧按 episode 成文件**，三条理由都是「**任务边界不能由写侧自决**」。
+本次没有引入任何自决：合并的仍是**已关闭**的 episode（判据是**时间间隔**，客观量），
+Episode 依旧是**派生**（正文由原子渲染，原子只**标** `compacted` 而不删），且自 `ADR-0110` §2.2 起收口产物改为
+「**同一件 Affaire 的同一张纪要加圈**」（不再是「一个 episode 一个新文件」）。⇒ 六条边界**一条未松**。
+
+### 仍未核（诚实标注）
+
+- `mutateMeta` 的**版本守卫**分支（`stat` 可用时的 `replaceIfVersion` 重试）仍未被真机覆盖 —— 新回归用的 mock fs 没有 `stat`，
+  走的是 ADR-0068 记的「诚实降级为无条件写」那一路；
+- 本机真工作区的 466 条**尚未收口**：插件当前未挂载（`desktop` profile 无 `dsh-shadow`），
+  且**真语料上首次收口的效果（439 条进归档、主题召回可见面从 466 条变 ~30 条）需要在挂载后观察
