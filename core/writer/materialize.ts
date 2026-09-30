@@ -27,6 +27,7 @@ import { invalidateProjection, shadowSourcesFingerprint } from "../view/projecti
 import { writeProjectionView, bodyHashOf } from "../space/view-file.js";
 import { atomTokenOf, invalidateProjectionSpace, soulTokenOf } from "../space/world.js";
 import { readSoul } from "../../subject/soul/soul.js";
+import { spiralSections } from "../view/spiral-index.js";
 import type { WriterCore } from "./core.js";
 import type { WriterHooks } from "./capture.js";
 
@@ -206,6 +207,8 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
           noteDegrade(core, "episodes", `Episodes 派生失败（${(e && e.message) || String(e)}）`, "`_index.md` 不列 Episodes 段，且与「暂无连续任务片段」**渲染结果相同** ⇒ 分不清是「没有」还是「坏了」");
         }
       }
+      // 成长面接进无参入口（ADR-0110 §3）：`read_shadow` 无参读本索引 ⇒ 先展开「纪要 / 材料卡的厚处」。
+      idx += await spiralSections(fs, ws);
       const t = await fs.resolve(`${ws}/${indexesRel("_index.md")}`, { cwd: ws });
       await fs.writeText(t, idx);
       // 落盘成功后才记指纹（失败时不记，下次仍会重建）。只在可判定时记。
