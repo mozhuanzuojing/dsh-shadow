@@ -3,85 +3,66 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.21.38] 撤回一次判错的自纠 + 补核一处借错区间的旧账（用户 review：因果颠倒）
+## [v1.21.39] 验证基线抬到 `0.2.0-rc.2`（用户指令「把最低兼容性升级到 0.2.0」）
 
-用户 2026-09-29 一句「review 因果颠倒」。逐段重读 `v1.21.36`/`v1.21.37` 的落盘文本、并当场复测后找到 6 处 ——
-**其中 1 处是 `v1.21.37` 那次自纠自己新引入的判错**。本版逐条修掉。
+### 1. 先核上游事实：没有 `0.2.0` 正式版，落在现存最新的 `0.2.0-rc.2`
 
-### 1. ① 撤回：`v1.21.37` 把**已经核实过的** `231` 判成「没核过」并删掉
+指令的字面值是 `0.2.0`，但上游**不存在**这个版本：`@deepseek-ai/dsh` 的 `latest` / `next` 都是 **`0.2.0-rc.2`**，
+版本表末尾是 `0.1.7-rc.2 → 0.2.0-rc.1 → 0.2.0-rc.2`；本机桌面 App 的 `desktopVersion` 同样是 `0.2.0-rc.2`。
+按 semver，`0.2.0-rc.2 < 0.2.0` ⇒ 照字面写 `>=0.2.0`，得到的是一条**无法验证、且连本机 live 宿主都不满足**的下限。
+**经用户确认后，取值落在 `0.2.0-rc.2`**（现存最新、也是本机正在跑的那一版）。
 
-`v1.21.37` 原话：「跟着 §7 抄的示例值 `231`，与 `presets/README` 里实际写的 `232` 不一致 ⇒ 等于在传播一个没核过的数，去掉。」
+### 2. 判据：两代「现装闭包」逐文件 MD5（口径与 §8 同源，取证形态换了）
 
-**这句错了，而且错在跨代比较。** 本轮实测（本机五棵 dlx 树的载体 `dsh-experimental-tool-agent-team/lib/index.js` 逐行数）：
+上一代那棵 dlx 树已被 pnpm 缓存清掉（本机只剩 rc.2 那棵）⇒ 改成 `pnpm add @deepseek-ai/dsh@<版本>` 装两棵
+**现装闭包**（同机同 store，比「dlx vs dlx」更对称）。脚本可重放：`../.docs/fix/2026-09-30/compare-dsh-closure.ts`。
 
-| 宿主 | 总行 | `const installed = new Map` | `const scoped = agent.ctx` | `team:policy` |
-|---|---|---|---|---|
-| 0.1.7-alpha.1 | 549 | 530 | 231 | 238 |
-| 0.1.7-alpha.2 | 557 | 538 | 231 | 238 |
-| 0.1.7-rc.1 / rc.2 / 0.2.0-rc.1 | 557 | 538 | **231** | **238** |
+| 项 | 读数 |
+|---|---|
+| 包数 | **288 / 288** |
+| 实质面文件（`lib/**` · `presets/**` · `locale/**`） | **3018 → 3034** |
+| 有差异的包 | **47 个 / 134 处**（非 client/host 面 20 个包 / 53 处 · UI/Host 面 27 个包 / 81 处） |
+| 本仓消费面 | **10 个包逐包指纹两代全同（0 处差异）** |
 
-- `231` **是对的**：`const scoped = agent.ctx` 从 alpha.1 起每一代都是第 231 行；
-- `232` **是 `0.1.5-rc.2` 时代的读数** —— `presets/README` 那句原文自己就写着 *those were `0.1.5-rc.2` readings*，`adr/0099` L58 亦同；
-- 我拿**更早一代**的值当判据，去否定**当前代**的值 ⇒ **删掉的是一个已被验证的正确值，还被扣了「没核过」的帽子**。
+### 3. 结论：rc.2 新增的设施不落在本仓的采集面上
 
-⇒ `231` 已恢复；`v1.21.37` 那句判断**撤回**（`README` + `adr/0098` §8.4 都写明真值与撤回理由）。
+- rc.2 唯一新增设施 = **用户问答的定时等待**（`dsh-user-questions` 新增 `timed-wait` / `projection`、
+  `dsh-tool-ask-user` 新增 `types/timed.d.ts`）；类型面上表现为 `MessageSourceMap` 多一条 `'user-question-reply'` ——
+  实测 **7 个包的 `lib/typert.host.js` 差异全都是这条声明串**；`dsh-api-session-controller` 另在会话投影里加 `userQuestions`。
+- **对本仓无影响（代码级可证，不是推断）**：`core/retention/collect.ts` 的 `extractMessage` 只按**事件类型**分类
+  （`type` ∈ `user/message` / `assistant/message`），**从不读消息的来源标识**；全仓对 `MessageSourceMap` /
+  `user-question-reply` / `session-projection` / `userQuestions` / `deferredToolsMode` / `supportsMidConvo*` /
+  `responseModel`（`dsh-llm-pi-ai` 本代三处改动全落在这些符号上）的**引用数都是 0**。
+- **⚠ 仍未核**：非 client/host 面的其余差异只做了逐文件定位、未逐行判定行为影响 —— `dsh` 外壳 ·
+  `dsh-api-gateway` / `-remotes` / `-terminal-controller` · `dsh-tool-cordis`。**这是判断，不是证明。**
 
-### 2. ② 补核：`v1.21.36` 用**不相交区间**的比对去「销账」
+### 4. 改了哪些文件
 
-`v1.21.36` 写「§7 的两条未核本次销账：`dsh-tools` **0 处差异**」—— 那个 0 来自 `rc.2 → 0.2.0-rc.1`，
-而 §7 问的是 `alpha.2 → rc.2`。**两段区间不相交**：后一区间没变，推不出「前一区间变了但没影响」。
-
-本轮把那 10 个文件**逐行读了**，并逐字复现 §7 的读数（`dsh-tools` **4** · `dsh-session` **6** ·
-`dsh-experimental-agent-team` **18** · `dsh-goal` **1**）：
-
-| 包 | alpha.2→rc.2 变化 | 读了之后：动了什么 | 对本仓 |
-|---|---|---|---|
-| `dsh-tools` | 4 | 只新增 `displayReason`（审批提示文案的本地化字段）。`tools/result` / `ToolResult` / `callId` / `content` 符号计数两代**完全相同** | 无影响 |
-| `dsh-session` | 6 | 新增 `ToolHistoryProjection`、`startsSeries` 字段与注释重写 | 无影响 |
-| `dsh-goal` | 1 | 只多注册 schedule 相关类型 | 无影响 |
-| `dsh-experimental-agent-team` | 18 | Team 由 profile 层 bundle 提供，本预设不含委派行 | 未消费 |
-
-⇒ 销账这次**成立**，但措辞改成「**补测销账**」。
-
-### 3. ③ 降级：`--dump-config` 证明不了「确被读取」
-
-`v1.21.36` 写「`--dump-config` 含 `preset-projection` ⇒ 声明行**确被读取**」。三条反证：
-① `dsh --help` 自述 `--dump-config` = *print the composed profile tree **and exit*** ⇒ **不 mount**；
-② 本轮 dump 里 **`fiberPhase` 出现 0 次**（§7 曾引 `preset-projection（fiberPhase: active）`）；
-③ dump 里 `agent-preset-registry` 的 **`config.default: standard`** ⇒ 这个 profile 的默认预设是 **standard**。
-
-⇒ 改为「行**被组合进** `0.2.0-rc.1` 的 profile 树」；「本会话跑的是哪个预设、`preset-projection` 有没有真被挂载/注入」列入**未核**（`BACKLOG` V10 连带项）。
-
-### 4. ④⑤⑥ 三处收尾
-
-- **④ 自纠不彻底**：`v1.21.37` 声称把「归一化读数」换成平白说法时**漏了 `adr/0098` §8.4** ——
-  那句中间多「行号」两字，而我的 grep 用的是精确串 ⇒ 没命中。本版按**概念**查补齐。
-  教训：**不能拿一个字符串 grep 当「修完了」的证据。**
-- **⑤ 术语用错档位**：「硬依赖面」—— 但 CONTEXT 的术语表里 **硬依赖** = `ctx.on`/`ctx.inject`/`ctx.get`/`fs`/`tools`，
-  而 **`systemPrompt` 是可选依赖**。4 处（`README` · `CONTEXT` · `index.ts` 注释 · `adr/0098` §8）改为
-  「**本仓消费的宿主服务面**（实现这些服务的包）」。
-- **⑥ 依据升级为实测**：载体包在 `alpha.2` / `rc.1` / `rc.2` 逐文件 MD5 一致（指纹 `88AF31B46A7B`），
-  且 `rc.2 → 0.2.0-rc.1` **0 处差异** ⇒ 「这些读数对当前代也适用」这条不再是**继承**来的；并**注明 `alpha.1` 不在该区间**
-  （载体 549 → 557 行，那条 +8 的位移正是 `installed` 530 → 538 的来源）。
+| 处 | 文件 | 改动 |
+|---|---|---|
+| ① | `package.json` | `version` → `1.21.39`；`engines.dsh` → `>=0.2.0-rc.2` |
+| ② | `index.ts` | `HOST_BASELINE` → `0.2.0-rc.2`（注释**同法改写、不增行** —— `index.ts` 是复杂度热点棘轮，368 行**只能降**） |
+| ③ | `README.md` | 基线表两行 + 「当前版本」行 + 新增一段基线沿革（含读数与未核项） |
+| ④ | `CONTEXT.md` | 「验证基线」术语行：历史链、`engines.dsh` 取值、rc.2 依据 |
+| ⑤ | `presets/README.md` | `(current as of …)` → `0.2.0-rc.2`（依据：载体包与 `dsh-agent-preset` 指纹两代相同） |
+| ⑥ | `BACKLOG.md` · `adr/0098` §8.6 | 登记本节读数、指纹、未核项与口径说明 |
 
 ### 5. 验证
 
 | # | 检查项 | 手段 | 结果 |
 |---|---|---|---|
-| 1 | `231` 真值 | 五棵 dlx 树逐行数 | `const scoped = agent.ctx` 五代表 **231**；`installed` alpha.1 **530** / alpha.2 **538** |
-| 2 | §7 读数复现 | 两代树逐文件 MD5 | `dsh-tools` **4** · `dsh-session` **6** · `dsh-experimental-agent-team` **18** · `dsh-goal` **1**（与 §7 吻合） |
-| 3 | 被删的值已恢复 | `grep '231'` | `README` 与 `adr/0098` §8.4 均给出真值（不再有「没核过」的判断） |
-| 4 | 两处措辞误用清零 | 全仓 `grep '硬依赖面'` / `grep '归一化行号读数'` | 「硬依赖面」正文 **4 处清零**（仅剩本条目引用该词）；「归一化行号读数」`BACKLOG` 2 处改平白，正文清零 |
-| 5 | 三方版本一致 | `npm run audit:docs` ① | **`1.21.38`**（`package.json` / README 当前版本行 / CHANGELOG 首条） |
-| 6 | 三处基线声明 | `npm run audit:docs` ⑦ | `0.2.0-rc.1`（本版未动基线） |
-| 7 | 全仓闸门 | `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` | **exit 0** · `[run-tests] 共 70 个检查（70 通过 / 0 失败）` · `ALL PASS ✅` |
+| 1 | 三处基线声明 = `engines.dsh` | `npm run audit:docs` ⑦ | `0.2.0-rc.2` |
+| 2 | 三方版本一致 | `npm run audit:docs` ① | `1.21.39` |
+| 3 | `HOST_BASELINE` 防漂移棘轮 | `test/host-probe.test.ts` ⑥ | 与 `engines.dsh` 一致 |
+| 4 | 复杂度热点棘轮 | `npm run audit:complexity` | `index.ts` **368**（未上涨） |
+| 5 | 全仓闸门 | `SHADOW_EVAL_ROOT=D:\project\net1 npm run verify` | **exit 0** · 70/70 通过 |
 
 ### 6. 诚实标注
 
-- 本版**只改文档 + 一处注释措辞**（`index.ts` 的注释），**不动行为代码、不动验证基线**；
-- 这是本会话**第 3 次自纠**：① `v1.21.36` 复杂度热点上涨（`index.ts` 368→373）；② `v1.21.37` 错数 `178`；
-  ③ 本版**撤回 `v1.21.37` 的误判**。三次同源：**写数 / 下判断之前没有当场核**。
-  第 3 次尤其值得记：**自纠本身成了新的错误来源** —— 修错的动作如果不带同样强度的复核，就会变成下一处错。
+- 本版**只抬基线 + 同步文档**，不动行为代码；
+- 「rc.2 对本仓无影响」有**代码级证据**（消费面 0 处差异 + 相关符号引用数 0），但**覆盖不到** §3 末尾列出的未核包 ——
+  那几家只做了逐文件定位，**是判断不是证明**；
+- 本机跑着的正是 `0.2.0-rc.2` ⇒ 声明与运行面一致（若照字面写 `0.2.0`，本机反而落在自己的基线之下）。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；

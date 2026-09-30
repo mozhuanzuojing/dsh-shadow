@@ -63,8 +63,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   // `$DSH_HOME/.agent-presets/<id>/` 目录**没有读取者**（官方 shipped skill 原文：Nothing reads that
   // directory any more）⇒ 形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。v1.21.36 这次是**跨 minor 的声明同步**：
   // 两代 dlx 树实质面逐文件 MD5 比对 ⇒ 本仓消费的宿主服务面（dsh-tools / dsh-fs / dsh-sandbox-policy / dsh-system-prompt）与
-  // 预设契约（dsh-agent-preset）**均 0 处差异**，宿主新增的尾部修复恢复与本仓采集面**结构性隔离**（§8）。
-  const HOST_BASELINE = "0.2.0-rc.1"; // 与 package.json 的 engines.dsh 同步维护
+  // 预设契约（dsh-agent-preset）**均 0 处差异**（§8）；v1.21.39 再抬到 rc.2 —— 两代**现装闭包**实质面比对，本仓消费面 10 个包**指纹全同**，rc.2 新增的问答定时等待 / 来源种类 `user-question-reply` 本仓 0 处引用（§8.6）。
+  const HOST_BASELINE = "0.2.0-rc.2"; // 与 package.json 的 engines.dsh 同步维护
   const reportHostGap = (kind: "error" | "warn", lines: string[]): void => {
     if (!lines.length) return;
     const head = kind === "error"

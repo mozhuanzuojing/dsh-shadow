@@ -1941,6 +1941,17 @@ V/G/T6 真机与外部条件项
   - **③ 另一条教训（`v1.21.38` 记）**：`v1.21.37` 的「自纠」自己判错了一次 —— 把已核实的 `231`（`const scoped` 在 alpha.1–0.2.0-rc.1
     都是第 231 行）拿 `0.1.5-rc.2` 时代的 `232` 去比，判成「没核过」并删除。**跨代比较当判据 = 坐标轴接反**，见 `adr/0098` §8.4。
 
+- **V10 再记一档（`v1.21.39`，`adr/0098` §8.6）**：基线再抬到 **`0.2.0-rc.2`**（同一 minor 内的 rc 推进；
+  上游并没有 `0.2.0` 正式版 —— npm 的 `latest` / `next` 都是 `0.2.0-rc.2`）。取证形态换了：上一代 dlx 树已被 pnpm
+  缓存清掉，改用**两棵现装闭包**（`pnpm add @deepseek-ai/dsh@<版本>`，同机同 store ⇒ 对称）。读数：包数 **288 / 288** ·
+  实质面文件 **3018 → 3034** · 有差异的包 **47 个 / 134 处**（非 client/host 面 **20 个包 / 53 处**），
+  **本仓消费面 10 个包逐包指纹两代全同**。rc.2 唯一新增设施 = **用户问答的定时等待**（类型面表现为 `MessageSourceMap`
+  多一条 `'user-question-reply'`；7 个包的 `typert.host.js` 差异**全是这一条声明串**；`dsh-api-session-controller`
+  另在会话投影里加 `userQuestions`）⇒ 本仓对 `MessageSourceMap` / `user-question-reply` / `session-projection` /
+  `userQuestions` **引用数均为 0**（代码级隔离，见 `core/retention/collect.ts` 的 `extractMessage`）。
+  **仍未核**：`dsh` 外壳 · `dsh-api-gateway` / `-remotes` / `-terminal-controller` · `dsh-tool-cordis` 的
+  行为 diff 未逐行读（**判断，不是证明**）。
+
 ### V11. 宿主原生能力面的**会话生效面**未实测
 
 - **现状**：`v1.21.1` 把 `dsh 原生 browser-use` / `dsh 原生 computer-use` 挂进 profile（4 行 `fiberPhase: active`），

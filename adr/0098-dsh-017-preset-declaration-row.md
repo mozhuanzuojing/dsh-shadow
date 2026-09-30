@@ -313,3 +313,39 @@ persona 文本逐字未改（折叠语义下 2915 字符）。
   而不是给它**再加一道门**（加门会把派生处从 3 处变 4 处，且要在长描述里做正则提取）。
 - **跳版**：`0.1.7-rc.1`（本机 `5caa8fc4…` 树）本仓从未声明过；本次是 `0.1.7-rc.2` → `0.2.0-rc.1`
   的**跨 minor 抬升**。
+
+### 8.6 补记（2026-09-30）：基线再抬到 `0.2.0-rc.2`，落成 `v1.21.39`
+
+用户 2026-09-30 指令「把最低兼容性升级到 0.2.0」。**先核上游事实**：npm 上**没有** `0.2.0` 正式版 ——
+`@deepseek-ai/dsh` 的 `latest` / `next` 都是 **`0.2.0-rc.2`**，版本表末尾是 `0.1.7-rc.2 → 0.2.0-rc.1 → 0.2.0-rc.2`；
+按 semver `0.2.0-rc.2 < 0.2.0` ⇒ 字面写 `>=0.2.0` 会得到一条**无法验证、且连本机 live 宿主都不满足**的声明
+（本机桌面 App 的 `desktopVersion` = `0.2.0-rc.2`）。经用户确认，落在**现存最新的 `0.2.0-rc.2`**。
+
+- **口径与 §8 同源（逐文件 MD5），取证形态不同**：上一代那棵 dlx 树已被 pnpm 缓存清掉（本机只剩 rc.2 那棵）⇒
+  改为**两棵现装闭包**：`pnpm add @deepseek-ai/dsh@0.2.0-rc.1` / `@0.2.0-rc.2`（同机同 store，比「dlx vs dlx」更对称）。
+  脚本可重放：`../.docs/fix/2026-09-30/compare-dsh-closure.ts`；读数落同目录 `run-diff.txt` / `closure-diff-20260930.json`。
+  ⚠ **指纹口径**：实质面（`lib/**` · `presets/**` · `locale/**`）的 `路径:md5` 排序后再取 MD5 前 12 位 ——
+  与 §7/§8 记的 `88AF31B46A7B`（那是**4 个文件**的口径）**不可直接比较**。
+- **读数**：包数 **288 / 288**；实质面文件 **3018 → 3034**；有差异的包 **47 个 / 134 处**
+  （非 client/host 面 **20 个包 / 53 处**；UI/Host 面 **27 个包 / 81 处**）。
+- **本仓消费面 0 处差异**（逐包指纹两代相同）：`dsh-tools` **301425C5D08F**（`tools/result` 的唯一发射点）·
+  `dsh-fs` **04BBA5C9A573** · `dsh-sandbox-policy` **5A73477AB50C** · `dsh-system-prompt` **F19F25EE6ADC** ·
+  `dsh-agent-preset` **346C981CBFFB** · `dsh-session` **674AF473A448** · `dsh-agent-loop` **36187EA2497E** ·
+  `dsh-experimental-tool-agent-team` **C8FEDBD4811A** · `dsh-web-app` **5212CB48A0D3** · `dsh-base` **B31DE78A7080**。
+- **rc.2 唯一新增设施 = 用户问答的定时等待**：`dsh-user-questions` 新增 `timed-wait` / `projection`、
+  `dsh-tool-ask-user` 新增 `types/timed.d.ts`；类型面上表现为 `MessageSourceMap` 多一条 `'user-question-reply'` ——
+  实测 **7 个包的 `lib/typert.host.js` 差异全都是这一条声明串**（`dsh-commands` / `dsh-goal` / `dsh-llm` /
+  `dsh-permission-presets` / `dsh-session-reference` / `dsh-subagent` / `dsh-agent-preset-registry`）；
+  `dsh-api-session-controller` 差异最大（`typert.host.js` 164 行 / `typert.remote-client.js` 120 行），
+  内容是在**会话投影**里新增 `userQuestions`。
+- **对本仓无影响（代码级可证，不是推断）**：`core/retention/collect.ts` 的 `extractMessage` 只按**事件类型**分类
+  （`type` ∈ `user/message` / `assistant/message` ⇒ `kind`），**从不读消息的来源标识**；全仓对
+  `MessageSourceMap` / `user-question-reply` / `session-projection` / `userQuestions` / `deferredToolsMode` /
+  `supportsMidConvo*` / `responseModel` 的引用数**都是 0**（`dsh-llm-pi-ai` 本代的三处改动全落在这些符号上）。
+- **⚠ 仍未核（诚实标注）**：非 client/host 面的其余差异**只做了逐文件定位**、未逐行判定行为影响 ——
+  `dsh`（CLI 外壳的 `bin` / `plugin` 入口）· `dsh-api-gateway` · `dsh-api-remotes` · `dsh-api-terminal-controller` ·
+  `dsh-tool-cordis`；`dsh-api-session-controller` 也只判了「新增 `userQuestions` 投影」这一点。**这是判断，不是证明。**
+- **`presets/README` 的 `(current as of …)` 标注随之抬到 `0.2.0-rc.2`**：依据是本轮实测 —— 载体包
+  `dsh-experimental-tool-agent-team` 指纹 **C8FEDBD4811A** 两代相同、`dsh-agent-preset` 指纹两代相同 ⇒
+  该节「预设只能是声明行」的实质断言在本代仍成立。⚠ `dsh-agent-preset-registry` 本轮有 1 处差异，
+  但那是 `MessageSourceMap` 声明串，与预设注册无关。

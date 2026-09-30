@@ -217,8 +217,8 @@ npm run verify
 
 | 项 | 值 |
 |---|---|
-| 验证基线 | **DSH `0.2.0-rc.1`**（在这一版上验证并运行） |
-| 声明 | `package.json` → `engines.dsh: ">=0.2.0-rc.1"` |
+| 验证基线 | **DSH `0.2.0-rc.2`**（在这一版上验证并运行） |
+| 声明 | `package.json` → `engines.dsh: ">=0.2.0-rc.2"` |
 | 更早版本 | **未经验证，不承诺可用** |
 
 **这是一句「验证基线」声明，不是强制闸门。** 宿主与 pnpm 目前都不读 `engines.dsh`（对 `@deepseek-ai/*` 全量编译产物检索 `engines`：**无任何代码读取**，仅散文注释提及；`dsh plugin` 只转发 pnpm，并按「装了什么」同步 bundles 层），所以它拦不住低版本 DSH。**能观测到的防线是能力探测**——它只**报告**、不拦截：插件探测自己需要的宿主接口，缺哪个就报哪个：
@@ -242,6 +242,13 @@ npm run verify
 - **§7 那两条「未核」本次销账**：`dsh-tools` 0 处差异、`dsh-goal` 只变了 `typert.host.js` 里内嵌的 `SessionEventMap` 声明 2 行、`dsh-experimental-tool-agent-team` 0 处差异。
 
 ⚠ **仍未核（诚实标注）**：`presets/README` 里那几处**按行号给出的读数**（`installed` = alpha.1 第 `530` 行 / alpha.2 第 `538` 行；`const scoped = agent.ctx` = 第 `231` 行；`team:policy` = 第 `238` 行）**未在本代重跑** —— 依据是**本轮实测**：载体包 `dsh-experimental-tool-agent-team` 的 4 个文件在 `alpha.2` / `rc.1` / `rc.2` 指纹一致（`88AF31B46A7B`）、`rc.2 → 0.2.0-rc.1` 0 处差异 ⇒ 这些读数**对当前代同样适用**（**`alpha.1` 不在这个区间**：载体 549 → 557 行，那条 +8 正是 `installed` 530 → 538 的来源）；但「在哪一代量的」这层标注**仍是 alpha.2**。其余差异多为 `dsh-client-*` UI 包（本仓不消费），**未逐行核**；这里**不写「剩下多少处」这个数**（它随每次比对变化）。⚠ `v1.21.37` 曾把 `231` 误判成「没核过的数」并删除，`v1.21.38` 已恢复并撤回那句 —— 详见 `adr/0098` §8.4。
+
+**基线在 `v1.21.39` 再抬到 `0.2.0-rc.2`（`adr/0098` §8.6 补记；取证脚本可重放：`../.docs/fix/2026-09-30/compare-dsh-closure.ts`）**：`0.2.0-rc.1 → 0.2.0-rc.2` 是同一 minor 内的 rc 推进。判据仍是**逐文件 MD5**，但取证形态换了 —— 上一代那棵 dlx 树已被 pnpm 缓存清掉，这次改成**两棵现装闭包**（`pnpm add @deepseek-ai/dsh@<版本>`，同机同 store ⇒ 对称）：包数 **288 / 288**、实质面文件 **3018 → 3034**、有差异的包 **47 个 / 134 处**（非 client/host 面 **20 个包 / 53 处**）。结论：
+
+- **本仓消费面 0 处差异**（逐包指纹两代相同）：`dsh-tools`（`tools/result` 的唯一发射点）· `dsh-fs` · `dsh-sandbox-policy` · `dsh-system-prompt` · `dsh-agent-preset`（预设声明行契约）· `dsh-session` · `dsh-agent-loop` · `dsh-experimental-tool-agent-team` · `dsh-web-app` · `dsh-base`；
+- **rc.2 唯一新增的宿主设施是「用户问答的定时等待」**（`dsh-user-questions` 新增 `timed-wait` / `projection`、`dsh-tool-ask-user` 新增 `types/timed.d.ts`），反映到类型面就是 `MessageSourceMap` 多出一条 **`'user-question-reply'`** —— 7 个包的 `lib/typert.host.js` 差异**全都是这一条声明串**；`dsh-api-session-controller` 另在会话投影里新增 `userQuestions`（该包本次差异最大）；
+- **对本仓结构性无害（代码级可证）**：本仓的消息采集只看**事件类型**（`core/retention/collect.ts` 的 `extractMessage`：`type` ∈ `user/message` / `assistant/message` ⇒ `kind`），**从不读消息的来源标识**；全仓对 `MessageSourceMap` / `user-question-reply` / `session-projection` / `userQuestions` / `deferredToolsMode` / `supportsMidConvo*` / `responseModel`（`dsh-llm-pi-ai` 本代的改动处）的引用数**都是 0**；
+- ⚠ **仍未核（诚实标注）**：非 client/host 面其余差异**只做了逐文件定位、未逐行判定行为影响** —— `dsh`（CLI 外壳的 `bin` / `plugin` 入口）· `dsh-api-gateway` · `dsh-api-remotes` · `dsh-api-terminal-controller` · `dsh-tool-cordis`；`dsh-api-session-controller` 的 160 行差异也只判了「新增 `userQuestions` 投影」这一点（本仓 0 引用）。已定位并判定的还有：7 个包的 `typert` 声明串、`dsh-tool-bash` / `dsh-tool-pwsh` 的**工具描述文案**、`dsh-llm-pi-ai` 的 provider 行为位、`dsh-schedule` 的提醒措辞。**这是判断，不是证明。**
 
 ## 安装（持久化）
 
@@ -284,4 +291,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.38`**（**撤回一次判错的自纠 + 补核一处借错区间的旧账**：`v1.21.37` 曾把已核实的行号 `231` 误判成「没核过」而删掉（跨代比较所致）⇒ 恢复并撤回；另把 `v1.21.36`「用后一区间比对销前一区间旧账」改为**补测销账**（那 10 个文件已逐行读）、把 `--dump-config` 那条断言降级为「行被组合进 profile 树」 —— 见 [`CHANGELOG.md`](./CHANGELOG.md)）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.39`**（**验证基线再抬一档到 `0.2.0-rc.2`**：`engines.dsh` 与 `HOST_BASELINE` 一并改、三处文档同步过 `audit:docs` ⑦ 门；判据是两代**现装闭包**的实质面逐文件 MD5 比对 —— 本仓消费的 10 个宿主包**指纹全同**，rc.2 唯一新增的宿主设施（问答定时等待 / 来源种类 `user-question-reply`）在本仓**引用数为 0**）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
