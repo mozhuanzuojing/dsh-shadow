@@ -62,6 +62,21 @@ const ctext = consolidated.map((k) => files.get(k) || "").join("\n");
 assert.ok(ctext.includes("采用 bundle 模式"), "consolidated 文件应保留决策正文");
 assert.ok(ctext.includes("改/读 pkg-a/x.js"), "consolidated 文件应保留动作背景");
 
+// v1.21.45（ADR-0110 §2.2）：**两者并存** —— 上面那些**圈记忆原子**（住 atoms/、进缓存）是**召回面**，
+// 另外还有一张**派生纪要**（住 indexes/affaires/、不进缓存）逐圈加厚，这才是「螺旋」的成长面。
+const minutes = [...files.keys()].filter((k) => k.includes("/.shadow/indexes/affaires/") && k.endsWith(".md") && !k.includes(".history/"));
+assert.equal(minutes.length, 1, "两个已关闭 episode 属同一件 Affaire ⇒ **只有一张纪要**（不再是「一个 episode 一个文件」）");
+const mtext = files.get(minutes[0])!;
+assert.ok(mtext.includes("### 圈 1") && mtext.includes("### 圈 2"), "同一张纪要应有圈 1 与圈 2（逐圈加厚）");
+assert.ok(mtext.includes("采用 bundle 模式"), "纪要也应含决策正文");
+assert.ok(mtext.includes("# 纪要："), "纪要必须有头（可读）");
+const hist = [...files.keys()].filter((k) => k.includes("/.shadow/indexes/affaires/") && k.includes(".history/"));
+assert.equal(hist.length, 1, "开第 2 圈前应落**恰好一份**归档圈（律 3）");
+assert.ok(files.get(hist[0])!.includes("### 圈 1") && !files.get(hist[0])!.includes("### 圈 2"),
+  "归档圈必须是**上一圈**的逐字快照（只追加、永不改写）");
+assert.ok(![...files.keys()].some((k) => k.includes("/.shadow/indexes/") && k.endsWith("-consolidated.md")),
+  "圈记忆原子只应住在 atoms/（派生纪要里不该再出现 consolidated 文件）");
+
 const meta = JSON.parse(files.get("D:/ws/.shadow/_meta.json") || "{}");
 assert.equal(meta[".shadow/atoms/2026-09-07--090000-pkg-a.md"]?.status, "compacted",
   "被收口的原子应在 _meta.json 标 compacted");
