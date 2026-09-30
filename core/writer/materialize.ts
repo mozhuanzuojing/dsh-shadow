@@ -16,6 +16,7 @@ import { traceOf } from "../retention/trace.js";
 import { streamText, textMessage } from "./llm.js";
 import { buildIndexText } from "./render.js";
 import { maybeCompact, runCompact } from "./compact.js";
+import { recordMaterials } from "../materials/store.js";
 import { parseMemory, deriveEpisodes, episodesIndexText } from "../view/episode.js";
 import { isForgettable, oldestBeyond, isCompacted } from "../retention/forget.js";
 import { sanitizeText, isUnsafe } from "../../security/scrub.js";
@@ -360,6 +361,29 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       // 写侧收口（v1.21.42）：文件爆炸发生在写侧 ⇒ 收敛也在写侧触发（根因见 `maybeCompact` 上方注释）。
       // 它在 flush 的 `try` 内 ⇒ 失败经 `lastFlushError` **显式留痕**，不会静默。
       await maybeCompact(compactDeps, fs, ws);
+      // 材料卡（adr/0110 §2.3，**主轴**）：把本条的「背景/材料」登记成证据圈 —— **写侧**登记，
+      // 与收口同一条判据（资产成长发生在写侧）。平衡三律的判定在 `core/materials/card.ts`。
+      // 确认闸（§2.5）：**用户拍板**（`decisionEvents` 里 source=user）才算 confirmed，agent 自己的决策只作候选。
+      const rec: any = cacheFor(ws).get(rel);
+      const mats: string[] = rec?.parsed?.materials || [];
+      if (mats.length) {
+        await recordMaterials(fs, ws, mats.map((raw) => ({
+          raw,
+          input: {
+            affaire: [rec?.parsed?.project, rec?.parsed?.agent].filter(Boolean).join("|"),
+            atomRel: rel,
+            at: `${rdate} ${rtime}`,
+            decisions: rec?.parsed?.decisions || [],
+            confirmed: (rec?.parsed?.decisionEvents || []).some((d: any) => d?.source === "user"),
+          },
+        })), {
+          // 源指纹（adr/0110 §2.3）：宿主 `fs` 有 `stat` 就用它的 `version`；拿不到 ⇒ 卡上写「（未记）」
+          //（**可见**，不是静默降级）。版本变了而结论没变 ⇒ 只刷新卡、不开新圈（见 `recordMaterials`）。
+          sourceVersionOf: async (raw: string) => {
+            try { const info: any = await (fs as any).stat?.(raw); return String(info?.version ?? ""); } catch { return ""; }
+          },
+        });
+      }
       void patchSummary(fs, ws, rel, entry, arr);
     } catch (e: any) {
       core.lastFlushError = { at: Date.now(), err: (e && e.message) || String(e) };

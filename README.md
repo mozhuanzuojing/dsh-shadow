@@ -291,4 +291,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.42`**（**修一处根因：Episode 收口的触发点从读路径搬到写路径**。收口原先只由「无参 `read_shadow`」触发，而写路径明确不重建 ⇒ **没人无参读目录就永不收敛**：本机 466 条原子而 `-consolidated.md`、`_meta.json` 的 `compacted`、`indexes/_index.md`、`abstracts/` **一起缺**。现改为 `flush` → `maybeCompact`（写侧收敛），**索引仍懒构建**；收口实现迁至 `core/writer/compact.ts`，`materialize.ts` 因热点「只能降」由 447 降到 414 行。新增回归 **从不调用 `read_shadow`**）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.43`**（**落地「记忆螺旋」的②：材料卡**。新增 `core/materials/card.ts`（纯逻辑：`normalizeMaterialKey` 唯一实现 · 平衡三律的机器判据 · 确认闸 · 并卡）+ `core/materials/store.ts`（落 `indexes/materials/` 派生位、开圈前留 `history/<圈号>.md` 归档），由**写侧** `flush` 登记 —— 与收口同一条判据。回归 [test/material-card.test.ts](test/material-card.test.ts) 八条；并卡做成**可用工具** `tools/material-card-merge.ts`（它天然没有自动触发点，挂产品面只会被接线门记成空接口））—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

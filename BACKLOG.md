@@ -1971,9 +1971,11 @@ V/G/T6 真机与外部条件项
   （收口只挂在**无参 `read_shadow`** 的读路径上，写路径明写「不在此处重建」⇒ 没人无参读目录就永不收敛；
   一次解释 `_index.md` / `abstracts/` / `consolidated` 三件一起缺）。修法：**收口改在写侧触发**（`flush` → `maybeCompact`），
   索引仍懒构建；实现迁至 `core/writer/compact.ts`，回归 `test/compact-write-side.test.ts`，见 `adr/0038` 补记。
-  ② **材料卡优先** —— `key` 规范化（唯一实现）· 写 API · 源指纹 · 冲突登记 · 并卡；③ 收口改
-  「**同一张纪要加圈** + `history/<圈号>.md` 归档圈版本链」（正文落 `indexes/`，不占 source 位）+ **平衡三律的机器判据**
-  （新证据 / 不矛盾 / 可回退）以及「未 `confirmed` 不得改写进化层」的闸门。
+  ② **材料卡** —— **已结（v1.21.43）**：`core/materials/card.ts`（纯逻辑：key 规范化唯一实现 · 平衡三律判定 · 确认闸 · 并卡）
+  + `core/materials/store.ts`（落盘：卡 → `indexes/materials/`，归档圈 → `history/<圈号>.md`，并卡旧件进 `_merged/`），
+  由**写侧** `flush` 登记（与收口同一判据）；源指纹走宿主 `fs.stat` 的 `version`，拿不到则卡上写「（未记）」（可见）；
+  回归 `test/material-card.test.ts` 八条（含「版本变化只刷新卡、不开圈」）。③ 收口改
+  「**同一张纪要加圈** + `history/<圈号>.md` 归档圈版本链」（正文落 `indexes/`，不占 source 位）—— **仍待做**。
 - **触发它的事实（本机实测，探针 `../.docs/fix/2026-09-30/atom-shape.ts`）**：466 条 / **307.9 KB** ·
   **全量读完 184–206 ms**（⇒ 当前瓶颈**不是** I/O）· 11 个会话产出 466 条（平均 **42**、最多 **183**）·
   正文 ≤1 行占 **89.7%** · **82.8% 无摘要** · `roles/` / `affaires/` / `soul/` **全不存在** ·
