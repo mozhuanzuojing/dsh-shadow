@@ -128,6 +128,10 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | | `workspace-record` / `workspace-context` / `continuity-index` | 工作区记录 / 上下文 / 连续性索引 |
 | | `recall-index` | RecallIndex（导航非内容） |
 | | `verification` | VerificationRun（只读只报；禁改 authority/identity） |
+| 记忆螺旋（ADR-0110） | 记忆的**成长模型**：事实层（`atoms/`，只追加）→ 成圈层（**同一张纪要逐圈加厚**：`affaires/<roleId>/<id>.md` + `<id>.history/<圈号>.md`）→ 进化层（`roles/` · `soul/` 派生切片 · **材料卡**）。**两条不变量**：原子不可变 + 派生可重建（⇒ **只有原子可以是「唯一一份」**）。**不是**把解释层升格为事实源（ADR-0038 的方向 A 仍不做） |
+| 一圈收口（ADR-0110） | 对 ADR-0038 的**产物形态**修改：收口不再「每 episode 一个新 `consolidated` 文件」，而是**同一件 Affaire 的同一张纪要加一圈**（纪要正文 = 当前圈；`history/<圈号>.md` = 逐字快照；圈号单调递增、**不许跳号 / 不许覆盖**）。⇒ 文件数与**事的件数**同阶，不再与回合数同阶 |
+| 材料卡（ADR-0110） | 进化层载体：`.shadow/materials/<key>.md`（`key` = 规范化路径 / 报题 / DOI）。卡上记「**它对哪些事重要**（Affaire 指针）· **我们从它那里得到过什么结论**（逐圈追加）· **读到的是第几版**（源指纹）· **哪些结论互相冲突**」。只登记**被引用过的事实**，**禁 LLM 补写**。它是「`背景/材料` 从一行路径长成资产」的落点 |
+| 平衡三律（ADR-0110） | 螺旋每加一圈必须**同时**过三道：① **新证据**（没有新的原子指针 ⇒ **不写**）② **不矛盾**（冲突显式记 `contradiction`，**不许静默覆盖**）③ **可回退**（每圈留 `history/`）。第四重：**未 `confirmed` 不得改写材料卡 / soul**（`soul.json` 核心仍走 `writeSoulCore` + H3gate） |
 
 ## 关联
 - **`resource` 是第 6 个 NodeType（ADR-0051，v1.14.0）**：卡片=source、节点=投影；无 `source` 的卡片不上投影；**不新增 mode**（本条原写「仍 61」，是个会腐烂的派生计数，v1.15.71 删去：mode 总数以 `test/recall-envelope.test.ts:104` 的门为准）。
