@@ -12,6 +12,13 @@
 // **判据**：文件爆炸**发生在写侧**，收敛也必须在写侧发生；索引（`_index.md` / abstracts）**仍保持懒构建**。
 // 这不违反 ADR-0038 §6 的「方向 A 不做」：合并的仍是**已关闭**的 episode（时间间隔客观判定），
 // 不引入「agent 自决任务边界」，Episode 依旧是派生。
+//
+// ⚠ **产物形态仍是「一个 episode 一个 consolidated 文件」（住在 `atoms/`）** —— `ADR-0110` §2.2 想把它改成
+// 「同一件 Affaire 的同一张纪要加圈 + 落 `indexes/affaires/`」，但**那一步被实测挡下**（2026-09-30）：
+//   旧形态里 consolidated **本身就是记忆**（在 `atoms/`、进缓存）⇒ `episode-lineage` 场景 7 钉着
+//   「**收口后决策可召回**」；一旦把纪要挪进 `indexes/`（派生件、不进缓存），被收口的决策就**从召回面消失**。
+//   ⇒ **③ 必须与「读侧入口（纪要可读可召回）」一起做**，不许只改写侧形态（那会削弱 ADR-0038 已有的保证）。
+//   详见 `adr/0110` §5 与 `BACKLOG.md` V12③。
 import { consolidateText } from "./render.js";
 import { mutateMeta, readMeta } from "../../persistence/meta.js";
 import { memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";

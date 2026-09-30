@@ -291,4 +291,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.21.43`**（**落地「记忆螺旋」的②：材料卡**。新增 `core/materials/card.ts`（纯逻辑：`normalizeMaterialKey` 唯一实现 · 平衡三律的机器判据 · 确认闸 · 并卡）+ `core/materials/store.ts`（落 `indexes/materials/` 派生位、开圈前留 `history/<圈号>.md` 归档），由**写侧** `flush` 登记 —— 与收口同一条判据。回归 [test/material-card.test.ts](test/material-card.test.ts) 八条；并卡做成**可用工具** `tools/material-card-merge.ts`（它天然没有自动触发点，挂产品面只会被接线门记成空接口））—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.21.44`**（**一个负结果：V12③「收口改同卡加圈」被实测挡下，已回退**。把纪要搬到 `indexes/affaires/` 加圈后，既有用例「**收口后决策可召回**」立刻红 —— 旧形态的 consolidated 本身就是记忆（在 `atoms/`、进缓存），挪进派生层后**被收口的决策从召回面消失**。⇒ 该形态改动**必须与「读侧入口（纪要可读可召回）」一起做**，不许只改写侧；本版**只留结论、不改任何判据**（放宽那条测试等于把判据改松）。改动仅 `compact.ts` 头部的原委说明 + `adr/0110` §5 与 `BACKLOG` V12③ 的记录）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
