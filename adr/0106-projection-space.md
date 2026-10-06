@@ -63,8 +63,8 @@
 
 补记二（同日第二轮审查修复）：
 
-- **「升级须人知」现在有落地**：`tools/granularity-audit.ts` 对「有旧日期树但没有 `atoms/`」判 **exit 2「迁移未做」**
-  （此前判 0 ⇒ 旧语料静默全绿）；`atoms/` 旁边仍有旧树时，通过报文里也带一行显式提示。
+- **旧树不检测、不提示 —— 原承诺已撤回（2026-10-06，用户指示）**：本仓**只支持新树**（`.shadow/atoms/`）。
+  原「「升级须人知」现在有落地」那两条（`exit 2「迁移未做」` / 并存时显式提示）**删除**，理由与现行实现见文件末尾补记。
 - **H3gate / Role / Affaire 卡写 API 本版无生产调用者**（`writeSoulCore` · `writeAffaireCard` 测试引用 0，`writeRoleCard` 仅测试）——
   它们是**已交付的接口**，不是已接通的通路；`README` 的措辞据此校正。闸门令牌用 `Symbol.for(...)`：
   **挡误调用，不挡蓄意绕过**（同进程内任何模块都能再取一次同名符号）。
@@ -83,3 +83,18 @@
 - 把 dream/temporal/全部 mode dump 并进 Affaire
 - Role/Affaire 进召回与 sqlite source（另开决策）
 - 以 `role !== "default"` 作为投影硬闸（须先有真实 Role 采集）
+
+## 补记（2026-10-06）：撤回 §2「升级须人知」的代码承诺 —— 本仓只支持新树
+
+§2 原写（已删）：「`tools/granularity-audit.ts` 对『有旧日期树但没有 `atoms/`』判 **exit 2『迁移未做』**；
+`atoms/` 旁边仍有旧树时，通过报文里也带一行显式提示。」
+
+**该承诺已按用户指示撤回。**本仓**只支持新树**（`.shadow/atoms/`）：
+
+- **不检测**旧日期树、**不在报文里提示**、**不提供迁移或只读兼容** —— 与 §1 三条禁令（不迁 / 不双读 / 不 shim）及 §4 Non-goals 同向；
+- **现行实现与之一致**：`tools/granularity-audit.ts` 只判 `.shadow/atoms/`，旧 `.shadow/<date>/` 明写「不扫、不因它报红、也不因它报绿」；
+  `persistence/files.ts` 的 `listMemories` 只枚举 `.shadow/atoms/`（`atomsRel()`），目录不存在即空集；候选面同理（`core/candidate/sqlite.ts` 的枚举器只保留 `atoms`）；
+- **盘上残留旧树 = 静默不可见死数据**（沿用 §1 原话），只作历史证据保留；删留须另立决定；
+- 那批历史语料已在 **v1.19.1** 按 `adr/0097` §5.3 用 `tools/granularity-reclaim.ts --apply` 一次性回收。
+
+⇒ 本次只动 §2 的这一处承诺（删除），§1 / §3 / §4 未动；规范术语见 `CONTEXT.md` 的「**旧日期树（存量）**」行。

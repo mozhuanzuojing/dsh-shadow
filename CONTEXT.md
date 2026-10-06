@@ -14,6 +14,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | 投影空间 | **多轴工作面权威**（ADR-0106）：落盘根仍为 `.shadow/`；语料权威为 `atoms/` · `roles/` · `affaires/`；派生在 `indexes/`。寻址坐标 = 五轴（缺轴结构闸；flush 可填 `"default"` 临时轴）。源指纹覆盖四源目录（含 nested `affaires/`）。**不是**日期目录树 |
 | 一条记忆 = 一个文件 | 记忆的落盘形态：`.shadow/atoms/<date>--<HHMMSS>-<入口slug>.md`（五轴在线索头） |
 | 记忆树 | `.shadow/` 根的**历史俗称**；现行权威布局见**投影空间**（工具文案勿再用此词指权威） |
+| 旧日期树（存量） | `.shadow/<YYYY-MM-DD>/` 的**已废除**布局（ADR-0106 §1/§4）：**不迁 · 不双读 · 不 shim**；不进召回/候选/索引，也不进任何门（`tools/granularity-audit.ts` 明写「不扫、不报红、不报绿」）⇒ 盘上残留 = **静默不可见死数据**，只作历史证据保留，删留须另立决定 | ≠ 现行权威语料（那是 `atoms/`）；≠ `indexes/abstracts/<date>/`（when 桶，派生件，不是旧树回归） |
 | Role | 一等公民卡：`.shadow/roles/<id>.md`。小世界 **枚举**已接（ADR-0107）；**不**驱动召回排序 / sqlite `source`（枚举 ≠ 生效） |
 | Affaire | Role 下的容器卡：`.shadow/affaires/<roleId>/<id>.md`；成员 = atom id **指针**。交付边界同 Role |
 | 投影空间小世界 | 读侧内存：roles · affaires · atomRels · soul；可扔可重建；`projectionSpace.cache` **只**控是否缓存 hydrate |

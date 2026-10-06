@@ -168,7 +168,7 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
   );
 
   // ④b persona：0.1.7 `team:policy` 的执行口径锚点（上游改口径时要回来核这一份）。
-  const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";
+  const persona = src.match(/prefix:\s*>-\r?\n([\s\S]*?)\r?\n\s*-\s+id:/)?.[1] ?? "";
   assert.notEqual(persona, "", "④b persona prefix 折叠块必须能取到");
   for (const needle of PERSONA_TEAM_POLICY_ANCHORS) {
     assert.ok(persona.includes(needle), `④b persona 必须携带 0.1.7 team:policy 锚点：${needle}`);
@@ -179,7 +179,7 @@ const legacyDir = new URL("../agent-presets/", import.meta.url);
 // ── ⑤ persona 的「宿主原生能力面」锚点（v1.21.5） ─────────────────────────────
 {
   const src = readFileSync(patchUrl, "utf8");
-  const persona = src.match(/prefix:\s*>-\n([\s\S]*?)\n\s*-\s+id:/)?.[1] ?? "";
+  const persona = src.match(/prefix:\s*>-\r?\n([\s\S]*?)\r?\n\s*-\s+id:/)?.[1] ?? "";
   assert.notEqual(persona, "", "⑤ persona prefix 折叠块必须能取到");
   for (const needle of PERSONA_CAPABILITY_ANCHORS) {
     assert.ok(
