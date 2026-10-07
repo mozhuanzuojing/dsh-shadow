@@ -20,8 +20,16 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
+import { exclusionLine, isMaterialDir, MATERIALS_ROOT_ENV, requireMaterialsRoot } from "./materials-root.lib.ts";
 
-const ROOT = process.argv[2] ?? "D:\\project\\dsh1\\vendor\\_src";
+/**
+ * 枚举根：位置参数 → 环境变量 → **缺件即拒**。
+ * 「没有写死的默认根」这条判据与它的报文**都在 `tools/materials-root.lib.ts`**（两个工具共用一份，`adr/0111`）。
+ */
+const ROOT = requireMaterialsRoot(
+  process.argv[2] ?? process.env[MATERIALS_ROOT_ENV],
+  `用法 \`node tools/materials-ledger.ts <枚举根>\`（或设 ${MATERIALS_ROOT_ENV}）。`,
+);
 
 /** 跑 git 并取 stdout；失败返回 undefined（由调用方决定是降级还是标缺件）。 */
 const git = (dir: string, args: string[]): string | undefined => {
@@ -127,6 +135,7 @@ const dirs: string[] = (() => {
   try {
     return readdirSync(ROOT)
       .filter((n) => {
+        if (!isMaterialDir(n)) return false; // 口径的第二半（排除）—— 与 `枚举、口径打印` 同一判据
         try {
           return statSync(join(ROOT, n)).isDirectory();
         } catch {
@@ -147,8 +156,13 @@ if (dirs.length === 0) {
 }
 
 console.log("dsh-shadow 材料台账（tools/materials-ledger.ts 生成 —— **不要手写这张表**）");
+/** 枚举时刻（本地时区）：清单口径**必须**带它 —— 否则换机后不可复核（`references.md` §14 立的判据）。 */
+const nowLocal = (): string => new Date().toLocaleString("sv-SE", { timeZoneName: "short" });
+
 console.log(`枚举根：${ROOT}`);
-console.log("枚举口径：目录 = 根下第一层；文件/字节 = 递归、**含**隐藏文件（分「含 .git」「不含 .git」两栏）；");
+console.log(`枚举时刻：${nowLocal()}`);
+console.log(exclusionLine());
+console.log("枚举口径：目录 = 根下第一层（**已过排除表**）；文件/字节 = 递归、**含**隐藏文件（分「含 .git」「不含 .git」两栏）；");
 console.log("          许可 = `LICENSE|LICENCE|COPYING*` 中第一个的首行 + 关键词识别；版本 = `git log -1`（取不到则降级读 .git/HEAD）。");
 console.log(`材料数：${dirs.length}`);
 console.log("");
@@ -235,7 +249,9 @@ if (degraded.length) {
 }
 if (!noGit.length && !degraded.length) {
   console.log("");
-  console.log("✔ **24/24 都有 `.git` 且都取到了 HEAD**（v1.18.1 补：原先 18 个没有 `.git`）。");
+  // **计数必须实算**：这里原先是写死的「24/24」。实测（2026-10-07）实跑 4 个目录时它照样打印「24/24」
+  // ⇒ 那正是本仓判据「能推出来的字段不要手写」（`AGENTS.md` / `adr/0085` §8.7）被违反在生成器自己身上。
+  console.log(`✔ **${dirs.length}/${dirs.length} 都有 \`.git\` 且都取到了 HEAD**（v1.18.1 补：原先 18 个没有 \`.git\`）。`);
   console.log("  ⚠ **但「有 HEAD」≠「本地拷贝等于那一版」** —— 看「工作树 vs HEAD」一列：");
   console.log("  差 0 处才是逐文件一致；差 N 处表示这份**vendored 拷贝**与上游那一版**不同**（被裁剪/改动/版本略偏）。");
 }

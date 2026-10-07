@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// dsh-shadow —— tools/materials-freshness.ts：**材料新鲜度**（`vendor/_src` 里的 git 材料有没有落后）。
+// dsh-shadow —— tools/materials-freshness.ts：**材料新鲜度**（枚举根下的 git 材料有没有落后）。
+//   根由**显式声明**（环境变量 `SHADOW_MATERIALS_ROOT`）+ **排除表**共同定义，两者收在
+//   `tools/materials-root.lib.ts`（v1.22.0 / `adr/0111`）—— 原先这里写死 `vendor/_src`，而**本机没有那一级**。
 //
 // 由来（用户 2026-09-20 指令）：「**材料里面的 git 每次访问先检查最新，并更新到最新**」。
 // 本条规则的完整口径见 `AGENTS.md` 的同名小节（含两条更新路径的区别与三条硬边界）。
@@ -37,9 +39,16 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { exclusionLine, isMaterialDir, MATERIALS_ROOT_ENV, requireMaterialsRoot } from "./materials-root.lib.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ROOT = process.env.SHADOW_MATERIALS_ROOT ?? "D:\\project\\dsh1\\vendor\\_src";
+// 根与排除表**与 `materials-ledger.ts` 共用一份**（`tools/materials-root.lib.ts`，`adr/0111`）：
+// 原来这里也写死 `D:\project\dsh1\vendor\_src`，而本机 `D:` 整盘已不存在（实测 2026-10-07）。
+const ROOT = requireMaterialsRoot(
+  process.env[MATERIALS_ROOT_ENV],
+  `请设环境变量 ${MATERIALS_ROOT_ENV}=<枚举根>（本工具没有位置参数：` +
+    "`--only <名>` 这类旗标会与它抢位置）。",
+);
 
 const argv = process.argv.slice(2);
 const DO_UPDATE = argv.includes("--update");
@@ -189,6 +198,7 @@ const dirs: string[] = (() => {
   try {
     names = readdirSync(ROOT)
       .filter((n) => {
+        if (!isMaterialDir(n)) return false; // 口径的第二半（排除）—— 与 `materials-ledger.ts` 同一份判据
         try {
           return statSync(join(ROOT, n)).isDirectory();
         } catch {
@@ -284,6 +294,7 @@ const checkMs = Date.now() - t0;
 
 console.log("dsh-shadow 材料新鲜度（tools/materials-freshness.ts —— 检查只读；更新要显式 --update）");
 console.log(`枚举根：${ROOT}`);
+console.log(exclusionLine());
 console.log("口径：本地 HEAD vs **远端默认分支**的当前 sha（`git ls-remote --symref`，**不 fetch**）。");
 console.log(`模式：${DO_UPDATE ? `**--update${HARD ? " --hard（会覆盖工作树）" : "（只移 HEAD，**工作树不动**）"}**` : "只检查（只读）"}${INCLUDE_FROZEN ? " · --include-frozen" : ""} · 并发 ${JOBS}`);
 console.log(`范围：${ONLY.length ? `**仅 ${ONLY.join(" · ")}**` : `全部（${dirs.length} 个）`} · 缓存 TTL **${MAX_AGE}s**（命中就不上网）· 缓存文件 \`${CACHE_PATH}\``);
