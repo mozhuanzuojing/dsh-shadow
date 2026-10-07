@@ -1,10 +1,10 @@
 # references.md — 参考材料（用户提供，先记录）
 
-> 用户 2026-09-02 提供的参考仓库清单，用于后续设计/实现参考（含「投影模式」预设与能力扩展）。
->
-> **本地全部材料（含 DSH 本体、生态插件、在用工具）的名册与状态见 [`MATERIALS.md`](./MATERIALS.md)** ——
-> 那是**磁盘枚举**生成的唯一台账（文件数/字节/许可/已吸收/未读/优先级）。
-> **本文件只登记与记忆层相关的参考材料**的核实记录；**同一事实不在两处重复登记**（避免两处各写一遍而漂移）。
+> **★ 归属（2026-10-07 立，`adr/0111`）**：本文件 = **内容面（源）** —— 只回答「**每份材料读了什么、判定是什么、还差什么**」；
+> **清单面（有哪些材料、各自什么状态）一律在 [`MATERIALS.md`](./MATERIALS.md)**（口径 = 集合定义 + 根 + 排除表 + 枚举时刻）。
+> 本文件原先自带的两个清单块（`§完整清单` · `§14 材料面清单`）已于 2026-10-07 **迁入 `MATERIALS.md` §1.2 / §1.3**，
+> **原处的标题原样保留，只留转发占位** ⇒ 既有引用（`references.md §完整清单` / `§14`）**不必改也不会失配**。
+> **口径**：**同一事实不在两处重复登记**；**能由磁盘枚举推出来的数（清单/计数）不写在本文件里** —— 写了必漂。
 
 ## 宿主原生能力（**不是材料**，不进 `MATERIALS.md` 台账）
 
@@ -92,32 +92,10 @@
 
 ## 完整清单
 
-- https://github.com/firecrawl/open-lovable
-- https://github.com/asgeirtj/system_prompts_leaks
-- https://github.com/datalab-to/marker
-- https://github.com/shadcn-ui/ui
-- https://github.com/volcengine/OpenViking
-- https://github.com/DataExpert-io/data-engineer-handbook
-- https://github.com/tt-a1i/archify
-- https://github.com/Leonxlnx/taste-skill
-- https://github.com/obra/superpowers
-- https://github.com/harry0703/MoneyPrinterTurbo
-- https://github.com/colbymchenry/codegraph
-- https://github.com/Fission-AI/OpenSpec
-- https://github.com/eze-is/web-access
-- https://github.com/addyosmani/agent-skills
-- https://github.com/browser-use/browser-harness
-- https://github.com/Z4nzu/hackingtool
-- https://github.com/affaan-m/ECC
-- https://github.com/google/langextract
-- https://github.com/usestrix/strix
-- https://github.com/VectifyAI/PageIndex
-- https://github.com/zvec-ai/zvec-grep
-
-> 上表是 2026-09-02 那一批。**2026-09-08 起另有补充材料**，见下方各节（§1–§4 / §5 / §6 / §7–§13 / §16–§19）；
-> 其中 **`lohr13/hl_mem` 是用户 2026-09-11 指定的重点材料**，已提到本文顶部单开一节。
-> **口径**：同一条材料**只在一处完整登记**；后到的重复指定**不重写旧段**，只在**新日期段**里补核实或刷新读数
-> （§8 是首次补核实，§9 只是刷新读数 —— 因为 §3 早已完整登记过）。
+> **⬆ 已迁出（2026-10-07，`adr/0111`）**：本节的 21 条**输入清单**整体迁到
+> [`MATERIALS.md`](./MATERIALS.md) **§1.2 输入清单（冻结）** —— 它是**输入**，属于**清单面**，不属于本文件（内容面）。
+> **本节标题按「标题原样保留、只留转发占位」处置** ⇒ 现存引用（`references.md §完整清单`）**不必改也不会失配**。
+> **本节不再承载任何计数与链接**：写了就会与 §1.2 两处各写一遍而漂移（本仓已立此判据）。
 
 ## 按与本项目（dsh-shadow / 投影模式 / 能力扩展）的关联度粗分
 
@@ -1128,8 +1106,11 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   `docs/maintainers.md` 的权限轴 · §4 记的「为什么存在 → 失败模式 → 修法」结构。
 - **未核 / 未做**：**未克隆、未安装、未运行**其任何技能（本节只读公开 API + README）；`skills/*/SKILL.md` 正文
   **未逐篇读**。⇒ 若要从「登记」走到「吸收」，先按 `AGENTS.md`「访问前先查最新」跑
-  `node tools/materials-freshness.ts --only mattpocock`（**前提是先有本地本体 —— 现在没有**：它**不在** `vendor/_src`，
-  也因此**未进** `MATERIALS.md`（那份台账的口径是**磁盘枚举**））。
+  `$env:SHADOW_MATERIALS_ROOT="G:\project\dsh1"; node tools/materials-freshness.ts --only mp-skills`
+  （⚠ **命令已更正**，2026-10-07：该工具自 `v1.22.0` 起**无默认根**，必须显式给根；
+  目录名取 `_upstream` 下的 `mp-skills`）。
+  ⚠ **原句「现在没有本地本体」已过期**：`mattpocock/skills` **已在** `vendor/_upstream/mp-skills`（HEAD `24fe0ef7`）——
+  但那是 **dsh-kit 的技能 vendor 树**，**不是材料根**（材料根 = 工作区根，口径见 `adr/0111`）。
 
 ## 深读结论（2026-09-14 第 2 轮：**一手克隆 + 源码深读**；判定见 `adr/0087`）
 
@@ -1193,24 +1174,18 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
 
 ### 14. 材料面清单（**口径 = 枚举根 + 枚举时刻**）
 
-- **枚举时刻**：2026-09-15（本机，`D:` 盘）。
-- **四个口径，条数互不相同**（不是「谁错」，是**四个不同的集合**）：
-
-| 口径 | 条数 | 复核命令（在本仓根下跑） |
-|---|---|---|
-| 本文件 §完整清单 的裸 URL（2026-09-02 那一批） | **21** | `(Select-String -LiteralPath references.md -Pattern '^- https://github.com/').Count` |
-| `../../references-agents/*/AGENTS.md`（**仓库之外**的第三份清单） | **19** | `(Get-ChildItem ..\..\references-agents -Directory).Count` |
-| `../_src` 磁盘本体 | **只认命令输出**（本行**不写死数**：2026-09-15 那次 = 22，**2026-09-25 实测 = 24** ⇒ 这是**会腐烂的派生计数**，写死必烂） | `(Get-ChildItem ..\_src -Directory).Count` |
-| `MATERIALS.md` §1 名册（**换盘前**口径） | **8** | 该表的枚举根 `G:\project\dsh1` **本机已不存在** ⇒ **不可复核** |
-
-- **⚠ 两个路径不是同一级**（本轮实测踩过）：`.docs/` 在 `vendor/` 下（`..\.docs\fix\<日期>\`），
-  而 `references-agents/` 在 `dsh1/` 下（`..\..\references-agents`）。
-- **三件对不上的事**（逐份判定见 `adr/0089` §1）：`codegraph` **有清单、有笔记、没有本体**；
-  `MATERIALS.md` 的名册是**换盘前**口径（8 项里 5 项本机已无）；
-  **「只有 4 份带 `.git`」这条已被推翻** —— `MATERIALS.md` §1.1（生成器输出）实测 **24/24 都有 `.git` 且都取到 HEAD**（v1.18.1 补的 `.git`）⇒ **HEAD 可复算性以 §1.1 为准，不以本行为准**。
-- **由此立的判据**（与 `AGENTS.md`「能推出来的字段不要手写」同源，事故见 `adr/0085` §8.7）：
-  **凡「清单」这类可由磁盘推出来的字段，登记时必须带「枚举根 + 枚举时刻」**；
-  否则它会在换机之后变成一句**看起来权威、实际不可复核**的话（`MATERIALS.md` §1 就是现成的样本）。
+> **⬆ 已迁出（2026-10-07，`adr/0111`）**：本节的**集合分栏表**整体迁到
+> [`MATERIALS.md`](./MATERIALS.md) **§1.3 集合分栏**（含「今日可复核性」一列）—— 它是**清单面**，不属于本文件（内容面）。
+> **本节标题按「标题原样保留、只留转发占位」处置** ⇒ 现存引用（`references.md §14`）**不必改也不会失配**。
+>
+> 🔴 **迁出时删掉了原文里两条已被实测推翻的判词**（2026-10-07 实测）：
+> 「`MATERIALS.md` §1 名册是换盘前口径 · 8 项里 5 项本机已无」**为假** —— 8/8 全在且 HEAD 逐项一致；
+> 「HEAD 可复算性以 §1.1 为准」**也已反了** —— §1.1 的根 `D:\…\_src` **永久不存在**，当前态只认 §1。
+> **迁走后本文件不再承载任何清单/计数**（写了必与 MATERIALS.md 两处漂移）。
+>
+> **原判据（保留，它仍然成立）**：**凡「清单」这类可由磁盘推出来的字段，登记时必须带
+> 「集合定义 + 枚举根 + 排除表 + 枚举时刻」**；否则它会在换机之后变成一句**看起来权威、实际不可复核**的话
+> （与 `AGENTS.md`「能推出来的字段不要手写」同源，事故见 `adr/0085` §8.7）。
 
 ---
 
@@ -1375,6 +1350,8 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   （引用口径：证据产物 `readme-ecc.md:1219-1267`，逐字等于 `affaan-m/ECC@d3b8a3e9` 的 `README.md` 同名段。）
 - **本机状态**：**已在** `vendor/_src/ECC`（`MATERIALS.md` §1.1 台账行：HEAD `2b6e8397`、工作树与 HEAD 差 **508 处**）
   ⇒ 属「**有本地本体、可深读**」的材料；**本轮未动它**（未 fetch、未读源码）。
+  ⚠ **落点更正（2026-10-07，`adr/0111`）**：原路径**所在的根已不存在**（`vendor/_src` 与 `D:` 盘都没了）；
+  ECC 现在 `vendor/_upstream/ecc`（HEAD `ef648e01`，2026-10-07 实测）。**原句按史料保留，但不要照原路径去找**。
 
 #### 23.1 用户材料的**事实分层**（本轮最要紧的一节）
 
