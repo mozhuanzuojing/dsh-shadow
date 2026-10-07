@@ -3,12 +3,21 @@ import type { ActionCandidate, ActionExecution, ActionFeedback } from "./types.j
 
 // 139/140：Simulation 不直接执行 Action；Candidate ≠ Approval（禁 expectedSuccess/confidence）。
 export const candidateIsClean = (c: ActionCandidate) => (c as any)?.expectedSuccess === undefined && (c as any)?.confidence === undefined;
-export const assertCandidateClean = (c: ActionCandidate) => ({ ok: candidateIsClean(c), reason: candidateIsClean(c) ? undefined : "candidate 禁 expectedSuccess/confidence（Simulation Outcome 不得升级为行动信念）" });
+// A27：谓词**只求值一次** —— 旧写法在同一个对象字面量里求值两次（`executionIsEvent` 那处对大对象是
+// `String(...)` 级别的重活）。结果形态 = 守卫族的统一形态 `{ ok, reason? }`
+// （与 `epistemic/world/guard/claim-admission.ts` 的 `AdmissionResult` 同一形态，见彼处注释）。
+export const assertCandidateClean = (c: ActionCandidate) => {
+  const v = candidateIsClean(c);
+  return { ok: v, reason: v ? undefined : "candidate 禁 expectedSuccess/confidence（Simulation Outcome 不得升级为行动信念）" };
+};
 
 // ActionExecution 是事件非 RealityClaim；Action Scope ≠ Reality Ownership（禁 should_exist/correct/proves）。
 const EXECUTION_FORBIDDEN = /RealityClaim|RealityEvidence|confirmed causal|should_exist|is correct|proves|architectural direction correct/i;
 export const executionIsEvent = (e: ActionExecution) => !EXECUTION_FORBIDDEN.test(String(e?.result || ""));
-export const assertExecutionEvent = (e: ActionExecution) => ({ ok: executionIsEvent(e), reason: executionIsEvent(e) ? undefined : "ActionExecution.result 是事件，不得声称 RealityClaim/RealityEvidence/should_exist/is correct" });
+export const assertExecutionEvent = (e: ActionExecution) => {
+  const v = executionIsEvent(e);   // A27：谓词只求值一次（理由同上）
+  return { ok: v, reason: v ? undefined : "ActionExecution.result 是事件，不得声称 RealityClaim/RealityEvidence/should_exist/is correct" };
+};
 
 // ActionFeedback 只记录"观察到符合某些预期结果"，Success ≠ Capability / ≠ Identity / ≠ Model Validation。
 const FEEDBACK_FORBIDDEN = /^i am better$|我预测正确|identity change|confidence increase|validated|proves|confirm|方向正确|架构方向/i;

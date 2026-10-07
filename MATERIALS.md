@@ -34,7 +34,7 @@
 | 1 | `dsh-w/deepseek-harness` | `deepseek-ai/deepseek-harness` | `cd5ef81481` / **0.1.2-alpha.1** | **MIT** | 74,163 文件 / 1.64 GB（**含** `node_modules`） | **DSH 宿主本体源码**（Cordis 可组合 agent 宿主） |
 | 2 | `hl_mem` | `lohr13/hl_mem` | `aa5d068` / **v1.1.7** | **Apache-2.0** | 1,025 文件 / 16.8 MB | 证据驱动的长期记忆服务（Python + SQLite） |
 | 3 | `openviking` | `volcengine/OpenViking` | `592c0fe` | **AGPL-3.0**（`crates/ov_cli` 与 `examples` 为 Apache-2.0） | 3,891 文件 / 93 MB | 自进化上下文库；**原生 DSH 记忆插件**（直接替代品） |
-| 4 | `dsh-shadow` | `mozhuanzuojing/dsh-shadow` | 本仓 | MIT | 3,000+ 文件 / 37.7 MB | **本项目**（记忆投影插件） |
+| 4 | `dsh-shadow` | `mozhuanzuojing/dsh-shadow` | 本仓 · `1dcaf67e`（2026-10-07 · chore(release): v1.22.0） | MIT | 3,000+ 文件 / 37.7 MB | **本项目**（记忆投影插件） |
 | 5 | `archify` | `tt-a1i/archify` | `82e63c9` | **MIT** | 422 文件 / 36 MB | 架构图/可视化插件（**在用**，报告 L2 产物） |
 | 6 | `awesome-dsh-plugin` | `mozhuanzuojing/awesome-dsh-plugin` | `271834d5` / 0.1.0 | **CC**（清单类） | 1,726 文件 / 8.5 MB | **DSH 插件清单**（生态索引） |
 | 7 | `ppt-master` | `hugohe3/ppt-master` | `a160e776` | **MIT** | 14,354 文件 / 725 MB | AI 生成原生 PowerPoint（文档→PPT） |
@@ -44,12 +44,22 @@
 
 - **8/8 全部存在**于枚举根 `G:\project\dsh1` 下，且 **HEAD 逐项命中**本表所记的值：
   `cd5ef81481`（harness）· `aa5d068`（hl_mem）· `592c0fe`（openviking）· `82e63c9`（archify）·
-  `271834d5`（awesome-dsh-plugin）· `a160e776`（ppt-master）· `b68eeac`（voyager）· `800d2b6`（本仓）。
-  工作树漂移：**7 项干净**、`dsh-shadow` 1 处（本次改动本身）。
+  `271834d5`（awesome-dsh-plugin）· `a160e776`（ppt-master）· `b68eeac`（voyager）· `1dcaf67e`（本仓）。
+- **枚举时刻 = `2026-10-07 16:23:39 GMT+8`**（`tools/materials-ledger.ts` 自己打印的那一行 —— **换机 / 隔天之后，
+  没有它就无法判定这份清单是哪台机器、哪一刻的读数**）。
+- **工作树漂移（同一时刻的读数）**：**7 项干净（= HEAD）**；`dsh-shadow` 一项 **≠ HEAD：122 处** ——
+  那是**本轮文档/状态面修复的在制改动**（尚未提交）。⚠ **它是时刻读数、不是恒真**：发版提交之后
+  这一格应为「**干净（= HEAD）**」。⇒ **别照抄这一格**，要现状就重跑下面那条命令。
 - **复核命令**（可重放；口径 = 根 + 排除，见 §5）：`node tools/materials-ledger.ts G:\project\dsh1`
+- ⚠ **本表 HEAD 与漂移列是 2026-10-07 16:23 的读数**：`dsh-shadow` 的 HEAD 在**每次发版**后会变一次
+  （本仓是活仓库）⇒ **报「本仓 HEAD」时必须写枚举时刻**，否则那句话第二天就不成立。
 - 🔴 **原先的两句判词都反了**：本表曾被注为「**换盘前**快照 · 枚举根已不存在 · 8 项里 5 项已无本体 · 不可复核」——
   实测**枚举根在、8 项都在、HEAD 都对**。真正不可复核的是 **§1.1**（24 行，根 `D:\…\_src`，而 **`D:` 整盘已不存在**）。
   ⇒ 由此立判据：**「哪一份是当前态」必须由复核产生，不得由叙述推断**（写进 `adr/0111`）。
+  ⚠ **同一条判据的第一个反例就在本表里**（v1.22.1 记）：上一版的复核块把本仓 HEAD 写成 `800d2b6` ——
+  那是 **v1.21.47 的发布提交**（`git log -1` 在**那次读数时刻**的真实值），而 v1.22.0 的发布提交在同一天更晚
+  把它推到 `1dcaf67` ⇒ 那一格**当天就过期了**，可那一句仍写着「HEAD 逐项命中」。
+  ⇒ 结论：**「复核过」不等于「复核的读数带了时刻」** —— 本版因此把「**枚举时刻**」当作清单口径四件之一（见文首「清单口径四件」那条）。
 - ⚠ 本表**身份**列（每份材料"是什么"）**不可机械推**，仍由人维护；机械面（HEAD / 许可 / 规模 / 漂移）以生成器为准。
 
 **另有（非「外来材料」，但同属本工作区）：**

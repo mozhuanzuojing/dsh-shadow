@@ -1,5 +1,6 @@
 // dsh-shadow —— retrieval/render.ts：召回渲染（分层/无匹配/Observation Window）。从 index.ts 迁出。
 import { RECALL_PREFIX } from "../core/util.js";
+import { clueHeaderOf } from "../core/view/clue.js";
 import { scrubFinal } from "../security/scrub.js";
 import { memorySummary, snippetFor } from "./rank.js";
 import { lossLine, neverWorseChars, type RecoverHandle } from "./loss.js";
@@ -147,7 +148,26 @@ export const renderIndexBudgeted = (
   return neverWorseChars(body + note.join("\n"), raw);
 };
 
-export const renderByTier = (s: any, budgetChars: number, forceL0 = false, tokens: string[] = []) => {
+/**
+ * `renderByTier` 的结果（**B9**）：把「是否真的插入了片段」变成**结构化字段**，而不是让调用方
+ * 用「正文里有没有 `…`」去反推。
+ *
+ * 为什么必须这样：`budget-render.ts` 原先用 `render.includes("…")` 同时决定 `withheld` 与
+ * `servedDetail` —— ① 那是**跨模块隐式协议**（`…` 一改成 `...` 两处同时静默失效）；
+ * ② 记忆正文**本身可能含 `…`** ⇒ 该条被误算进/漏算出，`tierLossNote`（`retrieval/loss.ts`）
+ * 的「分层省略」会**少报**，正好破坏 ADR-0090 甲-1 的完成判据（读侧要能区分「本来就没有更多内容」
+ * 与「被省略」）。⇒ `…` 从此**只用于呈现**，判据走 `hasSnippet`。
+ */
+export interface TierRender {
+  /** 最终渲染文本（含标记行）。 */
+  text: string;
+  /** **真的插入了片段**（`…<snippet>…`）—— 不是「文本里有 `…` 字符」。 */
+  hasSnippet: boolean;
+  /** 本条的档位（原样回传，免调用方再取 `s.tier` 而拿错对象）。 */
+  tier: string;
+}
+
+export const renderByTier = (s: any, budgetChars: number, forceL0 = false, tokens: string[] = []): TierRender => {
   const { mm, text, tier, score, stale, origin, currentOrigin, provenance, observer, asOf, verdict, outcome, reflection } = s;
   // 每条召回前加结构性边界标注（Memory ≠ Instruction / ≠ Current State / ≠ Trusted Input），
   // 靠 metadata + 输出包装保证，而不是一句 prompt。
@@ -156,14 +176,19 @@ export const renderByTier = (s: any, budgetChars: number, forceL0 = false, token
   if (origin && currentOrigin && String(origin) !== String(currentOrigin)) marker.push("（来自其它会话/子代理）");
   const summary = scrubFinal(memorySummary(text));
   let out: string;
+  // B9：**真的插入了片段**（不是「文本里有 `…`」）—— 见 `TierRender` 的注释。
+  let hasSnippet = false;
   if (observer) {
     // Observation Window：只呈现「当时可知」，后验知识标 [后验]——不让全局/后验答案假装成当下已知。
     out = `[Observation Window] ${mm.rel}`;
     out += `\nas-of ${mm.date}${asOf ? `（窗口 ≤ ${asOf.date || asOf}）` : ""}`;
+    // B8：线索头解析**收一处**到 `core/view/clue.ts`（原先本文件另写一份 `背景/材料` + `用户提示/决策` 正则）。
+    // 这里用 `clueHeaderOf`（**原始串**）而不是 `clueFieldsOf().materials`（切开后的数组）：
+    // 本行是把三段拼成一句「当时可知」，必须与旧输出**逐字等价**（数组再 join 会换掉分隔符）。
     const known = [
       (String(text).match(/^# (.+)$/m) || [])[1] || "",
-      (String(text).match(/^> 背景\/材料：(.+)$/m) || [])[1] || "",
-      (String(text).match(/^> 用户提示\/决策：(.+)$/m) || [])[1] || "",
+      clueHeaderOf(text, "背景/材料"),
+      clueHeaderOf(text, "用户提示/决策"),
     ].filter(Boolean).join(" · ");
     if (known) out += `\n当时可知 ${known.slice(0, 140)}`;
     const post = [verdict && `裁决 ${verdict}`, outcome && `结果 ${outcome}`, reflection && reflection !== "无后续修正记录" && `反思 ${reflection}`, summary && `摘要 ${summary}`].filter(Boolean);
@@ -174,15 +199,15 @@ export const renderByTier = (s: any, budgetChars: number, forceL0 = false, token
     const wantL1 = !forceL0 && tier !== "L0" && budgetChars >= out.length + 30;
     if (wantL2) {
       const snip = scrubFinal(snippetFor(text, tokens));
-      if (snip) out += `\n…${snip}…`;
+      if (snip) { out += `\n…${snip}…`; hasSnippet = true; }
       const skeleton = String(text || "").split("\n").filter((l) => /^\s*-\s*\[/.test(l) && !/改\/读 |调用 /.test(l)).slice(0, 2).map((l) => scrubFinal(l.trim().slice(0, 80)));
       if (skeleton.length) out += `\n${skeleton.join("\n")}`;
     } else if (wantL1) {
       const snip = scrubFinal(snippetFor(text, tokens));
-      if (snip) out += `\n…${snip}…`;
+      if (snip) { out += `\n…${snip}…`; hasSnippet = true; }
     }
     if (provenance) out += `\n${scrubFinal(provenance)}`;
   }
   out += `（相关度 ${score}）`;
-  return marker.join("\n") + "\n" + scrubFinal(out);
+  return { text: marker.join("\n") + "\n" + scrubFinal(out), hasSnippet, tier: String(tier || "") };
 };

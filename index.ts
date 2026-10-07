@@ -26,8 +26,9 @@
  */
 
 import type { GatewayEvidenceRef, EvidenceResult, ShadowConfig } from "./core/types.js";
+import { HOST_BASELINE } from "./core/host-baseline.js";
 import { createShadowCollector } from "./core/writer/index.js";
-import { scopedFs, sessionPolicy } from "./core/fs-scope.js";
+import { isPolicyFailure, scopedFs, sessionPolicy } from "./core/fs-scope.js";
 import { routeVerify } from "./evidence/gateway.js";
 import { runReadShadow } from "./query/query.js";
 import type { ShadowQueryDeps } from "./query/types.js";
@@ -40,6 +41,8 @@ export const name = "dsh-shadow";
 export const inject: string[] = [];
 
 type CtxLike = any;
+/** 三个工具的 `output.render` 共用这一份（A22）—— 原先各写一遍，改输出形状要改三处。 */
+const renderText = (_args: any, value: string) => [{ type: "text", text: value }];
 
 export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   const context: CtxLike = ctx;
@@ -64,7 +67,6 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   // directory any more）⇒ 形态迁移是**单向门**，迁过去之后 ≤0.1.6 不再认它。v1.21.36 这次是**跨 minor 的声明同步**：
   // 两代 dlx 树实质面逐文件 MD5 比对 ⇒ 本仓消费的宿主服务面（dsh-tools / dsh-fs / dsh-sandbox-policy / dsh-system-prompt）与
   // 预设契约（dsh-agent-preset）**均 0 处差异**（§8）；v1.21.39 再抬到 rc.2 —— 两代**现装闭包**实质面比对，本仓消费面 10 个包**指纹全同**，rc.2 新增的问答定时等待 / 来源种类 `user-question-reply` 本仓 0 处引用（§8.6）。
-  const HOST_BASELINE = "0.2.0-rc.2"; // 与 package.json 的 engines.dsh 同步维护
   const reportHostGap = (kind: "error" | "warn", lines: string[]): void => {
     if (!lines.length) return;
     const head = kind === "error"
@@ -141,8 +143,10 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
   // 把 apply() 时尚未就绪的服务固化进去，正是 fs/approval 两处特意写成 getter 要避免的事）。
   const makeQueryDeps = (exec: any): ShadowQueryDeps => {
     const policy = sessionPolicy(context, exec?.agent?.session);
+    const policyFailed = isPolicyFailure(policy); // A17：解析失败 ⇒ 保守（不可写）+ 留痕（三态见 core/fs-scope.ts）
+    if (policyFailed) collector.noteDegrade("sandboxPolicy", `沙箱策略解析失败（${policy.reason}）`, "派生索引按**不可写**处理（保守）；原文写入照旧");
     return {
-      // 懒解析 fs：与写侧 collector（core/writer.ts:242）一致，在每次 runReadShadow 执行时才取。
+      // 懒解析 fs：与写侧 collector（`core/writer/index.ts` 的 `createShadowCollector` 那处懒解析）一致。
       // 避免在 apply() 时急切快照得到 undefined 并永久固化进 queryDeps.fs，
       // 导致 read_shadow 恒命中 query/query.ts 的「（fs 服务不可用）」守卫（读写不对称 bug）。
       get fs() { return scopedFs(context.get("fs"), policy); },
@@ -157,9 +161,8 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       knowledgeNavigate: collector.knowledgeNavigate,
       ensureIndex: (ws: string) => collector.ensureIndex(ws, exec?.agent?.session),
       // T17-B（D13 守卫②）：派生索引要走 `fs.processPath` + `node:fs` 落盘，是本仓唯一一处**绕过策略围栏**
-      // 的写 ⇒ 由**策略本身**决定要不要写：只读会话一律不写（provider 直接 `unavailable`、回退 fs）。
-      // 策略取不到时按可写处理（此时 `scopedFs` 本就是恒等变换，没有围栏可绕）。
-      derivedIndexWritable: policy ? policy.mode !== "read-only" : true,
+      // 的写 ⇒ 由**策略本身**决定要不要写：只读会话一律不写；A17 的解析失败态取 false（保守），服务缺失才是 true。
+      derivedIndexWritable: policyFailed ? false : policy ? policy.mode !== "read-only" : true,
       // T17-B（D6 门③）：写侧「已知变更的 rel」台账 —— 由 `WriterCore.derivedDirty` 持有（键 `ws|rel`、
       // 随插件实例销毁），`flush` / `patchSummary` 写入后标脏；读侧取走、**成功 upsert 后**才消费。
       derivedIndexDirty: (ws: string) => collector.derivedDirtyFor(ws),
@@ -168,201 +171,198 @@ export function apply(ctx: CtxLike, rawConfig: ShadowConfig = {}) {
       get approval() { return context.get("approval"); },
     };
   };
-  if (typeof context.inject === "function") {
-    context.inject(["tools"], (toolsCtx: CtxLike) => {
-      // 防御性判断：Cordis 只在 tools 就绪时才回调，故此处理论上必存在。
-      // 真正的「缺 tools」报告在 probeHostOnFirstTurn —— 依赖缺失时这个回调根本不会执行。
-      const toolsService = toolsCtx.get("tools");
-      if (!toolsService) return;
-      toolsService.register({
-        name: "read_shadow",
-        description: "读取 agent 的投影空间（.shadow：atoms / roles / affaires / indexes）。无参数返回 indexes/_index.md；带 topic/entry 按入口或主题穿透到具体原子档案。穿透按分层召回（先精后深、预算内返回）：低分只给摘要，高分给摘要+命中片段+正文骨架。默认主题召回会套灵魂规避滤（raw:true 看原文；project:true 走 RealityProjection 且不经规避滤）。上下文不足、需要回忆最近想过/决定过什么时调用。",
-        parameters: {
-          type: "object",
-          properties: {
-            topic: { type: "string", description: "要穿透的入口/主题（如某路径片段、组件名、工具名、决策词）" },
-            limit: { type: "number", description: "最多返回的记忆文件数，默认 10" },
-            max_tokens: { type: "number", description: "召回内容预算（粗略 token 数），越大返回越深，默认 1600" },
-            debug: { type: "boolean", description: "开启召回管线调试：返回 候选/命中/冷却/预算/返回 计数 + 每条召回「为什么命中/为什么被降权」的拆解。默认关。" },
-            kg: { type: "boolean", description: "返回工程知识图谱（派生）追踪：主题 → 域 → 组件 → 依赖/相关记忆。默认关。" },
-            soul: { type: "boolean", description: "返回 Soul Kernel（身份/价值观/原则/品味/边界）投影。默认关。" },
-            experience: { type: "boolean", description: "返回结构化 Experience（情境/问题/决策/实现/证据/结果/教训），而非零散行。默认关。" },
-            asOf: { type: "string", description: "时间锚定（YYYY-MM-DD）：只召回该时间点『当时可知』的记忆；晚于此的记忆不入窗口。默认=现在。" },
-            observer: { type: "boolean", description: "Observer/Observation Window：以『当时可知』呈现（as-of），并把 outcome/lesson/verdict 等『后来才知』标为 [后验]，不让全局/后验知识假装成当下可知。默认关。" },
-            project: { type: "boolean", description: "RealityProjection：把 topic 当当前任务，返回带 distortion 的完整报告（默认关）。在管线中先于主题召回短路 ⇒ 不经默认灵魂规避滤。" },
-            raw: { type: "boolean", description: "逃生口：主题召回不套灵魂规避滤，看原子原文；mode:recovery 时不贴缺灵魂 F2 横幅（ADR-0107）。无参索引本就不套滤。" },
-            judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
-            claim: { type: "boolean", description: "返回 claim→Evidence→Judgment：对每条匹配记忆的断言验证证据，由 Observer 决定结论/置信/理由（Evidence 是输入，Observer 下判断）。默认关。" },
-            taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + .shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
-            verifyEvidence: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。" },
-            identity: { type: "boolean", description: "返回 Identity 主体锚（id/价值观/原则/反模式/决策风格/边界/Observer Lens），长期实体。默认关。推进 Identity Timeline 用 mode:identity-advance（≠本旗标；ADR-0050）。" },
-            context: { type: "boolean", description: "返回 ObserverContext（observerId/identityRef/intent/asOf/lens/realityAnchor）——一次观察事件。默认关。" },
-            goal: { type: "string", description: "观察意图 goal（我想改变什么），与 topic 合成 Intent。默认按模式推断。" },
-            realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
-            lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
-            state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
-            mode: { type: "string", description: "模式开关（不传则按布尔参数分派）。常用：episode / decision / task / context / recovery / query / query-log / shadow-report / shadow-manifest / toolset / index / knowledge / reflection / identity-advance / temporal / offline / validate / evidence / timeline / verification。长程与边界族（agency-* / delegation-* / recall-* / adapt-* / horizon-* / federation* / real-evidence / real-refer / model-* / world-* / simulate / candidate / execute / feedback / plan / distortion / stability / observer-* / workspace-* / continuity-index）的语义、入参与返回见 dsh-shadow 仓库的 CONTEXT.md「mode 参考」。" },
-            from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
-            to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
-            minCount: { type: "number", description: "Identity 重复性闸门：同向轨迹最小次数（默认 5）。与 mode:identity-advance 配合。" },
-            minRecency: { type: "number", description: "Identity 时间稳定闸门：recency 下限（默认 0.4）。与 mode:identity-advance 配合。" },
-            maxContradiction: { type: "number", description: "Identity 反证闸门：contradiction 上限（默认 0.3）。与 mode:identity-advance 配合。" },
-            halfLifeDays: { type: "number", description: "Identity 时间衰减半衰期（天，默认 90）。与 mode:identity-advance 配合。" },
-            at: { type: "string", description: "Temporal replay 时间点（YYYY-MM-DD），与 mode:temporal 配合。" },
-            trigger: { type: "string", description: "SleepWindow 触发类型 scheduled|resource_idle|manual（默认 scheduled）。与 mode:offline 配合。" },
-            hypothesisId: { type: "string", description: "Hypothesis id：与 mode:validate（验证该假设）或 mode:evidence（为其注册未来证据）配合。" },
-            observedAt: { type: "string", description: "FutureEvidence 观察时间（YYYY-MM-DD），与 mode:evidence 配合。" },
-            actualOutcome: { type: "string", description: "FutureEvidence 实际结果（决定 support/contradiction），与 mode:evidence 配合。" },
-            observationType: { type: "string", description: "FutureEvidence 观察类型，与 mode:evidence 配合。" },
-            sourceObserverId: { type: "string", description: "Federation 源 Observer id（与 mode:federation 配合）。" },
-            obsClaim: { type: "string", description: "Federation observationClaim（可交换：我看到什么）。与 mode:federation 配合。" },
-            visibleA: { type: "array", items: { type: "string" }, description: "Observer A 的 visible（与 mode:distortion 配合）。" },
-            visibleB: { type: "array", items: { type: "string" }, description: "Observer B 的 visible（与 mode:distortion 配合）。" },
-            targetObserverId: { type: "string", description: "Federation 目标 Observer id（与 mode:distortion 配合）。" },
-            perceptionOnly: { type: "boolean", description: "Temporal 只报 perceptive（可见/隐藏/透镜），不报人格。与 mode:temporal 配合。" },
-            identityContext: { type: "boolean", description: "Temporal 显式返回 identityVersion（非 personality）。与 mode:temporal 配合。" },
-            temporalReference: { type: "string", description: "Federation perspective 的时间坐标（与 mode:federation-perspective 配合）。" },
-            obsConfidence: { type: "number", description: "Federation 观测确信（observationConfidence），与 mode:federation-perspective 配合。" },
-            valConfidence: { type: "number", description: "Federation 解释确信（validationConfidence），与 mode:federation-perspective 配合。" },
-            observation: { type: "string", description: "Reality Evidence 弱事实（某事件在某时间被观察到），与 mode:real-evidence 配合。" },
-            realityId: { type: "string", description: "Reality Evidence id（与 mode:real-refer / mode:stability 配合）。" },
-            realEvidenceRef: { type: "string", description: "Observer Difference 的 reality evidence 引用（字段名历史遗留；注册入口是 mode:real-evidence，与 mode:federation-diff 配合）。" },
-            lensA: { type: "string", description: "Observer A 的 lens（与 mode:federation-diff 配合）。" },
-            lensB: { type: "string", description: "Observer B 的 lens（与 mode:federation-diff 配合）。" },
-            obsClaimB: { type: "string", description: "Observer B 的 observationClaim（与 mode:federation-diff 配合）。" },
-            linkedHypothesis: { type: "array", items: { type: "string" }, description: "Reality Evidence 关联的 hypothesis（与 mode:real-evidence 配合）。" },
-            hasValidation: { type: "boolean", description: "Perspective Stability 是否有 ValidationResult 支撑（与 mode:stability 配合）。" },
-            subject: { type: "string", description: "Reality 主体（subjectRef/subject），与 mode:model-observation / mode:model-claim / mode:model 配合。" },
-            sourcePerspectives: { type: "array", items: { type: "string" }, description: "RealityObservation 的来源 perspectives（与 mode:model-observation 配合）。" },
-            temporalContext: { type: "string", description: "RealityObservation 时间上下文（与 mode:model-observation 配合）。" },
-            validationRefs: { type: "array", items: { type: "string" }, description: "RealityObservation 关联的 validation 引用（与 mode:model-observation 配合）。" },
-            claimId: { type: "string", description: "RealityClaim id（与 mode:model 查询配合）。" },
-            relation: { type: "string", description: "RelationHypothesis 关系（如 depends_on；与 mode:world-relation 配合）。" },
-            evidence: { type: "array", items: { type: "string" }, description: "RelationHypothesis 证据（RealityClaim id，与 mode:world-relation 配合）。" },
-            condition: { type: "string", description: "Simulation 条件（须 'Assume X'，禁 'X will cause'；与 mode:simulate 配合）。" },
-            basedOn: { type: "array", items: { type: "string" }, description: "Simulation basedOn（Representation id，lineage 从属；与 mode:simulate 配合）。" },
-            proposal: { type: "string", description: "ActionCandidate proposedChange（与 mode:candidate 配合）。" },
-            proposedChange: { type: "string", description: "ActionCandidate proposedChange（与 mode:candidate 配合）。" },
-            basedOnSimulation: { type: "array", items: { type: "string" }, description: "ActionCandidate basedOnSimulation（SimulationOutcome id；与 mode:candidate 配合）。" },
-            candidateId: { type: "string", description: "ActionExecution candidateId（需先 mode:candidate 批准；与 mode:execute 配合）。" },
-            environmentChange: { type: "string", description: "ActionExecution 环境变化（事件，非'我改变了世界'；与 mode:execute 配合）。" },
-            executionId: { type: "string", description: "ActionFeedback executionId（与 mode:feedback 配合）。" },
-            objective: { type: "string", description: "Planning objective（须外部来源；与 mode:plan 配合）。" },
-            objectiveSource: { type: "string", description: "Planning objective 来源（external/observer；observer 拒绝；与 mode:plan 配合）。" },
-            criteria: { type: "string", description: "Planning evaluation criteria（禁 better/optimal/best；与 mode:plan 配合）。" },
-            constraints: { type: "array", items: { type: "string" }, description: "Planning objective/constraints（与 mode:plan 配合）。" },
-            candidates: { type: "array", items: { type: "object" }, description: "Planning 候选（actionSequence/assumptions/constraints；无 score；与 mode:plan 配合）。" },
-            simulationRefs: { type: "array", items: { type: "string" }, description: "Planning simulationReferences（与 mode:plan 配合）。" },
-            observedChanges: { type: "array", items: { type: "string" }, description: "ActionFeedback 观察到的变化（与 mode:feedback 配合）。" },
-            successIndicator: { type: "string", description: "ActionFeedback successIndicator（仅'观察到符合某些预期结果'；禁'我预测正确'；与 mode:feedback 配合）。" },
-            unexpectedEffects: { type: "array", items: { type: "string" }, description: "ActionFeedback 意外效应（与 mode:feedback 配合）。" },
-            objectiveRef: { type: "string", description: "Agency objectiveRef（外部目标引用，禁 observer/self 自指；与 mode:agency-context/agency-event 配合）。" },
-            authoritySource: { type: "string", description: "Agency authoritySource（external/human/system/user；禁 observer/self；与 mode:agency-context 配合）。" },
-            authorityScope: { type: "string", description: "Agency authorityScope 授权范围（与 mode:agency-context 配合）。" },
-            reason: { type: "string", description: "AgencySelection reason（只允许 constraint_satisfied；禁 valuable/meaningful/better；与 mode:agency-select 配合）。" },
-            selectedCandidateId: { type: "string", description: "AgencySelection 选中的候选 id（与 mode:agency-select 配合）。" },
-            actionCandidate: { type: "string", description: "AgencyBoundaryEvent actionCandidate（与 mode:agency-event 配合）。" },
-            identityRef: { type: "string", description: "Agent 身份引用（用于 Authority≠Identity 校验；与 mode:agency-event 配合）。" },
-            constraintCheck: { type: "array", items: { type: "string" }, description: "AgencyBoundaryEvent 已过约束（与 mode:agency-event 配合）。" },
-            executionResult: { type: "string", description: "AgencyBoundaryEvent 执行结果（事件，禁 Autonomy/所有权声称；与 mode:agency-event 配合）。" },
-            delegationId: { type: "string", description: "DelegationContext 委派 id（与 mode:delegation-context/check/event 配合）。" },
-            allowedScope: { type: "array", items: { type: "string" }, description: "DelegationContext allowedScope 允许做什么（禁所有权；与 mode:delegation-context 配合）。" },
-            expiration: { type: "string", description: "DelegationContext expiration（YYYY-MM-DD，时间说停止；与 mode:delegation-context 配合）。" },
-            revocation: { type: "boolean", description: "DelegationContext revocation（撤销信号，优先于执行历史；与 mode:delegation-context 配合）。" },
-            action: { type: "string", description: "DelegationCheck 待检动作路径（与 mode:delegation-check 配合）。" },
-            satisfiedConstraints: { type: "array", items: { type: "string" }, description: "Delegation 已满足约束（与 mode:delegation-check/event 配合）。" },
-            now: { type: "string", description: "DelegationCheck 当前时间（YYYY-MM-DD，用于过期判定；与 mode:delegation-check 配合）。" },
-            originalRef: { type: "string", description: "ForgottenRecord originalRef（原记录引用；与 mode:recall-forget 配合）。" },
-            forgottenAt: { type: "string", description: "ForgottenRecord forgottenAt（YYYY-MM-DD；与 mode:recall-forget 配合）。" },
-            recalledRef: { type: "string", description: "RecallEvent recalledRef（忆起的已遗忘记录 id；与 mode:recall-event/recall-validation 配合）。" },
-            triggerType: { type: "string", description: "Recall trigger 类型（须 external/cue/conversation/explicit/association；禁 internal certainty/intuition；与 mode:recall-event 配合）。" },
-            sourceRef: { type: "string", description: "Recall trigger sourceRef（为什么想起来，必须存在；与 mode:recall-event 配合）。" },
-            observationRefs: { type: "array", items: { type: "string" }, description: "Recall lineage observationRefs（与 mode:recall-event 配合）。" },
-            status: { type: "string", description: "Recall 不提升证据等级：status/epistemicStatus/support 禁 supported/validated/certain（与 mode:recall-event 配合）。" },
-            sourceExperience: { type: "string", description: "AdaptationContext/AdaptationChange sourceExperience（调整依据；与 mode:adapt-context/adapt-change 配合）。" },
-            adaptationScope: { type: "string", description: "AdaptationContext adaptationScope（method/strategy/execution_pattern；禁 objective/authority/identity；与 mode:adapt-context 配合）。" },
-            target: { type: "string", description: "AdaptationChange target（method/strategy/execution_pattern；禁 objective/authority/identity/value；与 mode:adapt-change 配合）。" },
-            changeObserved: { type: "boolean", description: "AdaptationValidation changeObserved（变化发生了；与 mode:adapt-validation 配合）。" },
-            validationReferences: { type: "array", items: { type: "string" }, description: "AdaptationValidation validationReferences（与 mode:adapt-validation 配合）。" },
-            sideEffectsObserved: { type: "array", items: { type: "string" }, description: "AdaptationValidation 现实反馈（与 mode:adapt-validation 配合）。" },
-            basedOnHistory: { type: "array", items: { type: "string" }, description: "InteractionContext basedOnHistory（当前长期交互基于什么历史；与 mode:horizon-context 配合）。" },
-            sourceRefs: { type: "array", items: { type: "string" }, description: "HistorySummary sourceRefs（ObservationRef[]，摘要是访问辅助；与 mode:horizon-summary 配合）。" },
-            compressionMethod: { type: "string", description: "HistorySummary compressionMethod（与 mode:horizon-summary 配合）。" },
-            accessibility: { type: "string", description: "HistorySummary accessibility（available/forgotten/recalled；与 mode:horizon-summary 配合）。" },
-            historyRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink historyRef（与 mode:horizon-event/horizon-link 配合）。" },
-            previousAccessibility: { type: "string", description: "HistoryContinuityEvent previousAccessibility（与 mode:horizon-event 配合）。" },
-            recallRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink recallRef（与 mode:horizon-event/horizon-link 配合）。" },
-            adaptationRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink adaptationRef（与 mode:horizon-event/horizon-link 配合）。" },
-            interactionStyle: { type: "string", description: "ObserverConfig interactionStyle（configuration，非 preference；与 mode:observer-config 配合）。" },
-            outputPreference: { type: "string", description: "ObserverConfig outputPreference（如 adr；与 mode:observer-config 配合）。" },
-            defaultProtocol: { type: "string", description: "ObserverConfig defaultProtocol（如 boundary-first；与 mode:observer-config 配合）。" },
-            planningCannotCreateObjective: { type: "boolean", description: "ObserverBoundary 政策开关（与 mode:observer-boundary 配合）。" },
-            records: { type: "array", items: { type: "object" }, description: "RecallIndex records（{id, location}，导航非内容；与 mode:recall-index 配合）。" },
-            observerId: { type: "string", description: "ContinuityRecord observerId（与 mode:observer-lineage 配合）。" },
-            continuityRef: { type: "string", description: "ContinuityRecord continuityRef（与 mode:observer-lineage 配合）。" },
-            kind: { type: "string", description: "WorkspaceRecord kind（observation/representation/simulation/planning/action/interaction；与 mode:workspace-record 配合）。" },
-            content: { type: "string", description: "WorkspaceRecord content（world 层项目内容；与 mode:workspace-record 配合）。" },
-            evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verification 配合）。" },
-            runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verification 配合）。" },
-            // 工具集台账（mode:"toolset"）：巡检只读；安装**仅用户显式要求**且**一律先经宿主审批**。
-            install: { type: "string", description: "工具集台账（mode:toolset）：**显式安装**某个条目的 CLI（传 id，如 \"rg\"/\"jadx\"/\"coreutils-ms\"）。有后果动作——会先向用户申请审批，只有获批（allowed-once）才执行，装完重新探测再报结果。默认不传=只读巡检。仅用户显式要求时使用。" },
-            survey: { type: "string", description: "工具集台账（mode:toolset）：\"providers\"（默认，只探测插件内接线的 zg/semble）或 \"all\"（并行探测全部通用工具，约 40 项）。" },
-            category: { type: "string", description: "工具集台账（mode:toolset）：只列某个分类（如 \"GNU 工具链\" / \"搜索与查找\" / \"逆向与二进制分析\"）。" },
-            need: { type: "array", items: { type: "string" }, description: "工具集台账（mode:toolset）：**能力预检** —— 按「需要什么能力」反查台账并探测本机是否就位（如 [\"全文搜索\",\"jadx\"]）。派活前的接缝：产出只用于**降级决策**（每行给「缺件时退到哪」），**不是派活闸门**。注意宿主进程 PATH 是启动时快照，本进程内新装的工具要重启宿主才可见，故预检后不要按「先装再派」做计划。" },
-          },
+  // A23：两处 inject 调用不再重复守卫 `typeof context.inject === "function"`（第 93 行的单一前置判据已保证）。
+  context.inject(["tools"], (toolsCtx: CtxLike) => {
+    // 防御性判断：Cordis 只在 tools 就绪时才回调，故此处理论上必存在。
+    // 真正的「缺 tools」报告在 probeHostOnFirstTurn —— 依赖缺失时这个回调根本不会执行。
+    const toolsService = toolsCtx.get("tools");
+    if (!toolsService) return;
+    toolsService.register({
+      name: "read_shadow",
+      description: "读取 agent 的投影空间（.shadow：atoms / roles / affaires / indexes）。无参数返回 indexes/_index.md；带 topic/entry 按入口或主题穿透到具体原子档案。穿透按分层召回（先精后深、预算内返回）：低分只给摘要，高分给摘要+命中片段+正文骨架。默认主题召回会套灵魂规避滤（raw:true 看原文；project:true 走 RealityProjection 且不经规避滤）。上下文不足、需要回忆最近想过/决定过什么时调用。",
+      parameters: {
+        type: "object",
+        properties: {
+          topic: { type: "string", description: "要穿透的入口/主题（如某路径片段、组件名、工具名、决策词）" },
+          limit: { type: "number", description: "最多返回的记忆文件数，默认 10" },
+          max_tokens: { type: "number", description: "召回内容预算（粗略 token 数），越大返回越深，默认 1600" },
+          debug: { type: "boolean", description: "开启召回管线调试：返回 候选/命中/冷却/预算/返回 计数 + 每条召回「为什么命中/为什么被降权」的拆解。默认关。" },
+          kg: { type: "boolean", description: "返回工程知识图谱（派生）追踪：主题 → 域 → 组件 → 依赖/相关记忆。默认关。" },
+          soul: { type: "boolean", description: "返回 Soul Kernel（身份/价值观/原则/品味/边界）投影。默认关。" },
+          experience: { type: "boolean", description: "返回结构化 Experience（情境/问题/决策/实现/证据/结果/教训），而非零散行。默认关。" },
+          asOf: { type: "string", description: "时间锚定（YYYY-MM-DD）：只召回该时间点『当时可知』的记忆；晚于此的记忆不入窗口。默认=现在。" },
+          observer: { type: "boolean", description: "Observer/Observation Window：以『当时可知』呈现（as-of），并把 outcome/lesson/verdict 等『后来才知』标为 [后验]，不让全局/后验知识假装成当下可知。默认关。" },
+          project: { type: "boolean", description: "RealityProjection：把 topic 当当前任务，返回带 distortion 的完整报告（默认关）。在管线中先于主题召回短路 ⇒ 不经默认灵魂规避滤。" },
+          raw: { type: "boolean", description: "逃生口：主题召回不套灵魂规避滤，看原子原文；mode:recovery 时不贴缺灵魂 F2 横幅（ADR-0107）。无参索引本就不套滤。" },
+          judgment: { type: "boolean", description: "返回 Judgment 模式：从记忆派生「面对<情境> → 我判断/选择<决策>」，让经验形成判断。默认关。" },
+          claim: { type: "boolean", description: "返回 claim→Evidence→Judgment：对每条匹配记忆的断言验证证据，由 Observer 决定结论/置信/理由（Evidence 是输入，Observer 下判断）。默认关。" },
+          taste: { type: "boolean", description: "返回 Taste 偏好（curated：灵魂 taste + .shadow/taste/taste.json），即「我认为什么是好的」。默认关。" },
+          verifyEvidence: { type: "boolean", description: "返回 Evidence Result：经 Evidence Gateway 验证匹配记忆的证据路径，报告 verified/not_found/unavailable；zg 未装→unavailable，绝不静默 fallback。默认关。" },
+          identity: { type: "boolean", description: "返回 Identity 主体锚（id/价值观/原则/反模式/决策风格/边界/Observer Lens），长期实体。默认关。推进 Identity Timeline 用 mode:identity-advance（≠本旗标；ADR-0050）。" },
+          context: { type: "boolean", description: "返回 ObserverContext（observerId/identityRef/intent/asOf/lens/realityAnchor）——一次观察事件。默认关。" },
+          goal: { type: "string", description: "观察意图 goal（我想改变什么），与 topic 合成 Intent。默认按模式推断。" },
+          realityAnchor: { type: "string", description: "观察现实层 known-at-time（当时可知）/current（当前）/historical（史观）。默认按 asOf/observer 推断。" },
+          lens: { type: "object", description: "覆盖 Observer 透镜 {preferred, avoided}（如 架构师/产品 视角），影响 Projection visible/hidden。默认关。" },
+          state: { type: "object", description: "ObserverState {energy, focus, goalStage, uncertainty}——只读取、不自动推断；可经 soul.json 或此处注入。默认关。" },
+          mode: { type: "string", description: "模式开关（不传则按布尔参数分派）。常用：episode / decision / task / context / recovery / query / query-log / shadow-report / shadow-manifest / toolset / index / knowledge / reflection / identity-advance / temporal / offline / validate / evidence / timeline / verification。长程与边界族（agency-* / delegation-* / recall-* / adapt-* / horizon-* / federation* / real-evidence / real-refer / model-* / world-* / simulate / candidate / execute / feedback / plan / distortion / stability / observer-* / workspace-* / continuity-index）的语义、入参与返回见 dsh-shadow 仓库的 CONTEXT.md「mode 参考」。" },
+          from: { type: "string", description: "Reflection 周期起点（YYYY-MM-DD），与 mode:reflection 配合。" },
+          to: { type: "string", description: "Reflection 周期终点（YYYY-MM-DD），与 mode:reflection 配合；默认今天。" },
+          minCount: { type: "number", description: "Identity 重复性闸门：同向轨迹最小次数（默认 5）。与 mode:identity-advance 配合。" },
+          minRecency: { type: "number", description: "Identity 时间稳定闸门：recency 下限（默认 0.4）。与 mode:identity-advance 配合。" },
+          maxContradiction: { type: "number", description: "Identity 反证闸门：contradiction 上限（默认 0.3）。与 mode:identity-advance 配合。" },
+          halfLifeDays: { type: "number", description: "Identity 时间衰减半衰期（天，默认 90）。与 mode:identity-advance 配合。" },
+          at: { type: "string", description: "Temporal replay 时间点（YYYY-MM-DD），与 mode:temporal 配合。" },
+          trigger: { type: "string", description: "SleepWindow 触发类型 scheduled|resource_idle|manual（默认 scheduled）。与 mode:offline 配合。" },
+          hypothesisId: { type: "string", description: "Hypothesis id：与 mode:validate（验证该假设）或 mode:evidence（为其注册未来证据）配合。" },
+          observedAt: { type: "string", description: "FutureEvidence 观察时间（YYYY-MM-DD），与 mode:evidence 配合。" },
+          actualOutcome: { type: "string", description: "FutureEvidence 实际结果（决定 support/contradiction），与 mode:evidence 配合。" },
+          observationType: { type: "string", description: "FutureEvidence 观察类型，与 mode:evidence 配合。" },
+          sourceObserverId: { type: "string", description: "Federation 源 Observer id（与 mode:federation 配合）。" },
+          obsClaim: { type: "string", description: "Federation observationClaim（可交换：我看到什么）。与 mode:federation 配合。" },
+          visibleA: { type: "array", items: { type: "string" }, description: "Observer A 的 visible（与 mode:distortion 配合）。" },
+          visibleB: { type: "array", items: { type: "string" }, description: "Observer B 的 visible（与 mode:distortion 配合）。" },
+          targetObserverId: { type: "string", description: "Federation 目标 Observer id（与 mode:distortion 配合）。" },
+          perceptionOnly: { type: "boolean", description: "Temporal 只报 perceptive（可见/隐藏/透镜），不报人格。与 mode:temporal 配合。" },
+          identityContext: { type: "boolean", description: "Temporal 显式返回 identityVersion（非 personality）。与 mode:temporal 配合。" },
+          temporalReference: { type: "string", description: "Federation perspective 的时间坐标（与 mode:federation-perspective 配合）。" },
+          obsConfidence: { type: "number", description: "Federation 观测确信（observationConfidence），与 mode:federation-perspective 配合。" },
+          valConfidence: { type: "number", description: "Federation 解释确信（validationConfidence），与 mode:federation-perspective 配合。" },
+          observation: { type: "string", description: "Reality Evidence 弱事实（某事件在某时间被观察到），与 mode:real-evidence 配合。" },
+          realityId: { type: "string", description: "Reality Evidence id（与 mode:real-refer / mode:stability 配合）。" },
+          realEvidenceRef: { type: "string", description: "Observer Difference 的 reality evidence 引用（字段名历史遗留；注册入口是 mode:real-evidence，与 mode:federation-diff 配合）。" },
+          lensA: { type: "string", description: "Observer A 的 lens（与 mode:federation-diff 配合）。" },
+          lensB: { type: "string", description: "Observer B 的 lens（与 mode:federation-diff 配合）。" },
+          obsClaimB: { type: "string", description: "Observer B 的 observationClaim（与 mode:federation-diff 配合）。" },
+          linkedHypothesis: { type: "array", items: { type: "string" }, description: "Reality Evidence 关联的 hypothesis（与 mode:real-evidence 配合）。" },
+          hasValidation: { type: "boolean", description: "Perspective Stability 是否有 ValidationResult 支撑（与 mode:stability 配合）。" },
+          subject: { type: "string", description: "Reality 主体（subjectRef/subject），与 mode:model-observation / mode:model-claim / mode:model 配合。" },
+          sourcePerspectives: { type: "array", items: { type: "string" }, description: "RealityObservation 的来源 perspectives（与 mode:model-observation 配合）。" },
+          temporalContext: { type: "string", description: "RealityObservation 时间上下文（与 mode:model-observation 配合）。" },
+          validationRefs: { type: "array", items: { type: "string" }, description: "RealityObservation 关联的 validation 引用（与 mode:model-observation 配合）。" },
+          claimId: { type: "string", description: "RealityClaim id（与 mode:model 查询配合）。" },
+          relation: { type: "string", description: "RelationHypothesis 关系（如 depends_on；与 mode:world-relation 配合）。" },
+          evidence: { type: "array", items: { type: "string" }, description: "RelationHypothesis 证据（RealityClaim id，与 mode:world-relation 配合）。" },
+          condition: { type: "string", description: "Simulation 条件（须 'Assume X'，禁 'X will cause'；与 mode:simulate 配合）。" },
+          basedOn: { type: "array", items: { type: "string" }, description: "Simulation basedOn（Representation id，lineage 从属；与 mode:simulate 配合）。" },
+          proposal: { type: "string", description: "ActionCandidate proposedChange（与 mode:candidate 配合）。" },
+          proposedChange: { type: "string", description: "ActionCandidate proposedChange（与 mode:candidate 配合）。" },
+          basedOnSimulation: { type: "array", items: { type: "string" }, description: "ActionCandidate basedOnSimulation（SimulationOutcome id；与 mode:candidate 配合）。" },
+          candidateId: { type: "string", description: "ActionExecution candidateId（需先 mode:candidate 批准；与 mode:execute 配合）。" },
+          environmentChange: { type: "string", description: "ActionExecution 环境变化（事件，非'我改变了世界'；与 mode:execute 配合）。" },
+          executionId: { type: "string", description: "ActionFeedback executionId（与 mode:feedback 配合）。" },
+          objective: { type: "string", description: "Planning objective（须外部来源；与 mode:plan 配合）。" },
+          objectiveSource: { type: "string", description: "Planning objective 来源（external/observer；observer 拒绝；与 mode:plan 配合）。" },
+          criteria: { type: "string", description: "Planning evaluation criteria（禁 better/optimal/best；与 mode:plan 配合）。" },
+          constraints: { type: "array", items: { type: "string" }, description: "Planning objective/constraints（与 mode:plan 配合）。" },
+          candidates: { type: "array", items: { type: "object" }, description: "Planning 候选（actionSequence/assumptions/constraints；无 score；与 mode:plan 配合）。" },
+          simulationRefs: { type: "array", items: { type: "string" }, description: "Planning simulationReferences（与 mode:plan 配合）。" },
+          observedChanges: { type: "array", items: { type: "string" }, description: "ActionFeedback 观察到的变化（与 mode:feedback 配合）。" },
+          successIndicator: { type: "string", description: "ActionFeedback successIndicator（仅'观察到符合某些预期结果'；禁'我预测正确'；与 mode:feedback 配合）。" },
+          unexpectedEffects: { type: "array", items: { type: "string" }, description: "ActionFeedback 意外效应（与 mode:feedback 配合）。" },
+          objectiveRef: { type: "string", description: "Agency objectiveRef（外部目标引用，禁 observer/self 自指；与 mode:agency-context/agency-event 配合）。" },
+          authoritySource: { type: "string", description: "Agency authoritySource（external/human/system/user；禁 observer/self；与 mode:agency-context 配合）。" },
+          authorityScope: { type: "string", description: "Agency authorityScope 授权范围（与 mode:agency-context 配合）。" },
+          reason: { type: "string", description: "AgencySelection reason（只允许 constraint_satisfied；禁 valuable/meaningful/better；与 mode:agency-select 配合）。" },
+          selectedCandidateId: { type: "string", description: "AgencySelection 选中的候选 id（与 mode:agency-select 配合）。" },
+          actionCandidate: { type: "string", description: "AgencyBoundaryEvent actionCandidate（与 mode:agency-event 配合）。" },
+          identityRef: { type: "string", description: "Agent 身份引用（用于 Authority≠Identity 校验；与 mode:agency-event 配合）。" },
+          constraintCheck: { type: "array", items: { type: "string" }, description: "AgencyBoundaryEvent 已过约束（与 mode:agency-event 配合）。" },
+          executionResult: { type: "string", description: "AgencyBoundaryEvent 执行结果（事件，禁 Autonomy/所有权声称；与 mode:agency-event 配合）。" },
+          delegationId: { type: "string", description: "DelegationContext 委派 id（与 mode:delegation-context/check/event 配合）。" },
+          allowedScope: { type: "array", items: { type: "string" }, description: "DelegationContext allowedScope 允许做什么（禁所有权；与 mode:delegation-context 配合）。" },
+          expiration: { type: "string", description: "DelegationContext expiration（YYYY-MM-DD，时间说停止；与 mode:delegation-context 配合）。" },
+          revocation: { type: "boolean", description: "DelegationContext revocation（撤销信号，优先于执行历史；与 mode:delegation-context 配合）。" },
+          action: { type: "string", description: "DelegationCheck 待检动作路径（与 mode:delegation-check 配合）。" },
+          satisfiedConstraints: { type: "array", items: { type: "string" }, description: "Delegation 已满足约束（与 mode:delegation-check/event 配合）。" },
+          now: { type: "string", description: "DelegationCheck 当前时间（YYYY-MM-DD，用于过期判定；与 mode:delegation-check 配合）。" },
+          originalRef: { type: "string", description: "ForgottenRecord originalRef（原记录引用；与 mode:recall-forget 配合）。" },
+          forgottenAt: { type: "string", description: "ForgottenRecord forgottenAt（YYYY-MM-DD；与 mode:recall-forget 配合）。" },
+          recalledRef: { type: "string", description: "RecallEvent recalledRef（忆起的已遗忘记录 id；与 mode:recall-event/recall-validation 配合）。" },
+          triggerType: { type: "string", description: "Recall trigger 类型（须 external/cue/conversation/explicit/association；禁 internal certainty/intuition；与 mode:recall-event 配合）。" },
+          sourceRef: { type: "string", description: "Recall trigger sourceRef（为什么想起来，必须存在；与 mode:recall-event 配合）。" },
+          observationRefs: { type: "array", items: { type: "string" }, description: "Recall lineage observationRefs（与 mode:recall-event 配合）。" },
+          status: { type: "string", description: "Recall 不提升证据等级：status/epistemicStatus/support 禁 supported/validated/certain（与 mode:recall-event 配合）。" },
+          sourceExperience: { type: "string", description: "AdaptationContext/AdaptationChange sourceExperience（调整依据；与 mode:adapt-context/adapt-change 配合）。" },
+          adaptationScope: { type: "string", description: "AdaptationContext adaptationScope（method/strategy/execution_pattern；禁 objective/authority/identity；与 mode:adapt-context 配合）。" },
+          target: { type: "string", description: "AdaptationChange target（method/strategy/execution_pattern；禁 objective/authority/identity/value；与 mode:adapt-change 配合）。" },
+          changeObserved: { type: "boolean", description: "AdaptationValidation changeObserved（变化发生了；与 mode:adapt-validation 配合）。" },
+          validationReferences: { type: "array", items: { type: "string" }, description: "AdaptationValidation validationReferences（与 mode:adapt-validation 配合）。" },
+          sideEffectsObserved: { type: "array", items: { type: "string" }, description: "AdaptationValidation 现实反馈（与 mode:adapt-validation 配合）。" },
+          basedOnHistory: { type: "array", items: { type: "string" }, description: "InteractionContext basedOnHistory（当前长期交互基于什么历史；与 mode:horizon-context 配合）。" },
+          sourceRefs: { type: "array", items: { type: "string" }, description: "HistorySummary sourceRefs（ObservationRef[]，摘要是访问辅助；与 mode:horizon-summary 配合）。" },
+          compressionMethod: { type: "string", description: "HistorySummary compressionMethod（与 mode:horizon-summary 配合）。" },
+          accessibility: { type: "string", description: "HistorySummary accessibility（available/forgotten/recalled；与 mode:horizon-summary 配合）。" },
+          historyRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink historyRef（与 mode:horizon-event/horizon-link 配合）。" },
+          previousAccessibility: { type: "string", description: "HistoryContinuityEvent previousAccessibility（与 mode:horizon-event 配合）。" },
+          recallRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink recallRef（与 mode:horizon-event/horizon-link 配合）。" },
+          adaptationRef: { type: "string", description: "HistoryContinuityEvent/InteractionAdaptationLink adaptationRef（与 mode:horizon-event/horizon-link 配合）。" },
+          interactionStyle: { type: "string", description: "ObserverConfig interactionStyle（configuration，非 preference；与 mode:observer-config 配合）。" },
+          outputPreference: { type: "string", description: "ObserverConfig outputPreference（如 adr；与 mode:observer-config 配合）。" },
+          defaultProtocol: { type: "string", description: "ObserverConfig defaultProtocol（如 boundary-first；与 mode:observer-config 配合）。" },
+          planningCannotCreateObjective: { type: "boolean", description: "ObserverBoundary 政策开关（与 mode:observer-boundary 配合）。" },
+          records: { type: "array", items: { type: "object" }, description: "RecallIndex records（{id, location}，导航非内容；与 mode:recall-index 配合）。" },
+          observerId: { type: "string", description: "ContinuityRecord observerId（与 mode:observer-lineage 配合）。" },
+          continuityRef: { type: "string", description: "ContinuityRecord continuityRef（与 mode:observer-lineage 配合）。" },
+          kind: { type: "string", description: "WorkspaceRecord kind（observation/representation/simulation/planning/action/interaction；与 mode:workspace-record 配合）。" },
+          content: { type: "string", description: "WorkspaceRecord content（world 层项目内容；与 mode:workspace-record 配合）。" },
+          evidenceRefs: { type: "array", items: { type: "string" }, description: "Verification evidenceRefs（运行的观察事件；禁 adaptation/permission/identity 变化措辞；与 mode:verification 配合）。" },
+          runtimeVersion: { type: "string", description: "VerificationRun runtimeVersion（与 mode:verification 配合）。" },
+          // 工具集台账（mode:"toolset"）：巡检只读；安装**仅用户显式要求**且**一律先经宿主审批**。
+          install: { type: "string", description: "工具集台账（mode:toolset）：**显式安装**某个条目的 CLI（传 id，如 \"rg\"/\"jadx\"/\"coreutils-ms\"）。有后果动作——会先向用户申请审批，只有获批（allowed-once）才执行，装完重新探测再报结果。默认不传=只读巡检。仅用户显式要求时使用。" },
+          survey: { type: "string", description: "工具集台账（mode:toolset）：\"providers\"（默认，只探测插件内接线的 zg/semble）或 \"all\"（并行探测全部通用工具；**条数不在此手写** —— 见台账自身，`mode:toolset` 会给出实际条数与分类）。" },
+          category: { type: "string", description: "工具集台账（mode:toolset）：只列某个分类（如 \"GNU 工具链\" / \"搜索与查找\" / \"逆向与二进制分析\"）。" },
+          need: { type: "array", items: { type: "string" }, description: "工具集台账（mode:toolset）：**能力预检** —— 按「需要什么能力」反查台账并探测本机是否就位（如 [\"全文搜索\",\"jadx\"]）。派活前的接缝：产出只用于**降级决策**（每行给「缺件时退到哪」），**不是派活闸门**。注意宿主进程 PATH 是启动时快照，本进程内新装的工具要重启宿主才可见，故预检后不要按「先装再派」做计划。" },
         },
-        output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
-        execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), args, exec),
-      });
-      // v1.5 Shadow Usability Layer：人类友好入口。隐藏 episode/decision/task/context 等底层模式，
-      // 只给一句自然查询，返回「记忆恢复包（Task Recovery Bundle）」。内部 = read_shadow({mode:'recovery', topic})。
-      toolsService.register({
-        name: "recall_shadow",
-        description: "人类友好的「记忆恢复」入口：给一句自然语言查询（如『Todo清理』『上次 OAuth 问题』），返回任务恢复包（内部 = read_shadow mode:recovery）。本路径不套灵魂规避滤；缺灵魂时顶部有 F2 提示（要关提示请用 read_shadow({mode:'recovery', raw:true, topic})）。内容全来自派生数据，不 LLM 补写。",
-        parameters: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "自然语言查询（任务/主题/入口，如『Todo清理』『上次 U8 补丁』）" },
-            limit: { type: "number", description: "最多返回的任务数，默认 1（返回最相关任务的恢复包）" },
-          },
-        },
-        output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
-        execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), { mode: "recovery", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
-      });
-      // Phase 1A Shadow Projection：跨类型统一查询（memory/decision/code/document/concept/resource），返回带 evidence 的 context。
-      // 内部 = read_shadow({mode:'query', topic, scope, limit})；Node 是派生投影（非事实源），可追溯。
-      toolsService.register({
-        name: "shadow_query",
-        description: "跨类型的统一记忆查询（shadow.query）：给定查询词与可选 scope（memory/decision/code/document/concept/resource），返回各组上下文的 ShadowNode 视图——每条带 evidence（指向源文件/文档/Atom），可追溯。Node 是派生投影，不是事实源。resource = `.shadow/resources/` 里的资源卡（外部资源/工具/论文/资料）。需要跨「历史决策+代码+规范+关系」地找上下文时用。",
-        parameters: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "查询词（如 'appid secret 认证'）" },
-            scope: { type: "array", items: { type: "string" }, description: "限定类型：memory/decision/code/document/concept/resource（不填=全部）" },
-            limit: { type: "number", description: "最多返回 context 条数，默认 8" },
-          },
-        },
-        output: { schema: { type: "string" }, render: (_args: any, value: string) => [{ type: "text", text: value }] },
-        execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), { mode: "query", topic: String((args && args.query) || "").trim(), scope: args && args.scope, limit: args && args.limit }, exec),
-      });
+      },
+      output: { schema: { type: "string" }, render: renderText },
+      execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), args, exec),
     });
-  }
+    // v1.5 Shadow Usability Layer：人类友好入口。隐藏 episode/decision/task/context 等底层模式，
+    // 只给一句自然查询，返回「记忆恢复包（Task Recovery Bundle）」。内部 = read_shadow({mode:'recovery', topic})。
+    toolsService.register({
+      name: "recall_shadow",
+      description: "人类友好的「记忆恢复」入口：给一句自然语言查询（如『Todo清理』『上次 OAuth 问题』），返回任务恢复包（内部 = read_shadow mode:recovery）。本路径不套灵魂规避滤；缺灵魂时顶部有 F2 提示（要关提示请用 read_shadow({mode:'recovery', raw:true, topic})）。内容全来自派生数据，不 LLM 补写。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "自然语言查询（任务/主题/入口，如『Todo清理』『上次 U8 补丁』）" },
+          limit: { type: "number", description: "最多返回的任务数，默认 1（返回最相关任务的恢复包）" },
+        },
+      },
+      output: { schema: { type: "string" }, render: renderText },
+      execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), { mode: "recovery", topic: String((args && args.query) || "").trim(), limit: args && args.limit }, exec),
+    });
+    // Phase 1A Shadow Projection：跨类型统一查询（memory/decision/code/document/concept/resource），返回带 evidence 的 context。
+    // 内部 = read_shadow({mode:'query', topic, scope, limit})；Node 是派生投影（非事实源），可追溯。
+    toolsService.register({
+      name: "shadow_query",
+      description: "跨类型的统一记忆查询（shadow.query）：给定查询词与可选 scope（memory/decision/code/document/concept/resource），返回各组上下文的 ShadowNode 视图——每条带 evidence（指向源文件/文档/Atom），可追溯。Node 是派生投影，不是事实源。resource = `.shadow/resources/` 里的资源卡（外部资源/工具/论文/资料）。需要跨「历史决策+代码+规范+关系」地找上下文时用。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "查询词（如 'appid secret 认证'）" },
+          scope: { type: "array", items: { type: "string" }, description: "限定类型：memory/decision/code/document/concept/resource（不填=全部）" },
+          limit: { type: "number", description: "最多返回 context 条数，默认 8" },
+        },
+      },
+      output: { schema: { type: "string" }, render: renderText },
+      execute: (args: any, exec: any) => runReadShadow(makeQueryDeps(exec), { mode: "query", topic: String((args && args.query) || "").trim(), scope: args && args.scope, limit: args && args.limit }, exec),
+    });
+  });
 
-  if (typeof context.inject === "function") {
-    context.inject(["systemPrompt"], (promptCtx: CtxLike) => {
-      // 防御性判断：Cordis 只在 systemPrompt 就绪时才回调，故此处理论上必存在。
-      // 真正的「缺 systemPrompt」报告在 probeHostOnFirstTurn。
-      const systemPrompt = promptCtx.get("systemPrompt");
-      if (!systemPrompt) return;
-      systemPrompt.context({
-        name: "dsh-shadow",
-        order: 40,
-        text: () =>
-          "你的思维、上下文与决策沉淀在工作区投影空间（.shadow/atoms 等；索引与便利贴可重建）。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery，缺灵魂时顶部有提示；本路径不套灵魂规避滤）。需要精细穿透时再用 `read_shadow`（默认主题召回会套规避滤；原文用 raw:true；完整 RealityProjection 用 project:true）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verification）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
-          "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
-      });
+  context.inject(["systemPrompt"], (promptCtx: CtxLike) => {
+    // 防御性判断：Cordis 只在 systemPrompt 就绪时才回调，故此处理论上必存在。
+    // 真正的「缺 systemPrompt」报告在 probeHostOnFirstTurn。
+    const systemPrompt = promptCtx.get("systemPrompt");
+    if (!systemPrompt) return;
+    systemPrompt.context({
+      name: "dsh-shadow",
+      order: 40,
+      text: () =>
+        "你的思维、上下文与决策沉淀在工作区投影空间（.shadow/atoms 等；索引与便利贴可重建）。快速回忆最近在做什么/为什么/做到哪时，用 `recall_shadow(query)`（一句自然查询即可，如「上次 Todo 清理」；内部 = read_shadow mode:recovery，缺灵魂时顶部有提示；本路径不套灵魂规避滤）。需要精细穿透时再用 `read_shadow`（默认主题召回会套规避滤；原文用 raw:true；完整 RealityProjection 用 project:true）。读主体锚用 identity:true；推进 Identity Timeline 用 mode:identity-advance。Evidence Gateway 用 verifyEvidence:true（≠ mode:verification）。缺上下文、需要回忆最近想过/决定过什么、或回顾用户最近在往哪个方向走时，先调用它们再补充回答。" +
+        "你还有 Soul 投影（身份/价值观/原则/品味/边界，见 .shadow/soul/soul.json）：遇到取舍可 read_shadow({soul:true}) 参考，回应工程经历问题可用 read_shadow(topic, {experience:true})。",
     });
-  }
+  });
 
   return collector.cleanup;
 }

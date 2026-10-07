@@ -2,7 +2,29 @@
 // **只改 Presentation，不改 Canonical Evidence**（v0.14 边界）。全部纯函数，从 index.ts 迁出。
 
 export const SECRET_PATTERNS = [/sk-[A-Za-z0-9]{16,}/, /ghp_[A-Za-z0-9]{30,}/, /AKIA[0-9A-Z]{16}/, /AIza[0-9A-Za-z_-]{30,}/, /xox[baprs]-[A-Za-z0-9-]{10,}/, /-----BEGIN [A-Z ]+ PRIVATE KEY-----/];
-export const UNSAFE_CONTROL = /[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 控制 / 双向覆盖字符的字符类（A13）：**只许有一份**。
+//
+// 为什么必须收一处：这是**安全边界**（不是排版偏好），而它原先被表达 3 遍 —— `UNSAFE_CONTROL`、
+// `scrubUnsafe` 里一份**逐字复制**、`UNSAFE_CONTROL_DOC` 一份。将来补一个新的双向控制符
+// （Unicode 仍在扩）极易只改一处，留下「单行字段清掉了、整篇没清」的洞。
+// 收口后的**唯一差异**是一个显式参数：是否保留 `\t`(09) `\n`(0A) `\r`(0D) 排版字符。
+// ─────────────────────────────────────────────────────────────────────────────
+/** 单行口径：连 `\t\n\r` 一起剔。 */
+const CONTROL_ALL = "\\u0000-\\u001f\\u007f";
+/** 整篇口径：保留 `\t` `\n` `\r`（否则 Markdown 结构被压成一行，见下方 `scrubUnsafeDoc` 注释）。 */
+const CONTROL_KEEP_LAYOUT = "\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f";
+/** 双向覆盖 / 隔离符。 */
+const BIDI = "\\u202a-\\u202e\\u2066-\\u2069";
+
+/** 拼清洗正则：`keepLayout` = 是否保留排版字符；`global` = 是否带 `g`（`.test` 用非全局，避免 `lastIndex` 态）。 */
+const unsafeRe = (keepLayout: boolean, global: boolean): RegExp =>
+  new RegExp(`[${keepLayout ? CONTROL_KEEP_LAYOUT : CONTROL_ALL}]|[${BIDI}]`, global ? "g" : "");
+
+export const UNSAFE_CONTROL = unsafeRe(false, false);
+/** 与 `UNSAFE_CONTROL` **同一字符集**的全局版（`scrubUnsafe` 用；不再手抄一遍字符类）。 */
+const UNSAFE_CONTROL_G = unsafeRe(false, true);
 
 export const sanitizeText = (text: unknown) => {
   let s = String(text || "");
@@ -14,11 +36,11 @@ export const isUnsafe = (line: unknown) => UNSAFE_CONTROL.test(String(line));
 
 // 剔除控制/双向覆盖字符：用于线索头等“正文之外”的文本（正文已由 isUnsafe 过滤整行剔除）。
 // 注意：这里连 \t\n\r 一起剔（单行字段用）。整篇文档请用 scrubFinal——它会保留排版换行（v1.12.7 修）。
-export const scrubUnsafe = (s: unknown) => String(s || "").replace(/[\u0000-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g, "");
+export const scrubUnsafe = (s: unknown) => String(s || "").replace(UNSAFE_CONTROL_G, "");
 
 // 整篇文档用的控制字符清洗：保留 \t(09) \n(0A) \r(0D) 排版字符，只剔其余 C0 控制符与双向覆盖符。
 // 旧实现整篇套 scrubUnsafe → 把所有换行压成一行（读侧 16 个模块的 Markdown 结构全丢）。
-export const UNSAFE_CONTROL_DOC = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]|[\u202a-\u202e\u2066-\u2069]/g;
+export const UNSAFE_CONTROL_DOC = unsafeRe(true, true);
 export const scrubUnsafeDoc = (s: unknown) => String(s || "").replace(UNSAFE_CONTROL_DOC, "");
 
 // 系统脚手架标签块：/workspace 指令、runtime context、skill 目录等以 <system-reminder>…</system-reminder> 成对注入。

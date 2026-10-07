@@ -19,8 +19,11 @@
 //   ③ **不破坏特性探测**：`persistence/meta.ts:50` 用 `typeof fs.stat === "function"` 判分派，
 //      门面必须**原样保留「没有 stat」**这件事。
 import assert from "node:assert/strict";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as mod from "../dist/index.js";
-import { scopedFs, sessionPolicy } from "../dist/core/fs-scope.js";
+import { scopedFs, sessionPolicy, isPolicyFailure } from "../dist/core/fs-scope.js";
 const { apply, name, inject } = mod;
 
 const SVC_CWD = "C:/svc";   // dsh 服务进程的启动目录（= 部署 fallback 的 workspaceRoot）
@@ -216,7 +219,12 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   assert.equal(scopedFs(raw, undefined), raw, "无策略时必须原样返回原 fs（零行为变化）");
   assert.equal(scopedFs(undefined, P), undefined, "无 fs 时必须原样返回 undefined");
   assert.equal(sessionPolicy({ get: () => undefined }, { id: "s" }), undefined, "缺 sandboxPolicy 服务 ⇒ undefined");
-  assert.equal(sessionPolicy({ get: () => { throw new Error("boom"); } }, { id: "s" }), undefined, "resolve 抛错 ⇒ 降级为 undefined，不得炸穿调用方");
+  // A17：`resolve` 抛错**不再**与「服务缺失」合并成 `undefined` —— 那是 fail-open 的入口：
+  // 消费点对 `undefined` 的处置是「按可写处理」，而解析失败时围栏本可生效、只是读不出参数。
+  const failed = sessionPolicy({ get: () => { throw new Error("boom"); } }, { id: "s" });
+  assert.ok(isPolicyFailure(failed), `resolve 抛错 ⇒ **失败态**（不得炸穿调用方、也不得与「服务缺失」同形）：${JSON.stringify(failed)}`);
+  assert.ok(String(failed.reason).includes("boom"), "失败态必须带**真实原因**（供调用方留痕，不臆造）");
+  assert.equal(scopedFs(raw, failed), raw, "失败标记不是策略 ⇒ 门面必须原样返回原 fs（不得把 {failed:true} 当 sandboxPolicy 传给围栏）");
   assert.equal(sessionPolicy({ get: () => ({ resolve: () => P }) }, undefined), undefined, "无 session ⇒ undefined（不猜策略）");
 
   // (b) 省略第 5 参 ⇒ 补会话策略；显式传入 ⇒ **原样转发，不覆盖**（不越权）
@@ -240,9 +248,53 @@ apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }
   console.log("✔ ⑥ 门面契约：恒等降级 / 补齐省略的策略 / 不覆盖显式策略 / 保留 stat 缺失");
 }
 
+// ── ⑦ A17 端到端负对照：`sandboxPolicy.resolve` **抛错**（服务在、解析失败） ──
+// 三态里的第三态（`core/fs-scope.ts` 的 `{ failed: true }`）在 ⑥ 只有**单元**断言；这里驱动**真实插件**：
+//   `sessionPolicy` 抛错 ⇒ `index.ts` 的 `derivedIndexWritable = false`（保守；原实现与「服务缺失」同形、
+//   会被消费点按**可写**处理 = fail-open）⇒ `query/materialize.ts` 把 `{ writable: false }` 交给 sqlite
+//   provider ⇒ 守卫②在**任何落盘之前**返回 unavailable（`core/candidate/sqlite.ts`）。
+// 两条断言都取**可观察的后果**（不碰私有字段，因为 `derivedIndexWritable` 不是导出面）：
+//   ① 不落盘：provider 的 `processPath` 指向一个空临时目录 ⇒ 该目录必须仍然为空；
+//   ② 可见：`noteDegrade` → `getFlushWarn()` 横幅，且必须带**真实原因**。
+{
+  const store = new Map<string, string>();
+  const { m, agent, ctx, services } = mkCtx(store, { resolve: () => { throw new Error("boom-policy"); } });
+  // 本场景只问「策略解析失败时派生索引写不写」，与写围栏无关 ⇒ 摘掉围栏（等价于「宿主没有 dsh-fs-sandbox」，
+  // 见 `core/fs-scope.ts` 对「服务缺失时围栏本身不存在」的说明），避免无关的写入被拒干扰读数。
+  services.fs.writeText = async (t: any, c: string) => { m.set(t.displayPath, c); return { operation: "update", version: "v1", before: null, after: c }; };
+  // 让守卫①（宿主绝对路径）通过 —— 否则 provider 会在**读到 writable 之前**就以「processPath 不可用」返回，
+  // 本场景就成了**假绿**（根本测不到「不可写」这一态）。指向空临时目录：真落盘也只落在那里。
+  const tmp = mkdtempSync(join(tmpdir(), "shadow-a17-"));
+  services.fs.processPath = () => join(tmp, "index.sqlite");
+  apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, derivedIndex: { provider: "sqlite" } });
+  const T = agent("T7");
+  m.set(`${WS}/.shadow/atoms/2026-09-11--100000-alpha.md`,
+    "# alpha\n\n> 完整线索\n> 坐标：locus(ws) · when(2026-09-08 10:00:00) · soul(default) · role(default) · intent(test)\n> 概况：1 动作 · 0 用户消息 · 0 决策\n> 项目：proj\n\n- [10:00:00] [alpha] 改/读 alpha.ts\n");
+  const rs = toolRegistry.get("read_shadow");
+
+  // ② 失败必须**可见**：`sandboxPolicy` 的留痕在 `makeQueryDeps` 里落台账，而 `runReadShadow` 开头就取横幅
+  //   ⇒ **本回合**的返回里就该看到它（不是下一回合）。
+  const out1 = String(await rs.execute({ topic: "alpha" }, { agent: T }));
+  assert.ok(out1.includes("沙箱策略解析失败"), `策略解析失败必须可见（noteDegrade → 横幅），不得静默：\n${out1.slice(-600)}`);
+  assert.ok(out1.includes("boom-policy"), `横幅必须带**真实原因**（不臆造、不吞掉）：\n${out1.slice(-600)}`);
+
+  // ① 保守取值：`derivedIndex` 的留痕由**本次读**内部的物化产生，而横幅在本回合**之前**取
+  //   （见 `query/reads.ts` 里「横幅是本回合之前取的」那段注释）⇒ 第二次读才看得到它。
+  //   这条原因**只有** `writable === false` 才可能产生（守卫②的唯一出口；守卫①已被 processPath 让开）。
+  const out2 = String(await rs.execute({ topic: "alpha" }, { agent: T }));
+  assert.ok(out2.includes("会话策略只读（read-only）"),
+    `解析失败 ⇒ 派生索引必须按**不可写**处理（保守）：这条原因只在 writable=false 时产生；实际：\n${out2.slice(-600)}`);
+  assert.ok(out2.includes("alpha"), `回退 fs 后结果不变（不是「因为失败所以读不到」）：\n${out2.slice(-600)}`);
+  const left = readdirSync(tmp);
+  assert.deepEqual(left, [], `不可写态下**绝不落盘**（连索引文件都不建）；实际残留：${JSON.stringify(left)}`);
+  rmSync(tmp, { recursive: true, force: true });
+  console.log("✔ ⑦ A17 端到端负对照：sandboxPolicy.resolve 抛错 ⇒ 派生索引按不可写处理（不落盘）+ 降级横幅带真实原因");
+}
+
 console.log("");
 console.log("未在本文件验证（诚实标注）：");
 console.log("  · 真机 `host.fs` + 真 `sandboxPolicy` 服务的端到端（需重启宿主）—— mock 按已读源码复刻判定，不是真沙箱；");
+console.log("    ⑦ 的「resolve 抛错」形态同样只在 mock 宿主上验过（真机需真服务抛错才能复现）；");
 console.log("  · `resolveShadowScope` 落到**兜底根**（`~/.dsh-observer/shadow`）时无 session 可问 ⇒ 仍走部署 fallback，");
 console.log("    该场景未被本修复覆盖（无会话就没有「会话策略」这回事）；");
 console.log("  · `editText` 只做门面转发断言，插件今天不调用它。");

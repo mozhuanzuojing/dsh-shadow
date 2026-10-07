@@ -1,13 +1,21 @@
 // dsh-shadow —— evidence/paths.ts：证据路径候选/路径判定。从 index.ts 迁出。纯函数。
-export const evidencePathsOf = (text: string) => {
-  const clue = (String(text).match(/^> 证据链：(.+)$/m) || [])[1] || "";
-  if (clue) {
-    const evM = clue.match(/证据\(([^)]*)\)/);
-    if (evM) return evM[1].split(/[、,]/).map((s) => s.trim()).filter(Boolean);
-  }
-  const mats = (String(text).match(/^> 背景\/材料：(.+)$/m) || [])[1] || "";
-  return mats.split(/[、,]/).map((s) => s.trim()).filter(Boolean);
-};
+import { clueFieldsOf } from "../core/view/clue.js";
+
+/**
+ * 记忆正文 ⇒ 证据路径候选（`、` / `,` 切开）。
+ *
+ * **B8：线索头解析收一处**到 `core/view/clue.ts` —— 此前这份正则被 `evidence/paths.ts` ·
+ * `subject/observer/arbitrate.ts` · `retrieval/render.ts` · `tools/granularity.lib.ts` 各写一遍
+ *（改一次记忆头格式要扫多处），四者现已全部走该模块。
+ * ⚠ **同族残留**（不在本轮写面，已在回执报给 Lead）：`core/view/experience.ts` 仍自留一份
+ * `证据链` / `证据(...)` / `背景/材料` 的解析，且它的 `evidence` **不**回落「背景/材料」（与这里口径不同）。
+ * 口径**保持**：命中「证据链」里的 `证据(…)` 就用它，否则回落「背景/材料」；空/缺行 ⇒ **空数组**（不猜）。
+ * 两处**已核过的差异**（都是改进方向，不在生产路径上）：
+ *   · `证据(—)`（写侧 `core/retention/memory.ts` 在无材料时写的占位）现在被 `clueItemsOf` 当占位丢掉
+ *     ⇒ 不再产出 `["—"]` 这个假 item（旧实现会，只是下游 `isPathLike("—")` 又把它滤掉，故无可观测差异）；
+ *   · **空捕获** `证据()` 现在回落「背景/材料」（旧实现返回 `[]`）—— 写侧从不产出空捕获（恒为 `—` 或真值）。
+ */
+export const evidencePathsOf = (text: string) => clueFieldsOf(String(text)).evidence;
 
 export const isPathLike = (p: string) => p && !/^https?:|github\.com|arxiv/i.test(p) && (/[\\\/]/.test(p) || /\.[a-z0-9]{1,6}$/i.test(p) || /^[A-Za-z]:/.test(p));
 

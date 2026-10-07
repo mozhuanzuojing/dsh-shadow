@@ -3,7 +3,7 @@
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { FutureEvidence } from "./types.js";
 import type { Hypothesis } from "../../selfhood/dream/types.js";
-import { today } from "../../core/util.js";
+import { today, newId } from "../../core/util.js";
 
 /**
  * 写一条 hypothesis。**返回是否真的落盘**（v1.15.55）。
@@ -39,7 +39,7 @@ export const readHypothesis = async (fs: any, ws: string, id: string): Promise<H
  * 而且**没有任何地方说明为什么**。
  */
 export const registerFutureEvidence = async (fs: any, ws: string, ev: { hypothesisId: string; observedAt: string; actualOutcome: string; observationType: string; sourceTraceIds?: string[]; createdAt?: string; id?: string }): Promise<{ evidence: FutureEvidence; persisted: boolean }> => {
-  const id = ev.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const id = ev.id || newId("ev");   // A12：id 生成**收一处**到 `core/util.ts`
   const full: FutureEvidence = { ...ev, sourceTraceIds: ev.sourceTraceIds || [], id, createdAt: ev.createdAt || today() } as FutureEvidence;
   try {
     const rel = `${SHADOW_ROOT}/future-evidence/${id}.json`;
@@ -56,7 +56,8 @@ export const readFutureEvidence = async (fs: any, ws: string, hypothesisId?: str
   const out: FutureEvidence[] = [];
   try {
     const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/future-evidence`, { cwd: ws });
-    const files = (await fs.listDir(root).catch(() => [])) || [];
+    // A7（`noImplicitAny: true`）：「列目录失败 ⇒ 空列表」的 `.catch` 回调需**显式返回类型**。
+    const files = (await fs.listDir(root).catch((): any[] => [])) || [];
     for (const f of files) {
       if (!f?.name || !f.name.endsWith(".json")) continue;
       const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/future-evidence/${f.name}`, { cwd: ws });

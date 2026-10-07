@@ -1,7 +1,11 @@
 // dsh-shadow —— core/types.ts：领域 DTO / 接口（v0.14 拆内核，类型仅声明、无运行时依赖）。
 // 从 index.ts 迁移；scope 解析函数见 core/scope.ts。
 
-export type ShadowScopeKind = "explicit" | "implicit" | "fallback" | "none";
+// A9：`"none"` 变体已删 —— 它是已废止行为（「不写」）留下的枚举残骸：`resolveShadowScope` 只返回
+// 前三种（`core/scope.ts` 的 `explicit`/`implicit`/`fallback`），全仓无 `scope === "none"` 比较，
+// 且本类型经 `index.ts` **对外导出** ⇒ 下游按类型写 `case "none"` 必然是死代码，而 TS 不会提示
+// （`ShadowScope.ws: string` 也表明该态无法携带路径）。
+export type ShadowScopeKind = "explicit" | "implicit" | "fallback";
 export interface ShadowScope {
   scope: ShadowScopeKind;
   ws: string;

@@ -22,8 +22,11 @@
  * - **形状读数只打印、不判**：每条目录条目数 / 平均文件大小会打出来供人看，
  *   但本门**不**据此报红 —— 一条可机械化的判据比三条会误报的判据好（同 `tools/citation-audit.lib.ts` 的教训）。
  * - **不 import `dist/`**：本门跑在 `npm run build` **之前**（`verify` 的顺序）⇒ 依赖编译产物会让门自己先坏。
- *   记忆文件名的判据因此在本文件内联一份，**与 `persistence/files.ts` 的 `isMemoryFileName` 同一口径**
- *   （`.md` 且非 `_` 前缀）；边界由 `granularity-audit.selftest.ts` 的对照锁住。
+ *   记忆文件名的判据因此**只有一份实现**，落在**零依赖**的 `core/paths.ts` 的 `isMemoryFileName`
+ *   （`.md` 且非 `_` 前缀），本门经 `tools/granularity.lib.ts` 的 `isMemoryName` 转出后引用它 ——
+ *   生产侧 `persistence/files.ts` 引的是**同一个符号**（B6 收口；此前两处各内联一份、
+ *   且本文件原先写的是「与 `persistence/files.ts` 同一口径」，而那份判据实际在 `granularity.lib.ts`）。
+ *   边界由 `granularity-audit.selftest.ts` 的对照锁住。
  * - **不联网**（与 `verify` 里其它门同族）。
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";

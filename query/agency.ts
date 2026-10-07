@@ -7,6 +7,7 @@ import { scrubFinal } from "../security/scrub.js";
 import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../stance/agency/render.js";
 import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../stance/agency/engine.js";
 import { writeAgencyContext } from "../stance/agency/persistence.js";
+import { unwrittenWarn } from "./degrade.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface AgencyCtx { fs: any; ws: string; flushWarn: string }
@@ -21,8 +22,10 @@ export async function runAgency(deps: ShadowQueryDeps, args: any, ctx: AgencyCtx
   if (mode === "agency-context") {
     const c = buildAgencyContext(args);
     if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[AgencyContext Rejected] " + c.reason + flushWarn);
-    await writeAgencyContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderAgencyContext(c.ctx) + flushWarn);
+    const w = await writeAgencyContext(fs, ws, c.ctx);
+    // B2：写失败必须与成功可区分（旧版 `Promise<void>` + `catch { console.log }`）。
+    const degrade = unwrittenWarn("AgencyContext", w, "`.shadow/agency/<date>/context-*.json` 没有它：上面这段只是**内存中的对象**（Agency 授权事实的不可变快照没留下）。");
+    return scrubFinal(RECALL_PREFIX + renderAgencyContext(c.ctx) + degrade + flushWarn);
   }
   if (mode === "agency-select") {
     const s = pickAgencySelection(args);
@@ -31,5 +34,7 @@ export async function runAgency(deps: ShadowQueryDeps, args: any, ctx: AgencyCtx
   }
   const e = await buildAgencyEvent(fs, ws, args);
   if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
-  return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + flushWarn);
+  // B2 续修（v1.22.x）：引擎现在把写侧三态带出来（旧版引擎**不消费** `writeAgencyEvent` 的返回值 ⇒ 写失败不可见）。
+  const degradeE = unwrittenWarn("AgencyBoundaryEvent", e.persist ?? { ok: true }, "`.shadow/agency/<date>/event-*.json` 没有它：这次行动的审计痕迹（lineage / 约束检查 / 执行结果）没留下。");
+  return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + degradeE + flushWarn);
 }

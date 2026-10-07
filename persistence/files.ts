@@ -1,4 +1,4 @@
-import { SHADOW_ROOT, ATOMS_DIR, atomsRel } from "../core/paths.js";
+import { SHADOW_ROOT, ATOMS_DIR, atomsRel, isMemoryFileName } from "../core/paths.js";
 
 // dsh-shadow —— persistence/files.ts：记忆文件读写 + 记忆枚举（ADR-0106 投影空间）。
 // 权威语料 = `.shadow/atoms/<date>--<HHMMSS>-….md`；日期树不再枚举。
@@ -26,13 +26,12 @@ export const memoryFileName = (date: string, time: string, rest: string): string
   `${date}--${/^\d{6}$/.test(String(time || "")) ? `${time}-` : ""}${rest}`;
 
 /**
- * **记忆文件判据（唯一一份实现）**：`.md`、非 `_index.md`、非 `_` 前缀。
- * 派生索引与 `listMemories` 共用（T17-B）。
+ * **记忆文件判据**：**实现在 `core/paths.ts`**（判据收一处；B6）——
+ * 工具侧（`tools/granularity.lib.ts`）必须在 `npm run build` **之前**用同一份判据，
+ * 而它不能 import 本文件（那会拖进 `dist/`）。故唯一实现落在零依赖的 `core/paths.ts`，
+ * 这里只**转出**它，保持既有调用方（`core/candidate/sqlite.ts`、`test/`）说明符不变。
  */
-export const isMemoryFileName = (name: unknown): boolean => {
-  const n = String(name ?? "");
-  return n.endsWith(".md") && n !== "_index.md" && !n.startsWith("_");
-};
+export { isMemoryFileName };
 
 /** Atom 的规范 rel：`.shadow/atoms/<name>`。 */
 export const atomRel = (name: string): string => `${atomsRel()}/${name}`;

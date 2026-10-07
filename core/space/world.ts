@@ -16,7 +16,8 @@ export interface ProjectionSpaceWorld {
   /** 原子 rel 列表（不内嵌全文，避免缓存暴胀）。 */
   atomRels: string[];
   sourceFp: string;
-  soulToken: string;
+  /** soul.json 令牌；`undefined` = **不可判定**（读不出来）—— 与 `"missing"`（确实没有）**不同**（A18）。 */
+  soulToken: string | undefined;
 }
 
 type CacheEntry = { fp: string; world: ProjectionSpaceWorld };
@@ -39,8 +40,18 @@ const parseAffaireCard = (roleId: string, id: string, text: string): AffaireCard
   return { id, roleId, title, members, summary };
 };
 
-/** soul.json 的令牌（size:version）；读不到 ⇒ `missing`。 */
-export const soulTokenOf = async (fs: any, ws: string): Promise<string> => {
+/**
+ * soul.json 的令牌（size:version）。**三态**（A18）：
+ *   · 有文件 ⇒ `soul.json:<size>:<version>`；
+ *   · 目录/文件**确实不在** ⇒ `"missing"`；
+ *   · **读不出来**（resolve/listDir 抛错，如目录暂时不可读）⇒ `undefined` = **不可判定**。
+ *
+ * 为什么第三种不能写成 `"missing"`：两者是**指纹输入**（见 `loadProjectionSpace` 的 `fp`）——
+ * 把「读不出来」说成「没有」会让「目录暂时不可读」与「文件真的不在」产生**同一个指纹**，
+ * 世界层缓存据此判「没变」⇒ 正是本仓反复挖的「**不可判定 ≠ 没变**」（同 `core/view/projection-store.ts`
+ * 的 `shadowSourcesFingerprint` 返回 `undefined` 那一族）。不可判定 ⇒ 指纹必然改变 ⇒ 保守重建。
+ */
+export const soulTokenOf = async (fs: any, ws: string): Promise<string | undefined> => {
   try {
     const dir = await fs.resolve(`${ws}/${SHADOW_ROOT}/soul`, { cwd: ws });
     const files = (await fs.listDir(dir)) || [];
@@ -48,7 +59,7 @@ export const soulTokenOf = async (fs: any, ws: string): Promise<string> => {
     if (!f) return "missing";
     return `soul.json:${f.size ?? "?"}:${f.version ?? "?"}`;
   } catch {
-    return "missing";
+    return undefined;
   }
 };
 
@@ -85,7 +96,7 @@ const listAffaireCards = async (fs: any, ws: string): Promise<AffaireCard[]> => 
   return out;
 };
 
-const hydrateFresh = async (fs: any, ws: string, sourceFp: string, soulToken: string): Promise<ProjectionSpaceWorld> => {
+const hydrateFresh = async (fs: any, ws: string, sourceFp: string, soulToken: string | undefined): Promise<ProjectionSpaceWorld> => {
   const soul = await readSoul(fs, ws);
   const mems = await listMemories(fs, ws);
   return {
@@ -110,6 +121,8 @@ export const loadProjectionSpace = async (
 ): Promise<ProjectionSpaceWorld> => {
   const sourceFp = (await shadowSourcesFingerprint(fs, ws)) ?? "";
   const soulToken = await soulTokenOf(fs, ws);
+  // A18：`soulToken === undefined`（读不出来）与 `"missing"`（确实没有）在指纹里**取不同值**
+  // ⇒ 「不可判定」必然导致缓存未命中并**保守重建**，不会被当成「没变」。
   const fp = `${sourceFp}\n#soul:${soulToken}`;
   const useCache = onByDefault(config?.projectionSpace?.cache);
   if (useCache) {
@@ -127,8 +140,13 @@ export const invalidateProjectionSpace = (ws?: string): void => {
   else cacheByWs.clear();
 };
 
-/** 原子文件令牌（供便利贴新鲜度）；listDir 级，读不到 ⇒ `?:?`。 */
-export const atomTokenOf = async (fs: any, ws: string, atomName: string): Promise<string> => {
+/**
+ * 原子文件令牌（供便利贴新鲜度）；listDir 级。**三态**（A18，同 `soulTokenOf`）：
+ * 有文件 ⇒ `<size>:<version>`；文件确实不在 ⇒ `"?:?"`；**读不出来** ⇒ `undefined`（不可判定）。
+ * 与 `"?:?"` 取不同值 ⇒ 便利贴新鲜度判**不可判定**时必然作废重滤（`readProjectionViewIfFresh`
+ * 逐字比较令牌），不会拿旧便利贴顶替刚读到的正文（ADR-0107 §2.5）。
+ */
+export const atomTokenOf = async (fs: any, ws: string, atomName: string): Promise<string | undefined> => {
   try {
     const root = await fs.resolve(`${ws}/${atomsRel()}`, { cwd: ws });
     const files = (await fs.listDir(root)) || [];
@@ -136,6 +154,6 @@ export const atomTokenOf = async (fs: any, ws: string, atomName: string): Promis
     if (!f) return "?:?";
     return `${f.size ?? "?"}:${f.version ?? "?"}`;
   } catch {
-    return "?:?";
+    return undefined;
   }
 };

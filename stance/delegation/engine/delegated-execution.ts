@@ -6,6 +6,7 @@ import { lifecycleOf } from "../guard/lifecycle-guard.js";
 import { contextHasNoExpansionField, resultNoPermissionUpgrade, resultNoLongRunAuthority, resultNoOwnership, resultNoIdentityClaim } from "../guard/expansion-guard.js";
 import { writeDelegationContext, readDelegationContext, writeDelegationEvent } from "../persistence/persist.js";
 import { today } from "../../../core/util.js";
+import type { PersistOutcome } from "../../../persistence/outcomes.js";
 
 const AUTHORITY_SOURCE = /^(external|human|system|user|delegated)$/i;
 const EXTERNAL_OBJ = /observer|self|自身|自主/i;
@@ -25,8 +26,12 @@ export const buildDelegationContext = (args: any): { ok: boolean; reason?: strin
 };
 
 // 委派检查：scope(182) / objective(183) / revocation(187) / expiration(189) / constraints。
+// B4 续修（v1.22.x）：`readDelegationContext` 现在返回三态 ⇒「读不出来」（事故）与「没有这条委派」必须分开
+// —— 旧形态把两者都变成 `null`，于是 EACCES 被报成「无 delegation（lineage 不可断）」，把排障引向错误方向。
 export const checkDelegation = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; notFound?: boolean; reason?: string; result?: any }> => {
-  const ctx = await readDelegationContext(fs, ws, String(args?.delegationId || ""));
+  const got = await readDelegationContext(fs, ws, String(args?.delegationId || ""));
+  if (!got.ok) return { ok: false, reason: `读不出 DelegationContext（${got.reason}）—— 这与「没有这条委派」是两件事：先查 \`.shadow/delegation/\` 的可读性` };
+  const ctx = got.value;
   if (!ctx) return { ok: false, notFound: true, reason: "无 delegation（Delegation Lineage 不可断：Action→Plan→Objective→Delegation→Authority Source）" };
   const action = String(args?.action || "");
   const objRef = String(args?.objectiveRef || "");
@@ -44,8 +49,11 @@ export const checkDelegation = async (fs: any, ws: string, args: any): Promise<{
 };
 
 // 记录 AutonomyBoundaryEvent（纯审计）。lineage 由 ctx 填充；守卫 181–189 逐一拦截。
-export const recordDelegationEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; ev?: AutonomyBoundaryEvent }> => {
-  const ctx = await readDelegationContext(fs, ws, String(args?.delegationId || ""));
+// B2/B4 续修（v1.22.x）：读侧三态（读不出来 ≠ 没有委派）+ 写侧三态（`persist` 透传给 `query/delegation.ts`）。
+export const recordDelegationEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; ev?: AutonomyBoundaryEvent; persist?: PersistOutcome }> => {
+  const got = await readDelegationContext(fs, ws, String(args?.delegationId || ""));
+  if (!got.ok) return { ok: false, reason: `读不出 DelegationContext（${got.reason}）—— 本次**判不了**，先查 \`.shadow/delegation/\` 的可读性` };
+  const ctx = got.value;
   if (!ctx) return { ok: false, reason: "无 delegation（Delegation Lineage 不可断：Action→Plan→Objective→Delegation→Authority Source）" };
   if (String(args?.objectiveRef || "") && args.objectiveRef !== ctx.objectiveRef) return { ok: false, reason: "执行目标与委派目标不一致（Adaptation ≠ Objective Change：禁 execution difficulty → change objective）" };
   const lc = lifecycleOf(ctx, today());
@@ -63,6 +71,6 @@ export const recordDelegationEvent = async (fs: any, ws: string, args: any): Pro
   const violated = ctx.constraints.filter((c) => !satisfied.includes(c));
   if (violated.length) return { ok: false, reason: `约束未满足：${violated.join("、")}` };
   const ev: AutonomyBoundaryEvent = { id: `de-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, delegationRef: ctx.delegationId, authorityRef: ctx.authoritySource, objectiveRef: ctx.objectiveRef, candidateAction: action, constraintCheck: { passed: ctx.constraints, violated }, scopeCheck: scopeOk, executionResult: result, boundaryTriggered: false, executedAt: today() };
-  await writeDelegationEvent(fs, ws, ev);
-  return { ok: true, ev };
+  const persist = await writeDelegationEvent(fs, ws, ev);
+  return { ok: true, ev, persist };
 };

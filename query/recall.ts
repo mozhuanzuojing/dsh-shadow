@@ -9,6 +9,7 @@ import { scrubFinal } from "../security/scrub.js";
 import { renderRecord, renderEvent as renderRecallEvent, renderValidation as renderRecallValidation } from "../trajectory/recall/render/render.js";
 import { buildForgottenRecord, buildRecallEvent, validateRecall } from "../trajectory/recall/engine/recall-continuity.js";
 import { writeForgottenRecord } from "../trajectory/recall/persistence/persist.js";
+import { unwrittenWarn } from "./degrade.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface RecallCtx { fs: any; ws: string; flushWarn: string }
@@ -23,13 +24,17 @@ export async function runRecall(deps: ShadowQueryDeps, args: any, ctx: RecallCtx
   if (mode === "recall-forget") {
     const r = buildForgottenRecord(args);
     if (!r.ok || !r.record) return scrubFinal(RECALL_PREFIX + "[Recall Rejected] " + r.reason + flushWarn);
-    await writeForgottenRecord(fs, ws, r.record);
-    return scrubFinal(RECALL_PREFIX + renderRecord(r.record) + flushWarn);
+    const w = await writeForgottenRecord(fs, ws, r.record);
+    // B2：写失败必须与成功可区分（旧版 `Promise<void>` ⇒ 同一段输出里宣称「已遗忘」而磁盘上没有，
+    // 随后 `buildRecallEvent` 会因为找不到这条记录而报「即非新观察」—— 把事故引向错误方向）。
+    const degrade = unwrittenWarn("ForgottenRecord", w, "`.shadow/recall/<date>/forgotten-*.json` 没有这条记录：上面的 `renderRecord` 只是**内存中的对象**，随后 `mode:\"recall-event\"` 会因找不到它而拒绝（且那份拒绝的**原因会指错方向**）。");
+    return scrubFinal(RECALL_PREFIX + renderRecord(r.record) + degrade + flushWarn);
   }
   if (mode === "recall-event") {
     const e = await buildRecallEvent(fs, ws, args);
     if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[RecallEvent Rejected] " + e.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderRecallEvent(e.ev) + flushWarn);
+    const degrade = unwrittenWarn("RecallEvent", e.persist ?? { ok: true }, "`.shadow/recall/<date>/event-*.json` 没有这次忆起：上面这段只是**内存中的对象**（Recall = Access Transition 的审计痕迹没留下）。");
+    return scrubFinal(RECALL_PREFIX + renderRecallEvent(e.ev) + degrade + flushWarn);
   }
   const v = await validateRecall(fs, ws, args);
   if (!v.ok || !v.result) return scrubFinal(RECALL_PREFIX + "[RecallValidation Rejected] " + v.reason + flushWarn);

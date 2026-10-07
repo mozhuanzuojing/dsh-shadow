@@ -2,7 +2,7 @@
 // ADR-0106：线索头必含五轴坐标（locus/when/soul/role/intent）；缺轴 ⇒ 不上投影。
 import { today } from "../util.js";
 import { scrubUnsafe, referencedMaterials } from "../../security/scrub.js";
-import { mutateMeta } from "../../persistence/meta.js";
+import { metaOutcomeNotice, mutateMetaVersioned } from "../../persistence/meta.js";
 import { materialOfAction } from "./capture-granularity.js";
 
 /** 投影空间五轴（ADR-0106 / X2）。每条 Atom 必须非空。 */
@@ -110,17 +110,36 @@ export const buildClueHeader = (entry: string, arr: any[], srcId?: string, extra
 };
 
 /**
- * 登记 `_meta.json` 里的一条。**返回是否登记成功**（v1.15.56）。
+ * 登记 `_meta.json` 里的一条。**返回「要不要报『未登记』」**（v1.15.56；B24 收口后语义写死在这里）。
+ *
+ * ## 为什么这一处**必须**区分「并发没抢到」与「写失败」（B24 消费面①）
+ *
+ * 返回值不是内部读数：`core/writer/materialize.ts` 拿它设 `core.lastMetaError`，而那是一条
+ * **给读者看的横幅**（`getFlushWarn()` 在每个读路径上渲染：「元数据未登记 ⇒ hits/生命周期/遗忘判据
+ * 都看不到这条记忆」）。四态在这里的含义**不同**（判据在 `persistence/meta.ts` 的 `metaOutcomeNotice` 一处）：
+ *   · `ok` / `noop` ⇒ 登记状态成立。`noop` 是**常态**：同一个 rel 只在首写时登记一次，
+ *     之后每次 flush 的 mutate 都因 `meta[rel]` 已存在而返回 `false`（旧 boolean 把它与 `ok` 都算 `true`，对）；
+ *   · `contended` ⇒ **本次没写进去，但会自愈**：`meta[rel]` 仍不存在 ⇒ 下一次写同一条记忆时
+ *     这段 mutate 会重新登记它（本函数是幂等的）。它**不是**登记失败 ⇒ 返回 `true`：
+ *     否则正常并发（多会话/teammate 同时 flush）就会给读者挂上「hits/生命周期都看不到这条记忆」的横幅
+ *     —— ADR-0049 的可见信号被**误报**成系统故障，而 ADR-0068 明文接受「竞争下放弃这一次、下次再记」；
+ *   · `failed`（含坏件不写回）⇒ **要人管**：磁盘满 / EACCES / `_meta.json` 坏件。
+ *     返回 `false` ⇒ 调用方设 `lastMetaError` 上横幅 —— v1.15.56 立的信号**保持不变**。
+ *
+ * ⚠ 四个结局里只有 `failed` 需要人管，故对外**仍是 `boolean`**（B24 的四态在**本函数内**被消费完；
+ * `persistence/meta.ts` 的 `mutateMetaVersioned` 类型注释写着「要区分就调它」——这里就是「要」的那一处）。
  */
 export const registerMeta = async (fs: any, ws: string, rel: string, actorId: string | undefined, retentionEnabled: boolean): Promise<boolean> => {
   if (!retentionEnabled) return true;
   try {
-    const ok = await mutateMeta(fs, ws, (meta) => {
+    const outcome = await mutateMetaVersioned(fs, ws, (meta) => {
       if (meta[rel]) return false;
       meta[rel] = { created: today(), lastSeen: 0, hits: 0, status: "active", confidence: 0.5, pinned: false, createdBy: actorId ? String(actorId) : "", confirmedBy: [] };
     });
-    if (!ok) console.log(`[dsh-shadow] meta register 未落盘（写失败或坏件）：${rel}`);
-    return ok;
+    const notice = metaOutcomeNotice(outcome);
+    // `contended` 只留一行日志（时间性、自愈）；**只有 `needsHuman` 才让调用方上报**（见上）。
+    if (notice && !notice.needsHuman) console.log(`[dsh-shadow] meta register 并发未抢到（下一条记忆的 flush 会重新登记）：${rel}`);
+    return !notice?.needsHuman;
   } catch (e: any) {
     console.log("[dsh-shadow] meta register failed:", e && e.message);
     return false;

@@ -15,6 +15,9 @@
 // （v1.15.15 两处不忠实 mock）。这里必须让「版本冲突」**真的会发生**，才能证明它被处理了。
 import assert from "node:assert/strict";
 
+// ⑥（B24）把 `mutateMetaVersioned` 的四态**在消费面**上也锁住：`registerMeta` 必须区分
+// 「并发没抢到」与「写失败 / 坏件」—— 见文件末尾 ⑥ 段。
+
 /** 会真的做版本校验的内存 fs：`writeText` 带 replaceIfVersion 时版本不符就抛 FS_STALE_VERSION。 */
 const mkCasFs = () => {
   const files = new Map<string, string>();
@@ -124,9 +127,56 @@ const META = `${WS}/.shadow/_meta.json`;
   console.log("✔ ⑤ readMeta 纯读语义不变（缺文件 → {}）");
 }
 
+// ── ⑥ B24 消费面：`registerMeta` 把「并发没抢到」与「写失败」分开（正/反对照）──────────────
+//    为什么在这一层测：`registerMeta` 的返回值不是内部读数 —— `core/writer/materialize.ts`
+//    拿它设 `core.lastMetaError`，而那是**给读者看的**横幅（「元数据未登记 ⇒ hits/生命周期/遗忘判据
+//    都看不到这条记忆」）。两态若混成一个 `false`，正常并发（多会话 / teammate 同时 flush）就会**误报**
+//    系统故障，而 `contended` 实际是**自愈**的（`meta[rel]` 仍不存在 ⇒ 下一条记忆的 flush 会重新登记）。
+//    本组正好补上本文件末「诚实标注」里那条「重试耗尽只有代码路径覆盖，未构造极端用例」的缺口。
+{
+  const { registerMeta } = await import("../dist/core/retention/memory.js");
+
+  // 正对照：健康 CAS fs ⇒ 真的登记上了
+  const healthy = mkCasFs();
+  assert.equal(await registerMeta(healthy, WS, "a.md", "T7", true), true, "首次登记应成功");
+  assert.equal(JSON.parse(healthy.files.get(META)!)["a.md"].status, "active", "且内容真的落盘");
+
+  // 负对照①：**重试耗尽**（每次都撞版本）⇒ `contended` ⇒ **不得**被当成登记失败
+  const contended = mkCasFs();
+  (contended as any).writeText = async () => { const e: any = new Error("stale version"); e.code = "FS_STALE_VERSION"; throw e; };
+  assert.equal(
+    await registerMeta(contended, WS, "a.md", "T7", true),
+    true,
+    "并发没抢到 ⇒ 不报「未登记」（返回 true，自愈）；混成 false 会在正常并发下给读者挂假降级横幅",
+  );
+  assert.equal(contended.files.has(META), false, "正对照：桩真的拦住了每一次写（不是「恰好没走写」）");
+
+  // 负对照②：**写失败**（readonly / 磁盘满）⇒ 必须返回 false（要人管）
+  const failed = mkCasFs();
+  (failed as any).writeText = async () => { throw new Error("readonly"); };
+  assert.equal(
+    await registerMeta(failed, WS, "a.md", "T7", true),
+    false,
+    "写失败 ⇒ 必须返回 false（调用方据此设 `lastMetaError` 上横幅 —— ADR-0049 缺件不静默）",
+  );
+
+  // 负对照③：**坏件**（不是合法 JSON）⇒ false —— 绝不把空快照写回（会把全工作区元数据清零）
+  const corrupt = mkCasFs();
+  corrupt.files.set(META, "{ not json");
+  assert.equal(await registerMeta(corrupt, WS, "a.md", "T7", true), false, "坏件 ⇒ false（不写回、要人管）");
+  assert.equal(corrupt.files.get(META), "{ not json", "坏件必须原样保留（没被空快照覆盖）");
+
+  // 控制变量：`retention` 显式关闭 ⇒ 早退 true，且一个字节都不写（「关掉」不是降级）
+  const off = mkCasFs();
+  assert.equal(await registerMeta(off, WS, "a.md", "T7", false), true, "retention 关闭 ⇒ 直接 true");
+  assert.equal(off.files.has(META), false, "且不产生任何写");
+  console.log("✔ ⑥ B24 消费面：registerMeta 分开「并发没抢到（自愈 ⇒ true）」与「写失败 / 坏件（⇒ false）」");
+}
+
 console.log("");
 console.log("未在本文件验证（诚实标注）：");
 console.log("  · 真机 `host.fs` 的 `stat`/`replaceIfVersion` 端到端行为（本测试是按契约写的 mock）；");
 console.log("  · 真并发（多会话同时召回）的时序 —— 本测试用「注入一次外部写入」确定性地模拟冲突；");
-console.log("  · 重试耗尽（连续 3 次冲突）时的行为只有代码路径覆盖，未构造极端用例。");
+console.log("  · 端到端「横幅真的出现在读输出里」由 `test/t8-silent-degradation.test.ts` 与");
+console.log("    `test/compact-write-side.test.ts` 锁（本文件只锁 seam 层的返回值语义）。");
 console.log("ALL PASS ✅");

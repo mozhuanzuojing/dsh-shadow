@@ -146,7 +146,7 @@ export function makeMaterialize(core: WriterCore, hooks: WriterHooks): Materiali
       }
       sections.push(`- ${date}（${faces.length} 条）${deriveL0(l1)}`);
     }
-    // T8-B（v1.15.64）：`types.ts:55` **明写**「默认 3，0 = 不列」，而 `|| 3` 把 0 吞掉 ⇒
+    // T8-B（v1.15.64）：`core/types.ts` 的 `abstracts.showInIndex` **明写**「默认 3，0 = 不列」，而 `|| 3` 把 0 吞掉 ⇒
     // 文档承诺的「0 = 不列」在代码里不成立（下面的 `!show` 分支因此永远走不到）。
     const show = numOr(core.abstractCfg.showInIndex, 3);
     if (!show || !sections.length) return "";

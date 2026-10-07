@@ -503,4 +503,73 @@ forget: { enabled: false }, compact: {}, retention: { enabled: false }, ...confi
   console.log("✔ ⑤d 严格 fs 端到端：全新工作区默认配置零横幅 · 观测首写真的落盘 · 真 I/O 失败仍可见且带真实原因 · 0 冷却不读台账 · 缺文件不报 unreadable · 坏件仍报");
 }
 
+// ─────────────────────────────────────────────
+// ⑥ **P0（v1.22.x）**：Continuity 写模式落盘失败**不得冒充成功** + B10（实际写入的根必须可见）
+//
+// 缺陷原形（`query/contverify.ts`）：四个写模式（observer-config / observer-boundary / recall-index /
+// observer-lineage）的 `write*` 当时是 `Promise<void>` + `catch { console.log }`，而调用点**紧接着**
+// 无条件渲染 `[Observer Config] …` 这类成功文案 ⇒ 写失败与写成功**逐字相同**；且 `observerGlobalRoot`
+// 未配置时静默回落到 `os.homedir()/.dsh-observer`（**工作区之外**），输出里一个字都不提写到哪。
+// 这是 ADR-0049 规则 3（绝不冒充成功）唯一的 P0 + 规则 2（必须可见）；`console.log` 不算信号（ADR-0085）。
+//
+// 本组三层正/负对照：健康 ⇒ 零降级字样；写被拒 ⇒ 同一段输出里「未落盘 + 真实原因 + 实际根」；
+// 未配置根 ⇒ 显式声明回落（且打印真实根）。
+// ─────────────────────────────────────────────
+{
+  const WSP = "D:/ws-p0";
+  const mkP0 = (cfg: any, denyWrite: (p: string) => boolean) => {
+    const m = new Map<string, string>();
+    const fs = {
+      async resolve(p: string) { return { targetKey: p, displayPath: p }; },
+      // **严格桩**（与 ⑤ 同纪律）：不在 map 里的路径 `readText` **抛**，与真实宿主同语义。
+      async readText(t: any) {
+        const v = m.get(t.displayPath);
+        if (v === undefined) throw Object.assign(new Error(`cannot read "${t.displayPath}": not found`), { code: "FS_NOT_FOUND" });
+        return v;
+      },
+      async writeText(t: any, c: string) {
+        if (denyWrite(t.displayPath)) throw new Error("readonly");
+        m.set(t.displayPath, c); return { version: "v1" };
+      },
+      async listDir() { return []; },
+    };
+    const agentsById = new Map<string, any>();
+    const agent = { id: "T-p0", session: { header: { cwd: WSP } } };
+    agentsById.set("T-p0", agent);
+    const registry = new Map<string, any>();
+    const services: any = { fs, agents: { currentInitiator: () => null, get: (id: string) => agentsById.get(id) }, systemPrompt: { context: () => {} }, tools: { register: (d: any) => registry.set(d.name, d) }, llm: undefined, agentDefaultModel: undefined };
+    const ctx: any = { get: (k: string) => services[k], on: () => () => {}, inject: (_d: string[], cb: Function) => cb({ get: (k: string) => services[k] }) };
+    const { apply } = mod;
+    apply(ctx, { summary: { enabled: false }, recall: {}, forget: { enabled: false }, compact: {}, ...cfg });
+    return { agent, m, registry };
+  };
+  const CFG_OK = { interactionStyle: "default", outputPreference: "adr", defaultProtocol: "boundary-first" };
+
+  // (a) **正控**：写 `observerGlobalRoot` 被拒 ⇒ 同一段输出里说「未落盘 + 真实原因」，且打印实际根
+  const bad = mkP0({ observerGlobalRoot: `${WSP}/obs` }, (p) => p.includes("/obs/"));
+  const rBad = String(await bad.registry.get("read_shadow").execute({ mode: "observer-config", ...CFG_OK }, { agent: bad.agent }));
+  assert.ok(rBad.includes("[Observer Config]"), "构造成功的文案仍在（契约不变）");
+  assert.ok(rBad.includes("未落盘"), `**P0 正控**：写失败必须在**同一段输出**里说明「未落盘」（旧版与成功逐字相同）；实际 ${JSON.stringify(rBad.slice(-400))}`);
+  assert.match(rBad, /readonly/, "必须带**真实原因**（不许写死「不可写」把排障引向错误方向）");
+  assert.ok(rBad.includes(`${WSP}/obs`), `B10：必须打印**实际写入的根**；实际 ${JSON.stringify(rBad.slice(-400))}`);
+  assert.ok(!rBad.includes("未配置"), "显式配置了根 ⇒ 不得说「未配置」回落");
+  assert.ok(![...bad.m.keys()].some((k) => k.includes("config.json")), "**正对照**：写被拒时那份 config 确实不在（证明桩真的拦住了）");
+
+  // (b) **负对照**：健康 fs ⇒ 零「未落盘」、零能力降级横幅（只有多了「根」那一行）
+  const good = mkP0({ observerGlobalRoot: `${WSP}/obs` }, () => false);
+  const rGood = String(await good.registry.get("read_shadow").execute({ mode: "observer-config", ...CFG_OK }, { agent: good.agent }));
+  assert.ok(!rGood.includes("未落盘") && !rGood.includes("能力降级"),
+    `**负对照**：健康路径不得出现任何降级信号；实际 ${JSON.stringify(rGood.slice(-400))}`);
+  assert.ok(rGood.includes(`${WSP}/obs`), "健康路径同样要打印实际写入的根（B10：读者不用猜写到哪）");
+  assert.ok([...good.m.keys()].some((k) => k.includes("config.json")), "**正对照**：健康路径真的落盘");
+
+  // (c) **B10**：未配置 `observerGlobalRoot` ⇒ 显式声明「使用默认根」，且必须给出真实根
+  const def = mkP0({}, () => false);
+  const rDef = String(await def.registry.get("read_shadow").execute({ mode: "observer-config", ...CFG_OK }, { agent: def.agent }));
+  assert.ok(rDef.includes("未配置") && rDef.includes("默认根"),
+    `B10：未配置时必须显式声明回落到默认根（它在工作区之外、不进沙箱围栏）；实际 ${JSON.stringify(rDef.slice(-400))}`);
+  assert.ok(rDef.includes(".dsh-observer"), "且必须把实际根打出来（`os.homedir()/.dsh-observer`），不许只写「默认」");
+  console.log("✔ ⑥ P0：写模式失败 ⇒ 同段输出「未落盘 + 真实原因 + 实际根」；健康 ⇒ 零降级字样；未配置根 ⇒ 显式声明回落（正/负对照齐备）");
+}
+
 console.log("ALL PASS ✅");

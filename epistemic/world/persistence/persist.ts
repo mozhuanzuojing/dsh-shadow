@@ -4,7 +4,7 @@
 // 原先本文件与 `selfhood/temporal/persistence.ts` 各有一份**逐字近重复**的读取逻辑，且**同带一个顺序 bug**
 // —— 直接取 `listDir` 的**第一个**日期（契约与真机实现都是升序 ⇒ 取到**最旧**的快照）。
 import { SHADOW_ROOT } from "../../../core/paths.js";
-import { readLatestSnapshot } from "../../../persistence/snapshots.js";
+import { readLatestSnapshot, type SnapshotRead } from "../../../persistence/snapshots.js";
 import type { RepresentationGraph } from "../types.js";
 
 export const writeGraph = async (fs: any, ws: string, g: RepresentationGraph) => {
@@ -15,6 +15,13 @@ export const writeGraph = async (fs: any, ws: string, g: RepresentationGraph) =>
   } catch (e: any) { console.log("[dsh-shadow] world graph write failed:", e && e.message); }
 };
 
-/** 读**最新**的一份 world 快照（按日期目录降序取第一份；无 → null）。 */
-export const readGraph = (fs: any, ws: string): Promise<RepresentationGraph | null> =>
+/**
+ * 读**最新**的一份 world 快照（按日期目录降序取第一份；无 → `value: null`）。
+ *
+ * **B3（v1.22.x）**：返回值**原样透传** `SnapshotRead`（**不解包**）—— 回退到更旧快照时调用方
+ * 必须能拿到 `usedRel` / `skipped` / `readFailure`（`console.log` 不算 ADR-0049 认可的可见信号）。
+ * ⚠ 与 `selfhood/temporal/persistence.ts` 的 `readTemporalGraph` **两侧必须同解包或同不解包**
+ *（否则 `test/graph-snapshot-order.test.ts` 与类型门会同时红）；现在是**都不解包**。
+ */
+export const readGraph = (fs: any, ws: string): Promise<SnapshotRead<RepresentationGraph>> =>
   readLatestSnapshot<RepresentationGraph>(fs, ws, "world", "graph.json");

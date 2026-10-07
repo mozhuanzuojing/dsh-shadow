@@ -52,10 +52,30 @@
 // 在**取得 fs 的三处**（写侧 flush / 索引重建 / 读侧 queryDeps）包一次，
 // 等价于全部写入点都补上了策略，且不必动任何 persistence 模块的签名。
 import type { AgentLike } from "./types.js";
+import { errText } from "./util.js";
 
 /**
- * 该会话自己的沙箱策略；取不到（无 session、宿主未提供 `sandboxPolicy`、调用抛错）时返回
- * `undefined` —— 门面随即**原样返回原 fs**，即维持旧行为，不改变任何已有语义。
+ * 「服务在、但 `resolve` 抛错」的**显式标记**（A17）—— 与 `undefined`（服务缺失 / 无 session）**不是一回事**。
+ *
+ * 为什么必须分开：原实现把两种事实合并成 `undefined`，而消费点（`index.ts` 的 `derivedIndexWritable`）
+ * 对 `undefined` 的处置是「按**可写**处理」（理由：没有策略时本门面是恒等变换、没有围栏可绕）。
+ * 该理由对「服务缺失」成立，对「解析失败」**不成立** —— 解析失败意味着围栏**本可以**生效却读不出参数，
+ * 此时放宽 = fail-open，方向与 ADR-0049「缺件不静默 + 保守」相反。
+ * 用一个可判别的普通对象（而不是 `Symbol`）：调用方要能读走原因（`reason`）做留痕。
+ */
+export interface PolicyFailure {
+  failed: true;
+  reason: string;
+}
+
+/** 判据（**唯一一份**）：`{ failed: true }` 才算失败态。 */
+export const isPolicyFailure = (p: any): p is PolicyFailure => !!p && p.failed === true;
+
+/**
+ * 该会话自己的沙箱策略；**三态**（A17）：
+ *   · 有策略 ⇒ 策略对象；
+ *   · **服务缺失 / 无 session** ⇒ `undefined` —— 门面随即原样返回原 fs，即维持旧行为、不改变任何已有语义；
+ *   · **服务在、`resolve` 抛错** ⇒ `{ failed: true, reason }`（不可判定 ⇒ 调用方取保守值并留痕）。
  *
  * 宿主未提供 `sandboxPolicy` 时不是「降级」：`dsh-fs-sandbox` 自己 `inject: ["sandboxPolicy"]`，
  * 该服务缺失时**围栏本身不存在**（用的是不带围栏的后端），写入不受影响。
@@ -65,8 +85,9 @@ export function sessionPolicy(context: any, session: any): any {
   try {
     const sp = context?.get?.("sandboxPolicy");
     return sp && typeof sp.resolve === "function" ? sp.resolve({ session }) : undefined;
-  } catch {
-    return undefined;
+  } catch (e: any) {
+    // 不再吞成 `undefined`（那会与「服务缺失」合并 ⇒ 消费点 fail-open）。原因如实带出供调用方留痕。
+    return { failed: true as const, reason: errText(e) };
   }
 }
 
@@ -78,13 +99,15 @@ export function policyForAgent(context: any, agent: AgentLike | undefined): any 
 /**
  * 把会话策略补进 `writeText` / `editText` 的 fs 门面。
  * 无策略时**原样返回** `rawFs`（零行为变化），故本函数在旧宿主上等于恒等变换。
+ * A17：`{ failed: true }` 这个**失败标记不是策略** —— 与 `undefined` 同路（原样返回），
+ * 否则会把一个没有 `mode` 的对象当成 `sandboxPolicy` 交给宿主围栏。
  *
  * 只转发**插件真正使用**的方法，且只补**真实存在**的方法：
  * `persistence/meta.ts:50` 用 `typeof fs.stat === "function"` 做特性探测，
  * 无条件补一个 `stat` 会让探测恒真、改变既有分支。
  */
 export function scopedFs(rawFs: any, policy: any): any {
-  if (!rawFs || !policy) return rawFs;
+  if (!rawFs || !policy || isPolicyFailure(policy)) return rawFs;
   const f: any = {
     resolve: (...a: any[]) => rawFs.resolve(...a),
     readText: (...a: any[]) => rawFs.readText(...a),

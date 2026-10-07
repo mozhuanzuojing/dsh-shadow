@@ -6,6 +6,7 @@ import { RECALL_PREFIX } from "../core/util.js";
 import { scrubFinal } from "../security/scrub.js";
 import { assertObjectiveExternal, assertCandidateNoScore, assertEvaluationComparison, assertCriteriaNotValue } from "../stance/planning/guard.js";
 import { renderContext, renderEvaluation } from "../stance/planning/render.js";
+import type { PlanningComparison } from "../stance/planning/types.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface PlanningCtx { fs: any; ws: string; flushWarn: string }
@@ -22,12 +23,19 @@ export async function runPlanning(deps: ShadowQueryDeps, args: any, ctx: Plannin
   const gc = assertCriteriaNotValue(criteria);
   if (!gc.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + gc.reason + flushWarn);
   const candidates = (args?.candidates as any[]) || [];
-  const planCandidates = candidates.map((c: any, i: number) => ({ id: `pc-${Date.now()}-${i}`, basedOnSimulation: c.basedOnSimulation || [], actionSequence: c.actionSequence || [], assumptions: c.assumptions || [], constraints: c.constraints || [], uncertainty: Number(c.uncertainty) || 0.5 }));
+  // **B5（Lead 授权本文件改动）**：把调用方**声明**的「约束满足/违反」透传下来 —— 原先这份 whitelist
+  // 映射把它们丢掉，于是渲染器只能 `(c as any)` + 「文本含 `under` 子串」嗅探，`violatedConstraints`
+  // 恒空 ⇒ 输出里 `violatedConstraints: —` 是**永远为真的假读数**。保持本文件「不校验、直接取」的风格。
+  const planCandidates = candidates.map((c: any, i: number) => ({ id: `pc-${Date.now()}-${i}`, basedOnSimulation: c.basedOnSimulation || [], actionSequence: c.actionSequence || [], assumptions: c.assumptions || [], constraints: c.constraints || [], satisfiedConstraints: c.satisfiedConstraints || [], violatedConstraints: c.violatedConstraints || [], uncertainty: Number(c.uncertainty) || 0.5 }));
   let badScore: string | null = null;
   for (const c of planCandidates) { const g2 = assertCandidateNoScore(c as any); if (!g2.ok) { badScore = g2.reason; break; } }
   if (badScore) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + badScore + flushWarn);
-  const ctx2 = { id: `ctx-${Date.now()}`, realitySnapshot: [], representationSnapshot: [], simulationReferences: args?.simulationRefs || [], objective };
+  // A7（`noImplicitAny: true`）：空数组字面量在无上下文类型处需显式标注（`PlanningContext` 要 `string[]`）。
+  const ctx2 = { id: `ctx-${Date.now()}`, realitySnapshot: [] as string[], representationSnapshot: [] as string[], simulationReferences: args?.simulationRefs || [], objective };
   const ev: any = { candidates: planCandidates, tradeoffs: String(criteria) ? [{ condition: criteria, consequence: "possible", uncertainty: 0.5 }] : [], unresolvedQuestions: ["只比较路径，非系统价值判断（需外部约束权衡）"] };
   const g3 = assertEvaluationComparison(ev); if (!g3.ok) return scrubFinal(RECALL_PREFIX + "[Planning Rejected] " + g3.reason + flushWarn);
-  return scrubFinal(RECALL_PREFIX + renderContext(ctx2) + "\n" + renderEvaluation(ev) + flushWarn);
+  // B5：**真的构造** `PlanningComparison`（`types.ts` 的那个类型此前全仓零消费者）并交给渲染 ——
+  // 渲染器只报这里真的传下去的值（空数组 ⇒ 该段省略），不再有子串嗅探与恒空的 `violatedConstraints: —`。
+  const comparison: PlanningComparison = { candidates: planCandidates.map((c) => ({ id: c.id, satisfiedConstraints: c.satisfiedConstraints, violatedConstraints: c.violatedConstraints, uncertainty: c.uncertainty })) };
+  return scrubFinal(RECALL_PREFIX + renderContext(ctx2) + "\n" + renderEvaluation(ev, comparison) + flushWarn);
 }

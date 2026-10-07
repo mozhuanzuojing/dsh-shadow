@@ -6,6 +6,7 @@ import { assertTargetInScope, assertResultNoObjectiveChange, assertResultNoPrefe
 import { assertResultNoEpistemicIncrease, resultNotKnowledge, assertValidationNoCorrectness } from "../guard/epistemic-guard.js";
 import { writeAdaptationContext, writeAdaptationChange, writeAdaptationValidation } from "../persistence/persist.js";
 import { today } from "../../../core/util.js";
+import type { PersistOutcome } from "../../../persistence/outcomes.js";
 
 const rand = () => Math.random().toString(36).slice(2, 6);
 
@@ -21,7 +22,8 @@ export const buildAdaptationContext = (args: any): { ok: boolean; reason?: strin
 };
 
 // AdaptationChange（行为策略变化）。target 在 scope（212）+ non-identity（208）；basedOn/sourceExperience 必须（214/209）；结果禁 authority/better-self/epistemic。
-export const buildAdaptationChange = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; change?: AdaptationChange }> => {
+// B2（v1.22.x）：写侧返回三态 ⇒ 透传 `persist`，由 `query/adaptation.ts` 在输出里说明「未落盘」。
+export const buildAdaptationChange = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; change?: AdaptationChange; persist?: PersistOutcome }> => {
   const target = String(args?.target || "");
   const g1 = assertTargetInScope(target); if (!g1.ok) return { ok: false, reason: g1.reason };
   const g2 = assertTargetNotIdentity(target); if (!g2.ok) return { ok: false, reason: g2.reason };
@@ -37,15 +39,15 @@ export const buildAdaptationChange = async (fs: any, ws: string, args: any): Pro
   const g7 = assertResultNoPreference(after); if (!g7.ok) return { ok: false, reason: g7.reason };
   const g8 = assertResultNoAgencyUpgrade(after); if (!g8.ok) return { ok: false, reason: g8.reason };
   const change: AdaptationChange = { id: `ad-${Date.now()}-${rand()}`, target: target as AdaptationTarget, before: String(args?.before || ""), after, basedOn, sourceExperience, validationRequired: true };
-  await writeAdaptationChange(fs, ws, change);
-  return { ok: true, change };
+  const persist = await writeAdaptationChange(fs, ws, change);
+  return { ok: true, change, persist };
 };
 
 // AdaptationValidation（弱语义）：change happened + 现实反馈；不是 change was correct。
-export const validateAdaptation = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; validation?: AdaptationValidation }> => {
+export const validateAdaptation = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; validation?: AdaptationValidation; persist?: PersistOutcome }> => {
   const validation: AdaptationValidation = { changeObserved: Boolean(args?.changeObserved), validationReferences: (args?.validationReferences as string[]) || [], sideEffectsObserved: (args?.sideEffectsObserved as string[]) || [] };
   const g = assertValidationNoCorrectness(validation);
   if (!g.ok) return { ok: false, reason: g.reason };
-  await writeAdaptationValidation(fs, ws, validation);
-  return { ok: true, validation };
+  const persist = await writeAdaptationValidation(fs, ws, validation);
+  return { ok: true, validation, persist };
 };

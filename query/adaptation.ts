@@ -7,6 +7,7 @@ import { scrubFinal } from "../security/scrub.js";
 import { renderContext as renderAdaptContext, renderChange, renderValidation as renderAdaptValidation } from "../trajectory/adaptation/render/render.js";
 import { buildAdaptationContext, buildAdaptationChange, validateAdaptation } from "../trajectory/adaptation/engine/adaptation.js";
 import { writeAdaptationContext } from "../trajectory/adaptation/persistence/persist.js";
+import { unwrittenWarn } from "./degrade.js";
 import type { ShadowQueryDeps } from "./types.js";
 
 export interface AdaptationCtx { fs: any; ws: string; flushWarn: string }
@@ -21,15 +22,19 @@ export async function runAdaptation(deps: ShadowQueryDeps, args: any, ctx: Adapt
   if (mode === "adapt-context") {
     const c = buildAdaptationContext(args);
     if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[Adaptation Rejected] " + c.reason + flushWarn);
-    await writeAdaptationContext(fs, ws, c.ctx);
-    return scrubFinal(RECALL_PREFIX + renderAdaptContext(c.ctx) + flushWarn);
+    const w = await writeAdaptationContext(fs, ws, c.ctx);
+    // B2：写失败必须与成功可区分（旧版 `Promise<void>` + `catch { console.log }`）。
+    const degrade = unwrittenWarn("AdaptationContext", w, "`.shadow/adapt/<date>/context-*.json` 没有它：上面这段只是**内存中的对象**（调整依据/范围随后读不回来）。");
+    return scrubFinal(RECALL_PREFIX + renderAdaptContext(c.ctx) + degrade + flushWarn);
   }
   if (mode === "adapt-change") {
     const ch = await buildAdaptationChange(fs, ws, args);
     if (!ch.ok || !ch.change) return scrubFinal(RECALL_PREFIX + "[AdaptationChange Rejected] " + ch.reason + flushWarn);
-    return scrubFinal(RECALL_PREFIX + renderChange(ch.change) + flushWarn);
+    const degrade = unwrittenWarn("AdaptationChange", ch.persist ?? { ok: true }, "`.shadow/adapt/<date>/change-*.json` 没有它：`mode:\"adapt-validation\"` 随后**找不到这次调整**（Adaptation Lineage 断了）。");
+    return scrubFinal(RECALL_PREFIX + renderChange(ch.change) + degrade + flushWarn);
   }
   const v = await validateAdaptation(fs, ws, args);
   if (!v.ok || !v.validation) return scrubFinal(RECALL_PREFIX + "[AdaptationValidation Rejected] " + v.reason + flushWarn);
-  return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + flushWarn);
+  const degrade = unwrittenWarn("AdaptationValidation", v.persist ?? { ok: true }, "`.shadow/adapt/<date>/validation-*.json` 没有它：这次「问题发生 + 现实反馈」的记录没留下。");
+  return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + degrade + flushWarn);
 }

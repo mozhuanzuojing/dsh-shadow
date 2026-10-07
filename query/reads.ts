@@ -34,6 +34,7 @@ import {
 } from "../core/admission/decision-outcome.js";
 import { loadProjectionSpace } from "../core/space/world.js";
 import { missingSoulBanner } from "../core/space/soft-lens.js";
+import type { ShadowQueryDeps } from "./types.js";
 
 export interface ReadCtx {
   fs: any;
@@ -49,16 +50,13 @@ export interface ReadCtx {
 }
 export interface ReadQuery {
   modes: string[];                       // 它负责的 mode 串
-  run(deps: any, args: any, exec: any, ctx: ReadCtx): Promise<string>;
+  /** B21：`deps` 由 `any` 收紧为 `ShadowQueryDeps`（`noteDegrade` 是 `?.` 可选的，拼错永远不报 = 丢可见信号）。 */
+  run(deps: ShadowQueryDeps, args: any, exec: any, ctx: ReadCtx): Promise<string>;
 }
 
-/**
- * 7 个 `materializeAtoms` 调用点共用的第 4 参（T17-B）：
- *   · `note`  —— 降级留痕（`deps.noteDegrade`，写进同一个能力降级台账 ⇒ 由 `getFlushWarn()` 渲染成横幅）；
- *   · `writable` / `dirtyRels` / `clearDirty` —— D13 可写吗 + D6 门③ 写侧精确信号。
- * 收敛成一处，免得同一件事在 7 个调用点各写一遍（本仓「判据收一处」）。
- */
-const matOpts = (deps: any, ctx: ReadCtx) => ({
+/** 7 个 `materializeAtoms` 调用点共用的第 4 参（T17-B）：`note` + `writable`/`dirtyRels`/`clearDirty`（D13+D6 门③）。
+ *  B11：**导出**给 `query.ts` 的默认主题召回共用（原 `matOptsFrom` 是同一件事的第二份实现，两处取值来源不同）。 */
+export const matOpts = (deps: ShadowQueryDeps, ctx: ReadCtx) => ({
   note: deps.noteDegrade,
   writable: ctx.writable,
   dirtyRels: ctx.dirtyRels,
@@ -381,7 +379,7 @@ export const findReadQuery = (args: any): ReadQuery | undefined => {
 };
 
 /** 若 mode 命中某 ReadQuery，则交给它并返回；否则返回 undefined（交由 runReadShadow 继续走内联分支）。 */
-export const dispatchReadQuery = async (deps: any, args: any, exec: any, ctx: ReadCtx): Promise<string | undefined> => {
+export const dispatchReadQuery = async (deps: ShadowQueryDeps, args: any, exec: any, ctx: ReadCtx): Promise<string | undefined> => {
   const q = findReadQuery(args);
   if (!q) return undefined;
   return q.run(deps, args, exec, ctx);

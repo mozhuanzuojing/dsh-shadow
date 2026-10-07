@@ -3,7 +3,7 @@
 // 无 lineage 拒绝生成；无 true/false；只描述世界对象，不描述观察者人格。
 import type { RealityClaim, RealityObservation, RealityClaimStatus } from "../types.js";
 import { parseTriple } from "../types.js";
-import { today } from "../../../core/util.js";
+import { today, newId } from "../../../core/util.js";
 import { scrubUnsafe } from "../../../security/scrub.js";
 
 // ADR-0023.1 Invariant-1：RealityClaim 的 predicate 必须属 observable predicate set（REALITY CLAIM ≠ EVALUATION CLAIM）。
@@ -24,7 +24,7 @@ export const claimOf = (opts: { observations: RealityObservation[]; validations?
   const repetition = Math.min(1, obs.length / 6);
   const temporalConsistency = obs.length >= 2 ? 0.8 : 0.4;
   const alternativeSurvival = validationOutcomes.includes("validated") ? 0.7 : 0.4;
-  const id = opts.id || `rc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const id = opts.id || newId("rc");   // A12 同族（本写面内同一条判据的其它实例）：id 生成收一处到 `core/util.ts`
   return {
     id,
     subjectRef: first.subjectRef,

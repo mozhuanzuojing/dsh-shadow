@@ -2,27 +2,31 @@
 // zg/fs 是"发现了什么"（discover/verify），这里才是"它意味着什么"（Arbitration）。从 index.ts 迁出。
 import { confidenceOf } from "../../retrieval/rank.js";
 import { ageDaysOf } from "../../core/util.js";
+import { clueFieldsOf } from "../../core/view/clue.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../../evidence/paths.js";
 import type { GatewayEvidenceRef, EvidenceResult } from "../../core/types.js";
 
 export const evidenceOf = (text: string, mm: any, meta: any, stale: boolean) => {
   const body = String(text || "");
-  const clue = (body.match(/^> 证据链：(.+)$/m) || [])[1] || "";
-  const srcM = clue.match(/来源\(([^)]*)\)/);
-  const dateM = clue.match(/日期\(([^)]*)\)/);
-  const evM = clue.match(/证据\(([^)]*)\)/);
+  // **B8：线索头解析收一处**到 `core/view/clue.ts`（本文件原先自己写 `来源(` / `日期(` / `证据(` 各一遍）。
+  // 口径必须保持（改这两处等于改 `provenanceText` 与裁决读数）：
+  //   · `kinds` 缺省是 **`"—"`**（不是空串）—— `provenanceText` 按 `kinds !== "—"` 判「有没有来源」；
+  //   · `evidence` 取**原始串**（`evidenceRaw`：有「证据(…)」用它，否则回落「背景/材料」），**不切开** ——
+  //     与 `evidence/paths.ts` 的**数组**形态是有意的两种口径（这里给 `provenanceText` 截断展示）。
+  const f = clueFieldsOf(body);
   const rec = meta && mm?.rel ? (meta[mm.rel] || {}) : {};
   const status = rec.status || (stale ? "stale" : "active");
   const hits = Number(rec.hits) || 0;
-  const evidence = evM ? evM[1] : (body.match(/^> 背景\/材料：(.+)$/m) || [])[1] || "";
+  const evidence = f.evidenceRaw;
+  // 这两处是**存在性**判定（不取字段值），且 `hasDecision` 的 `^` 无 `m` 锚在**串首** —— 保持原样，不动。
   const hasExperience = /^> 摘要：|^> 概况：/m.test(body);
   const hasDecision = /^> 用户提示\/决策：/.test(body);
   return {
-    kinds: srcM ? srcM[1] : "—",
-    date: dateM ? dateM[1] : (mm?.date || ""),
-    session: (body.match(/^> 来源会话：(.+)$/m) || [])[1] || "",
-    project: (body.match(/^> 项目：(.+)$/m) || [])[1] || "",
-    goal: (body.match(/^> 目标：(.+)$/m) || [])[1] || "",
+    kinds: f.kinds || "—",
+    date: f.date || (mm?.date || ""),
+    session: f.session,
+    project: f.project,
+    goal: f.goal,
     evidence,
     status,
     stale,

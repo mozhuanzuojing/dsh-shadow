@@ -64,26 +64,38 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
   hooks.flush = materialize.flush;
   hooks.primaryComp = capture.primaryComp;
 
+  // ── 可见信号横幅（T6 ② / T8-A / ADR-0049）───────────────────────────────────
+  // **为什么是「表 + 一个 `renderNotice`」**（A24）：本函数原先有**六段同模板手抄**的形状
+  // （`new Date(x.at).toISOString()` 逐字出现六次）。本模块下面自述「判据收一处在这里的具体含义
+  // 就是：能力降级怎么让读者看见只有一个答案」，但**形状**仍是六份抄本 ⇒ 改一次措辞
+  // （加时间格式本地化、加 `at` 缺失处理）就要改六处，漏一处就出现「同一条横幅两种口吻」。
+  // 现在：四条单值槽 + `degrade` 台账各产出一条记录，**由 `renderNotice` 统一渲染**，
+  // 横幅形状只有一处。⚠ **输出逐字不变**由 `test/t8-silent-degradation.test.ts` 的正/负对照锁住。
+  //
+  // `inner` = 与时间戳同处一个括号内的补充（如 `：<err>`）；`tail` = 右括号之后的部分。
+  const renderNotice = (at: number, prefix: string, tail: string, inner = "") =>
+    `\n\n> ⚠ shadow ${prefix}（${new Date(at).toISOString()}${inner}）${tail}`;
+
   const getFlushWarn = () => {
-    const parts: string[] = [];
+    const notices: { at: number; prefix: string; tail: string; inner?: string }[] = [];
     // T6 ②（v1.21.26）：兜底根写入的**未受会话授权**告知 —— 与 `lastFlushError` 并列（同一条横幅的两种事实：
     // 「没写进去」与「写到了不受本会话围栏保护的地方」）。信号只由写侧在落到兜底根时置，见 `core/writer/materialize.ts`。
     if (core.lastScopeNotice) {
-      parts.push(`\n\n> ⚠ shadow 本次写入**未受会话授权**（${new Date(core.lastScopeNotice.at).toISOString()}）：${core.lastScopeNotice.note}。请确认 shadowRoot / 会话 cwd，勿把「写到了别处」当成「已按本会话落盘」。`);
+      notices.push({ at: core.lastScopeNotice.at, prefix: "本次写入**未受会话授权**", tail: `：${core.lastScopeNotice.note}。请确认 shadowRoot / 会话 cwd，勿把「写到了别处」当成「已按本会话落盘」。` });
     }
     if (core.lastFlushError) {
-      parts.push(`\n\n> ⚠ shadow 最近一次落盘失败（${new Date(core.lastFlushError.at).toISOString()}：${core.lastFlushError.err}）。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。`);
+      notices.push({ at: core.lastFlushError.at, prefix: "最近一次落盘失败", inner: `：${core.lastFlushError.err}`, tail: "。你读到的可能是旧/不完整记忆；请先确认 shadowRoot 可写，勿把「数据不可达」当作「召回不足」。" });
     }
     // 索引重建失败**也必须提示**：此时无参读路径会 serve 磁盘上的**陈旧** `_index.md`，
     // 「索引里没有这条」与「这条不存在」是两件事（ADR-0049）。
     if (core.lastIndexError) {
-      parts.push(`\n\n> ⚠ shadow 最近一次**索引重建失败**（${new Date(core.lastIndexError.at).toISOString()}：${core.lastIndexError.err}）。下面的索引可能**不是最新的**；主题召回走逐文件读盘，两者可能不一致。`);
+      notices.push({ at: core.lastIndexError.at, prefix: "最近一次**索引重建失败**", inner: `：${core.lastIndexError.err}`, tail: "。下面的索引可能**不是最新的**；主题召回走逐文件读盘，两者可能不一致。" });
     }
     // 元数据未登记：记忆**存在**但 hits/生命周期/遗忘判据看不到它 —— 与「落盘失败」是不同的事，故分开提示。
     if (core.lastMetaError) {
-      parts.push(`\n\n> ⚠ shadow 最近一次**元数据未登记**（${new Date(core.lastMetaError.at).toISOString()}：${core.lastMetaError.err}）。记忆本体已写入，但命中计数与生命周期标签对它不生效。`);
+      notices.push({ at: core.lastMetaError.at, prefix: "最近一次**元数据未登记**", inner: `：${core.lastMetaError.err}`, tail: "。记忆本体已写入，但命中计数与生命周期标签对它不生效。" });
     }
-    // T8-A（v1.15.65）**能力降级台账** —— ADR-0049 的「可见信号」在此收口。
+    // T8-A（v1.15.65）**能力降级台账** —— ADR-0049 的「可见信号」在此收口，且走**同一条渲染路径**。
     //
     // 为什么复用它而不是各能力自己打印：本函数的结果（`flushWarn`）已经被**每一个**读路径
     // 带在返回值里（`query/*.ts` 里 60+ 处 `+ flushWarn`）⇒ 在这里加一行，
@@ -92,9 +104,9 @@ export function createShadowCollector(opts: ShadowCollectorOpts): ShadowCollecto
     //
     // 排序保证输出**稳定**（`Map` 的插入序会随「哪个先降级」变化 ⇒ 会让逐字节比对的门禁变脆）。
     for (const n of [...core.degrade.values()].sort((a, b) => a.capability.localeCompare(b.capability))) {
-      parts.push(`\n\n> ⚠ shadow **能力降级** · ${n.capability}（${new Date(n.at).toISOString()}）。**原因**：${n.reason}。**后果**：${n.effect}`);
+      notices.push({ at: n.at, prefix: `**能力降级** · ${n.capability}`, tail: `。**原因**：${n.reason}。**后果**：${n.effect}` });
     }
-    return parts.join("");
+    return notices.map((n) => renderNotice(n.at, n.prefix, n.tail, n.inner)).join("");
   };
 
   // v1.6 recall_shadow 的 LLM 推理导航：只让 LLM【选编号】（意图/排序），不生成事实/理由/判断。

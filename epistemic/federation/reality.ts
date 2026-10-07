@@ -1,11 +1,11 @@
 // dsh-shadow —— federation/reality.ts：G2 Reality Evidence Registry（弱事实，append-only，Observer 只能引用不能拥有）。
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { RealityEvidence } from "./types.js";
-import { today, isNotFound } from "../../core/util.js";
+import { today, isNotFound, newId } from "../../core/util.js";
 
 export const registerRealityEvidence = async (fs: any, ws: string, ev: { observedAt?: string; source: string; observation: string; linkedHypothesis?: string[] }): Promise<{ evidence: RealityEvidence; persisted: boolean }> => {
   const full: RealityEvidence = {
-    id: `re-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: newId("re"),   // A12：id 生成**收一处**到 `core/util.ts`（此前 7 个模块各写一遍，且位宽分叉）
     observedAt: ev.observedAt || today(),
     source: ev.source,
     observation: ev.observation,          // 弱事实："某事件在某时间被观察到"
@@ -60,7 +60,8 @@ export const readRealityEvidenceDetailed = async (fs: any, ws: string): Promise<
   let corrupt = 0;
   try {
     const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/reality`, { cwd: ws });
-    const files = (await fs.listDir(root).catch(() => [])) || [];
+    // A7（`noImplicitAny: true`）：「列目录失败 ⇒ 空列表」的 `.catch` 回调需**显式返回类型**。
+    const files = (await fs.listDir(root).catch((): any[] => [])) || [];
     for (const f of files) {
       if (!f?.name || !f.name.endsWith(".json")) continue;
       try {

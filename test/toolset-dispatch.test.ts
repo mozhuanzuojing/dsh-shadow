@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchReadQuery, findReadQuery, readQueries } from "../dist/query/reads.js";
 import type { ReadCtx } from "../dist/query/reads.js";
+import type { ShadowQueryDeps } from "../dist/query/types.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,7 +25,10 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 //     （修复前：findReadQuery 返回 undefined → 这里会红）
 // ─────────────────────────────────────────────
 assert.ok(findReadQuery({ mode: "toolset" }), `{mode:"toolset"} 必须能解析到 ReadQuery（现状：不可达）`);
-const deps = { getFlushWarn: () => "", approval: undefined };
+// B21（v1.22.x）：`dispatchReadQuery(deps: ShadowQueryDeps, …)` 已**类型化**（原先 `deps: any`
+// ⇒ `deps.noteDegrade?.()` 拼错永远不报 = 丢可见信号）。本用例只测「入口可达」，
+// 故**故意**只给 toolset 真正用到的两个字段（`getFlushWarn` / `approval`），显式断言式转型。
+const deps = { getFlushWarn: () => "", approval: undefined } as unknown as ShadowQueryDeps;
 // toolset 的 ReadQuery 不读 ctx（其 run 的形参就是 `_ctx`），故这里**故意传空 ctx**：
 // 本测试测的是「入口可达」，不是「ctx 齐全时能跑」。
 const out = await dispatchReadQuery(deps, { mode: "toolset" }, {}, {} as ReadCtx);

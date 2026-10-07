@@ -67,7 +67,9 @@ const OWNS: Record<string, string> = {
   core: "脊柱（**不是**纯函数层：它 import `evidence`/`persistence`/`security` 与 `node:fs`）",
   persistence: "写侧",
   query: "读侧",
-  decision: "决策原语层（ADR-0096）：协议 / 守卫 / 一个原语 + 一个视图 / 后端表 / 投影",
+  // ⚠ 这里曾有一条 `decision:`（"决策原语层（ADR-0096）…"）—— 该层已按 `T26`（`v1.21.33`）**整层删除**
+  //   （顶层 `decision/` 目录不存在了），而 `OWNS` 只在 layer 存在时才被读到 ⇒ 那条**永不生效**、
+  //   还会让读代码的人以为仍存在这一层（v1.22.1 删）。
 };
 
 /**

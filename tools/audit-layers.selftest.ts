@@ -6,6 +6,9 @@
 // 本文件只用**合成夹具**驱动 `audit-layers.lib.ts` 的同一份判据；真仓库的基线由
 // `npm run audit:layers`（接在 `npm run verify` 里）执行，不在这里重复。
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   auditLayers,
   buildGraph,
@@ -14,10 +17,13 @@ import {
   extractSpecifiers,
   layerOf,
   stronglyConnected,
+  tsconfigIncludes,
+  tsconfigIncludeViolations,
   PURE_MODULES,
   DIRECTION_RULES,
 } from "./audit-layers.lib.ts";
 
+const HERE = dirname(fileURLToPath(import.meta.url));
 const f = (path: string, text: string) => ({ path, text });
 
 // ⚠ 关键前提：**默认判据表指向真仓库的文件**（`core/paths.ts` 等）。在合成夹具上跑默认表，
@@ -166,8 +172,58 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   console.log("✔ ⑧ Tarjan：合成环与 DAG 的对照都对");
 }
 
+// ⑩ `tsconfig*.json` 的 include 条目必须存在（A2）
+{
+  const cfg = (text: string) => [{ path: "tsconfig.json", text }];
+  /** 合成「文件系统」：只认 index.ts 与 core/ 下的任意 .ts（`**` 通配由 CLI 注入的 match 负责，这里模拟其语义）。 */
+  const exists = (entry: string): boolean =>
+    entry === "index.ts" || (entry.includes("core/") && /\.ts$/.test(entry) && !entry.includes("ghost"));
+
+  // **负对照（本判据存在的理由）**：条目零匹配必须报，且要**点名是哪一条**（否则复审者找不到）
+  const r1 = tsconfigIncludeViolations(cfg('{"include":["index.ts","core/ghost.ts"]}'), exists);
+  assert.equal(r1.length, 1, "include 里零匹配的条目必须报一条违规（否则门是瞎的）");
+  assert.match(r1[0].where, /core\/ghost\.ts/, `报文必须点名那一条：${JSON.stringify(r1[0])}`);
+  assert.ok(r1[0].why.length > 0, "每条违规必须带 why（判据来源）");
+
+  // **负对照 2（实测形态）**：`**` 通配零匹配同样要报 —— 本仓 `tsconfig.json` 的 `decision/**/*.ts`
+  // 就是这条形态（`decision/` 整层已删），而 `tsc` 不报错。
+  assert.equal(
+    tsconfigIncludeViolations(cfg('{"include":["decision/**/*.ts"]}'), exists).length,
+    1,
+    "零匹配的通配条目必须报（`tsc` 只要匹配到一个文件就不说「无输入」）",
+  );
+
+  // **正对照**：全部条目都匹配 ⇒ 零违规
+  assert.equal(
+    tsconfigIncludeViolations(cfg('{"include":["index.ts","core/x.ts"]}'), exists).length,
+    0,
+    "全部条目都存在时不得报（否则门是红的、会被绕过）",
+  );
+
+  // **控制变量（JSONC）**：`tsconfig.test.json` 顶部有大段 `//` 注释、且注释里出现过「include」这个词 ⇒
+  // 解析必须只认**带引号的键**，否则会把注释当成配置（而 `JSON.parse` 在这里根本用不了）。
+  const jsonc = "// 本文档说明 include 全部 test/**/*.ts\n{\n  \"include\": [\"index.ts\"]\n}\n";
+  assert.deepEqual(tsconfigIncludes(jsonc), ["index.ts"], "带引号的 include 键必须被正确解析（JSONC 注释不得干扰）");
+  assert.equal(tsconfigIncludeViolations(cfg(jsonc), exists).length, 0);
+
+  // **控制变量（无该键）**：`include` 是可选字段 ⇒ 0 条条目、0 条违规（「不判」不是「通过」，
+  // 所以 CLI 会把它作为「一份配置都没找到 ⇒ 本条不判」打印出来）。
+  assert.deepEqual(tsconfigIncludes('{"compilerOptions":{}}'), []);
+
+  // ★ **防「门被摘掉」**（同 `citation-audit.selftest.ts` ⑧ 的形状）：判据在 lib 里，但只有 CLI
+  //   真的调用它、且把结果并进 `violations`（决定退出码的那个数组），它才是一道门 ——
+  //   否则「从 CLI 里删掉这一行」会让门更宽松而**照样全绿**。
+  const cliSrc = readFileSync(join(HERE, "audit-layers.ts"), "utf8");
+  assert.match(cliSrc, /tsconfigIncludeViolations\(/, "audit-layers.ts 必须调用 include 存在性判据");
+  assert.match(
+    cliSrc,
+    /violations\.push\(\.\.\.includeViolations\)/,
+    "include 违规必须并进 `violations`（否则只打印、不改退出码 —— 又是一道「绿而无判别力」的门）",
+  );
+  console.log("✔ ⑩ tsconfig include 存在性：零匹配被抓到（含 `**` 通配形态与 JSONC 控制变量）、齐备放行、且已真的挂在 CLI 的退出码上");
+}
+
 console.log("");
-console.log("未在测试中验证（诚实标注）：");
 console.log("  · 说明符抽取**不是 AST**（本仓 typescript 7.0.2 = native 移植，`.` 只导出 version，AST 在 unstable 子路径）");
 console.log("    ⇒ 字符串里形如 `from \"./x\"` 的文本会误命中；命中项须人工复核；");
 console.log("  · 只判**层 → 层**方向，不判「同层内谁依赖谁」；");

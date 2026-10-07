@@ -4,7 +4,7 @@
 import type { AgentLike } from "../core/types.js";
 import { resolveWorkspace } from "../core/scope.js";
 import { tokenize, RECALL_PREFIX } from "../core/util.js";
-import { dispatchReadQuery } from "./reads.js";
+import { dispatchReadQuery, matOpts } from "./reads.js";
 import { runContVerify } from "./contverify.js";
 import { runObserverKernel } from "./observer-kernel.js";
 import { runValidation } from "./validation.js";
@@ -47,14 +47,9 @@ export function retiredApiMessage(args: any): string | null {
   return null;
 }
 
-const matOptsFrom = (deps: ShadowQueryDeps, ws: string) => ({
-  note: deps.noteDegrade,
-  writable: deps.derivedIndexWritable !== false,
-  dirtyRels: deps.derivedIndexDirty?.(ws),
-  clearDirty: deps.derivedIndexClearDirty
-    ? (rels: Iterable<string>) => deps.derivedIndexClearDirty!(ws, rels)
-    : undefined,
-});
+// B11（v1.22.x）：`matOptsFrom` 已删除 —— 与 `reads.ts` 导出的 `matOpts` 是**同一件事的两份实现**
+//（`reads.ts` 自称「收敛成一处」），而两处的 `writable`/`dirtyRels` 取值来源不同。
+// 现在默认主题召回也用 `matOpts(deps, readCtx)`：`readCtx` 已带全部四个字段（见下）。
 
 export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any): Promise<string> {
   const agent: AgentLike | undefined = exec?.agent;
@@ -115,7 +110,8 @@ export async function runReadShadow(deps: ShadowQueryDeps, args: any, exec: any)
   if (!topic) return runIndexBudget(deps, lensCtx, maxChars);
 
   // 活跃集只物化一次：topic 透镜与默认主题召回共用（forget/compact 只经 keep）。
-  const view = await materializeAtoms(fs, ws, deps.config, matOptsFrom(deps, ws));
+  // B11：第 4 参用 `reads.ts` 的 `matOpts`（**唯一一份**；原先这里另有一份 `matOptsFrom`）。
+  const view = await materializeAtoms(fs, ws, deps.config, matOpts(deps, readCtx));
   let tokens = tokenize(topic);
   if (!tokens.length) tokens = [String(topic).toLowerCase()];
   if (deps.config.recall?.enabled === true && deps.config.recall?.provider && deps.config.recall?.model) {

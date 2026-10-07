@@ -3,6 +3,7 @@
 import type { SimulationScenario } from "../types/scenario.js";
 import type { SimulationOutcome } from "../types/outcome.js";
 import type { SimulationRule } from "../types/rule.js";
+import { newId } from "../../../core/util.js";
 
 const RULES: SimulationRule[] = [
   { id: "r-latency", inputPattern: "latency", transformation: "latency increase -> timeout risk increase", confidence: 0.6, source: "heuristic" },
@@ -20,7 +21,7 @@ export const simulate = (scenario: SimulationScenario): SimulationOutcome => {
     `representation suggests ${rule.transformation.split("->")[1]?.trim() || "possible impact"} (may occur)`,
   ];
   return {
-    id: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: newId("sim"),   // A12：id 生成**收一处**到 `core/util.ts`（4 位 base36 ⇒ 6 位，同一毫秒内碰撞后是**静默覆盖**）
     scenarioId: scenario.id,
     status: "hypothetical",          // 只 hypothetical，禁 predicted/confirmed/expected
     derivedFrom: scenario.basedOnRepresentationIds,   // lineage（必须保留）

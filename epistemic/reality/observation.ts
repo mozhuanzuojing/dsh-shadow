@@ -1,9 +1,9 @@
 // dsh-shadow —— reality/observation.ts：RealityObservation（多 Observer 指向同一被观察事件；非世界事实）。
 import type { RealityObservation } from "./types.js";
-import { today } from "../../core/util.js";
+import { today, newId } from "../../core/util.js";
 
 export const observationOf = (opts: { observedAt?: string; subjectRef?: string; sourcePerspectives: string[]; observation: string; temporalContext?: string; validationRefs?: string[] }): RealityObservation => ({
-  id: `ro-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+  id: newId("ro"),   // A12：id 生成**收一处**到 `core/util.ts`
   observedAt: opts.observedAt || today(),
   subjectRef: opts.subjectRef,
   sourcePerspectives: opts.sourcePerspectives,

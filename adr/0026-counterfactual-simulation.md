@@ -88,3 +88,19 @@ dsh-shadow 已完成"认识自己→认识现实→表示现实"；v0.32 进入"
 结构：`simulation/{types/{scenario,state,rule,outcome}, engine/simulator, guard/{assumption-guard,reality-boundary}, explain/explain}.ts`。`mode:"simulate"`。
 
 mock 131–138 验证：SimulationOutcome 不产 RealityClaim(仅 hypothetical) / 不改 Identity / lineage 完整(derivedFrom) / Assumption≠Fact / 不入 Knowledge / 多结果允许冲突(不 winner) / Rule≠Reality Relation / 不反向污染 Representation。
+
+---
+
+## 补记（v1.22.1）
+
+> **正文一字未改** —— 已接受 ADR 只写补记（`AGENTS.md`「历史文档 vs 当前态文档」）。
+
+- **`epistemic/simulation/types/state.ts` 已删除**（连同 `CounterfactualState`）。理由：**零消费者** ——
+  条件变更由 `SimulationScenario` 的 `changedConditions: string[]`（`"Assume X"`）承载，推演后的状态由
+  `SimulationOutcome` 的 `stateAfter: string[]`（`"suggests … may occur"`）承载；而 `CounterfactualState`
+  的 `stateVariables` / `uncertainty` 那一份模型**全仓没有构造点，也没有读取点**。
+  留一个无人构造、无人读取的接口，只会让后来的读者以为存在一条「状态快照」通路。
+- ⇒ 上面那句结构清单里的 `types/{scenario,state,rule,outcome}` 现为 **`types/{scenario,rule,outcome}`**；
+  其余不变（`engine/simulator` · `guard/{assumption-guard,reality-boundary}` · `explain/explain`）。
+- **本 ADR 的不变量一条未动**：`status` 只 `hypothetical|explored|compared` · 必须 `derivedFrom` lineage ·
+  禁 RealityClaim 反写 · `Assumption ≠ Fact`（`Assume X` 允许、`X will cause` 拒绝）· 不产 winner · 不入 Knowledge。

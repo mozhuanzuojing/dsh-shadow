@@ -35,7 +35,14 @@ export const fsExists = async (fs: any, ws: string, rel: string): Promise<"exist
   // 绝对 locator 直接查它自己；相对 locator 才拼工作区（无工作区 → 判不了）
   const target = isAbsoluteLocator(rel) ? String(rel) : (ws ? `${ws}/${rel}` : "");
   if (!target) return "undecidable";
-  const resolved = await fs.resolve(target, { cwd: ws });
+  // **B19**：`fs.resolve` 也必须在 `try` 里 —— 它此前在 `try` 之外，抛错会**穿出只读路径**
+  //（`fsEvidenceProvider.verify` → `routeVerify` → `deps.verifyEvidence` → `conflictOf` 没有 `try`
+  // ⇒ 一条路径解析失败会让整个 `mode:"experience"` 读失败），而 ADR-0049 规则 1 明写
+  // 「只降级、不抛错、不阻塞（读侧保持只读）」。失败分类与下面同族：**确认不存在 ⇒ `missing`**，
+  // 其余（EACCES / 后端异常）⇒ `undecidable`（判不了就是判不了，不伪装成缺失）。
+  let resolved: any;
+  try { resolved = await fs.resolve(target, { cwd: ws }); }
+  catch (e: any) { return isNotFound(e) ? "missing" : "undecidable"; }
   let firstErr: any;
   try { await fs.readText(resolved); return "exists"; } catch (e: any) { firstErr = e; }
   // **同类修复（v1.15.15）**：目录用 `readText` 必失败，于是「引用一个目录」会被判成缺失——

@@ -40,8 +40,8 @@ export interface Capability {
   id: string;
   label: string;
   kind: ToolKind;
-  /** 分类（渲染顺序见 CATEGORY_ORDER）。 */
-  category: string;
+  /** 分类（渲染顺序见 `CATEGORY_ORDER`）；类型是**由 `CATEGORY_ORDER` 派生的联合**（A20）。 */
+  category: Category;
   /** 它提供什么。 */
   provides: string;
   /** provider 缺件时**退到什么确定性路径**（ADR-0049）；reference 填「不影响插件行为」。 */
@@ -89,22 +89,36 @@ const noInstallRemedy = (note: string): Record<string, CapabilityRemedy> => ({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 通用 CLI 目录（reference）。列序固定：id, 二进制, 显示名, 分类, winget 包 ID, 实测版本, 版本旗标, 用途, 替代对象, 备注
+// 通用 CLI 目录（reference）。**字段即契约**（A19：单对象参数，顺序不再是契约）。
 // winget ID 与版本均为 **2026-09-10 本机实测核对**；版本会随时间变化，ID 稳定。
 // ─────────────────────────────────────────────────────────────────────────────
-const tool = (
-  id: string,
-  bin: string,
-  label: string,
-  category: string,
-  pkg: string,
-  ver: string,
-  flag: string,
-  provides: string,
-  replaces: string,
-  note?: string,
+
+/**
+ * `tool()` 的入参（A19）。**为什么从 11 个位置参数改成单对象**：
+ * 原签名 `tool(id, bin, label, category, pkg, ver, flag, provides, replaces, note?, verSrc?)` 里
+ * `bin` 与 `label`、`ver` 与 `flag` **位置相邻且同为 `string`** ⇒ 写错位置**不报错**，
+ * 而错的 `probe[0]` 会让该条目**恒「未检出」**（台账是给 agent 看的权威目录，错一条就误导一次）；
+ * 调用点读到 11 个裸参数也看不出语义（`REFERENCE_TOOLS` 里那几个「备注很长、被折成两三行」的条目尤其如此）。
+ * 改成单对象后：字段名即文档、缺字段/多字段都编译不过、顺序随意。
+ */
+interface ToolSpec {
+  id: string;
+  /** 二进制名（`probe[0]`；与 `label` 是两件事，此前同为相邻 `string`）。 */
+  bin: string;
+  label: string;
+  category: Category;
+  /** winget 包 ID；**空串 = 无可靠安装方式**（只陈述事实，不给命令）。 */
+  pkg: string;
+  /** 台账**声称**的版本号（原样保留；`"none"` 档为 `""`）。 */
+  ver: string;
+  /** 版本旗标/子命令（如 `--version` / `-V` / `version`）；`probe = [bin, flag]`。 */
+  flag: string;
+  provides: string;
+  replaces: string;
+  note?: string;
   /**
-   * 版本号出处（v1.15.14；**v1.15.29 改正默认值**；**v1.15.89 改成类型**）。**必须诚实区分**，否则会说谎：
+   * 版本号出处（v1.15.14；**v1.15.29 改正默认值**；**v1.15.89 改成类型**；**A19 起随入参变成字段**）。
+   * **必须诚实区分**，否则会说谎：
    *   - `"measured"`（标签「实测」）：在**本机**跑该条目的 `probe`（如 `--version`）拿到版本号。**只有这才叫实测。**
    *   - `"authority"`（标签「权威核验」，**现为默认**）：取自 `winget show` 的权威目录 —— 那是**最新发布版**，
    *     **不代表本机已装该版本**。
@@ -121,8 +135,11 @@ const tool = (
    *   ⇒ 「实测」这个标签**比事实强**，正是 v1.15.14 造 `verSrc` 要防的那种谎。
    *   改成 `"权威核验"` 后标签与事实一致，且**可复核**（重跑 `npm run verify:toolset` 即可确认）。
    */
-  verSrc: VerSrcKind = "authority",
-): Capability => {
+  verSrc?: VerSrcKind;
+}
+
+const tool = (spec: ToolSpec): Capability => {
+  const { id, bin, label, category, pkg, ver, flag, provides, replaces, note, verSrc = "authority" } = spec;
   const providesText = `${provides}${replaces && replaces !== "—" ? `（替代：${replaces}）` : ""}`;
   // pkg 为空 → **无可靠安装方式**：只陈述事实，不给命令（宁缺勿编）。
   if (!pkg) {
@@ -157,85 +174,89 @@ const tool = (
 
 const REFERENCE_TOOLS: Capability[] = [
   // ── GNU 工具链（Windows 原本没有 grep/find/sed/awk…，最高优先级；三选一，勿全装）──
-  tool("coreutils-ms", "coreutils", "Coreutils for Windows（微软打包 uutils）", "GNU 工具链", "Microsoft.Coreutils", "2026.9.3", "--version",
-    "coreutils + findutils + grep 三合一的 multi-call 二进制", "grep/find/sed/awk 等（Windows 原本没有）",
-    "✅ Windows 首选；**要求 PowerShell 7.4+**（7.6+ 支持 ~）；preview 阶段；与 PowerShell 别名冲突，可用 coreutils-manager disable 关掉"),
-  tool("coreutils-uutils", "coreutils", "uutils coreutils（上游原版）", "GNU 工具链", "uutils.coreutils", "0.10.0", "--version",
-    "GNU coreutils 的 Rust 跨平台重写", "GNU coreutils",
-    "上游原版；自述「部分选项可能缺失或行为不同」，差异按 bug 处理"),
-  tool("busybox", "busybox", "busybox-w32", "GNU 工具链", "frippery.busybox-w32", "1.38.0-FRP", "--help",
-    "经典 BusyBox 的 Windows 移植", "大量 UNIX 小工具", "极简单文件、老派做法"),
+  tool({ id: "coreutils-ms", bin: "coreutils", label: "Coreutils for Windows（微软打包 uutils）", category: "GNU 工具链", pkg: "Microsoft.Coreutils", ver: "2026.9.3", flag: "--version",
+    provides: "coreutils + findutils + grep 三合一的 multi-call 二进制", replaces: "grep/find/sed/awk 等（Windows 原本没有）", note: "✅ Windows 首选；**要求 PowerShell 7.4+**（7.6+ 支持 ~）；preview 阶段；与 PowerShell 别名冲突，可用 coreutils-manager disable 关掉" }),
+  tool({ id: "coreutils-uutils", bin: "coreutils", label: "uutils coreutils（上游原版）", category: "GNU 工具链", pkg: "uutils.coreutils", ver: "0.10.0", flag: "--version",
+    provides: "GNU coreutils 的 Rust 跨平台重写", replaces: "GNU coreutils", note: "上游原版；自述「部分选项可能缺失或行为不同」，差异按 bug 处理" }),
+  tool({ id: "busybox", bin: "busybox", label: "busybox-w32", category: "GNU 工具链", pkg: "frippery.busybox-w32", ver: "1.38.0-FRP", flag: "--help",
+    provides: "经典 BusyBox 的 Windows 移植", replaces: "大量 UNIX 小工具", note: "极简单文件、老派做法" }),
 
   // ── 搜索与查找 ──
-  tool("rg", "rg", "ripgrep", "搜索与查找", "BurntSushi.ripgrep.MSVC", "15.2.0", "--version", "全文搜索", "grep -R（Windows 无）",
-    "另有 BurntSushi.ripgrep.GNU 变体"),
-  tool("fd", "fd", "fd", "搜索与查找", "sharkdp.fd", "10.5.0", "--version", "文件查找", "UNIX find（注意 DOS find.exe 不是它）"),
-  tool("ast-grep", "ast-grep", "ast-grep", "搜索与查找", "ast-grep.ast-grep", "0.45.2", "--version", "AST 结构化搜索", "grep -C"),
-  tool("fzf", "fzf", "fzf", "搜索与查找", "junegunn.fzf", "0.74.3", "--version", "模糊过滤", "find | grep"),
+  tool({ id: "rg", bin: "rg", label: "ripgrep", category: "搜索与查找", pkg: "BurntSushi.ripgrep.MSVC", ver: "15.2.0", flag: "--version",
+    provides: "全文搜索", replaces: "grep -R（Windows 无）", note: "另有 BurntSushi.ripgrep.GNU 变体" }),
+  tool({ id: "fd", bin: "fd", label: "fd", category: "搜索与查找", pkg: "sharkdp.fd", ver: "10.5.0", flag: "--version", provides: "文件查找", replaces: "UNIX find（注意 DOS find.exe 不是它）" }),
+  tool({ id: "ast-grep", bin: "ast-grep", label: "ast-grep", category: "搜索与查找", pkg: "ast-grep.ast-grep", ver: "0.45.2", flag: "--version", provides: "AST 结构化搜索", replaces: "grep -C" }),
+  tool({ id: "fzf", bin: "fzf", label: "fzf", category: "搜索与查找", pkg: "junegunn.fzf", ver: "0.74.3", flag: "--version", provides: "模糊过滤", replaces: "find | grep" }),
 
   // ── 文本与数据处理 ──
-  tool("jq", "jq", "jq", "文本与数据", "jqlang.jq", "1.8.2", "--version", "JSON 处理", "—"),
-  tool("yq", "yq", "yq", "文本与数据", "MikeFarah.yq", "4.53.6", "--version", "YAML/JSON 处理", "—"),
-  tool("sd", "sd", "sd", "文本与数据", "chmln.sd", "1.1.0", "--version", "字符串替换", "sed（Windows 无）"),
-  tool("bat", "bat", "bat", "文本与数据", "sharkdp.bat", "0.26.1", "--version", "高亮查看文件", "cat（PowerShell 别名，非文件）"),
-  tool("glow", "glow", "glow", "文本与数据", "charmbracelet.glow", "3.0.0", "--version", "Markdown 渲染", "阅读 .md"),
-  tool("hexyl", "hexyl", "hexyl", "文本与数据", "sharkdp.hexyl", "0.17.0", "--version", "十六进制查看", "xxd / od"),
+  tool({ id: "jq", bin: "jq", label: "jq", category: "文本与数据", pkg: "jqlang.jq", ver: "1.8.2", flag: "--version", provides: "JSON 处理", replaces: "—" }),
+  tool({ id: "yq", bin: "yq", label: "yq", category: "文本与数据", pkg: "MikeFarah.yq", ver: "4.53.6", flag: "--version", provides: "YAML/JSON 处理", replaces: "—" }),
+  tool({ id: "sd", bin: "sd", label: "sd", category: "文本与数据", pkg: "chmln.sd", ver: "1.1.0", flag: "--version", provides: "字符串替换", replaces: "sed（Windows 无）" }),
+  tool({ id: "bat", bin: "bat", label: "bat", category: "文本与数据", pkg: "sharkdp.bat", ver: "0.26.1", flag: "--version", provides: "高亮查看文件", replaces: "cat（PowerShell 别名，非文件）" }),
+  tool({ id: "glow", bin: "glow", label: "glow", category: "文本与数据", pkg: "charmbracelet.glow", ver: "3.0.0", flag: "--version", provides: "Markdown 渲染", replaces: "阅读 .md" }),
+  tool({ id: "hexyl", bin: "hexyl", label: "hexyl", category: "文本与数据", pkg: "sharkdp.hexyl", ver: "0.17.0", flag: "--version", provides: "十六进制查看", replaces: "xxd / od" }),
 
   // ── 目录与文件浏览 ──
-  tool("eza", "eza", "eza", "目录与浏览", "eza-community.eza", "0.23.5", "--version", "目录清单", "ls / dir"),
-  tool("yazi", "yazi", "yazi", "目录与浏览", "sxyazi.yazi", "26.9.1", "--version", "终端文件管理器", "mc / 资源管理器"),
+  tool({ id: "eza", bin: "eza", label: "eza", category: "目录与浏览", pkg: "eza-community.eza", ver: "0.23.5", flag: "--version", provides: "目录清单", replaces: "ls / dir" }),
+  tool({ id: "yazi", bin: "yazi", label: "yazi", category: "目录与浏览", pkg: "sxyazi.yazi", ver: "26.9.1", flag: "--version", provides: "终端文件管理器", replaces: "mc / 资源管理器" }),
 
   // ── Shell 与终端 ──
-  tool("zoxide", "zoxide", "zoxide", "Shell 与终端", "ajeetdsouza.zoxide", "0.10.0", "--version", "目录跳转（z）", "cd"),
-  tool("atuin", "atuin", "atuin", "Shell 与终端", "Atuinsh.Atuin", "18.21.0", "--version", "历史搜索", "history | grep"),
-  tool("starship", "starship", "starship", "Shell 与终端", "Starship.Starship", "1.26.0", "--version", "提示符", "各 shell 自带提示符"),
-  tool("nushell", "nu", "nushell", "Shell 与终端", "Nushell.Nushell", "0.114.1", "--version", "结构化 Shell", "PowerShell（另一种选择）", "二进制名是 nu"),
-  tool("direnv", "direnv", "direnv", "Shell 与终端", "direnv.direnv", "2.37.1", "version", "目录局部环境", "手动 source .env", "版本子命令是 `direnv version`，不是 --version"),
-  tool("zellij", "zellij", "zellij", "Shell 与终端", "Zellij.Zellij", "0.45.1", "--version", "终端复用", "tmux", "**Windows 无官方 tmux winget 包**，用 zellij 替代"),
+  tool({ id: "zoxide", bin: "zoxide", label: "zoxide", category: "Shell 与终端", pkg: "ajeetdsouza.zoxide", ver: "0.10.0", flag: "--version", provides: "目录跳转（z）", replaces: "cd" }),
+  tool({ id: "atuin", bin: "atuin", label: "atuin", category: "Shell 与终端", pkg: "Atuinsh.Atuin", ver: "18.21.0", flag: "--version", provides: "历史搜索", replaces: "history | grep" }),
+  tool({ id: "starship", bin: "starship", label: "starship", category: "Shell 与终端", pkg: "Starship.Starship", ver: "1.26.0", flag: "--version", provides: "提示符", replaces: "各 shell 自带提示符" }),
+  tool({ id: "nushell", bin: "nu", label: "nushell", category: "Shell 与终端", pkg: "Nushell.Nushell", ver: "0.114.1", flag: "--version",
+    provides: "结构化 Shell", replaces: "PowerShell（另一种选择）", note: "二进制名是 nu" }),
+  tool({ id: "direnv", bin: "direnv", label: "direnv", category: "Shell 与终端", pkg: "direnv.direnv", ver: "2.37.1", flag: "version",
+    provides: "目录局部环境", replaces: "手动 source .env", note: "版本子命令是 `direnv version`，不是 --version" }),
+  tool({ id: "zellij", bin: "zellij", label: "zellij", category: "Shell 与终端", pkg: "Zellij.Zellij", ver: "0.45.1", flag: "--version",
+    provides: "终端复用", replaces: "tmux", note: "**Windows 无官方 tmux winget 包**，用 zellij 替代" }),
   // v1.15.12 补：WSL 清单（docs/toolchain-wsl.md）提到、但台账此前漏登的条目。
   // **Windows 无可靠包的不编造命令**（pkg 留空 → 只说事实）。
-  tool("tmux", "tmux", "tmux", "Shell 与终端", "", "", "-V", "终端复用", "screen", "Windows 无官方包；用 zellij，或直接在 WSL 里用 tmux"),
-  tool("tldr", "tldr", "tldr（tlrc）", "Shell 与终端", "tldr-pages.tlrc", "1.13.1", "--version", "精简帮助（社区示例）", "man"),
-  tool("viddy", "viddy", "viddy", "构建与任务", "", "", "--version", "更现代的 watch", "watch", "winget 无结果（实测）；走 cargo install 或 release"),
-  tool("tig", "tig", "tig", "Git 与版本控制", "", "", "--version", "Git TUI（轻量）", "git log", "winget 搜到的 DoD.STIGViewer 是**无关工具**（勿混装）；走 scoop/choco 或 release"),
-  tool("lazydocker", "lazydocker", "lazydocker", "构建与任务", "JesseDuffield.Lazydocker", "0.25.2", "--version", "Docker TUI", "docker ps"),
-  tool("ip", "ip", "iproute2（ip / ss）", "网络与下载", "", "", "-V", "网络配置与 socket 查看", "ifconfig / netstat", "**Linux 专属**（iproute2）；Windows 用 Get-NetIPAddress / netstat"),
-  tool("wezterm", "wezterm", "WezTerm", "Shell 与终端", "wez.wezterm", "20240203", "--version", "终端模拟器", "Windows Terminal（自带）"),
-  tool("nvim", "nvim", "Neovim", "Shell 与终端", "Neovim.Neovim", "0.12.5", "--version", "编辑器", "notepad / VS Code"),
+  tool({ id: "tmux", bin: "tmux", label: "tmux", category: "Shell 与终端", pkg: "", ver: "", flag: "-V", provides: "终端复用", replaces: "screen", note: "Windows 无官方包；用 zellij，或直接在 WSL 里用 tmux" }),
+  tool({ id: "tldr", bin: "tldr", label: "tldr（tlrc）", category: "Shell 与终端", pkg: "tldr-pages.tlrc", ver: "1.13.1", flag: "--version", provides: "精简帮助（社区示例）", replaces: "man" }),
+  tool({ id: "viddy", bin: "viddy", label: "viddy", category: "构建与任务", pkg: "", ver: "", flag: "--version", provides: "更现代的 watch", replaces: "watch", note: "winget 无结果（实测）；走 cargo install 或 release" }),
+  tool({ id: "tig", bin: "tig", label: "tig", category: "Git 与版本控制", pkg: "", ver: "", flag: "--version",
+    provides: "Git TUI（轻量）", replaces: "git log", note: "winget 搜到的 DoD.STIGViewer 是**无关工具**（勿混装）；走 scoop/choco 或 release" }),
+  tool({ id: "lazydocker", bin: "lazydocker", label: "lazydocker", category: "构建与任务", pkg: "JesseDuffield.Lazydocker", ver: "0.25.2", flag: "--version", provides: "Docker TUI", replaces: "docker ps" }),
+  tool({ id: "ip", bin: "ip", label: "iproute2（ip / ss）", category: "网络与下载", pkg: "", ver: "", flag: "-V",
+    provides: "网络配置与 socket 查看", replaces: "ifconfig / netstat", note: "**Linux 专属**（iproute2）；Windows 用 Get-NetIPAddress / netstat" }),
+  tool({ id: "wezterm", bin: "wezterm", label: "WezTerm", category: "Shell 与终端", pkg: "wez.wezterm", ver: "20240203", flag: "--version", provides: "终端模拟器", replaces: "Windows Terminal（自带）" }),
+  tool({ id: "nvim", bin: "nvim", label: "Neovim", category: "Shell 与终端", pkg: "Neovim.Neovim", ver: "0.12.5", flag: "--version", provides: "编辑器", replaces: "notepad / VS Code" }),
 
   // ── Git 与版本控制 ──
-  tool("delta", "delta", "delta", "Git 与版本控制", "dandavison.delta", "0.19.2", "--version", "diff 美化", "diff"),
-  tool("lazygit", "lazygit", "lazygit", "Git 与版本控制", "JesseDuffield.lazygit", "0.64.1", "--version", "Git TUI", "git log 手敲"),
-  tool("gh", "gh", "GitHub CLI", "Git 与版本控制", "GitHub.cli", "2.100.0", "--version", "GitHub 命令行", "网页操作"),
+  tool({ id: "delta", bin: "delta", label: "delta", category: "Git 与版本控制", pkg: "dandavison.delta", ver: "0.19.2", flag: "--version", provides: "diff 美化", replaces: "diff" }),
+  tool({ id: "lazygit", bin: "lazygit", label: "lazygit", category: "Git 与版本控制", pkg: "JesseDuffield.lazygit", ver: "0.64.1", flag: "--version", provides: "Git TUI", replaces: "git log 手敲" }),
+  tool({ id: "gh", bin: "gh", label: "GitHub CLI", category: "Git 与版本控制", pkg: "GitHub.cli", ver: "2.100.0", flag: "--version", provides: "GitHub 命令行", replaces: "网页操作" }),
 
   // ── 磁盘与系统 ──
-  tool("dust", "dust", "dust", "磁盘与系统", "bootandy.dust", "1.2.5", "--version", "磁盘分析", "du"),
-  tool("dua", "dua", "dua", "磁盘与系统", "Byron.dua-cli", "2.42.1", "--version", "磁盘分析（交互）", "ncdu"),
-  tool("btop", "btop", "btop4win", "磁盘与系统", "aristocratos.btop4win", "1.0.5", "--version", "系统监控", "任务管理器 / top"),
-  tool("procs", "procs", "procs", "磁盘与系统", "dalance.procs", "0.14.12", "--version", "进程查看", "ps aux"),
+  tool({ id: "dust", bin: "dust", label: "dust", category: "磁盘与系统", pkg: "bootandy.dust", ver: "1.2.5", flag: "--version", provides: "磁盘分析", replaces: "du" }),
+  tool({ id: "dua", bin: "dua", label: "dua", category: "磁盘与系统", pkg: "Byron.dua-cli", ver: "2.42.1", flag: "--version", provides: "磁盘分析（交互）", replaces: "ncdu" }),
+  tool({ id: "btop", bin: "btop", label: "btop4win", category: "磁盘与系统", pkg: "aristocratos.btop4win", ver: "1.0.5", flag: "--version", provides: "系统监控", replaces: "任务管理器 / top" }),
+  tool({ id: "procs", bin: "procs", label: "procs", category: "磁盘与系统", pkg: "dalance.procs", ver: "0.14.12", flag: "--version", provides: "进程查看", replaces: "ps aux" }),
 
   // ── 网络与下载 ──
-  tool("xh", "xh", "xh", "网络与下载", "ducaale.xh", "0.26.2", "--version", "HTTP 客户端", "curl"),
-  tool("aria2", "aria2c", "aria2", "网络与下载", "aria2.aria2", "1.37.0", "--version", "多线程下载", "wget", "二进制名是 aria2c"),
-  tool("gping", "gping", "gping", "网络与下载", "orf.gping", "1.21.0", "--version", "图形化 ping", "ping"),
-  tool("ffmpeg", "ffmpeg", "FFmpeg", "网络与下载", "Gyan.FFmpeg", "9.0.1", "-version", "媒体处理", "—", "版本旗标是单横线 -version"),
+  tool({ id: "xh", bin: "xh", label: "xh", category: "网络与下载", pkg: "ducaale.xh", ver: "0.26.2", flag: "--version", provides: "HTTP 客户端", replaces: "curl" }),
+  tool({ id: "aria2", bin: "aria2c", label: "aria2", category: "网络与下载", pkg: "aria2.aria2", ver: "1.37.0", flag: "--version", provides: "多线程下载", replaces: "wget", note: "二进制名是 aria2c" }),
+  tool({ id: "gping", bin: "gping", label: "gping", category: "网络与下载", pkg: "orf.gping", ver: "1.21.0", flag: "--version", provides: "图形化 ping", replaces: "ping" }),
+  tool({ id: "ffmpeg", bin: "ffmpeg", label: "FFmpeg", category: "网络与下载", pkg: "Gyan.FFmpeg", ver: "9.0.1", flag: "-version", provides: "媒体处理", replaces: "—", note: "版本旗标是单横线 -version" }),
 
   // ── 版本与包管理 ──
-  tool("mise", "mise", "mise", "版本与包管理", "jdx.mise", "2026.8.5", "--version", "版本管理器", "nvm / fnm / asdf"),
-  tool("uv", "uv", "uv", "版本与包管理", "astral-sh.uv", "0.12.12", "--version", "Python 环境与工具", "pip / pipenv / pipx", "真 .exe，可直接被 execFile 起"),
+  tool({ id: "mise", bin: "mise", label: "mise", category: "版本与包管理", pkg: "jdx.mise", ver: "2026.8.5", flag: "--version", provides: "版本管理器", replaces: "nvm / fnm / asdf" }),
+  tool({ id: "uv", bin: "uv", label: "uv", category: "版本与包管理", pkg: "astral-sh.uv", ver: "0.12.12", flag: "--version",
+    provides: "Python 环境与工具", replaces: "pip / pipenv / pipx", note: "真 .exe，可直接被 execFile 起" }),
 
   // ── 构建与任务编排 ──
-  tool("just", "just", "just", "构建与任务", "Casey.Just", "1.58.0", "--version", "任务运行器", "make"),
-  tool("mprocs", "mprocs", "mprocs", "构建与任务", "pvolok.mprocs", "0.9.6", "--version", "多进程管理", "parallel"),
-  tool("hyperfine", "hyperfine", "hyperfine", "构建与任务", "sharkdp.hyperfine", "1.20.0", "--version", "基准测试", "time"),
-  tool("lnav", "lnav", "lnav", "构建与任务", "tstack.lnav", "0.14.1-rc1", "--version", "日志分析", "tail -f"),
+  tool({ id: "just", bin: "just", label: "just", category: "构建与任务", pkg: "Casey.Just", ver: "1.58.0", flag: "--version", provides: "任务运行器", replaces: "make" }),
+  tool({ id: "mprocs", bin: "mprocs", label: "mprocs", category: "构建与任务", pkg: "pvolok.mprocs", ver: "0.9.6", flag: "--version", provides: "多进程管理", replaces: "parallel" }),
+  tool({ id: "hyperfine", bin: "hyperfine", label: "hyperfine", category: "构建与任务", pkg: "sharkdp.hyperfine", ver: "1.20.0", flag: "--version", provides: "基准测试", replaces: "time" }),
+  tool({ id: "lnav", bin: "lnav", label: "lnav", category: "构建与任务", pkg: "tstack.lnav", ver: "0.14.1-rc1", flag: "--version", provides: "日志分析", replaces: "tail -f" }),
 
   // ── 归档 ──
-  tool("7zip", "7z", "7-Zip", "归档", "7zip.7zip", "26.03", "", "压缩/解压", "tar / unzip（Windows 无 unzip）", "不带参数即打印版本与用法；另有 7z.exe"),
+  tool({ id: "7zip", bin: "7z", label: "7-Zip", category: "归档", pkg: "7zip.7zip", ver: "26.03", flag: "", provides: "压缩/解压", replaces: "tar / unzip（Windows 无 unzip）", note: "不带参数即打印版本与用法；另有 7z.exe" }),
 
   // ── 逆向与二进制分析 ──
-  tool("jadx", "jadx", "jadx", "逆向与二进制分析", "Skylot.jadx", "1.5.6", "--version", "Dex/APK → Java 反编译", "—",
-    "**需 Java 11+ 64 位**；作者警告无法 100% 反编译，报错属预期。GUI 为 jadx-gui"),
+  tool({ id: "jadx", bin: "jadx", label: "jadx", category: "逆向与二进制分析", pkg: "Skylot.jadx", ver: "1.5.6", flag: "--version",
+    provides: "Dex/APK → Java 反编译", replaces: "—", note: "**需 Java 11+ 64 位**；作者警告无法 100% 反编译，报错属预期。GUI 为 jadx-gui" }),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // v1.15.14 扩源（ADR-0058）：以下条目由 tools/winget-verify-seed.ts **程序化核验**后写入。
@@ -245,197 +266,140 @@ const REFERENCE_TOOLS: Capability[] = [
   // ═══════════════════════════════════════════════════════════════════════════
 
   // ── 逆向与二进制分析 ──
-  tool("dnspy", "dnSpy", "dnSpyEx", "逆向与二进制分析", "dnSpyEx.dnSpy", "6.6.0", "--version",
-    ".NET 调试与反编译", "—",
-    ".NET 反编译首选；原 dnSpy 已停更，此为维护分支；许可证 GPL-3.0", "authority"),
-  tool("exiftool", "exiftool", "ExifTool", "逆向与二进制分析", "OliverBetz.ExifTool", "13.59", "-ver",
-    "文件元数据读写（EXIF 等）", "—",
-    "Windows 再打包；上游 philharvey/ExifTool；许可证 CC0-1.0", "authority"),
-  tool("ilspy", "ILSpy", "ILSpy", "逆向与二进制分析", "icsharpcode.ILSpy", "11.0.0.9375", "--version",
-    ".NET 反编译（开源）", "—",
-    "上游组织 icsharpcode；许可证 MIT", "authority"),
-  tool("rizin", "rizin", "Rizin", "逆向与二进制分析", "Rizin.Rizin", "0.9.1", "-v",
-    "逆向工程框架（radare2 分支）", "radare2",
-    "radare2 活跃分支；GUI 是 Rizin.Cutter；许可证 LGPL-3.0", "authority"),
-  tool("upx", "upx", "UPX", "逆向与二进制分析", "UPX.UPX", "5.2.1", "--version",
-    "可执行文件压缩/加壳", "—",
-    "上游自维护；许可证 GPL-2.0-or-later", "authority"),
+  tool({ id: "dnspy", bin: "dnSpy", label: "dnSpyEx", category: "逆向与二进制分析", pkg: "dnSpyEx.dnSpy", ver: "6.6.0", flag: "--version",
+    provides: ".NET 调试与反编译", replaces: "—", note: ".NET 反编译首选；原 dnSpy 已停更，此为维护分支；许可证 GPL-3.0", verSrc: "authority" }),
+  tool({ id: "exiftool", bin: "exiftool", label: "ExifTool", category: "逆向与二进制分析", pkg: "OliverBetz.ExifTool", ver: "13.59", flag: "-ver",
+    provides: "文件元数据读写（EXIF 等）", replaces: "—", note: "Windows 再打包；上游 philharvey/ExifTool；许可证 CC0-1.0", verSrc: "authority" }),
+  tool({ id: "ilspy", bin: "ILSpy", label: "ILSpy", category: "逆向与二进制分析", pkg: "icsharpcode.ILSpy", ver: "11.0.0.9375", flag: "--version",
+    provides: ".NET 反编译（开源）", replaces: "—", note: "上游组织 icsharpcode；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "rizin", bin: "rizin", label: "Rizin", category: "逆向与二进制分析", pkg: "Rizin.Rizin", ver: "0.9.1", flag: "-v",
+    provides: "逆向工程框架（radare2 分支）", replaces: "radare2", note: "radare2 活跃分支；GUI 是 Rizin.Cutter；许可证 LGPL-3.0", verSrc: "authority" }),
+  tool({ id: "upx", bin: "upx", label: "UPX", category: "逆向与二进制分析", pkg: "UPX.UPX", ver: "5.2.1", flag: "--version",
+    provides: "可执行文件压缩/加壳", replaces: "—", note: "上游自维护；许可证 GPL-2.0-or-later", verSrc: "authority" }),
 
   // ── 网络与下载 ──
-  tool("curl", "curl", "curl", "网络与下载", "cURL.cURL", "8.21.0.6", "--version",
-    "HTTP 客户端", "—",
-    "Windows 自带的 curl.exe 版本旧，此为上游最新；许可证 Freeware", "authority"),
-  tool("dog", "dog", "dog", "网络与下载", "ogham.dog", "0.1.0", "--version",
-    "DNS 查询客户端", "dig / nslookup",
-    "作者 ogham（同 bat 系出）；许可证 EUPL-1.2 License", "authority"),
-  tool("doggo", "doggo", "doggo", "网络与下载", "MrKaran.Doggo", "1.4.0", "--version",
-    "DNS 查询（现代）", "dig",
-    "作者 MrKaran；许可证 GPL-3.0", "authority"),
-  tool("httpie", "http", "HTTPie", "网络与下载", "HTTPie.HTTPie", "2025.2.0", "--version",
-    "人性化 HTTP 客户端", "curl（可读性更好）",
-    "上游自维护；许可证 免费软件", "authority"),
-  tool("iperf3", "iperf3", "iperf3", "网络与下载", "ar51an.iPerf3", "3.21", "--version",
-    "网络带宽测试", "—",
-    "Windows 构建；上游 esnet/iperf；许可证 BSD-3-Clause", "authority"),
-  tool("mitmproxy", "mitmdump", "mitmproxy", "网络与下载", "mitmproxy.mitmproxy", "12.2.3", "--version",
-    "HTTP(S) 抓包与改写", "Fiddler / Charles",
-    "命令行版是 mitmdump；另有 mitmweb/mitmproxy；许可证 MIT License", "authority"),
-  tool("nmap", "nmap", "Nmap", "网络与下载", "Insecure.Nmap", "7.80", "--version",
-    "端口扫描与网络探测", "—",
-    "上游 Insecure.Com（nmap 官方发布者名）；许可证 Modified GNU GPLv2", "authority"),
+  tool({ id: "curl", bin: "curl", label: "curl", category: "网络与下载", pkg: "cURL.cURL", ver: "8.21.0.6", flag: "--version",
+    provides: "HTTP 客户端", replaces: "—", note: "Windows 自带的 curl.exe 版本旧，此为上游最新；许可证 Freeware", verSrc: "authority" }),
+  tool({ id: "dog", bin: "dog", label: "dog", category: "网络与下载", pkg: "ogham.dog", ver: "0.1.0", flag: "--version",
+    provides: "DNS 查询客户端", replaces: "dig / nslookup", note: "作者 ogham（同 bat 系出）；许可证 EUPL-1.2 License", verSrc: "authority" }),
+  tool({ id: "doggo", bin: "doggo", label: "doggo", category: "网络与下载", pkg: "MrKaran.Doggo", ver: "1.4.0", flag: "--version",
+    provides: "DNS 查询（现代）", replaces: "dig", note: "作者 MrKaran；许可证 GPL-3.0", verSrc: "authority" }),
+  tool({ id: "httpie", bin: "http", label: "HTTPie", category: "网络与下载", pkg: "HTTPie.HTTPie", ver: "2025.2.0", flag: "--version",
+    provides: "人性化 HTTP 客户端", replaces: "curl（可读性更好）", note: "上游自维护；许可证 免费软件", verSrc: "authority" }),
+  tool({ id: "iperf3", bin: "iperf3", label: "iperf3", category: "网络与下载", pkg: "ar51an.iPerf3", ver: "3.21", flag: "--version",
+    provides: "网络带宽测试", replaces: "—", note: "Windows 构建；上游 esnet/iperf；许可证 BSD-3-Clause", verSrc: "authority" }),
+  tool({ id: "mitmproxy", bin: "mitmdump", label: "mitmproxy", category: "网络与下载", pkg: "mitmproxy.mitmproxy", ver: "12.2.3", flag: "--version",
+    provides: "HTTP(S) 抓包与改写", replaces: "Fiddler / Charles", note: "命令行版是 mitmdump；另有 mitmweb/mitmproxy；许可证 MIT License", verSrc: "authority" }),
+  tool({ id: "nmap", bin: "nmap", label: "Nmap", category: "网络与下载", pkg: "Insecure.Nmap", ver: "7.80", flag: "--version",
+    provides: "端口扫描与网络探测", replaces: "—", note: "上游 Insecure.Com（nmap 官方发布者名）；许可证 Modified GNU GPLv2", verSrc: "authority" }),
 
   // ── 文本与数据 ──
-  tool("duckdb", "duckdb", "DuckDB CLI", "文本与数据", "DuckDB.cli", "1.5.5", "--version",
-    "进程内分析型 SQL（可直接查 CSV/Parquet）", "sqlite3（分析场景）",
-    "上游自维护；许可证 MIT", "authority"),
-  tool("gron", "gron", "gron", "文本与数据", "TomHudson.gron", "0.7.1", "--version",
-    "JSON → 可 grep 的赋值语句", "jq（grep 场景）",
-    "作者 TomHudson；许可证 MIT", "authority"),
-  tool("miller", "mlr", "Miller", "文本与数据", "Miller.Miller", "6.20.2", "--version",
-    "CSV/TSV/JSON 流式处理", "awk / cut / join",
-    "二进制名是 mlr；许可证 BSD-2-Clause", "authority"),
-  tool("xsv", "xsv", "xsv", "文本与数据", "BurntSushi.xsv.MSVC", "0.13.0", "--version",
-    "CSV 命令行工具集", "csvkit",
-    "作者 BurntSushi（同 ripgrep）；许可证 Dual License (Unlicense & MIT)", "authority"),
+  tool({ id: "duckdb", bin: "duckdb", label: "DuckDB CLI", category: "文本与数据", pkg: "DuckDB.cli", ver: "1.5.5", flag: "--version",
+    provides: "进程内分析型 SQL（可直接查 CSV/Parquet）", replaces: "sqlite3（分析场景）", note: "上游自维护；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "gron", bin: "gron", label: "gron", category: "文本与数据", pkg: "TomHudson.gron", ver: "0.7.1", flag: "--version",
+    provides: "JSON → 可 grep 的赋值语句", replaces: "jq（grep 场景）", note: "作者 TomHudson；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "miller", bin: "mlr", label: "Miller", category: "文本与数据", pkg: "Miller.Miller", ver: "6.20.2", flag: "--version",
+    provides: "CSV/TSV/JSON 流式处理", replaces: "awk / cut / join", note: "二进制名是 mlr；许可证 BSD-2-Clause", verSrc: "authority" }),
+  tool({ id: "xsv", bin: "xsv", label: "xsv", category: "文本与数据", pkg: "BurntSushi.xsv.MSVC", ver: "0.13.0", flag: "--version",
+    provides: "CSV 命令行工具集", replaces: "csvkit", note: "作者 BurntSushi（同 ripgrep）；许可证 Dual License (Unlicense & MIT)", verSrc: "authority" }),
 
   // ── Git 与版本控制 ──
-  tool("git-absorb", "git-absorb", "git-absorb", "Git 与版本控制", "tummychow.git-absorb", "0.9.0", "--version",
-    "自动把改动折进正确的提交（fixup）", "手动 git rebase -i",
-    "作者 tummychow；许可证 BSD-3-Clause", "authority"),
-  tool("glab", "glab", "GitLab CLI", "Git 与版本控制", "GLab.GLab", "1.117.0", "--version",
-    "GitLab 命令行（MR/Issue/CI）", "网页操作",
-    "上游 glab（GitHub CLI 的 GitLab 对应物）；许可证 MIT", "authority"),
-  tool("jj", "jj", "Jujutsu", "Git 与版本控制", "jj-vcs.jj", "0.44.0", "--version",
-    "VCS（Git 兼容，工作流不同）", "—",
-    "上游 jj-vcs；与 Git 仓库互操作；许可证 Apache-2.0", "authority"),
+  tool({ id: "git-absorb", bin: "git-absorb", label: "git-absorb", category: "Git 与版本控制", pkg: "tummychow.git-absorb", ver: "0.9.0", flag: "--version",
+    provides: "自动把改动折进正确的提交（fixup）", replaces: "手动 git rebase -i", note: "作者 tummychow；许可证 BSD-3-Clause", verSrc: "authority" }),
+  tool({ id: "glab", bin: "glab", label: "GitLab CLI", category: "Git 与版本控制", pkg: "GLab.GLab", ver: "1.117.0", flag: "--version",
+    provides: "GitLab 命令行（MR/Issue/CI）", replaces: "网页操作", note: "上游 glab（GitHub CLI 的 GitLab 对应物）；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "jj", bin: "jj", label: "Jujutsu", category: "Git 与版本控制", pkg: "jj-vcs.jj", ver: "0.44.0", flag: "--version",
+    provides: "VCS（Git 兼容，工作流不同）", replaces: "—", note: "上游 jj-vcs；与 Git 仓库互操作；许可证 Apache-2.0", verSrc: "authority" }),
 
   // ── 容器与编排 ──
-  tool("dive", "dive", "dive", "容器与编排", "wagoodman.dive", "0.13.1", "version",
-    "镜像分层分析", "docker history",
-    "作者 wagoodman；用于精简镜像；许可证 MIT", "authority"),
-  tool("helm", "helm", "Helm", "容器与编排", "Helm.Helm", "4.3.0", "version",
-    "Kubernetes 包管理", "—",
-    "版本子命令是 `helm version`；许可证 Apache-2.0", "authority"),
-  tool("k9s", "k9s", "k9s", "容器与编排", "Derailed.k9s", "0.51.0", "version",
-    "Kubernetes TUI", "kubectl 手敲",
-    "作者 derailed；许可证 Apache-2.0", "authority"),
-  tool("kind", "kind", "kind", "容器与编排", "Kubernetes.kind", "0.33.0", "version",
-    "本地 Kubernetes（容器内）", "minikube",
-    "上游 kubernetes-sigs；许可证 Apache-2.0", "authority"),
-  tool("kubectl", "kubectl", "kubectl", "容器与编排", "Kubernetes.kubectl", "1.37.0", "version",
-    "Kubernetes 命令行", "—",
-    "版本子命令是 `kubectl version`；许可证 Apache-2.0", "authority"),
-  tool("kustomize", "kustomize", "kustomize", "容器与编排", "Kubernetes.kustomize", "5.8.1", "version",
-    "K8s 清单定制（无模板）", "helm（轻量场景）",
-    "上游 kubernetes-sigs；许可证 Apache-2.0", "authority"),
-  tool("minikube", "minikube", "minikube", "容器与编排", "Kubernetes.minikube", "1.39.0", "version",
-    "本地单节点 Kubernetes", "—",
-    "上游 kubernetes；许可证 Apache-2.0", "authority"),
-  tool("podman", "podman", "Podman", "容器与编排", "RedHat.Podman", "5.8.3", "--version",
-    "无守护进程容器引擎", "docker",
-    "RedHat 官方；许可证 Apache-2.0", "authority"),
-  tool("skaffold", "skaffold", "Skaffold", "容器与编排", "Google.ContainerTools.Skaffold", "2.24.0", "version",
-    "K8s 开发内循环", "手写 CI 脚本",
-    "Google 官方；许可证 Apache-2.0", "authority"),
-  tool("stern", "stern", "stern", "容器与编排", "stern.stern", "1.34.0", "--version",
-    "多 Pod 日志聚合", "kubectl logs -f",
-    "上游 stern；许可证 Apache-2.0 license", "authority"),
+  tool({ id: "dive", bin: "dive", label: "dive", category: "容器与编排", pkg: "wagoodman.dive", ver: "0.13.1", flag: "version",
+    provides: "镜像分层分析", replaces: "docker history", note: "作者 wagoodman；用于精简镜像；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "helm", bin: "helm", label: "Helm", category: "容器与编排", pkg: "Helm.Helm", ver: "4.3.0", flag: "version",
+    provides: "Kubernetes 包管理", replaces: "—", note: "版本子命令是 `helm version`；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "k9s", bin: "k9s", label: "k9s", category: "容器与编排", pkg: "Derailed.k9s", ver: "0.51.0", flag: "version",
+    provides: "Kubernetes TUI", replaces: "kubectl 手敲", note: "作者 derailed；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "kind", bin: "kind", label: "kind", category: "容器与编排", pkg: "Kubernetes.kind", ver: "0.33.0", flag: "version",
+    provides: "本地 Kubernetes（容器内）", replaces: "minikube", note: "上游 kubernetes-sigs；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "kubectl", bin: "kubectl", label: "kubectl", category: "容器与编排", pkg: "Kubernetes.kubectl", ver: "1.37.0", flag: "version",
+    provides: "Kubernetes 命令行", replaces: "—", note: "版本子命令是 `kubectl version`；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "kustomize", bin: "kustomize", label: "kustomize", category: "容器与编排", pkg: "Kubernetes.kustomize", ver: "5.8.1", flag: "version",
+    provides: "K8s 清单定制（无模板）", replaces: "helm（轻量场景）", note: "上游 kubernetes-sigs；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "minikube", bin: "minikube", label: "minikube", category: "容器与编排", pkg: "Kubernetes.minikube", ver: "1.39.0", flag: "version",
+    provides: "本地单节点 Kubernetes", replaces: "—", note: "上游 kubernetes；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "podman", bin: "podman", label: "Podman", category: "容器与编排", pkg: "RedHat.Podman", ver: "5.8.3", flag: "--version",
+    provides: "无守护进程容器引擎", replaces: "docker", note: "RedHat 官方；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "skaffold", bin: "skaffold", label: "Skaffold", category: "容器与编排", pkg: "Google.ContainerTools.Skaffold", ver: "2.24.0", flag: "version",
+    provides: "K8s 开发内循环", replaces: "手写 CI 脚本", note: "Google 官方；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "stern", bin: "stern", label: "stern", category: "容器与编排", pkg: "stern.stern", ver: "1.34.0", flag: "--version",
+    provides: "多 Pod 日志聚合", replaces: "kubectl logs -f", note: "上游 stern；许可证 Apache-2.0 license", verSrc: "authority" }),
 
   // ── 安全与供应链 ──
-  tool("cosign", "cosign", "Cosign", "安全与供应链", "Sigstore.Cosign", "3.1.3", "version",
-    "制品签名与验签", "—",
-    "Sigstore 官方；许可证 Apache-2.0", "authority"),
-  tool("gitleaks", "gitleaks", "gitleaks", "安全与供应链", "Gitleaks.Gitleaks", "8.30.1", "version",
-    "Git 历史密钥扫描", "手写正则",
-    "上游 gitleaks；许可证 MIT", "authority"),
-  tool("grype", "grype", "Grype", "安全与供应链", "Anchore.Grype", "0.118.0", "version",
-    "SBOM/镜像漏洞扫描", "—",
-    "Anchore 官方，与 syft 配套；许可证 Apache-2.0", "authority"),
-  tool("kubescape", "kubescape", "Kubescape", "安全与供应链", "kubescape.kubescape", "4.0.14", "version",
-    "K8s 安全基线扫描", "—",
-    "ARMO 官方；许可证 Apache-2.0", "authority"),
-  tool("sops", "sops", "SOPS", "安全与供应链", "SecretsOPerationS.SOPS", "3.13.3", "--version",
-    "加密的配置文件管理", "明文密钥",
-    "上游 getsops；许可证 MPL-2.0", "authority"),
-  tool("syft", "syft", "Syft", "安全与供应链", "Anchore.Syft", "1.51.0", "version",
-    "SBOM 生成", "—",
-    "Anchore 官方；许可证 Apache-2.0", "authority"),
-  tool("trivy", "trivy", "Trivy", "安全与供应链", "AquaSecurity.Trivy", "0.74.0", "--version",
-    "漏洞/配置/密钥扫描", "—",
-    "Aqua Security 官方；许可证 Apache-2.0", "authority"),
+  tool({ id: "cosign", bin: "cosign", label: "Cosign", category: "安全与供应链", pkg: "Sigstore.Cosign", ver: "3.1.3", flag: "version",
+    provides: "制品签名与验签", replaces: "—", note: "Sigstore 官方；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "gitleaks", bin: "gitleaks", label: "gitleaks", category: "安全与供应链", pkg: "Gitleaks.Gitleaks", ver: "8.30.1", flag: "version",
+    provides: "Git 历史密钥扫描", replaces: "手写正则", note: "上游 gitleaks；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "grype", bin: "grype", label: "Grype", category: "安全与供应链", pkg: "Anchore.Grype", ver: "0.118.0", flag: "version",
+    provides: "SBOM/镜像漏洞扫描", replaces: "—", note: "Anchore 官方，与 syft 配套；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "kubescape", bin: "kubescape", label: "Kubescape", category: "安全与供应链", pkg: "kubescape.kubescape", ver: "4.0.14", flag: "version",
+    provides: "K8s 安全基线扫描", replaces: "—", note: "ARMO 官方；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "sops", bin: "sops", label: "SOPS", category: "安全与供应链", pkg: "SecretsOPerationS.SOPS", ver: "3.13.3", flag: "--version",
+    provides: "加密的配置文件管理", replaces: "明文密钥", note: "上游 getsops；许可证 MPL-2.0", verSrc: "authority" }),
+  tool({ id: "syft", bin: "syft", label: "Syft", category: "安全与供应链", pkg: "Anchore.Syft", ver: "1.51.0", flag: "version",
+    provides: "SBOM 生成", replaces: "—", note: "Anchore 官方；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "trivy", bin: "trivy", label: "Trivy", category: "安全与供应链", pkg: "AquaSecurity.Trivy", ver: "0.74.0", flag: "--version",
+    provides: "漏洞/配置/密钥扫描", replaces: "—", note: "Aqua Security 官方；许可证 Apache-2.0", verSrc: "authority" }),
 
   // ── 构建与任务 ──
-  tool("bazelisk", "bazelisk", "Bazelisk", "构建与任务", "Bazel.Bazelisk", "1.29.0", "version",
-    "Bazel 版本管理器", "手动装 bazel",
-    "上游 bazelbuild；许可证 Apache-2.0", "authority"),
-  tool("cmake", "cmake", "CMake", "构建与任务", "Kitware.CMake", "4.4.3", "--version",
-    "跨平台构建系统", "手写 Makefile",
-    "Kitware 官方；许可证 BSD-3-Clause", "authority"),
-  tool("goreleaser", "goreleaser", "GoReleaser", "构建与任务", "goreleaser.goreleaser", "2.17.1", "--version",
-    "Go 制品发布自动化", "手写发布脚本",
-    "上游自维护；许可证 MIT", "authority"),
-  tool("k6", "k6", "k6", "构建与任务", "GrafanaLabs.k6", "2.2.0", "version",
-    "负载测试", "ab / jmeter",
-    "Grafana 官方；许可证 AGPL-3.0", "authority"),
-  tool("ninja", "ninja", "Ninja", "构建与任务", "Ninja-build.Ninja", "1.13.2", "--version",
-    "高速构建后端", "make（速度）",
-    "上游 ninja-build；许可证 Apache-2.0", "authority"),
+  tool({ id: "bazelisk", bin: "bazelisk", label: "Bazelisk", category: "构建与任务", pkg: "Bazel.Bazelisk", ver: "1.29.0", flag: "version",
+    provides: "Bazel 版本管理器", replaces: "手动装 bazel", note: "上游 bazelbuild；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "cmake", bin: "cmake", label: "CMake", category: "构建与任务", pkg: "Kitware.CMake", ver: "4.4.3", flag: "--version",
+    provides: "跨平台构建系统", replaces: "手写 Makefile", note: "Kitware 官方；许可证 BSD-3-Clause", verSrc: "authority" }),
+  tool({ id: "goreleaser", bin: "goreleaser", label: "GoReleaser", category: "构建与任务", pkg: "goreleaser.goreleaser", ver: "2.17.1", flag: "--version",
+    provides: "Go 制品发布自动化", replaces: "手写发布脚本", note: "上游自维护；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "k6", bin: "k6", label: "k6", category: "构建与任务", pkg: "GrafanaLabs.k6", ver: "2.2.0", flag: "version",
+    provides: "负载测试", replaces: "ab / jmeter", note: "Grafana 官方；许可证 AGPL-3.0", verSrc: "authority" }),
+  tool({ id: "ninja", bin: "ninja", label: "Ninja", category: "构建与任务", pkg: "Ninja-build.Ninja", ver: "1.13.2", flag: "--version",
+    provides: "高速构建后端", replaces: "make（速度）", note: "上游 ninja-build；许可证 Apache-2.0", verSrc: "authority" }),
 
   // ── 文档与转换 ──
-  tool("pandoc", "pandoc", "Pandoc", "文档与转换", "JohnMacFarlane.Pandoc", "3.11", "--version",
-    "文档格式互转（md/docx/pdf…）", "—",
-    "作者 John MacFarlane（上游本人）；许可证 GPL-2.0-or-later", "authority"),
-  tool("poppler", "pdftotext", "Poppler", "文档与转换", "oschwartz10612.Poppler", "25.07.0-0", "-v",
-    "PDF 文本/图片提取（pdftotext/pdftoppm）", "—",
-    "Windows 构建；上游 freedesktop/poppler；许可证 MIT", "authority"),
-  tool("qpdf", "qpdf", "qpdf", "文档与转换", "QPDF.QPDF", "12.4.1", "--version",
-    "PDF 结构变换/修复", "—",
-    "上游 qpdf；许可证 Apache-2.0", "authority"),
-  tool("tesseract", "tesseract", "Tesseract OCR", "文档与转换", "UB-Mannheim.TesseractOCR", "5.4.0.20240606", "--version",
-    "图片/PDF 文字识别", "—",
-    "Windows 常用再打包；上游 tesseract-ocr；许可证 Apache-2.0", "authority"),
-  tool("typst", "typst", "Typst", "文档与转换", "Typst.Typst", "0.15.1", "--version",
-    "排版系统（LaTeX 替代，快）", "LaTeX",
-    "上游 typst；许可证 Apache-2.0", "authority"),
+  tool({ id: "pandoc", bin: "pandoc", label: "Pandoc", category: "文档与转换", pkg: "JohnMacFarlane.Pandoc", ver: "3.11", flag: "--version",
+    provides: "文档格式互转（md/docx/pdf…）", replaces: "—", note: "作者 John MacFarlane（上游本人）；许可证 GPL-2.0-or-later", verSrc: "authority" }),
+  tool({ id: "poppler", bin: "pdftotext", label: "Poppler", category: "文档与转换", pkg: "oschwartz10612.Poppler", ver: "25.07.0-0", flag: "-v",
+    provides: "PDF 文本/图片提取（pdftotext/pdftoppm）", replaces: "—", note: "Windows 构建；上游 freedesktop/poppler；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "qpdf", bin: "qpdf", label: "qpdf", category: "文档与转换", pkg: "QPDF.QPDF", ver: "12.4.1", flag: "--version",
+    provides: "PDF 结构变换/修复", replaces: "—", note: "上游 qpdf；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "tesseract", bin: "tesseract", label: "Tesseract OCR", category: "文档与转换", pkg: "UB-Mannheim.TesseractOCR", ver: "5.4.0.20240606", flag: "--version",
+    provides: "图片/PDF 文字识别", replaces: "—", note: "Windows 常用再打包；上游 tesseract-ocr；许可证 Apache-2.0", verSrc: "authority" }),
+  tool({ id: "typst", bin: "typst", label: "Typst", category: "文档与转换", pkg: "Typst.Typst", ver: "0.15.1", flag: "--version",
+    provides: "排版系统（LaTeX 替代，快）", replaces: "LaTeX", note: "上游 typst；许可证 Apache-2.0", verSrc: "authority" }),
 
   // ── 媒体处理 ──
-  tool("imagemagick", "magick", "ImageMagick", "媒体处理", "ImageMagick.ImageMagick", "7.1.2.29", "--version",
-    "图像转换与处理", "—",
-    "二进制名是 magick（IM7）；许可证 ImageMagick", "authority"),
-  tool("mkvtoolnix", "mkvmerge", "MKVToolNix", "媒体处理", "MoritzBunkus.MKVToolNix", "100.0.0", "--version",
-    "Matroska 封装/拆分", "—",
-    "作者 Moritz Bunkus（上游本人）；许可证 GPL-2.0", "authority"),
-  tool("oxipng", "oxipng", "oxipng", "媒体处理", "Shssoichiro.Oxipng", "10.1.1", "--version",
-    "PNG 无损压缩", "optipng",
-    "上游自维护；许可证 MIT", "authority"),
-  tool("yt-dlp", "yt-dlp", "yt-dlp", "媒体处理", "yt-dlp.yt-dlp", "2026.08.19", "--version",
-    "网络视频/音频下载", "youtube-dl",
-    "上游自维护；许可证 Unlicense", "authority"),
+  tool({ id: "imagemagick", bin: "magick", label: "ImageMagick", category: "媒体处理", pkg: "ImageMagick.ImageMagick", ver: "7.1.2.29", flag: "--version",
+    provides: "图像转换与处理", replaces: "—", note: "二进制名是 magick（IM7）；许可证 ImageMagick", verSrc: "authority" }),
+  tool({ id: "mkvtoolnix", bin: "mkvmerge", label: "MKVToolNix", category: "媒体处理", pkg: "MoritzBunkus.MKVToolNix", ver: "100.0.0", flag: "--version",
+    provides: "Matroska 封装/拆分", replaces: "—", note: "作者 Moritz Bunkus（上游本人）；许可证 GPL-2.0", verSrc: "authority" }),
+  tool({ id: "oxipng", bin: "oxipng", label: "oxipng", category: "媒体处理", pkg: "Shssoichiro.Oxipng", ver: "10.1.1", flag: "--version",
+    provides: "PNG 无损压缩", replaces: "optipng", note: "上游自维护；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "yt-dlp", bin: "yt-dlp", label: "yt-dlp", category: "媒体处理", pkg: "yt-dlp.yt-dlp", ver: "2026.08.19", flag: "--version",
+    provides: "网络视频/音频下载", replaces: "youtube-dl", note: "上游自维护；许可证 Unlicense", verSrc: "authority" }),
 
   // ── 磁盘与系统 ──
-  tool("bottom", "btm", "bottom", "磁盘与系统", "Clement.bottom", "0.14.9", "--version",
-    "系统监控（跨平台 top）", "任务管理器 / htop",
-    "二进制名是 btm；作者 ClementTsang；许可证 MIT", "authority"),
-  tool("hwinfo", "HWiNFO64", "HWiNFO", "磁盘与系统", "REALiX.HWiNFO", "8.50", "--version",
-    "硬件信息与传感器读取", "—",
-    "上游 REALiX；许可证 专有软件", "authority"),
-  tool("sysinternals", "handle", "Sysinternals Suite", "磁盘与系统", "Microsoft.Sysinternals.Suite", "未取到（套件包）", "-?",
-    "Windows 深度诊断（handle/procdump/autoruns…）", "—",
-    "微软官方；套件含数十个工具，此处探针用 handle；许可证 Proprietary", "authority"),
+  tool({ id: "bottom", bin: "btm", label: "bottom", category: "磁盘与系统", pkg: "Clement.bottom", ver: "0.14.9", flag: "--version",
+    provides: "系统监控（跨平台 top）", replaces: "任务管理器 / htop", note: "二进制名是 btm；作者 ClementTsang；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "hwinfo", bin: "HWiNFO64", label: "HWiNFO", category: "磁盘与系统", pkg: "REALiX.HWiNFO", ver: "8.50", flag: "--version",
+    provides: "硬件信息与传感器读取", replaces: "—", note: "上游 REALiX；许可证 专有软件", verSrc: "authority" }),
+  tool({ id: "sysinternals", bin: "handle", label: "Sysinternals Suite", category: "磁盘与系统", pkg: "Microsoft.Sysinternals.Suite", ver: "未取到（套件包）", flag: "-?",
+    provides: "Windows 深度诊断（handle/procdump/autoruns…）", replaces: "—", note: "微软官方；套件含数十个工具，此处探针用 handle；许可证 Proprietary", verSrc: "authority" }),
 
   // ── 版本与包管理 ──
-  tool("chocolatey", "choco", "Chocolatey", "版本与包管理", "Chocolatey.Chocolatey", "2.7.4.0", "--version",
-    "Windows 包管理器（winget 之外的第二渠道）", "—",
-    "上游 chocolatey；台账多条目在其上有包时可作补充渠道；许可证 Apache v2", "authority"),
-  tool("conan", "conan", "Conan", "版本与包管理", "JFrog.Conan", "2.32.0", "--version",
-    "C/C++ 包管理", "vcpkg（另一选择）",
-    "JFrog 官方；许可证 MIT", "authority"),
-  tool("miniconda", "conda", "Miniconda3", "版本与包管理", "Anaconda.Miniconda3", "未取到（套件包）", "--version",
-    "Python/Conda 环境管理", "—",
-    "二进制名是 conda；Anaconda 官方；许可证 专有软件", "authority"),
-  tool("pixi", "pixi", "pixi", "版本与包管理", "prefix-dev.pixi", "0.80.0", "--version",
-    "跨语言环境与包管理", "conda（更快）",
-    "上游 prefix-dev；许可证 BSD-3-Clause", "authority"),
+  tool({ id: "chocolatey", bin: "choco", label: "Chocolatey", category: "版本与包管理", pkg: "Chocolatey.Chocolatey", ver: "2.7.4.0", flag: "--version",
+    provides: "Windows 包管理器（winget 之外的第二渠道）", replaces: "—", note: "上游 chocolatey；台账多条目在其上有包时可作补充渠道；许可证 Apache v2", verSrc: "authority" }),
+  tool({ id: "conan", bin: "conan", label: "Conan", category: "版本与包管理", pkg: "JFrog.Conan", ver: "2.32.0", flag: "--version",
+    provides: "C/C++ 包管理", replaces: "vcpkg（另一选择）", note: "JFrog 官方；许可证 MIT", verSrc: "authority" }),
+  tool({ id: "miniconda", bin: "conda", label: "Miniconda3", category: "版本与包管理", pkg: "Anaconda.Miniconda3", ver: "未取到（套件包）", flag: "--version",
+    provides: "Python/Conda 环境管理", replaces: "—", note: "二进制名是 conda；Anaconda 官方；许可证 专有软件", verSrc: "authority" }),
+  tool({ id: "pixi", bin: "pixi", label: "pixi", category: "版本与包管理", pkg: "prefix-dev.pixi", ver: "0.80.0", flag: "--version",
+    provides: "跨语言环境与包管理", replaces: "conda（更快）", note: "上游 prefix-dev；许可证 BSD-3-Clause", verSrc: "authority" }),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -485,8 +449,14 @@ const PROVIDERS: Capability[] = [
 /** 全台账：provider + reference。 */
 export const CAPABILITIES: Capability[] = [...PROVIDERS, ...REFERENCE_TOOLS];
 
-/** 渲染用的分类顺序。 */
-export const CATEGORY_ORDER = [
+/**
+ * 渲染用的分类顺序 —— **同时是分类取值域的唯一事实源**（A20）。
+ * 值住在**私有的元组**里（`as const`），因为 `core/toolset/exec.ts` 会拿一个 `string`
+ * 去 `CATEGORY_ORDER.includes(...)`（渲染时给「未登记进顺序表」的分类兜底）——
+ * 把 `as const` 直接挂在导出的 `CATEGORY_ORDER` 上会让那个调用点编译不过，而那条兜底是**必需的**
+ * （否则将来新增分类会从渲染顺序里掉队且无处可归）。⇒ 公开面保持 `readonly string[]`，联合类型从元组派生。
+ */
+const CATEGORY_TUPLE = [
   "插件内接线",
   "GNU 工具链",
   "搜索与查找",
@@ -505,7 +475,17 @@ export const CATEGORY_ORDER = [
   "安全与供应链",
   "文档与转换",
   "媒体处理",
-];
+] as const;
+
+export const CATEGORY_ORDER: readonly string[] = CATEGORY_TUPLE;
+
+/**
+ * 分类的**类型化取值域**（A20）：`Capability.category` 用它 ⇒ 打错一个字（如 `"Shell与终端"`）
+ * 在**编译期**就红，而不是让该条目静默掉出 `CATEGORY_ORDER` 的渲染顺序
+ * （`findCapabilities` 的匹配面也吃 `category` —— 错值会同时让「按能力反查」失效）。
+ * 与 `core/util.ts` 的 `VerSrcKind` 同一形态：「取值域是类型」，映射表只有一份。
+ */
+export type Category = (typeof CATEGORY_TUPLE)[number];
 
 export const providerCapabilities = (): Capability[] => CAPABILITIES.filter((c) => c.kind === "provider");
 export const referenceCapabilities = (): Capability[] => CAPABILITIES.filter((c) => c.kind === "reference");

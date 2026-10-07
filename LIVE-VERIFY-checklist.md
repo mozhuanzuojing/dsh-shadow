@@ -8,7 +8,7 @@
 
 ## 0. 确认 running host 载入的版本
 - `dsh --profile web --dump-config` → 应见 `- id: dsh-shadow`（无 shadowRoot），且无 `Error:/Cannot/failed`。
-- 确认 `vendor/dsh-shadow/package.json` version = **当前版本**（现 `1.21.0`），`dist/index.js` 存在（改代码后先 `npm run build`）。
+- 确认**本仓** `package.json` 的 version = **当前版本**（**版本号以 `package.json` 为准，这里不手抄** —— 本行曾手写 `1.21.0` 并横跨两个版本没人更新）；本仓路径 = `G:\project\dsh1\dsh-shadow`（**不是** `vendor/dsh-shadow`，那一级在本机不存在），`dist/index.js` 存在（改代码后先 `npm run build`）。
 - 触发一个真实工具回合（任意工具调用）→ 让插件采集。
 
 ## 1. 采集落地 + 系统提示不泄漏
@@ -42,13 +42,15 @@
 - `read_shadow("<情境>", { judgment: true })` → 应见 `[Judgment]` + `面对 … → 我判断/选择 …`。
 - `read_shadow({ taste: true })` → 应见 `[Taste]`（品味/喜欢/不喜欢；未配置则提示）。
 
-## 10. 关键命题
+## 10. 关键命题（**这是「待验命题」，不是「已验结论」**）
 > read-side derived architecture 在真实 DSH host 中完整成立。
 
-- 即：以上各模式**全部**从已落盘的记忆文件**读侧派生**（不改写写侧），无需重启逐模式重采；各段输出都可出现。
+- 即：上述各模式都应从已落盘的记忆文件**读侧派生**（不改写写侧），无需重启逐模式重采。
+  ⚠ **覆盖面**：§1–§9 里**只有一部分被逐项 invoke 过** —— 见文末 2026-09-06 记录的倒数第二条：
+  `experience` / `kg` / `observer` / `judgment` **未单独 invoke**（当时以其「写侧字段存在 + 读逻辑 mock 验证」代替）。
 
 ## 判定
-- 全部 ✅ → **v0.13 真闭环**，进入下一优先级（zg Evidence Provider 接口 / Observation Model research）。
+- **§1–§9 全部 ✅ 才算** v0.13 真闭环 —— **当前状态是「部分完成」，不是已达成**（4 个模式未单独 invoke，见 §10）。
 - 任一 ❌ → 记录失败模式（哪一段、报什么），回到代码定位（勿当成品）。
 
 ## 2026-09-06 实验结果（真机真数据）
@@ -59,5 +61,7 @@
   - `"dsh", { debug: true }` → 管线 trace（候选41/命中41/预算/返回10）+ 每条 `命中·入口/主题/路径/正文·状态`。
   - 输出暴露 v0.7–v0.10 读侧派生：`生命周期 NEW`、`裁决 fresh/superseded`（旧 vendor-dsh-shadow 标 superseded + 反思已迭代）、`结果 evidence_live/superseded`、`项目 dsh1`、`置信 0.55`、`来源 动作/agent`、`（来自其它会话/子代理）`。
 - ⏳ 未单独 invoke：`experience` / `kg` / `observer` / `judgment` 查询（其写侧字段已确认存在；读逻辑已 mock 验证）。如需逐项确认，按上表跑即可。
-- 结论：**写读双侧闭环，v0.13 真机验证通过。**
+- 结论（**如实表述，v1.22.1 改正**）：**写侧闭环 + 读侧部分验证** —— 上列已跑各项通过；但
+  `experience` / `kg` / `observer` / `judgment` 四项**未单独 invoke**（读逻辑仅 mock 验证）
+  ⇒ **不能**据此宣称「写读双侧闭环 / 真机验证通过」（原句曾这么写）。
 

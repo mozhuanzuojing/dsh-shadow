@@ -5,10 +5,11 @@
 //
 // ⚠ **接线状态（v1.15.33 / T4 分诊结论：保留，但"未接线"是已知且未决的）**：
 //   本文件的 `progressiveDisclosure` / `refineTree` 在生产里**无调用点** —— 生产读路径
-//   `query/reads.ts:141-158` 从 `knowledge-structure.js` / `knowledge-retrieval.js` **直接**建树并检索，
-//   从不经过这个 cost seam；唯一调用者是 `test/knowledge-engine.test.ts:53,59`。
-//   而 `core/knowledge-engine.ts:7-8` 的清单式注释**提到了**这两个名字 —— 那是一处**假调用点**
-//   （`audit-wiring` 的 A 类把注释算作命中，故它没报；人工分诊时才发现）。
+//   （`query/reads.ts` 的 knowledge 读查询，经 `../core/knowledge/engine.js` 这个 barrel）
+//   从 `core/knowledge/structure.ts` / `core/knowledge/retrieval.ts` **直接**建树并检索，
+//   从不经过这个 cost seam；唯一调用者是 `test/knowledge-engine.test.ts`。
+//   而 `core/knowledge/engine.ts` 的清单式注释**提到了**这两个名字（`refineTree` / `progressiveDisclosure`）
+//   —— 那是一处**假调用点**（`audit-wiring` 的 A 类把注释算作命中，故它没报；人工分诊时才发现）。
 //   **为什么本轮不删也不接线**：这是 `adr/0048` ①/② 的**目标能力**，是否启用属**产品决策**
 //   （默认路径可能刻意不做成本折叠）⇒ 见 `BACKLOG.md` **T1** 的"待决策"项。
 //   **不要**因为「零调用」就删除 —— 它与 `auditDrift` 那种空壳不同，它是实现完整的功能面。

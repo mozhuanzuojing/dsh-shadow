@@ -20,7 +20,8 @@
 // 不引入「agent 自决任务边界」，Episode 依旧是派生。
 import { createHash } from "node:crypto";
 import { consolidateText } from "./render.js";
-import { mutateMeta, readMeta } from "../../persistence/meta.js";
+import { metaOutcomeNotice, mutateMetaVersioned, readMeta } from "../../persistence/meta.js";
+import { noteDegrade } from "./core.js";
 import { readRel, memoryFileName, timeFromName, dateFromName } from "../../persistence/files.js";
 import { atomsRel, indexesRel } from "../paths.js";
 import { deriveEpisodes } from "../view/episode.js";
@@ -75,7 +76,7 @@ export const runCompact = async (deps: CompactDeps, fs: any, ws: string, cache: 
   if (eps.length <= 1) return; // 只有当前打开的 episode，无已完成收口的
   // **增量标记，不在陈旧快照上改**（ADR-0068）：本函数的写入窗口跨「重建索引 + 收口」，
   // 拿开头读到的 meta 全量覆盖回去会丢掉期间别人的写入。故只收集 delta，最后在
-  // `mutateMeta` 的**新鲜快照**上应用。
+  // `mutateMetaVersioned` 的**新鲜快照**上应用（四态结局见下方 `marks` 那一段）。
   const marks: string[] = [];
   const dateOf = (rel: string) => dateFromName(String(rel).split("/").pop() || "") || today();
   for (const ep of eps.slice(0, -1)) {
@@ -111,12 +112,35 @@ export const runCompact = async (deps: CompactDeps, fs: any, ws: string, cache: 
     // ⚠ **不**把纪要塞回 `cache`：它是派生件，进缓存就会被当成 Memory Atom 出现在索引/召回里。
   }
   if (marks.length) {
-    await mutateMeta(fs, ws, (m) => {
+    // ## 为什么这一处**必须**区分「并发没抢到」与「写失败」（B24 消费面②）
+    //
+    // `marks` = 本批**已收口**原子的 `status = "compacted"`。这个标记**丢不得**（ADR-0068 原文）：
+    // 它是「把低价值/已归档条目移出**活跃索引/召回**热集」的唯一依据，丢了会让
+    // **已归档原子重回活跃索引/召回** —— 读者看到的内容因此改变，不是遥测量。
+    // 旧版 `await mutateMeta(...)` 把两种结局都吞进 `false` 且**没人看**（没有调用方分支）⇒
+    // 一次竞争或一次磁盘故障就能静默改变召回面。这里把结论送进**可见信号**通道
+    //（`WriterCore.degrade` 台账 → `getFlushWarn()` 在每条读路径上渲染），并**分开写原因**
+    //（原因串与「哪种结局要人管」的判据都在 `persistence/meta.ts` 的 `metaOutcomeNotice` 一处，
+    // 不让同一个 `字段=字面量` 在两个模块里各出现一次 —— `audit:drift` 的棘轮只许降）。
+    // ⚠ 与 `registerMeta` 的用法**不同**：那里只有 `needsHuman` 才上报（`contended` 会自愈、
+    // 报它就是假降级）；**这里两种都要上横幅** —— 收口标记哪怕只是时间性地没写进去，
+    // 召回面此刻也已经不对了，读者有权知道。`noop` 不可能出现（本 mutate 恒返回 `void`）。
+    const outcome = await mutateMetaVersioned(fs, ws, (m) => {
       for (const rel of marks) {
         m[rel] = m[rel] || { hits: 0, status: "active", pinned: false };
         m[rel].status = "compacted";
       }
     });
+    const notice = metaOutcomeNotice(outcome);
+    if (notice) {
+      noteDegrade(
+        core,
+        "compact",
+        `收口标记未落盘：${notice.why}`,
+        `本批 ${marks.length} 条已收口原子的 \`status=compacted\` **没写进 \`_meta.json\`** ⇒ 它们可能**仍留在活跃索引/召回里**` +
+          `（收口文件与派生纪要都已落盘、可回放；缺的只是「移出活跃集」这一步）`,
+      );
+    }
   }
 };
 

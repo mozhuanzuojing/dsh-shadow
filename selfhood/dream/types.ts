@@ -55,6 +55,14 @@ export interface DreamResult {
   status: DreamResultStatus;
   patterns: DreamPattern[];
   hypotheses: Hypothesis[];
+  /**
+   * **输入样本不全**（B4，v1.22.x）：算这次 dream 时，读 `.shadow/observation/<date>/*.md`
+   * 被**跳过/坏件**而没进 pattern 的条数。`> 0` ⇒ 尤其 `no_pattern` 必须按「样本被削」读，
+   * **不能**读成「真的没有模式」（ADR-0049：两者处置不同）。**缺席 = 0**（健康路径不写这个字段）。
+   */
+  sourceSkipped?: number;
+  /** **目录级读不出来**的真实原因（「还没有 observation 目录」**不算**）。 */
+  sourceReadFailure?: string;
 }
 
 export const GRAPH_VERSION_HINT = "0.26";

@@ -2,8 +2,17 @@
 // 不是"我要查什么"，而是"我要改变什么"。goal/question/desiredOutcome/constraints 四要素。
 import type { Intent } from "../types.js";
 
-/** 布尔旗标 → 默认 goal（ADR-0050：verify→verifyEvidence；废止 args.recall）。 */
-const FLAG_GOAL: Record<string, string> = {
+/**
+ * 布尔旗标 → 默认 goal（ADR-0050：verify→verifyEvidence；废止 args.recall）。
+ *
+ * **A10：这张表是「旗标名 → goal」的唯一一份，且必须覆盖 `index.ts` 工具 schema 里的全部 boolean 参数。**
+ * 原先只有 7 个键，而 schema 里有 **19** 个 boolean 参数 ⇒ `{soul:true}` / `{taste:true}` / `{claim:true}` /
+ * `{kg:true}` 等 12 个不在表里，`intentOf` 于是**静默**回落 `DEFAULT_GOAL`「召回相关记忆」——
+ * 一次灵魂投影会被记成「召回相关记忆」，而 Intent 是有落盘副作用的（会写进 `ObserverContext`）。
+ * **门**：`test/intent-flags.test.ts` 断言「`index.ts` 的 boolean 参数集合 ⊆ 本表键集」——
+ * 新增旗标只改 schema 而忘改这里 ⇒ 当场红，而不是静默取默认（本仓「能推出来的东西要配门」）。
+ */
+export const FLAG_GOAL: Record<string, string> = {
   judgment: "形成判断",
   project: "投影当前任务",
   experience: "回顾经历",
@@ -11,6 +20,19 @@ const FLAG_GOAL: Record<string, string> = {
   verifyEvidence: "验证证据",
   identity: "确认主体",
   context: "观察上下文",
+  // ↓ 补上的 12 个（A10；顺序即 `PRIORITY` 里「原有在前」的书写顺序）
+  soul: "读取灵魂投影",
+  taste: "读取品味偏好",
+  kg: "追踪工程知识图谱",
+  claim: "核验断言证据",
+  debug: "调试召回管线",
+  raw: "查看记忆原文",
+  perceptionOnly: "只看感知层",
+  identityContext: "取身份版本",
+  hasValidation: "判断视角稳定性",
+  changeObserved: "登记适配变化",
+  revocation: "登记委派撤销",
+  planningCannotCreateObjective: "确认观察边界政策",
 };
 /** mode 串 → 默认 goal（布尔未命中时；避免 recovery/identity-advance 错挂「召回相关记忆」）。 */
 const MODE_GOAL: Record<string, string> = {
@@ -25,8 +47,32 @@ const MODE_GOAL: Record<string, string> = {
   temporal: "时间坐标重放",
   offline: "离线压缩",
 };
-/** 布尔旗标优先级。 */
-const FLAG_ORDER = ["identity", "context", "observer", "project", "experience", "judgment", "verifyEvidence"];
+/**
+ * 布尔旗标的**优先级次序**（同时置多个时谁定 goal）。
+ *
+ * **A28：这只是一张排序表，不再是第二份键清单。** 原先是手写的 7 元素数组，与 `FLAG_GOAL` 的键
+ * **手工保持一致** —— 往表里加第 8 个旗标而忘改这里，该旗标就**永远取不到 goal**（`activeFlag` 恒
+ * `undefined`）：静默，且没有任何测试覆盖这个交叉约束。现在 `FLAG_ORDER` 由本表 + `FLAG_GOAL` 的键派生。
+ *
+ * · 原有 7 个的**相对顺序保持不变**（改顺序 = 改「混用多个旗标时谁定 goal」的既有语义）；
+ * · 后补的 12 个一律排在原有 7 个**之后**：它们此前不在表里 ⇒ 与原有旗标混用时 goal 恒由原有旗标决定
+ *   （排后面使「混用时 goal 变化」的面收敛为 0），而「只置新旗标」从今往后不再静默落回默认。
+ */
+const PRIORITY = [
+  "identity", "context", "observer", "project", "experience", "judgment", "verifyEvidence",
+  "soul", "taste", "kg", "claim", "debug", "raw",
+  "perceptionOnly", "identityContext", "hasValidation",
+  "changeObserved", "revocation", "planningCannotCreateObjective",
+];
+/**
+ * 布尔旗标的实际判定顺序（**由 `PRIORITY` 与 `FLAG_GOAL` 的键派生**，A28）。
+ * 派生使「表里有、顺序表里没有 ⇒ 静默丢映射」这条路径**不存在**：未在 `PRIORITY` 点名的键
+ * 一律**追加在末尾**（仍然可判），而不是被丢掉。`test/intent-flags.test.ts` 另断言两表键集相等。
+ */
+export const FLAG_ORDER: readonly string[] = [
+  ...PRIORITY.filter((k) => k in FLAG_GOAL),
+  ...Object.keys(FLAG_GOAL).filter((k) => !PRIORITY.includes(k)),
+];
 const DEFAULT_GOAL = "召回相关记忆";
 
 export const intentOf = (args: any, topic: string): Intent => {

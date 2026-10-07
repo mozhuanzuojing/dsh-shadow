@@ -1,16 +1,31 @@
 // dsh-shadow —— long-horizon/guard/authority-guard.ts：224 Temporal≠AuthorityGrowth / 225 LongHistory≠Preference / 228 Pattern≠Objective / 229 Success≠SelfConfidence。
+//
+// **A27（v1.22.x，修一类）**：4 个 `assert*` 旧写法把**同一个谓词在一个对象字面量里求值两次**；
+// 现在「求值一次 + `{ ok, reason? }`」（守卫族统一形态 `AdmissionResult` 同形，`.ok`/`.reason` 不变）。
 const AUTHORITY_GROWTH = /longer.*trusted|more trusted|执行更久.*权限|时间.*权限|trusted more|权限增加|more authority|运行越久.*信任|authority expansion|authority increase|权限扩展|reliability.*permission|permission.*reliability|可靠.*权限|success rate.*autonomy/i;
 export const resultNoAuthorityGrowth = (r: string) => !AUTHORITY_GROWTH.test(String(r || ""));
-export const assertResultNoAuthorityGrowth = (r: string) => ({ ok: resultNoAuthorityGrowth(r), reason: resultNoAuthorityGrowth(r) ? undefined : "Temporal Accumulation ≠ Authority Growth（执行时间越长→更可信→权限增加 禁：时间累积不产生可信度/权限）" });
+export const assertResultNoAuthorityGrowth = (r: string) => {
+  const ok = resultNoAuthorityGrowth(r);
+  return { ok, reason: ok ? undefined : "Temporal Accumulation ≠ Authority Growth（执行时间越长→更可信→权限增加 禁：时间累积不产生可信度/权限）" };
+};
 
 const SELF_CONFIDENCE = /self confidence|更自信|自我信任|autonomy increase|自主扩大|更自主|become more confident|成熟度.*自主/i;
 export const resultNoSelfConfidence = (r: string) => !SELF_CONFIDENCE.test(String(r || ""));
-export const assertResultNoSelfConfidence = (r: string) => ({ ok: resultNoSelfConfidence(r), reason: resultNoSelfConfidence(r) ? undefined : "Long Horizon Success ≠ Self Confidence（长期成功→能力提升→自我信任→自主扩大 禁）" });
+export const assertResultNoSelfConfidence = (r: string) => {
+  const ok = resultNoSelfConfidence(r);
+  return { ok, reason: ok ? undefined : "Long Horizon Success ≠ Self Confidence（长期成功→能力提升→自我信任→自主扩大 禁）" };
+};
 
 const PREFERENCE = /prefer|preferred this|形成偏好|更偏好|偏好/i;
 export const resultNoPreference = (r: string) => !PREFERENCE.test(String(r || ""));
-export const assertResultNoPreference = (r: string) => ({ ok: resultNoPreference(r), reason: resultNoPreference(r) ? undefined : "Long History ≠ Preference（长期选择 A → 偏好 A 禁）" });
+export const assertResultNoPreference = (r: string) => {
+  const ok = resultNoPreference(r);
+  return { ok, reason: ok ? undefined : "Long History ≠ Preference（长期选择 A → 偏好 A 禁）" };
+};
 
 const PATTERN_OBJECTIVE = /inferred objective|推断目标|pattern.*objective|合作模式.*目标|自己推断目标|长期模式.*目标/i;
 export const resultNoInferredObjective = (r: string) => !PATTERN_OBJECTIVE.test(String(r || ""));
-export const assertResultNoInferredObjective = (r: string) => ({ ok: resultNoInferredObjective(r), reason: resultNoInferredObjective(r) ? undefined : "Interaction Pattern ≠ Objective（长期合作模式→系统自己推断目标 禁；objective 只能来自外部权威）" });
+export const assertResultNoInferredObjective = (r: string) => {
+  const ok = resultNoInferredObjective(r);
+  return { ok, reason: ok ? undefined : "Interaction Pattern ≠ Objective（长期合作模式→系统自己推断目标 禁；objective 只能来自外部权威）" };
+};

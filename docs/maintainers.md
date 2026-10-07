@@ -145,8 +145,9 @@
 > 守着它的门：`npm run audit:layers`（方向禁令 / 无环 / 纯模块白名单），逐条判据见 `tools/audit-layers.lib.ts` 与 `adr/0086`。
 > **什么时候需要看**：要新加一层、或把某段逻辑搬家之前。
 
-**这张表是「生成」的，不是手写的**（v1.16.0 起**生成器就在本仓里**）。一级模块 **28** 个
-（= 27 个目录 + `index.ts`）× 5 列 = **140** 个格子，**手写必然腐烂**，
+**这张表是「生成」的，不是手写的**（v1.16.0 起**生成器就在本仓里**）。一级模块数与格子数**以生成器输出为准**
+（**本行不抄数**：v1.22.1 实测生成器打印 **27** 个 = 26 个目录 + `index.ts`、共 **135** 格，而本行此前手写的
+「28 个 / 140 格」是 `adr/0102`–`adr/0105` 把那批顶层目录收进导航伞**之前**的旧值 —— 生成器重建之后没人重跑），
 而它的用途是「**暴露「谁开始越权」**」—— 本仓的「越权」**已有一份可执行判据**：
 `tools/audit-layers.lib.ts` 的 `DIRECTION_RULES` · `FORBIDDEN_TARGETS_EVERYWHERE` · `PURE_MODULES`
 （**条数以表为准，本行不抄** —— 抄一遍就会在下次加规则时腐烂）。
@@ -156,9 +157,13 @@ node tools/module-ownership.ts   # 打印整张表 + **行数**（别在别处�
 ```
 
 > **为什么生成器回到了本仓**（v1.16.0）：它原先指向 `../.docs/fix/2026-09-12/t15-module-ownership.ts`，
-> 而那个日期目录**已不在本机**（`.docs/fix/` 现存 `2026-09-14` / `-15` / `-16`），整个 `.docs` 下
-> **没有任何 `t15*`** —— 于是「表是生成的」与「别在别处手写」**两条同时落空**。
-> 按 `AGENTS.md` 自己的结论「**能复现的东西放 `tools/`**」，重建在 `tools/module-ownership.ts`。
+> 而写这段时那个日期目录**不在本机**（当时 `.docs/fix/` 只剩 `2026-09-14` / `-15` / `-16`）——
+> 于是「表是生成的」与「别在别处手写」**两条同时落空**。
+> ⚠ **更正（v1.22.1）**：上面那句描述的是**当时那台机器**的状态，写成现在时是错的 —— 实测
+> `../.docs/fix/2026-09-12/` **存在**，且 `t15-module-ownership.ts` / `t15-counts-verify.ts` /
+> `t15-mode-count-reconcile.ts` / `t15-mode-surface-audit.ts` 四个探针都在（故本节表格里
+> 「已实测，命令：`node ../.docs/fix/2026-09-12/t15-counts-verify.ts`」**是可重放的**）。
+> 重建的判据不变（按 `AGENTS.md`「**能复现的东西放 `tools/`**」），但**理由不该再写成「目录已不在」**。
 
 **五个字段里只有两个能从代码机械推出，这里如实分开**：
 
@@ -169,8 +174,11 @@ node tools/module-ownership.ts   # 打印整张表 + **行数**（别在别处�
 | `Owns` | **不可以**（语义） | 只对 ADR 已定过的层给结论，其余**标未核、不编一句** |
 | `Writes` | **不可以**（副作用） | **已登记在 `derived-file-v1` / `memory-file-v1`** 两条契约里（判据收一处，不再列第二份派生件清单） |
 
-**由 ADR 定过、可直接引用的 `Owns` 结论**：`core` 是**脊柱**（不是「纯函数层」：43 个文件里**只有 4 个**是 0 import，
-且它 import `evidence`/`persistence`/`security` 与 `node:fs`）· `persistence` = **写侧** · `query` = **读侧** ·
+**由 ADR 定过、可直接引用的 `Owns` 结论**：`core` 是**脊柱**（不是「纯函数层」：它含大量有副作用文件，
+import `evidence`/`persistence`/`security` 与 `node:fs`；**「几个文件 / 几个零 import」这类派生计数本行不写**
+—— 要数就现数：`Get-ChildItem core -Recurse -Filter *.ts` 与对每个文件 grep `^\s*import `；
+v1.22.1 实测为 **54 个文件 / 11 个零 import**，而本行此前手写的「43 个 / 只有 4 个」既旧、又与
+`tools/audit-layers.lib.ts` 文件头**并不存在**这两个数）· `persistence` = **写侧** · `query` = **读侧** ·
 `security/scrub.ts` = 纯模块 · `(root)`（`index.ts`）= Cordis 适配器，**任何层不得 import 它**。
 依据：`tools/audit-layers.lib.ts` 文件头（T13 实测结论）。
 
@@ -189,6 +197,59 @@ node tools/module-ownership.ts   # 打印整张表 + **行数**（别在别处�
 #6 **归 `T7`**。#1/#2 判为不涉及兼容性（删或补棘轮 / 收敛成一份），**尚未动手**。
 **没有生产消费者**：⚠ 这句说的是**这份登记册本身**（**没有代码读它**）—— **不是**说登记册里的面没人用
 （`config-keys-v1` 的键**就被消费**）。说清楚免得它变成本仓清理过的那类「写好了但从不执行」的东西。
+
+### 落盘面：`.shadow/` 根下有什么（v1.22.1 补）
+
+> **为什么补这一节**：`.shadow/` 根下有一大批**由读侧 mode 直接落盘**的存储目录，此前**在全部自述文档里 0 次出现**
+> —— README / CONTEXT / MATERIALS / BACKLOG / `adr/*` 全文搜 `.shadow/action`、`.shadow/model`、`.shadow/verification`、
+> `.shadow/hypothesis`、`.shadow/future-evidence`、`.shadow/reality`、`.shadow/validation` **命中数都是 0** ——
+> 而术语表又说「派生在 `indexes/`」⇒ 读者无法判断它们属 source 还是派生，而那正是 `adr/0003` 要分清的那条线。
+
+**口径（按 `adr/0003` 分四类；**不写个数** —— 能数出来的字段别手写，用下面的命令现取）**：
+
+| 层 | 判据 | 例（**非穷举**） |
+|---|---|---|
+| **语料轴**（投影空间权威） | `CONTEXT.md`「投影空间」· `adr/0106` | `atoms/` · `roles/` · `affaires/` |
+| **模式存储根** | **由某个 `mode:` 落盘、且是该 mode 的唯一副本** ⇒ 目前**当 source 事实对待** | `action/`（`<date>/exec-*` `feedback-*`）· `model/`（`observations/` `claims/`）· `verification/` · `hypothesis/` · `future-evidence/` · `reality/` · `validation/`（含 `*.timeline.json`）· `observation/` · `world/` · `temporal/` · `dream/` · `identity/` · `reflection/` · `agency/` · `delegation/` · `adapt/` · `horizon/` · `recall/` · `recall-index/` · `lineage/` · `observer/` |
+| **派生件** | 见契约 `derived-file-v1`：可整份重建、坏件与空件必须可分 | `indexes/**` · `_meta.json` · `shadow-manifest.json` · `_recall_log.json` · `taste/taste.json`（契约已登记为派生） |
+| **系统派生记录** | 可删；**不进** `_meta.json`、不进索引、不计 hits | `audit/` · `query-log/` · `shadow-report.md` |
+| **curated source** | 人 / 工具卡写的**不可重建**内容（不是「派生件」） | `soul/soul.json` · `resources/*.md` |
+
+**现取命令**（枚举「源码里出现过的 `.shadow/` 顶层名」，可重放）：
+
+```powershell
+$files = Get-ChildItem -Recurse -File -Include *.ts | Where-Object { $_.FullName -notmatch '\\node_modules\\|\\dist\\|\\test\\|\\tools\\' }
+($files | ForEach-Object { [regex]::Matches((Get-Content $_ -Raw), 'SHADOW_ROOT\}/([A-Za-z][A-Za-z0-9_-]*)') } |
+  ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ', '
+# 本机 v1.22.1 实测（该命令输出的**字面**命中）：
+# action, adapt, agency, audit, delegation, dream, future-evidence, horizon, hypothesis, identity, model,
+# observation, query-log, reality, recall, reflection, resources, shadow-manifest, shadow-report, soul,
+# taste, temporal, validation, world
+```
+
+⚠ **两个已知不完整处（诚实标注）**：① 上面那条命令**只抓字面** `${SHADOW_ROOT}/<名字>`，
+漏掉「root 以参数传入」的写法（`epistemic/verification/persist.ts` 的 `${root}/verification/…`、
+`trajectory/continuity/persist.ts` 的 `recall-index/` · `lineage/` · `observer/`）⇒ 它给的是**下界，不是全集**；
+② `.dsh-shadow/`（`WORKSPACE_SHADOW_ROOT`）是**另一个根**（Workspace World Shadow，见 `adr/0036`），不在此列。
+
+🔴 **开放项（需 ADR 裁决）**：「模式存储根」是 source 还是派生？本仓的判据 `adr/0003` 只写了「派生件可整份重建」，
+**没有**回答「这些 JSON 能不能从 `atoms/` 重建」。在有人论证之前，删除/重建它们**一律按删 source 对待**。
+
+### 判据收一处：v1.22.1 新增的四份「唯一实现」
+
+> **为什么单列**：本仓两次代价明确的教训（`tools/comparison-points.lib.ts` 的两个正则、`core/util.ts` 的 `numOr`）
+> 都是「同一个判据写了两份，其中一份漂移」。下面四份是同一族的收口，**改它们之前先看这里**。
+
+| 文件 | 收的是什么 | 判据/边界 |
+|---|---|---|
+| `core/view/clue.ts` | 记忆正文**线索头** `> <标签>：<值>` 的解析（此前散在 `evidence/paths.ts` / `subject/observer/arbitrate.ts` / `retrieval/render.ts` / `tools/granularity.lib.ts` 四处，且**口径已分叉**：一处取原始串、一处取切开数组） | **零 import**（`tools/granularity.lib.ts` 要在 build 前直引 `.ts`）；只收线索头，Reflection 族不进 |
+| `persistence/outcomes.ts` | **三态形状** `PersistOutcome` / `ReadOutcome<T>` / `DegradeNote` | **只有类型、零依赖**（任一层可引而不新增依赖边）；只放形状，不放渲染 |
+| `query/degrade.ts` | 降级**措辞**：`unwrittenWarn`（写侧，同段输出披露）/ `readCauseWarn`（读侧） | `ok:true` ⇒ **空串** ⇒ 健康路径输出逐字节不变 |
+| `core/host-baseline.ts` | 验证基线的**运行时派生**（读 `package.json` 的 `engines.dsh`） | 此前是第 4 份副本而 `audit:docs` ⑦ 只守三处 ⇒ 它的漂移永远无门报警；**派生之后不要再给 ⑦ 加比对面** |
+
+同批新增的还有：`tools/clean.ts`（`npm run clean` 从内联 `node -e` 改成可重放的 `.ts` —— 内联串落在 `audit:scripts` 盲区）
+与 `test/intent-flags.test.ts`（用**真实注册面**取 schema，锁「19 个 boolean 参数都有 goal 映射、顺序表与映射表同源」）。
+
 ### 读取（`read_shadow`，可穿透）
 
 - 无参数返回 `indexes/_index.md`（目录）；带 `topic`/`entry` 按主题穿透到具体记忆文件。穿透按**分层召回**：按「入口/主题标签 → 路径 → 正文 + 时间衰减」打分排序，在 token 预算内按深度返回——高分记忆给「摘要 + 命中片段 + 正文骨架」，低分只给「路径 + 摘要」；`max_tokens` 控制预算（默认 1600）。**无参读索引也走同一份预算**（v1.15.85）：超预算时按 `## ` 段整段装、**不腰斩行内**，并按**段名 + 行数**披露「未返回的段 / 部分返回的段」+ 三条下一步（穿透 / 提高 `max_tokens` / 直接读文件）；**装得下则逐字原样、零多余文字**。⛔ 由来是实测：当时 `.shadow/_index.md`（日期树时代根路径）= **2 251 348 字节 / 24 639 行**（8310 条记忆 / 7 个日期目录），而此前无参路径**整篇原样返回**（`adr/0088`）；现行路径为 `.shadow/indexes/_index.md`。借鉴 OpenViking 的 L0/L1/L2 分层思想，但**不引入向量库**（见 ADR-0001）。
@@ -329,7 +390,7 @@ uv tool install semble
 
 ```text
 read_shadow({ mode: "toolset" })                             # 只读巡检：按分类列出全部条目 + provider 实时状态
-read_shadow({ mode: "toolset", survey: "all" })              # 并行探测全部 105 项（会起 105 个子进程，按需用）
+read_shadow({ mode: "toolset", survey: "all" })              # 并行探测**全部**条目（本机台账实测 107 项 = 2 provider + 105 reference；每项一个子进程，按需用）
 read_shadow({ mode: "toolset", category: "GNU 工具链" })      # 只看某一分类
 read_shadow({ mode: "toolset", need: ["全文搜索", "jadx"] })  # 能力预检：派活前查「要用的工具本机有没有」（见下）
 read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某一项（会先向你申请审批）
@@ -370,15 +431,51 @@ read_shadow({ mode: "toolset", install: "rg" })              # 显式安装某�
 | 级 | 是什么 | 缺它会怎样 | 例子 |
 |---|---|---|---|
 | **`provider`** | **插件内接线**的可选增强 | 对应能力**降级**（读侧会出现处置行） | `zg`、`semble` |
-| **`reference`** | **通用开发 CLI 目录**（44 项 / 13 分类） | **不影响插件行为**；只是 agent 需要时能查到「装什么、怎么装」 | `rg`、`fd`、`jq`、`jadx`、`coreutils`… |
+| **`reference`** | **通用开发 CLI 目录**（项数与分类数**以台账为准** —— 本机实测 **105 项 / 17 分类**；本行此前手写的「44 项 / 13 分类」是 ADR-0072 那一代的旧值） | **不影响插件行为**；只是 agent 需要时能查到「装什么、怎么装」 | `rg`、`fd`、`jq`、`jadx`、`coreutils`… |
 
-目录覆盖：GNU 工具链（3 选 1）、搜索与查找、文本与数据、目录与浏览、Shell 与终端、Git、磁盘与系统、网络与下载、版本与包管理、构建与任务、归档、逆向与二进制分析。
+目录覆盖（**顺序即渲染顺序，别手抄** —— 以 `core/toolset/index.ts` 的 `CATEGORY_ORDER` 为准）：GNU 工具链、搜索与查找、文本与数据、目录与浏览、Shell 与终端、Git 与版本控制、磁盘与系统、网络与下载、版本与包管理、构建与任务、归档、逆向与二进制分析、容器与编排、安全与供应链、文档与转换、媒体处理、插件内接线。
+
+**项数 / 分类数怎么现取**（`AGENTS.md`：能推出来的字段不要手写；**先 `npm run build`**，它读的是 `dist/`）：
+
+```sh
+node --input-type=module -e "const m=await import('./dist/core/toolset/index.js'); console.log('总', m.CAPABILITIES.length, 'provider', m.providerCapabilities().length, 'reference', m.referenceCapabilities().length, '分类', m.CATEGORY_ORDER.length)"
+# 本机 v1.22.1 实测读数：总 107 provider 2 reference 105 分类 17
+```
 
 **人读版**在 `docs/toolchain-windows.md`（Windows 口径，含 winget ID 实测、Windows 特有陷阱与「未核实」标注）与 `docs/toolchain-wsl.md`（Linux/WSL 口径）。这两份文档**随包发布**，并受 `test/toolset-catalog.test.ts` 的**双向棘轮**保护——台账与文档任一侧漂移都会测试失败（该棘轮首次运行即抓出一个写错的 winget ID）。
 
 **探测的两条诚实纪律**：
 - **探测失败只说「未检出」，不说「未装」**（探测方式可能不适用，如该工具没有版本旗标）；
 - 宿主进程的 **PATH 是启动时快照**——宿主起来之后装的工具，要**重启宿主**才可见。
+
+### 仓库内工具：哪些有 `npm run` 入口、哪些只能直跑（v1.22.1 补）
+
+> **为什么补**：`tools/` 下有生产工具**此前在 8 份自述文档里 0 次出现、也没有 npm 入口** ⇒ 只有读目录才知道它存在
+> （v1.22.1 用全文检索实测：`audit-triage` / `material-card-merge` 在 README / CONTEXT / MATERIALS / references /
+> BACKLOG / AGENTS / `docs/*.md` / `adr/*.md` / `presets/README.md` 里**命中数都是 0**）。
+> 下表只登记「**没有 npm 入口**」的那些（有入口的见 `package.json` 的 `scripts`，那本身是可发现面）。
+
+| 工具 | 用途 | 直跑命令 |
+|---|---|---|
+| `tools/audit-triage.ts` | **分诊助手**（**不是门**）：把 `audit:wiring` A/B 段给出的 `字段=值` + `文件:行` 的**上下文**摆到眼前，便于人工判「噪声 / 真断线」。**它不判定**，只摆证据；退出码恒 0 | `node tools/audit-triage.ts [仓库根] "field=value@file:line[,file:line...]"` |
+| `tools/material-card-merge.ts` | **并卡**（人工收口动作，`adr/0110` §2.0 的代价那段）：同一份材料因历史 key 裂成两张卡时人工合并；旧卡整份挪 `indexes/materials/_merged/`，**证据不删** | `node tools/material-card-merge.ts <工作区根> <保留的 key 或原始引用> <被并入的 key 或原始引用>` |
+| `tools/module-ownership.ts` | 打印模块归属表（见上「模块归属表」节） | `node tools/module-ownership.ts [仓库根]` |
+| `tools/materials-ledger.ts` · `tools/materials-freshness.ts` | 材料名册 / 新鲜度（**要 `SHADOW_MATERIALS_ROOT`**） | 见 `MATERIALS.md` §5 |
+| `tools/citation-audit.ts` · `tools/granularity-reclaim.ts` · `tools/sidecar-cost.ts` · `tools/derived-index-bench.ts` · `tools/timebomb-sweep.ts` | 引用越界审计 / 粒度回收（默认 dry-run）/ sidecar 成本 / 派生索引基准 / 时间炸弹扫描 | 各自文件头有用法；**都刻意不在 `verify` 里**（要真语料、要造语料或要联网） |
+
+### 「当时取证」产物：别当现状读（v1.22.1 补）
+
+`docs/` 下除 `*.md` 外还有两类**留仓但不进发布面**的产物（`adr/0093` §1 登记；`package.json` 的 `files` 只发 `docs/*.md`）：
+
+| 产物 | 它是什么 | 读它时的口径 |
+|---|---|---|
+| `docs/architecture-seams.candidate.json` + `.html` | 架构图（`archify` 出图）：写读 seam 与 14 个读族 seam | **生成于 `v1.12.2`**（`a6c9351`，2026-09-08）—— 里面写的 `core/writer.ts`、`组合根 134 行` 等**已被后续版本证伪**（`core/writer.ts` 现不存在，组合根是 `core/writer/index.ts`）⇒ **当当时证据看，不是现状** |
+| `docs/absorb-verdict.candidate.json` + `.html` | `adr/0087` 的判定图（rtk / langextract 三闸） | 与 `adr/0087` 同代（2026-09-14）；ADR 正文有更新时它**不会**跟着变 |
+
+⚠ **为什么要有这句**：`tools/citation-audit.lib.ts` 的 `currentStateDocs()` **只收**根 `*.md`（除 `CHANGELOG`）、
+`docs/*.md`、未冻结 ADR，加源码 `.ts` 注释 —— 它自己那行注释就写着「**HTML/JSON 不扫**」⇒
+`docs/*.candidate.json` 与 `docs/*.html` **都不在扫描面内**（`.html` 连引用正则的扩展名表
+`md|ts|mts|json|ya?ml|py|sh|ps1` 都不认）⇒ 这两类产物的过期**不会有任何门报警**。
 
 ## 投影模式（DSH agent 预设，生产包构成）
 

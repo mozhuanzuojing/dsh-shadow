@@ -3,82 +3,87 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.22.0] 参考资料面分层：清单 / 内容拆开 · 状态标注由复核产生 · 材料根与排除表收一处
+## [v1.22.1] 写侧降级三态化 · 判据收一处 · 文档与状态面回核
 
 ### 1. 补的是什么洞
 
-四条，都是**实测**出来的（`adr/0111`）：
+主线是 **ADR-0049 / ADR-0085 那一族：失败与成功在读者眼里逐字相同**。
 
-- **清单与内容混装**：`references.md`（1413 行 / 151,550 B）把三种生命周期不同的东西装在一个文件里 ——
-  ① 派生清单（裸 URL 表 / 口径×条数表 / 覆盖率台账 / 版本许可快照，**会腐烂**）· ② 源·核实记录（**只追加**）·
-  ③ 导航口径。`MATERIALS.md`（418 行）同款混装。
-- **两个材料工具的枚举根都写死** `D:\project\dsh1\vendor\_src`，而本机 **`D:` 整盘已不存在**
-  （实测 `Test-Path D:\` = False）⇒ 一运行就是 exit 2；又因为两者**都不在 `verify` 里**，**没有任何门会发现**。
-- **生成器自己手写派生计数**：实跑 4 个目录，尾部仍打印「✔ **24/24** 都有 `.git`」——
-  正是 `AGENTS.md`/`adr/0085` §8.7「能推出来的字段不要手写」被违反在生成器自己身上。
-- 🔴 **状态标注反转**（本轮最值钱的一条）：`MATERIALS.md` §1 那 8 行名册被注成「换盘前 · 根已不存在 ·
-  8 项里 5 项已无本体 · **不可复核**」，而 2026-10-07 实测 **8/8 全在**于根 `G:\project\dsh1` 下、
-  **HEAD 逐项命中**。**把对的判成死的、把死的（§1.1 的 24 行，根已永久消失）标成当前态**，
-  且这个错在 `references.md` §14 被**二次固化**。
+- **写侧「只 `console.log`、返回 `void`」**：`trajectory/` `stance/` `selfhood/` `reflection/` 下一批写侧函数的契约里
+  **没有返回值**，失败只进日志 —— 而 `console.log` **不算** ADR-0049 认可的可见信号 ⇒ 读侧照旧说「已记录」。
+  最严重的一处是 `query/contverify.ts` 的四个写模式：失败渲染成成功，**同段输出里没有任何反证**（定为 P0）。
+- **恒空的假读数**：`stance/planning/types.ts` 的 `PlanningComparison` 此前**全仓零消费者**，渲染器只能 `(c as any)` +
+  「约束文本含 `under` 子串」嗅探，`violatedConstraints` 因此**恒空** ⇒ 每次都打印 `violatedConstraints: —`，
+  读者读成「没有任何约束被违反」（B5）。
+- **旗标落不回 goal**：`core/admission/intent.ts` 的 `FLAG_GOAL` 只有 7 个键，而 `read_shadow` 的 schema 有 19 个 boolean 参数
+  ⇒ 多处旗标静默回落到 `DEFAULT_GOAL`「召回相关记忆」；而 Intent **有落盘副作用**（写进 `ObserverContext`）。
+  同文件 `FLAG_ORDER` 是**手写的第二份清单**，往一处加而漏另一处就永远取不到 goal（A10 / A28）。
+- **同一事实被写在多处**：记忆线索头解析散在 4 个模块（且口径已分叉：一处取原始串、一处取切开后的数组）；
+  降级措辞散在各层；`HOST_BASELINE` 是验证基线的**第 4 份副本**，而 `audit:docs` ⑦ 只守前三处，
+  这处漂移**永远不会有门报警**，偏偏它印在给用户看的降级横幅里（A1）。
+- **`clean` 落在门的盲区**：`npm run clean` 原先是内联 `node -e "…"` —— 既不是文件也不是 TS，
+  却每个 build / 发版都跑，而 `audit:scripts` 只认文件（A26）。
 
 ### 2. 做法与边界
 
 | 项 | 处置 | 边界（写清防顺手扩大） |
 |---|---|---|
-| 归属 | `MATERIALS.md` = **清单面（派生）**；`references.md` = **内容面（源）**；两侧文件头各写归属声明 | 只加声明，**不重写**任何一方的既有记录 |
-| 迁移 | `references.md` 的 `## 完整清单`（21 条输入 URL）与 `### 14. 材料面清单` 迁入 `MATERIALS.md` **§1.2 / §1.3** | 原处**标题原样保留、只留转发占位** ⇒ 老引用（含 `adr/0089` 的 5 处）**一处未改、一处未破** |
-| 不重编号 | **不重排任何 `§N`、不改那 47 处节级引用** | 理由：节级引用**今天没有门**（门⑥ 只认 `文件:行号`）⇒ 无门重排 = 静默腐烂。老锚当**冻结映射表**用 |
-| 口径 | 清单必须带**四件**：集合定义 · 枚举根 · **排除表** · 枚举时刻 | 实测：只给根不给排除 ⇒ 14 行、其中 6 项不是材料 |
-| 状态 | §1 **升当前态**（附 2026-10-07 复核块：8/8 + HEAD 逐项一致 + 复核命令）；§1.1 **降历史快照** | §1.1 的 24 行数字**一字未改**（归档层改写＝伪造历史），原文保留 + 更正注 |
-| 工具 | 新增 `tools/materials-root.lib.ts`；两个材料工具共用根/排除/报文；**删掉写死默认根**（缺件即 exit 2）；计数改实算 | 同族先例：`tools/comparison-points.lib.ts`、`core/util.ts:numOr` |
+| 三态形状 | `persistence/outcomes.ts` 收 `PersistOutcome` / `ReadOutcome<T>` / `DegradeNote` | **零依赖、只有类型**：任一层可引而不再多一条依赖边；只放形状，不放渲染 |
+| 读者可见 | `query/degrade.ts` 收 `unwrittenWarn` / `readCauseWarn` | `ok:true` ⇒ **空串** ⇒ 健康路径输出**逐字节不变** |
+| 判据收一处 | `core/view/clue.ts`（线索头解析，**零 import**，供 `tools/` 在 build 前直引）· `core/host-baseline.ts`（基线从 `package.json` **运行时派生**） | clue.ts 只解析 `> <标签>：<值>` 一类，Reflection 族不进；派生之后**不再给 ⑦ 加比对面**（那会再造一份副本） |
+| 裁决透传 | `query/planning.ts` 真的构造 `PlanningComparison` 交给渲染；空数组 ⇒ 该段**整段省略** | 渲染器只报调用方**真的声明了**的约束，不反过来说「没有违反」 |
+| 旗标门 | 新增 `test/intent-flags.test.ts`：用**真实注册面**取 schema，断言 19 个 boolean 参数都有 goal 映射、顺序表与映射表同源 | 判据是「宿主真正看到的参数面」，不是「源码里有几处 `type:"boolean"`」 |
+| clean | `tools/clean.ts` + `npm run clean` 改指它 | 只搬家不改语义；`force: true` 让「本来就没有」不报错 |
 
-### 3. 改了哪些文件
+### 3. 文档与状态面（本轮同批回核）
+
+评审轴（`../.docs/fix/2026-10-07/review-shadow-spec.md`）登记的「文档 vs 实现」缺陷，逐条落地：
 
 | 处 | 文件 | 改动 |
 |---|---|---|
-| ① | `tools/materials-root.lib.ts` | **新增**：`requireMaterialsRoot` / `isMaterialDir` / `exclusionLine`（唯一一份） |
-| ② | `tools/materials-ledger.ts` | 删写死默认根（改用 lib）· 枚举过排除表 · 口径行加「枚举时刻 + 排除目录」· 尾部「24/24」→ 实算 |
-| ③ | `tools/materials-freshness.ts` | 同款根/排除/口径行（与 ② 共用 lib） |
-| ④ | `MATERIALS.md` | 归属声明 + **清单口径四件**；§1 复核块（8/8 + HEAD）；§1.1 更正注（降历史）；**新增 §1.2 输入清单 · §1.3 集合分栏**；§5 命令与判词更正 |
-| ⑤ | `references.md` | 归属声明；`## 完整清单` 与 `### 14.` 改**转发占位**（标题原样保留） |
-| ⑥ | `adr/0111-reference-materials-list-content-split.md` | **新增 ADR**（分层 · 迁移 · 不重编号 · 口径四件 · 状态判据 · Non-goals） |
-| ⑦ | `adr/0089-materials-deep-comparison.md` | 末尾**补记**（正文一字未改 —— 已接受 ADR 只写补记）；登记本轮推翻的 4 条判词 |
-| ⑧ | `AGENTS.md` | 「材料」一节：枚举根 = 工作区根 + 排除表 + 必填环境变量；「更新之后」改指 `§1` |
-| ⑨ | `BACKLOG.md` | 新增 `T28`（目录化 + 节级引用门，**未做**，附卡点与完成判据） |
+| ① | `README.md` | 安装/粘贴路径写成**不存在的 `D:` 盘** ⇒ 改成 `G:\project\dsh1\dsh-shadow`；「只读工具**不写工作区**」与同页 `queryLog` 行、与 `core/view/projection-store.ts` 的注释相反 ⇒ 限定为「不写 `atoms/` 权威语料」；复杂度门「热点棘轮只降不升」与 `fresh` 分支相反 ⇒ 补「新热点只记账」；「每个文件自己打印 `ALL PASS ✅`」对 3/59 不成立 ⇒ 限定；`SHADOW_EVAL_ROOT` 的本机值同步换根 |
+| ② | `CONTEXT.md` | 遗忘的「默认**关**」与 README 默认开关表、`core/util.ts` 的 `onByDefault` 相反 ⇒ 改「默认开（v1.15.85）」；新增 `影子存储根`、`ADR 条数口径` 两条术语 |
+| ③ | `MATERIALS.md` | §1 的复核块按新枚举时刻重出（本仓 HEAD / 漂移列）；§1.1 的 24 行**一字未改**（归档层） |
+| ④ | `BACKLOG.md` | 头部那组手写计数改成「判据 + 命令，不写数」；新增 `T29`（ADR 交叉引用被「去数」削断的损害面 + 复现命令）；`satisfiedConstraints` 那条按 B5 的实际收口更新 |
+| ⑤ | `LIVE-VERIFY-checklist.md` | 「现 1.21.0」与已废弃的 `vendor/dsh-shadow` 路径 ⇒ 修正；判定/结论两行由「全部 ✅ 真机验证通过」改成**如实的部分完成** |
+| ⑥ | `docs/maintainers.md` | 模块归属表的「28 个 / 140 格子」⇒ 改「以生成器输出为准」；「core 43 个文件 / 4 个零 import」⇒ 改实测与判据；`reference` 44 项 / 13 分类 ⇒ 改实测读法；`:158-160` 那段「2026-09-12 目录已不在本机、无 t15*」与实测相反 ⇒ 更正；登记 7 个 `.shadow/` 存储根、两个未登记工具、新模块与新工具 |
+| ⑦ | `tools/module-ownership.ts` | 删掉 `decision` 层的死 `OWNS` 条目（该层已按 `T26` 整层删除） |
+| ⑧ | `presets/projection.patch.yml` | **只**补文件头注解：基体的上游代与逐字节结论以 README 的验证基线为准 |
+| ⑨ | `adr/0026` | 末尾**补记**（正文一字未改——已接受 ADR 只写补记）：`epistemic/simulation/types/state.ts` 与 `CounterfactualState` 已删 |
 
 ### 4. 验证
 
 | # | 检查项 | 手段 | 结果 |
 |---|---|---|---|
-| 1 | 迁移守恒 | `references.md` 裸 URL 计数 / `MATERIALS.md` 裸 URL 计数 | **0 / 21**（21 条只出现在清单面） |
-| 2 | 标题守恒 | `references.md` 的 `^#{1,3} ` 计数 | **61 → 61**（「保留标题 + 转发占位」实现，老锚不失配） |
-| 3 | 工具面类型门 | `npm run typecheck:tools` | exit 0 |
-| 4 | 无默认根 | `node tools/materials-ledger.ts` / `materials-freshness.ts` | 两条都 **exit 2** 并打印用法 |
-| 5 | 计数实算 | 同上，指向 4 个目录 | 打印「**4/4**」（不再是写死的 24/24） |
-| 6 | 全仓闸门 | `npm run verify` | 由 `npm run release` 的第一步执行（闸门是退出码） |
+| 1 | 文档派生字段门 | `node tools/docs-consistency.ts .` | ①–⑦ 见「当前状态」 |
+| 2 | 引用越界门 | `node tools/citation-audit.ts .` | 0 越界 |
+| 3 | 模块归属表 | `node tools/module-ownership.ts` | 由生成器打印，文档不再手写 |
+| 4 | 材料名册 | `node tools/materials-ledger.ts G:\project\dsh1` | 8 份材料 / 本仓 HEAD 见该次枚举 |
+| 5 | 全仓闸门 | `npm run verify` | 由 `npm run release` 的第一步执行（闸门是退出码） |
 
 ### 5. 诚实标注
 
-- **本版自查（用户 review 轮）修掉 5 处「自己引入 / 漏改」的缺陷** —— 且其中 4 处**正是本版要治的病**：
-  ① `MATERIALS.md` 把排除表指到 `materials-ledger.ts`（其实已搬进 `materials-root.lib.ts`）；
-  ② 同一处手写「排除表打印在**输出第 3 行**」（实测第 4 行）；
-  ③ `materials-freshness.ts` 文件头仍称枚举根 = `vendor/_src`；
-  ④ `AGENTS.md` 四处手写「**24 个仓** / ~25s」（根换成工作区根后实为 **8** 份材料）；
-  ⑤ `references.md` 的 ECC「本机状态」落点已过期 + `materials-freshness` 示例命令缺必填 env。
-  ⇒ 逐条处置与同类扫面见 `../.docs/fix/2026-10-07/` 的应用记录 §2。**判据**：这类「派生字段手写 / 死指针」
-  在本版的**首个**版本里就复发了 —— 与 `adr/0085` §8.7 同型。
-- **只做了一半**：`references.md` 仍是 **1390 行 / 150,810 B**（2026-10-07 实测）的内容面单文件；
-  **目录化**（`references/<id>.md`）与**节级引用门**刻意未做 —— 两者的前置关系与判据写进 `BACKLOG` `T28`。
-- **§1.1 的 24 行仍是不可复核的表**（根 `D:\…\_src` 永久不存在）—— 按「可追溯性优先于清理」**刻意保留**。
-- **§1 的「身份」列不可机械推**，仍由人核；生成器只给机械面（HEAD / 漂移 / 许可 / 规模）。
-- **`adr/0089` 的 §1-2 未逐项重核**：本轮只验了「`hl_mem` 本体在不在」这一条（**在**），
-  其 §2 C/D 的其余判定未重跑。
-- 本版**未联网**：`materials-freshness` 的实查（`git ls-remote`）**未跑**，故「落后到哪个 sha」本轮无读数。
+- **本版**把「文档能对上代码」当**一次核对**，不是**一次保证**：`audit:docs` 的 ①–⑦ 都是必要条件，
+  它答「有没有 / 一致不一致」，答不了「顺序与描述对不对」。
+- **ADR 交叉引用被削断这件事未修**：`adr/0087` 等文件里的 `ADR- / 0051` 这类残片来自 `v1.21.13` 的 D12「全量删数」，
+  而本仓口径是「**冻结 ADR 不改正文、只写补记**」⇒ 恢复编号会与 D12 的既有决定冲突，**需用户裁决**；
+  本轮只在 `BACKLOG` `T29` 登记损害面与复现命令（见该条「需用户裁决」）。
+- **`adr/` 无索引**：文件数与最高编号**不是同一件事**（有断号、有 `-1` 变体）⇒ 口径已写进 `CONTEXT.md`
+  「ADR 条数口径」，但**没有**建索引文件（新增产物须另立决定）。
+- **生成物未回核**：`docs/architecture-seams.*`（`v1.12.2` 的当时证据）与 `docs/absorb-verdict.*` 内容已旧，
+  本轮**不改产物**，只在 `docs/maintainers.md` 注明「勿当现状读」——`citation-audit` 的引用正则扫不到 `.html` / `.candidate.json`
+  （`AGENTS.md` 已记该边界），故它们的过期**不会有任何门报警**。
+- **两处失配的行号引用在源码/测试面，不在本轮写面**：`core/util.ts` 与 `test/t8-explicit-zero.test.ts` 把
+  「`abstracts.showInIndex` 默认 3」的出处写成 `core/types.ts:55`（实为 `indexSchema` 那行）、把 `episodeShow` 的落点写成
+  `materialize.ts:212`（实为 `core/writer/core.ts`）——`citation-audit` 只判**越界**，这两处没越界却指错，需改源码注释与测试（未做）。
+- **`satisfiedConstraints` 仍有两处算法**：B5 只收掉了渲染器的子串嗅探与恒空假读数；
+  `stance/agency/engine.ts` 仍从 `args.candidates` 上按 `satisfied >= violated` 自行挑候选，与 planning 面不同源（`BACKLOG` 已更新）。
+- **未跑 `npm run verify` 全链**：本轮只跑上述只读门；全链由 `npm run release` 的闸门跑。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；
 治理 = ADR 登记册 · 棘轮 · 引用门 · 文档一致性门 · 分层方向门 · 复杂度预算门 · 脚本语言门；唯一验证入口 `npm run verify`；
 **发版唯一入口 `npm run release`（闸门在第一步）**；评测口径 = dev 切片（默认）/ 留出切片（报告，`--holdout-only`）。
-- **下一批**：`T28`（参考资料目录化 + 节级引用门）；`recall_shadow` 是否纳入纪要/材料卡（**待你拍板**）；`T17-C` 默认值前置条件 ①。
-- **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料** · **重启桌面客户端**（重启后 `read_shadow` 等工具才出现、
-  记忆采集才从 2026-09-29 17:51 恢复，纪要/材料卡也才会开始长）。
+- **下一批**：`T29`（ADR 引用残片，**需用户裁决**）；`T28`（参考资料目录化 + 节级引用门）；
+  `adr/` 索引（新增产物须另立决定）；`docs/architecture-seams.*` 的重生成或退役决定。
+- **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料** · **推 `main` 与 tag**（本版提交后需推送 —— 上个版本的提交与 tag 都没推）。

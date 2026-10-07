@@ -159,7 +159,7 @@ export async function runTopicRecall(
   const kgBlock = args?.kg ? await kgTrace(fs, ws, memories, topic) : "";
   const lossNote = onByDefault(recallCfg.lossDisclosure) ? tierLossNote({ withheld, returned: parts.length }) : "";
   const out = scrubFinal(RECALL_PREFIX + soulBanner + (kgBlock ? kgBlock + "\n\n" : "") + (debugMode ? diag.join("\n") + "\n\n" : "") + parts.join("\n\n") + lossNote + envelope + flushWarn);
-  await recordObservationTrace(fs, ws, {
+  const traceOutcome = await recordObservationTrace(fs, ws, {
     observerId: obsCtx.observerId,
     createdAt: today(),
     realityAnchor: obsCtx.realityAnchor,
@@ -169,5 +169,10 @@ export async function runTopicRecall(
     metadata: { source: "read_shadow" },
     state: obsCtx.state,
   });
+  // B2：轨迹写失败**不再静默**（旧版 `Promise<void>` + `catch { console.log }`）。留痕是持久的，
+  // 故横幅在**下一次**读出现（与 `queryLog` 同一条已知且可接受的时延，见 `query/reads.ts` 的说明）。
+  if (!traceOutcome.ok) {
+    deps.noteDegrade?.("observationTrace", `观测轨迹未落盘（${traceOutcome.reason}）`, "Reflection/Identity 的输入样本**丢了一条**：`mode:\"reflection\"` 的「≥3 次 decision→outcome」门槛可能因此触发不了，而输出看起来与「真的不够」一样");
+  }
   return out;
 }

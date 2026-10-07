@@ -115,8 +115,6 @@ export const invalidateProjection = async (fs: any, ws: string): Promise<void> =
 /** 源指纹落盘位置（与缓存同目录，同属可重建派生）。 */
 export const fingerprintRel = () => indexesRel("shadow-index", "sources.fingerprint");
 
-/** @deprecated ADR-0106：日期树已废；保留符号以免外部误引用编译失败，恒不匹配。 */
-export const DATE_DIR_NAME = /^\d{4}-\d{2}-\d{2}$/;
 /** 资源卡目录名（`.shadow/resources/`）。 */
 export const RESOURCES_DIR_NAME = "resources";
 /** 投影空间 Atom 目录名（`.shadow/atoms/`，ADR-0106）。 */

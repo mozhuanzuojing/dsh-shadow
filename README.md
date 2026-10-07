@@ -59,8 +59,8 @@
 把下面这段丢给任意能读写本地文件的编码 agent（Claude Code / Codex / 本机 DSH 会话等）：
 
 ```text
-把 D:/project/dsh1/vendor/dsh-shadow 以 link: 方式装进 DSH web profile：
-1) profile 的 package.json 加依赖 "dsh-shadow": "link:D:/project/dsh1/vendor/dsh-shadow"，bundles 数组加 "dsh-shadow"；
+把 G:\project\dsh1\dsh-shadow 以 link: 方式装进 DSH web profile：
+1) profile 的 package.json 加依赖 "dsh-shadow": "link:G:/project/dsh1/dsh-shadow"，bundles 数组加 "dsh-shadow"；
 2) 在本目录跑 pnpm install（会触发 prepare→build；改过源码再 pnpm run build）；
 3) 重启 profile，跑 dsh --profile web --dump-config 确认没有 Error:；
 4) 新开一个会话做几次工具调用，确认工作区出现 .shadow/atoms/<date>--<时刻>-<主题>.md、.shadow/indexes/_index.md 生成、read_shadow 出现在工具列表；
@@ -84,13 +84,13 @@ npm run verify
 + npm run audit:layers         结构门（v1.15.41：文件级无环 / 纯模块白名单零副作用 / 方向禁令）
 + npm run audit:scripts        脚本扩展名门（v1.15.87：仓内不得有**手写** `.js` / `.mjs` / `.cjs`；`.ts` 与 `.py` / `.ps1` 等允许）
 + npm run audit:docs           文档派生字段门（v1.15.66：①三方版本一致 ②`verify` 每一步都被**本块**与 `AGENTS.md` 点名 …… ⑦三处「验证基线」= `engines.dsh`，v1.20.2 补）
-+ npm run audit:complexity     复杂度预算门（v1.21.29：**硬上限 800 行** + **热点棘轮只降不升**；判**产品面**，不扫 `test/` 与 `tools/`，见 `adr/0109`）
++ npm run audit:complexity     复杂度预算门（v1.21.29：**硬上限 800 行**；**已记录的热点只降不升** —— 首次跨过阈值的新热点**只记账、不判违规**（否则每加一个大文件就红）；判**产品面**，不扫 `test/` 与 `tools/`，见 `adr/0109`）
 + npm run audit:granularity    记录粒度门（v1.19.0 `adr/0097`：**起点之后**不得再有「纯动作回声」落成记忆文件）
 +                               ⚠ 边界：**起点（2026-09-21）之前的归档豁免**（`adr/0049` 不改写历史）⇒ 它回答的是
 +                                 「起点之后有没有新的纯动作记忆文件」，不是「全仓都不是」；同样要 `.shadow` 语料根（兜底同上）
 + npm run eval:retrieval:check 评测门完整性（v1.15.42：协议自检 / 基线只含聚合面 / 同源 / 读数齐备）
 +                               ⚠ **语料根**：它要一个带 `.shadow` 的**工作区根** —— 默认由本工具位置**往上找**（最多三级，取第一个存在的）；
-+                                 一个都没有 ⇒ **exit 2，后面 3 步（棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。兜底：`SHADOW_EVAL_ROOT=<工作区>`（本机 = `D:\project\dsh1`）
++                                 一个都没有 ⇒ **exit 2，后面 3 步（棘轮 / 插件面类型门 / 全部测试）不会跑** ⇒ 那一次「全绿」是**假绿**。兜底：`SHADOW_EVAL_ROOT=<工作区>`（本机 = `G:\project\dsh1`）
 + npm run audit:ratchet        分诊棘轮（v1.15.45：线索数只能降不能升；桶消失或新桶即红）
 + npx tsc --noEmit             插件面类型门
 + npm run test:all             = npm run build && node tools/run-tests.ts
@@ -130,7 +130,7 @@ npm run verify
 要真正启用回归门，把一份语料快照放到别处并 `SHADOW_EVAL_ROOT=<冻结工作区>` 再 `--update-baseline` / `--compare`
 （**是否物化这份副本是使用者的取舍**，本仓不替你复制真实记忆）。
 
-> 单个测试仍可直跑：`node test/<名字>.test.ts`（每个文件自己打印 `ALL PASS ✅`）。
+> 单个测试仍可直跑：`node test/<名字>.test.ts`（**多数**文件末行打印 `ALL PASS ✅`；`capture-granularity` / `granularity-e2e` / `preset-projection` 三个打印的是同义的 `✔ … 全部通过` ⇒ 成功信号格式**不统一**，别按某个字面量 grep 判「全绿」）。
 > 两个审计工具另有单独入口：`npm run audit:wiring` / `npm run audit:drift`（**人工分诊**用，不是门禁）。
 
 ### 让它主动用起来
@@ -139,7 +139,7 @@ npm run verify
 
 ## 默认开关（装完什么都不动会怎样）
 
-**只读工具不写工作区；默认值以本表为唯一台账。**两条方向的读法（**v1.15.85「默认全开」**起，「默认」列逐项对源码默认值）：**「默认开」= 关掉才是显式动作** —— 判据只有一处，`core/util.ts` 的 `onByDefault`（`undefined` = 开，**只有显式 `false`** 才关；`retention` / `forget` / `compact` 三件套共用它，见 `adr/0088`）；**「默认关」= 打开才是显式动作**，且按下面的权限轴**仅用户显式要求**（那一族多为需要外部 LLM / CLI 的增强）。`summary` / `queryLog` / `episodes` 都能一行关掉（`episodes.showInIndex: 0`，**v1.15.64 修好了**：此前被 `|| 8` 吞掉 ⇒ 那个开关**不存在**，见注①），采集本身**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
+**只读工具不写 `atoms/` 权威语料；派生件与旁路记录是例外**（读路径会写 `indexes/_index.md`、`_meta.json` 的 hits、`.shadow/query-log/` —— 见下表 `queryLog` 行）；**默认值以本表为唯一台账。**两条方向的读法（**v1.15.85「默认全开」**起，「默认」列逐项对源码默认值）：**「默认开」= 关掉才是显式动作** —— 判据只有一处，`core/util.ts` 的 `onByDefault`（`undefined` = 开，**只有显式 `false`** 才关；`retention` / `forget` / `compact` 三件套共用它，见 `adr/0088`）；**「默认关」= 打开才是显式动作**，且按下面的权限轴**仅用户显式要求**（那一族多为需要外部 LLM / CLI 的增强）。`summary` / `queryLog` / `episodes` 都能一行关掉（`episodes.showInIndex: 0`，**v1.15.64 修好了**：此前被 `|| 8` 吞掉 ⇒ 那个开关**不存在**，见注①），采集本身**没有**总开关（只有语义不同的 `writeConsent`，见注 ②）。
 
 契约台账 / 模块 Owns / Observatory 等 → [`docs/maintainers.md`](./docs/maintainers.md)。
 
@@ -256,12 +256,12 @@ npm run verify
 
 ```sh
 # 1. 在 profile package.json 增加依赖 + bundles 条目
-#    "dsh-shadow": "link:D:/project/dsh1/vendor/dsh-shadow"
+#    "dsh-shadow": "link:G:/project/dsh1/dsh-shadow"
 #    bundles 数组加 "dsh-shadow"
 # 2. 安装并重启 profile（重启后加载 bundle patch 注入插件行）
 ```
 
-在 `D:/project/dsh1/vendor/dsh-shadow` 目录内：
+在 `G:\project\dsh1\dsh-shadow` 目录内（`package.json` 的 `link:` 里写正斜杠 `G:/project/dsh1/dsh-shadow`，JSON 不必转义）：
 
 ```sh
 pnpm install
@@ -291,6 +291,4 @@ dsh --profile web --dump-config   # 确认无 Error:
 > **尚未完成的事项（阻塞项 / 待分诊 / 待决策 / 未验证 / 已知空白）见 [BACKLOG.md](./BACKLOG.md)** ——
 > 那是待办的唯一台账，每条带「依据 / 为什么没做 / 完成判据」，与 CHANGELOG 的「已做」互补。
 
-**当前版本：`v1.22.0`**（**参考资料面分层**：把「谁有哪些材料」与「每份材料核到什么程度」分到两个文件，
-并用一次实测把「哪一份才算当前态」纠正过来 —— 原先被判成死数据的 8 项名册其实**全部在、HEAD 全对**，
-而被标成当前态的那份 24 行表的枚举盘**已不存在**；顺带把两个材料工具的写死根与手写计数改成一份共用判据 + 实算）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。
+**当前版本：`v1.22.1`**（**静默降级这一族收口**：写侧失败改成显式三态 `{ ok, reason }`，并由读侧横幅或**同一段输出**如实披露 —— 此前约 22 处「只 `console.log`、返回 `void`」，读者读到成功文案而磁盘上什么都没有；另把「线索头解析」「降级措辞」「验证基线」各自收成一份实现（`core/view/clue.ts` / `query/degrade.ts` / `core/host-baseline.ts`），`clean` 脚本改回 `.ts`，并回核了文档与状态面）—— **完整变更历史见 [`CHANGELOG.md`](./CHANGELOG.md)**（历史只写一处：本文件不再保留版本历史表）。

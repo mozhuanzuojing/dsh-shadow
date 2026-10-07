@@ -135,21 +135,75 @@ export const writeMeta = async (fs: any, ws: string, meta: any): Promise<MetaWri
  * `mutate` 返回 `false` 表示「无需写入」（例如没有任何变化），事务直接结束。
  * 重试上限 3 次：拿不到独占就放弃这一次的更新（宁可少记一次命中，也不覆盖别人的写入）。
  */
-export const mutateMeta = async (fs: any, ws: string, mutate: (meta: any) => boolean | void, attempts = 3): Promise<boolean> => {
-  if (!fs || !ws) return false;
+/**
+ * 一次「事务式修改」的**四种**结果（B24，v1.22.x）。
+ *
+ * 旧契约是 `boolean`，而它有**三种**含义被挤进两个值里：`true` = 「落盘成功」**或**「无需写入」，
+ * `false` = 「写失败」**或**「并发没抢到」。调用方无法区分「并发没抢到（可以下次再记）」
+ * 与「写失败（要人管）」—— 而本文件 `:101-107` 已经为 `writeMetaGuarded` 记过一次同样的教训
+ *（「布尔量根本装不下三种含义，故改成三态」）。这里把同一条判据走完：
+ *   · `"ok"` 落盘成功；`"noop"` 调用方判定无需写入；`"failed"` **没写成功**（含坏件不写回）；
+ *   · `"contended"` 重试 `attempts` 次都被别的写入者抢走（**不是**写失败，但这次更新确实没发生）。
+ */
+export type MetaMutateOutcome = "ok" | "noop" | "failed" | "contended";
+
+export const mutateMetaVersioned = async (fs: any, ws: string, mutate: (meta: any) => boolean | void, attempts = 3): Promise<MetaMutateOutcome> => {
+  if (!fs || !ws) return "failed";
   for (let i = 0; i < attempts; i++) {
     const { meta, version, corrupt } = await readMetaVersioned(fs, ws);
     // **坏件不写回**：拿一份「解析失败后的空快照」覆盖磁盘 = 把全工作区元数据清零（见 readMetaVersioned）。
     // 这次更新直接放弃（宁可少记一次命中，也不毁掉别人的 pin/archived/hits）。
-    if (corrupt) return false;
+    if (corrupt) return "failed";
     const keep = mutate(meta);
-    if (keep === false) return true; // 调用方判定无需写入
+    if (keep === false) return "noop"; // 调用方判定无需写入
     const outcome = await writeMetaGuarded(fs, ws, meta, version);
-    if (outcome === "ok") return true;
-    // **写失败**（磁盘满 / EACCES / 后端报错）：重试也不会成功，且**绝不能报成功** ⇒ 立刻返回 false。
-    if (outcome === "failed") return false;
+    if (outcome === "ok") return "ok";
+    // **写失败**（磁盘满 / EACCES / 后端报错）：重试也不会成功，且**绝不能报成功** ⇒ 立刻返回。
+    if (outcome === "failed") return "failed";
     // 版本冲突：说明期间有别的写入者。重读快照再试（而不是把我们的旧快照盖上去）。
   }
-  console.log("[dsh-shadow] meta mutate gave up after", attempts, "attempts (concurrent writers)");
-  return false;
+  // 抢不到独占：**这不是「写失败」**（磁盘是好的），但也**不是成功**（这次更新没发生）。
+  // 旧版在这里 `console.log` + `return false`，把两件事混成一个 false（ADR-0085：`console.log` 不算信号）。
+  return "contended";
 };
+
+/** `mutateMeta` 的「不算成功」集合（判据收一处；用 `Set` 而非多个 `===`，免得同一件事写两遍）。 */
+const MUTATE_NOT_OK: ReadonlySet<MetaMutateOutcome> = new Set<MetaMutateOutcome>(["failed", "contended"]);
+
+/**
+ * 兼容视图：`true` = 落盘成功**或**无需写入（与旧版逐字同义），`false` = 没落盘
+ *（写失败 / 坏件 / 抢不到独占）。
+ *
+ * **要区分后两种就调 `mutateMetaVersioned`** —— 保留本函数是为了不改既有调用点的判定语义。
+ * B24 收口后仍用它的是 `core/retention/served-hits.ts` 的 `recordServedHits`（那里 boolean 够用：
+ * 没有任何可执行的分叉，见该函数上方的三条理由）；`core/retention/memory.ts` 的 `registerMeta`
+ * 与 `core/writer/compact.ts` 的收口标记**已改调四态版**（它们各自需要区分「并发没抢到」与「写失败」）。
+ */
+export const mutateMeta = async (fs: any, ws: string, mutate: (meta: any) => boolean | void, attempts = 3): Promise<boolean> =>
+  !MUTATE_NOT_OK.has(await mutateMetaVersioned(fs, ws, mutate, attempts));
+
+/**
+ * `MetaMutateOutcome` 四态 → **「要不要让读者看见、看见时说什么」**（B24 的**唯一一处**判断）。
+ * `undefined` = 正常（`ok` / `noop`），调用方不该产生任何信号。
+ *
+ * ## 为什么要有这个函数，而不是让消费点各写一遍 `outcome === "failed"`
+ * 1. **判据收一处**：同一件事（哪种结局要人管）在两个模块各写一次就是漂移的种子 ——
+ *    `audit:drift` 的 B 段正是抓「同一个 `字段=字面量` 出现在多个模块」，而它的棘轮**只许降**。
+ *    （实测：把字面量比较直接写进 `core/writer/compact.ts` 时，drift 棘轮当场 23 → 28。）
+ * 2. **措辞也要收一处**：`why` 是写进**给读者看的横幅**的原因串，两处各写一句就会漂移。
+ * 3. **它属于这个类型**：`needsHuman` 是四态**自身**的性质（哪种结局要人管），不是某个消费点的偏好
+ *    ⇒ 与 `MetaMutateOutcome` 同处；新增消费点不会各自发明一套判断。
+ *
+ * ## 两个消费点的用法**不同**（刻意的：本函数只给「事实 + 原因」，不替调用方决定要不要上报）
+ * · `core/retention/memory.ts` 的 `registerMeta`：只有 `needsHuman` 才上报（设 `core.lastMetaError`）
+ *   —— `contended` 会自愈（`meta[rel]` 仍不存在 ⇒ 下一条记忆的 flush 会重新登记），
+ *   报它就是给读者挂假的能力降级横幅；
+ * · `core/writer/compact.ts` 的收口标记：**两种都要上横幅**（`compacted` 丢了会让已归档原子
+ *   重回活跃集，哪怕只是时间性的也必须让读者知道缺了这一步），只是 `why` 分开写清。
+ */
+export const metaOutcomeNotice = (o: MetaMutateOutcome): { why: string; needsHuman: boolean } | undefined =>
+  o === "contended"
+    ? { why: "并发未抢到（重试 3 次都被别的写入者抢走）", needsHuman: false }
+    : o === "failed"
+      ? { why: "写失败（磁盘满 / 只读挂载 / `_meta.json` 坏件）", needsHuman: true }
+      : undefined;

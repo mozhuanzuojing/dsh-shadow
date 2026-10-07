@@ -42,7 +42,7 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | Confirmation（v1.1.1） | 纯确认（好/可以/行/ok/嗯），**不是 Decision**——`classifyUser` 单独归类，避免"好/可以"误判为拍板 |
 | DecisionClass（v1.1.2） | 明确决策细分为三类：`selection`（选择/删除/保留/采用 X）、`scope`（范围/聚焦，如"资产同步"）、`anchor`（锚点/定位，如"…这是 openapi 的 U8 工作区"）——真实用户"关键决策"常为短促的范围/锚点声明，旧判定（只认选择动词）会漏 |
 | Memory Atom | 最小不可变事件投影（即每条记忆文件，200–1000 bytes）；Episode/Decision 在其上派生，不改写它 |
-| 遗忘（v1.2.0） | 把低价值/旧/已归档记忆**移出「活跃」扫描集**（索引+召回），文件保留（**Forget≠Delete**，ADR-0031）。`forget:{enabled,staleDays,minHits,maxActive}`；默认关。目的是封顶热集大小（性能），不破坏可追溯性 |
+| 遗忘（v1.2.0） | 把低价值/旧/已归档记忆**移出「活跃」扫描集**（索引+召回），文件保留（**Forget≠Delete**，ADR-0031）。`forget:{enabled,staleDays,minHits,maxActive}`；**默认开**（v1.15.85「默认全开」；判据只有一处 —— `core/util.ts` 的 `onByDefault`：`undefined` 即开，**只有显式 `false`** 才关；默认值以 `README.md` 的「默认开关」表为**唯一台账**）。目的是封顶热集大小（性能），不破坏可追溯性 |
 | 增量索引（v1.2.0） | 进程内 `indexCache` 缓存已 parse 的记忆（entry/topics/parsed），冷启动读一次、之后 flush 只增量增补并**由缓存生成 `_index.md`**，避免每回合全量顺序重读所有文件（性能热路径根因） |
 | 收口归档（v1.2.2，compact） | 对齐参考"会话级聚合+只留摘要+原始归档"：一个 episode 结束时把其 turn 原子**合并成 1 个 consolidated 文件**（保留决策/动作/材料/结果），个体原子 mark `compacted` 并移出活跃热集（文件保留可回放，Forget≠Delete）。活跃树"每 turn 一文件"→"每 episode 一 consolidated 文件"，热集文件数大降。**Episode=投影非事实；Replay 必须活过收口**（ADR-0038） |
 | Task（v1.3.0，ADR-0039 实现） | **任务生命周期一等视图**（`mode:"task"` 派生）：`{title, trigger, objective, constraints[], status:active|completed|abandoned, 决策链, 观测结果, 证据}`；objective ≠ identity。解决"为什么任务开始/什么条件算完成/哪些决策改变方向/哪些结果影响后续"。**Task 是读侧派生的投影，非写侧事实源**（ADR-0038/0039） |
@@ -83,6 +83,8 @@ dsh-shadow 存在的意义：**为每个已完成的任务记录「完整线索�
 | `browser-use`（既有指称 = **外部项目**） | **外部第三方**：组织 `browser-use/browser-use` 及其 CDP harness `browser-harness`（MIT）。本仓只**登记为材料**、**不引依赖**（`references.md`；ADR-0089「本仓不操作浏览器」）。**不是** DSH 能力。单说 `browser-use` 一律指这一行；其中 `browser-harness` 本体自 **2026-09-25** 起降级为「**已被宿主原生面取代**」的**历史登记**（保留不删，见 `MATERIALS.md` §2.10） |
 | dsh 原生 browser-use | **DSH 第一方能力**：seam 包 `@deepseek-ai/dsh-browser-use`（**独占命名** provider 注册，同一作用域只能挂一个）+ 一个浏览器 provider（chrome-devtools-mcp / playwright-mcp / stagehand-native，**择一**）。与上一行**同名不同物** —— 这个指宿主提供的浏览器工具，不指外部项目；指它时**必须**带「dsh 原生」限定 |
 | dsh 原生 computer-use | **DSH 第一方能力**：seam 包 `@deepseek-ai/dsh-computer-use`（同样**独占**注册）+ 一个桌面 provider（`cua-driver-native` 内嵌 Cua Driver SDK / `cua-driver-mcp` 连外部可执行，**择一**）。与 `dsh 原生 browser-use` 对仗；两者都是**宿主能力**，与 dsh-shadow 的记忆/投影面**并列**，**不是**其从属 |
+| 模式存储根（v1.22.1 补记） | `.shadow/` 根下**由某个 `mode:` 落盘、且是该 mode 的唯一副本**的存储目录族（**不在 `indexes/` 下**；例：`action/` · `model/`（`observations/` `claims/`）· `verification/` · `hypothesis/` · `future-evidence/` · `reality/` · `validation/` · `observation/` · `world/` · `temporal/` · `dream/` · `identity/` · `reflection/` · `agency/` · `delegation/` · `adapt/` · `horizon/` · `recall/` · `recall-index/` · `lineage/` · `observer/`；写出方散在 `epistemic/*/persistence*.ts` · `stance/*/persistence*` · `trajectory/*/persistence*` · `selfhood/*/persistence*`）。**口径**：它们**不是**「投影空间」的语料轴（那是 `atoms/` / `roles/` / `affaires/`），也**不在** `derived-file-v1` 的派生件清单里 ⇒ 目前**当 source 事实对待**（删/重建前必须先论证「能不能从 `atoms/` 重建」—— **该论证尚未做，是开放项**）。同根的 `audit/` · `query-log/` · `shadow-report.md` 是**系统派生记录**（可删）。**四类分层与枚举命令见 `docs/maintainers.md`「落盘面」节 —— 个数不手写** |
+| ADR 条数口径（v1.22.1 补记） | 「有几条 ADR」**不是**一个数：`adr/` 是 `NNNN-slug.md` 平铺目录，**有断号**（`0079` 缺）**有 `-1` 变体**（形如 `0017-1-*` 的「实现边界」子 ADR，如 `ADR-0017.1`，与主 ADR `0017` 并存）⇒ 报数必须写清是哪一种：**文件数**（`Get-ChildItem adr -Filter *.md`）· **去重编号数**（文件名前四位去重）· **最高编号**。三者本机实测分别是 **122 / 110 / 0111**。本仓**没有** `adr/README` 索引文件（新增产物须另立决定）⇒ 权威清单就是目录本身 |
 
 ## mode 参考（`read_shadow` 的 mode 串）
 

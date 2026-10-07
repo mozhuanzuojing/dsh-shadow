@@ -200,26 +200,31 @@ const fireTurn = async (listeners: Map<string, Function>, turn = 1) => {
   }
 }
 
-// ── ⑥ HOST_BASELINE 与 package.json engines.dsh 防漂移（v1.15.12）──
-// 此前两处是**双源**：`index.ts` 的 HOST_BASELINE 常量与 `package.json` 的 `engines.dsh`。
-// 双源的风险是漂移（改了包版本忘了改常量，或反之），报给用户的版本号就会说谎。
-// 这里用棘轮锁住一致性——与仓库既有的「mode 棘轮」「winget 棘轮」同一手法。
+// ── ⑥ HOST_BASELINE **由 package.json 派生**（A1；v1.15.12 立的双源棘轮在 v1.22.1 改形）──
+// 此前这里锁的是「`index.ts` 的常量 == `engines.dsh`」——那是**双源**之间的比对面。
+// A1 把双源消掉了：`index.ts` 不再手写版本，改由 `core/host-baseline.ts` 运行时从 `package.json` 读。
+// ⇒ 棘轮要锁的不变量随之变成两条（**比对面本身不该成为第三份副本**，故不再断言某个字面量）：
+//   ① `index.ts` 里**不得**再出现手写的 `HOST_BASELINE = "<版本>"`（防有人把派生改回常量）；
+//   ② 真正会印进降级横幅的那个值 == `engines.dsh` 的版本部分（含**源码/产物两种布局都能读到**，
+//      见 `core/host-baseline.ts` 的向上查找：起初写死 `../package.json` 时产物侧读到的是 `dist/` ⇒ 印成 `unknown`）。
 {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const enginesDsh = String(pkg?.engines?.dsh ?? "");
   assert.ok(enginesDsh, "package.json 应有 engines.dsh");
   const src = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
-  const m = src.match(/const HOST_BASELINE = "([^"]+)"/);
-  assert.ok(m, "index.ts 应有 HOST_BASELINE 常量");
-  const baseline = m[1];
-  // engines.dsh 形如 ">=0.1.5-rc.1"，取其版本部分与常量比对
+  assert.ok(
+    !/const HOST_BASELINE = "\d/.test(src),
+    "index.ts 不得再手写 HOST_BASELINE 版本号（应由 package.json 派生；否则又变成双源）",
+  );
+  const { HOST_BASELINE } = await import("../dist/core/host-baseline.js");
   const versionPart = enginesDsh.replace(/^[^\d]*/, "");
   assert.equal(
-    baseline,
+    HOST_BASELINE,
     versionPart,
-    `HOST_BASELINE（${baseline}）必须与 package.json engines.dsh（${enginesDsh} → ${versionPart}）一致：两处是双源，漂移就会把版本号报错`,
+    `派生的 HOST_BASELINE（${HOST_BASELINE}）必须等于 package.json engines.dsh（${enginesDsh} → ${versionPart}）：`
+      + "它会被印进降级横幅，读错就是把版本号报错",
   );
-  console.log(`✔ ⑥ HOST_BASELINE = ${baseline} 与 package.json engines.dsh = ${enginesDsh} 一致（双源防漂移棘轮）`);
+  console.log(`✔ ⑥ HOST_BASELINE = ${HOST_BASELINE} 由 package.json engines.dsh（${enginesDsh}）派生，且源码无第二份`);
 }
 
 console.log("ALL PASS ✅");

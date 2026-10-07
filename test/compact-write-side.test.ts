@@ -7,6 +7,8 @@
 //
 // 本用例**从不调用 `read_shadow`**：只 `push` + `onTurnStopping`（一次普通写入），断言收口照样发生。
 // 同时锁住边界：**索引（`_index.md`）仍是懒构建** —— 本版只搬触发点，没把索引也改成写侧。
+//
+// 第二个场景（负对照，B24）：**收口标记（`compacted`）写失败必须可见** —— 见文件末尾。
 import assert from "node:assert/strict";
 import { createShadowCollector } from "../dist/core/writer/index.js";
 
@@ -88,4 +90,60 @@ assert.ok(!files.has("D:/ws/.shadow/indexes/_index.md"),
   "索引仍应是懒构建：只写不读时不得出现 _index.md（否则说明顺手把索引也搬到了写侧）");
 
 console.log("✔ 场景 Compact-Write-Side：只写不读也收口（关闭 episode → consolidated + 原子标 compacted），索引仍懒构建");
+
+// ── 负对照（B24 消费面）：**收口标记写失败必须可见**（ADR-0049 / ADR-0085）────────────────────
+// `marks` = 已收口原子的 `status = "compacted"`；它是「把已归档条目移出**活跃索引/召回**热集」的
+// 唯一依据（ADR-0068）——丢了会让**已归档原子重回活跃集**，读者看到的内容因此改变，不是遥测量。
+// 旧版 `await mutateMeta(...)` 把「并发没抢到」与「写失败」一起吞进没人看的 `false`
+// ⇒ 一次竞争或一次磁盘故障就能**静默**改变召回面。本组只拦 `_meta.json` 的写（收口文件与纪要仍落盘），
+// 断言横幅**逐条说清原因与后果**；健康路径零横幅由上面第 56 行那条正对照锁住。
+{
+  const m2 = new Map<string, string>();
+  const fs2 = {
+    resolve: async (p: string) => p,
+    writeText: async (p: string, text: string) => {
+      if (p.endsWith("_meta.json")) throw new Error("readonly");   // 只拦 meta ⇒ 其余写路径照常
+      m2.set(p, text);
+    },
+    readText: async (p: string) => m2.get(p) || "",
+    listDir: async (dir: string) => [...m2.keys()]
+      .filter((k) => k.startsWith(`${dir}/`))
+      .map((k) => ({ name: k.slice(dir.length + 1) }))
+      .filter((e) => !e.name.includes("/")),
+  };
+  const seed2 = (name: string, entry: string, decision: string, path: string) =>
+    m2.set(`D:/ws2/.shadow/atoms/${name}`,
+      `# ${entry}\n\n> 完整线索\n> 坐标：locus(ws2) · when(2026-09-07 09:00:00) · soul(default) · role(default) · intent(test)\n` +
+      `> 背景/材料：${path}\n> 决策：〔user〕${decision}\n> 概况：1 动作 · 1 用户消息 · 1 决策\n` +
+      `> 项目：ws2\n> Agent：T8\n\n- [09:00:00] [${entry}] 改/读 ${path}\n`);
+  seed2("2026-09-07--090000-pkg-a.md", "pkg-a", "采用 bundle 模式", "pkg-a/x.js");
+  seed2("2026-09-07--090100-pkg-a.md", "pkg-a", "拆分模块", "pkg-a/x2.js");
+  seed2("2026-09-07--120000-pkg-b.md", "pkg-b", "收尾 pkg-b", "pkg-b/y.js");
+
+  const c2 = createShadowCollector({
+    context: { get: (k: string) => (k === "fs" ? fs2 : undefined) },
+    config: {
+      summary: { enabled: false }, writeConsent: false,
+      forget: { enabled: false },                 // 同上面那条：隔离遗忘策略，只测收口
+      compact: { enabled: true, gapMinutes: 60 },
+      retention: {},                             // 让 registerMeta 也真的走一遍（它同样会失败 ⇒ 另一条横幅）
+      shadowRoot: "D:/ws2",
+    },
+    getAgentById: (id: string | undefined) => ({ id }),
+  });
+  c2.push("T8", { kind: "action", text: "改/读 spec/u9.md", comp: "spec/u9.md", source: "fs" });
+  c2.push("T8", { kind: "user", text: "用户：记住收口标记写失败必须可见", comp: "", source: "user" });
+  await c2.onTurnStopping({ agent: { id: "T8" } });
+
+  const w = c2.getFlushWarn();
+  assert.ok(w.includes("compact"), `收口标记写失败必须留痕（丢了会让已归档原子重回活跃集）；实际 ${JSON.stringify(w)}`);
+  assert.ok(w.includes("收口标记未落盘") && w.includes("写失败"),
+    `横幅必须分开写**原因**（写失败 ≠ 并发没抢到）并说清后果；实际 ${JSON.stringify(w)}`);
+  assert.ok(m2.has("D:/ws2/.shadow/atoms/2026-09-07--090000-pkg-a.md"),
+    "原子文件必须保留（Forget≠Delete，可回放）—— 缺的只是「移出活跃集」这一步");
+  assert.ok([...m2.keys()].some((k) => k.includes("-consolidated.md")),
+    "正对照：收口文件仍应落盘（证明失败点确实只在 `_meta.json` 那一步）");
+  console.log("✔ 场景 Compact-Write-Side-2（负对照）：收口标记写失败 ⇒ 「能力降级 · compact」横幅可见且分开写明原因");
+}
+
 console.log("ALL PASS ✅");

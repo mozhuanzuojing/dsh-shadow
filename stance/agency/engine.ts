@@ -4,6 +4,7 @@ import type { AgencyContext, AgencySelection, AgencyBoundaryEvent } from "./type
 import { isExternalObjectiveSource, objectiveIsExternal, reasonIsConstraintOnly, eventProvenanceOk, authorityIsNotIdentity, hasNoAutonomousTransition, isNotAgencyExpansion, hasNoOwnership, hasNoIdentityClaim, isNotInternalReason } from "./guards.js";
 import { writeAgencyContext, writeAgencyEvent } from "./persistence.js";
 import { today } from "../../core/util.js";
+import type { PersistOutcome } from "../../persistence/outcomes.js";
 
 // 构建 AgencyContext（immutable snapshot）。authoritySource 必须外部；objectiveRef 不得自指。
 export const buildAgencyContext = (args: any): { ok: boolean; reason?: string; ctx?: AgencyContext } => {
@@ -31,7 +32,9 @@ export const pickAgencySelection = (args: any): { ok: boolean; reject?: string; 
 };
 
 // AgencyBoundaryEvent（audit node）。lineage 不可断；Authority ≠ Identity；执行结果禁 Autonomy/所有权。
-export const buildAgencyEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; ev?: AgencyBoundaryEvent }> => {
+// B2 续修（v1.22.x）：写侧返回三态 ⇒ 本函数把它透传出去（`persist`），由 `query/agency.ts` 在输出里说明
+//「未落盘」（旧版 `await writeAgencyEvent(...)` **不消费返回值** ⇒ 写失败与成功在读者眼里逐字相同）。
+export const buildAgencyEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; ev?: AgencyBoundaryEvent; persist?: PersistOutcome }> => {
   const ev: AgencyBoundaryEvent = { actionCandidate: String(args?.actionCandidate || ""), authorityRef: String(args?.authorityRef || ""), objectiveRef: String(args?.objectiveRef || ""), constraintCheck: (args?.constraintCheck as string[]) || [], executionResult: String(args?.executionResult || "") };
   if (!eventProvenanceOk(ev)) return { ok: false, reason: "objectiveRef 须外部来源（Action→Candidate→Plan→Objective→External Authority 的 lineage 不可断）" };
   if (!authorityIsNotIdentity(ev.authorityRef, String(args?.identityRef || ""))) return { ok: false, reason: "Authority ≠ Identity（授权引用与身份分离，禁把授权当身份）" };
@@ -43,6 +46,6 @@ export const buildAgencyEvent = async (fs: any, ws: string, args: any): Promise<
   if (!hasNoOwnership(result)) return { ok: false, reason: "执行结果禁所有权声称（permission to modify ≠ ownership of）" };
   if (!hasNoIdentityClaim(result)) return { ok: false, reason: "执行结果禁身份声称（successful action ≠ 『我是更好规划者』；identity 只来自 Reflection→Candidate→Evaluator）" };
   if (!isNotInternalReason(result)) return { ok: false, reason: "执行结果禁内部理由（系统只答『因为外部目标X/授权Y/约束Z』，不能答『因为我认为应该这样』）" };
-  await writeAgencyEvent(fs, ws, ev);
-  return { ok: true, ev };
+  const persist = await writeAgencyEvent(fs, ws, ev);
+  return { ok: true, ev, persist };
 };

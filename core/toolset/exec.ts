@@ -75,7 +75,7 @@ export const probeCapability = async (id: string, timeoutMs?: number): Promise<{
  */
 export const resolveInstall = (id: string): { cmd: string; args: string[]; display: string } | { error: string } => {
   const c = capabilityOf(id);
-  if (!c) return { error: `未登记的条目：${id}（台账见 core/toolset.ts）` };
+  if (!c) return { error: `未登记的条目：${id}（台账见 mode:"toolset" 的工具集台账）` }; // A21：不再写已不存在的 core/toolset.ts
   const r = c.install;
   if (!r) return { error: `条目 ${id} 未登记可靠安装方式（宁缺勿编）—— 见 ${c.doc}` };
   if (r.kind === "argv") {

@@ -11,6 +11,8 @@
  *   ⑥–⑧ 见下方对应块（结构缺失不静默 / 别的根不误配 / 已挂在 `audit:docs` 上）
  *   ⑨–⑪ 归档层度量（`--include-archive`，v1.21.7）：看得见归档层越界但**不据此报红**、
  *      **冻结 ADR 也被纳入**（否则 ⑨ 只是「CHANGELOG 特例」）、归档层缺件不静默
+ *   ⑰ 扫描面扩到**源码 `.ts` 的注释**（A3②）：注释里的越界必须红、点名源码位置；
+ *      代码字符串 / `test/` 不扫（否则对着标定语料报假红）、块注释要扫、范围内放行
  *
  * 跑法：`node tools/citation-audit.selftest.ts`
  */
@@ -245,8 +247,40 @@ try {
     assert.match(r.out, /条问题\*\*（不得静默）/, `报告必须写出问题条数：${r.out}`);
     assert.ok(!/可信根注册表：1 个可用/.test(r.out), `违规条目**不得**入表：${r.out}`);
   }
+  // ⑰ 扫描面扩到**源码 `.ts` 的注释**（A3②）。这一组同时给出「抓得到」与「不误报」两侧：
+  {
+    // **负对照（扩面的理由）**：注释里的越界引用必须红，且报文要点名「哪个文件的第几行」——
+    // 本仓的 `.ts` 注释是 `文件:行号` 纪律用得最多、却从来没有门的地方（评审实测 8 处抽样里 4 处
+    // 指向已不存在的文件）。
+    const bad = tree({ "README.md": "无关引用：无。\n", "core/x.ts": "// 见 `a.ts:1-9`。\nexport const x = 1;\n", "a.ts": "l1\n" });
+    const r = run(bad);
+    assert.equal(r.code, 1, `源码注释里的越界引用必须红（1）；实际 ${r.code}：${r.out}`);
+    assert.match(r.out, /core\/x\.ts:1/, `报文必须点名源码文件与行号（否则复审者找不到）：${r.out}`);
+    assert.match(r.out, /实际只有 1 行/, `报文必须给出实际行数：${r.out}`);
+
+    // **控制变量（字符串里的同一条引用不得被扫）**：测试夹具 / 报文常量里到处是「某个 .ts 文件加行号」
+    // 这种文本，若把它们也算进扫描面，门会对着**标定语料**报红（假阳性 ⇒ 门会被绕过）。
+    const str = tree({ "README.md": "无关引用：无。\n", "core/x.ts": "export const s = \"a.ts:1-9\";\n", "a.ts": "l1\n" });
+    assert.equal(run(str).code, 0, `代码字符串里的引用**不得**被扫（否则标定语料会报假红）；实际 ${run(str).code}`);
+
+    // **控制变量（块注释也要扫）**：本仓大量引用的实际形态是 JSDoc / 多行 `//` 块。
+    const block = tree({ "README.md": "无关引用：无。\n", "core/x.ts": "/**\n * 见 `a.ts:1-9`。\n */\nexport const x = 1;\n", "a.ts": "l1\n" });
+    assert.equal(run(block).code, 1, `块注释里的越界引用必须被扫到；实际 ${run(block).code}：${run(block).out}`);
+
+    // **控制变量（`test/` 不在扫描面内）**：测试夹具刻意写越界引用（本文件上面每一组都是），
+    // 拿它报红是假阳性 —— 与 `audit-layers` 排除 `test/` 的理由同源。
+    const inTest = tree({ "README.md": "无关引用：无。\n", "test/fixture.ts": "// 见 `a.ts:1-9`。\n", "a.ts": "l1\n" });
+    assert.equal(run(inTest).code, 0, `test/ 不在扫描面内（那是标定语料）；实际 ${run(inTest).code}：${run(inTest).out}`);
+
+    // **正对照**：注释里的引用在范围内 ⇒ 放行。
+    const ok = tree({ "README.md": "无关引用：无。\n", "core/x.ts": "// 见 `a.ts:1`。\nexport const x = 1;\n", "a.ts": "l1\nl2\n" });
+    const rOk = run(ok);
+    assert.equal(rOk.code, 0, `范围内必须放行（0）；实际 ${rOk.code}：${rOk.out}`);
+    assert.match(rOk.out, /源码 `\.ts` 的\*\*注释\*\*/, `报文必须声明扫描面含源码注释（口径要打印出来）：${rOk.out}`);
+  }
+
   console.log(
-    "✔ citation-audit.selftest：① 正对照 / ② 负对照 / ③ 不猜 / ④ 归档层豁免 / ⑤ 冻结 ADR 豁免（含控制变量）/ ⑥ 结构缺失 / ⑦ 别的根不误配 / ⑧ 已挂在 audit:docs 上 / ⑨ 归档层度量看得见越界且不报红 / ⑩ 冻结 ADR 也被纳入度量 / ⑪ 归档层缺件不静默 / ⑫ 可信根唯一命中可判定 / ⑬ 多根同名仍不判 / ⑭ 根不可用点名 / ⑮ scope 外不解析 / ⑯ 坏件不静默（授权） —— 全部通过",
+    "✔ citation-audit.selftest：① 正对照 / ② 负对照 / ③ 不猜 / ④ 归档层豁免 / ⑤ 冻结 ADR 豁免（含控制变量）/ ⑥ 结构缺失 / ⑦ 别的根不误配 / ⑧ 已挂在 audit:docs 上 / ⑨ 归档层度量看得见越界且不报红 / ⑩ 冻结 ADR 也被纳入度量 / ⑪ 归档层缺件不静默 / ⑫ 可信根唯一命中可判定 / ⑬ 多根同名仍不判 / ⑭ 根不可用点名 / ⑮ scope 外不解析 / ⑯ 坏件不静默（授权） / ⑰ 源码注释纳入扫描面（越界红、字符串与 test/ 不误报、块注释与正对照齐备） —— 全部通过",
   );
 } finally {
   for (const d of tmp) rmSync(d, { recursive: true, force: true });

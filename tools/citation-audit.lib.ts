@@ -27,11 +27,29 @@
  *   （查它们等于要求改写历史）。
  * - **不联网**（与 `verify` 里的其它门同族）。
  *
+ * ## 扫描面（A3②，v1.22.1 扩面）
+ *
+ * 原先只扫**当前态文档**（根目录 `*.md` + `docs/*.md` + 未冻结 ADR）；现在**同一套判据**
+ * 也扫**源码 `.ts` 的注释**里的 `文件:行号`：本仓的核心纪律是「每条断言带 `文件:行号`」，
+ * 而 `.ts` 注释恰恰是这条纪律用得最多、却**从来没有门**的地方（评审实测：抽查 8 处当前态
+ * `文件:行号` 引用，**4 处文件已不存在**）。覆盖面与 `.md` 完全相同（共用同一份 `judge`），
+ * 差别只在**怎么把行拿出来**：`.ts` 只取注释内容，且**保持行号对齐**（非注释行留空行）。
+ *
+ * **已知边界（先读再改）**：
+ *   · **行尾注释不扫**（`const x = 1; // 见 a.ts:1`）—— 宁可漏，不可误报；
+ *   · **不区分「字符串里长得像注释的一行」**（多行模板串中以 `//` / `*` 开头的那一行会被当成注释）；
+ *     实测当前语料（源码 + `tools/`，`test/` 排除）命中 **0 处误报**，唯一一处是**真越界**
+ *     ——本文件自己的文件头，已改成符号引用；
+ *   · `test/` 与 `dist/` / `node_modules/` / 文档 / 预设**不进扫描面**：测试夹具里会**刻意**
+ *     写越界引用（那是标定语料），拿它报红是假阳性（同 `audit-layers` 排除 `test/` 的理由）。
+ *
  * ## 两个被**测量否决**的更宽判据（记下来，免得下次又想去加）
  *
  * 1. **「引用后的 `「…」` 引文必须出现在被引行上」**：第一版把反引号也当引文 ⇒ 实测
- *    **139 处「不符」，几乎全是误报**（例：`README.md:314` 引 `test/recall-envelope.test.ts:104`，
- *    该行确为 `assert.equal(modes.size, 62, …)` —— 引用是**对的**，错的是抽取正则）。
+ *    **139 处「不符」，几乎全是误报**（例：`README.md` 引 `test/recall-envelope.test.ts` 的
+ *    `assert.equal(modes.size, 62, …)` —— 引用是**对的**，错的是抽取正则）。
+ *    （⚠ 上面这处举例已按 A3② 改成**符号引用**：它原先指着 README 的第 314 行，
+ *    而 README 现在只有 296 行 —— 扩面之后这条「历史举例」当场被本门自己抓成越界，不是巧合。）
  * 2. 收紧成「只认紧跟引用的 `「…」`」后：**误报 0，覆盖也 0** —— 带 `「」` 引文的引用
  *    全落在冻结 ADR 与外部材料上，恰好是本门不查的两层。
  * ⇒ 覆盖 0 的判据等于没有判据；**先量再建**，不要凭「看起来更严」加判据。
@@ -39,6 +57,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { loadTrustedRoots, resolveAgainstTrustedRoots, type TrustedRoot } from "./trusted-roots.lib.ts";
+import { SOURCE_EXCLUDED_DIRS } from "./audit-layers.lib.ts";
 
 export type CiteResult = {
   ok: boolean;
@@ -118,12 +137,80 @@ export const isFrozenAdr = (text: string): boolean => {
 
 const CITE = /([A-Za-z0-9_.\-/\\]+\.(?:md|ts|mts|json|ya?ml|py|sh|ps1)):(\d+)(?:\s*[-–~]\s*(\d+))?/g;
 
+/**
+ * 扫描**源码注释**时要跳过的目录（A3②）。
+ *
+ * 直接复用 `audit-layers.lib.ts` 的 `SOURCE_EXCLUDED_DIRS`（`dist` / `node_modules` / `.git` /
+ * `_research` / `.docs` / `docs` / `presets`）——「哪些目录不是源码」这条判断**只有一份实现**；
+ * 本门再补 `test`：测试夹具里**刻意**写着越界引用（那是标定语料），拿它报红是假阳性。
+ * `tools/` **在**扫描面内（工具注释同样是当前态代码，本轮实测的第一处真越界就在那里）。
+ */
+const SRC_SKIP = new Set([...SOURCE_EXCLUDED_DIRS, "test"]);
+
+/** 扫描面的源码文件（仓库相对 → 绝对路径；不含 `.d.ts`）。 */
+export const sourceCommentDocs = (root: string): string[] => {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // 读不动就跳过：本门只判「越界」，读不到的目标归入「未判定」
+    }
+    for (const e of entries) {
+      if (SRC_SKIP.has(e.name)) continue;
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile() && e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")) out.push(p);
+    }
+  };
+  walk(root);
+  return out.sort();
+};
+
+/**
+ * 只保留**注释文本**、并**保持行号对齐**（非注释行 → 空串）。
+ *
+ * 为什么必须对齐：`collectCites` 用行下标当 `docLine`，而报文要给读者「去第几行看」——
+ * 若把注释抽出来压缩成几行，报出来的行号就是假的（本仓最忌的「读数不可复核」）。
+ * 识别形态：整行 `//`、整行 `/*`（含跨行块注释），以及块注释内的续行。
+ * **刻意不认行尾注释**（`const x = 1; // 见 a.ts:1`）：那要区分「字符串里的 `//`」，
+ * 判错的代价是**假阳性**，而本门的判据必须零误报才配进门（见文件头「两个被测量否决的更宽判据」）。
+ */
+export const commentTextOf = (text: string): string => {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const raw of norm(text).split("\n")) {
+    const t = raw.trim();
+    if (inBlock) {
+      const end = t.indexOf("*/");
+      out.push(end < 0 ? t : t.slice(0, end));
+      if (end >= 0) inBlock = false;
+      continue;
+    }
+    if (t.startsWith("//")) {
+      out.push(t.slice(2));
+      continue;
+    }
+    if (t.startsWith("/*")) {
+      const end = t.indexOf("*/", 2);
+      out.push(end < 0 ? t.slice(2) : t.slice(2, end));
+      if (end < 0) inBlock = true;
+      continue;
+    }
+    out.push("");
+  }
+  return out.join("\n");
+};
+
 export type Cite = { doc: string; docLine: number; target: string; from: number; to: number; raw: string };
 
 export const collectCites = (root: string, docs: string[]): Cite[] => {
   const cites: Cite[] = [];
   for (const doc of docs) {
-    const lines = norm(readFileSync(doc, "utf8")).split("\n");
+    // `.ts` 只取注释（且行号对齐）；`.md` / ADR 整篇都算（当前态文档的正文里全是断言）。
+    const raw = readFileSync(doc, "utf8");
+    const lines = norm(doc.endsWith(".ts") ? commentTextOf(raw) : raw).split("\n");
     lines.forEach((line, i) => {
       for (const m of line.matchAll(CITE)) {
         cites.push({
@@ -306,9 +393,11 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
     };
   }
 
-  // 可信根注册表（adr/0108）：坏件**不得静默**（ADR-0049）——问题逐条打进报告。
+  // 扫描面 = 当前态文档 + **源码 `.ts` 的注释**（A3②）：判据、解析、越界口径**完全共用**，
+  // 差别只在 `collectCites` 怎么把行取出来（见 `commentTextOf`）。
+  const sources = sourceCommentDocs(ROOT);
   const { roots, problems } = loadTrustedRoots(ROOT);
-  const { cites, judged, unjudged, external, overflow, unjudgedList } = judge(ROOT, docs, MATERIALS, roots);
+  const { cites, judged, unjudged, external, overflow, unjudgedList } = judge(ROOT, [...docs, ...sources], MATERIALS, roots);
   const rootLines = [
     "  · 可信根注册表：" + roots.length + " 个可用" +
       (problems.length ? " · **" + problems.length + " 条问题**（不得静默）" : ""),
@@ -316,11 +405,14 @@ export const checkCitations = (root: string, opts: { verbose?: boolean } = {}): 
   ];
 
   const head =
-    `引用 ${cites.length} 处（当前态文档；\`CHANGELOG.md\` 与冻结 ADR **不在范围内**）` +
+    `引用 ${cites.length} 处（当前态文档 + 源码 \`.ts\` 的**注释**（${sources.length} 个文件）；` +
+    `\`CHANGELOG.md\` 与冻结 ADR **不在范围内**）` +
     ` ⇒ 可唯一解析并判定 ${judged} 处（其中外部材料 ${external} 处）· 未判定 ${unjudged} 处`;
   const boundary = [
     "  ⚠ 本门**只答「越界了没有」**：抓不到「行号存在但指错行」（那要读语义），",
     "    也不判外部材料的内容位移（材料随上游移动）—— 未判定**不是**「已验证」（ADR-0049）。",
+    "  ⚠ `.ts` 只扫**注释**（整行 `//` / 块注释；行尾注释与字符串不在面内），`test/` 亦不在面内 ——",
+    "    测试夹具里会刻意写越界引用（标定语料），拿它报红是假阳性。",
     ...rootLines,
   ];
 

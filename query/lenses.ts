@@ -80,7 +80,7 @@ export async function runTopicLenses(
     const project = ws.split(/[\\/]/).filter(Boolean).pop() || ws;
     const task = `${c.intent.goal} ${c.intent.question}`.trim() || topic;
     const p = await projectContext(fs, ws, memories, task, soul, deps.verifyEvidence, identity.observerLens || args.lens, identity, c.intent);
-    await recordObservationTrace(fs, ws, {
+    const traceOutcome = await recordObservationTrace(fs, ws, {
       observerId: c.observerId,
       createdAt: today(),
       realityAnchor: c.realityAnchor,
@@ -90,6 +90,10 @@ export async function runTopicLenses(
       metadata: { source: "projection" },
       state: c.state,
     });
+    // B2：投影轨迹写失败不再静默（旧版 `Promise<void>` + `catch { console.log }`）⇒ 下一读的横幅带着它。
+    if (!traceOutcome.ok) {
+      deps.noteDegrade?.("observationTrace", `投影轨迹未落盘（${traceOutcome.reason}）`, "Reflection/Identity 少一条输入样本；「不确定性理由」这一维也会在往返后丢失");
+    }
     return scrubFinal(RECALL_PREFIX + renderProjection(p, topic, project, c) + flushWarn);
   }
   if (args?.judgment) {

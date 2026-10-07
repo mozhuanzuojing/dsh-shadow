@@ -14,6 +14,8 @@
  * 「`> 证据链：来源(动作)` 里**只有**动作」= 纯动作回声 = 该进审计流，不该是记忆文件。
  */
 import { basename } from "node:path";
+import { isMemoryFileName } from "../core/paths.ts";
+import { clueFieldOf, clueFieldsOf, clueHeaderOf } from "../core/view/clue.ts";
 
 /** 起点（含）：这一天及之后的日期目录按新判据判；之前**豁免**（历史不改写，除非显式回收）。 */
 export const GRANULARITY_FROM = "2026-09-21";
@@ -24,17 +26,18 @@ export const ACTION_ONLY = "动作";
 /** 日期目录名。 */
 export const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** 记忆文件名判据：`.md` 且非 `_` 前缀（与 `persistence/files.ts` 的 `isMemoryFileName` 同一口径）。 */
-export const isMemoryName = (name: string): boolean =>
-  String(name || "").endsWith(".md") && !String(name || "").startsWith("_");
+/**
+ * 记忆文件名判据：`.md` 且非 `_` 前缀。
+ *
+ * **实现只有一份**（B6）：住在零依赖的 `core/paths.ts`（工具侧按 `.ts` 说明符直接引它，
+ * 因为本文件跑在 `npm run build` **之前**、不能 import `dist/`）；本文件只做名字兼容的转出，
+ * `tools/granularity-audit.ts` / `tools/granularity-reclaim.ts` 的调用点因此不用改。
+ * 此前这里内联一份、`persistence/files.ts` 内联另一份，两处注释还互相指认「同一口径」。
+ */
+export const isMemoryName = (name: string): boolean => isMemoryFileName(name);
 
-const SOURCE_RE = /> 证据链：来源\(([^)]*)\)/;
-
-/** 取 `> 证据链：来源(...)` 里的 kinds；没有这一行 ⇒ `null`（**未判定，不猜**）。 */
-export const sourceKindsOf = (text: string): string | null => {
-  const m = SOURCE_RE.exec(String(text || ""));
-  return m ? m[1] : null;
-};
+/** 取 `> 证据链：来源(...)` 里的 kinds；**没有这一行 ⇒ `null`（未判定，不猜）**。 */
+export const sourceKindsOf = (text: string): string | null => clueFieldsOf(text).kinds || null;
 
 /** kinds 是否**只有动作**。 */
 export const isPureActionKinds = (kinds: string | null): boolean => kinds === ACTION_ONLY;
@@ -54,20 +57,14 @@ export const bodyLinesOf = (text: string): string[] =>
     .filter((l) => BODY_LINE_RE.test(l.trimEnd()))
     .map((l) => l.trimEnd());
 
-/** 头部的 `> 背景/材料：A、B、C` ⇒ 材料数组（`—` 与空项丢掉）。 */
-export const headerMaterialsOf = (text: string): string[] => {
-  const m = /^> 背景\/材料：(.*)$/m.exec(String(text || ""));
-  if (!m) return [];
-  return m[1]
-    .split("、")
-    .map((s) => s.trim())
-    .filter((s) => s && s !== "—");
-};
+/**
+ * 头部的 `> 背景/材料：A、B、C` ⇒ 材料数组（`—` 与空项丢掉）。
+ * 判据在 `core/view/clue.ts`（线索头解析的**唯一一份**，B8）——此处只保留函数名与签名。
+ */
+export const headerMaterialsOf = (text: string): string[] => clueFieldsOf(text).materials;
 
-const headerFieldOf = (text: string, label: string): string | undefined => {
-  const m = new RegExp(`^> ${label}：(.*)$`, "m").exec(String(text || ""));
-  return m ? m[1].trim() : undefined;
-};
+/** 任意线索头字段（缺 ⇒ `undefined`，与原来的返回形态一致：`reclaimedRecordsOf` 的字段是可选的）。 */
+const headerFieldOf = (text: string, label: string): string | undefined => clueHeaderOf(text, label).trim() || undefined;
 
 /** 动作文本 ⇒ 来源（记忆文件里没写 fs/tool，只能按文本前缀**推断**；回收记录里标 `sourceInferred`）。 */
 export const sourceOfActionText = (text: string): string => {
@@ -142,6 +139,22 @@ export const relOf = (shadowDirName: string, fileName: string): string => `.shad
  *
  * 用途：文件名不含日期时（如 consolidated 件 `ep-<id>-consolidated.md`）**不猜**、也不算「已判定」——
  * 而是读它自报的日期。缺 ⇒ `""`（调用方归入「未判定」）。
+ *
+ * ## 为什么是 `core/view/clue.ts` 之上的**严格投影**，而不是 `clueFieldsOf(text).date`
+ *
+ * `clueFieldsOf().date` 是**宽松**的（`日期(…)` 里写什么都算：`日期(昨天)` / `日期(2026-9-1)` 都会过）
+ * ⇒ 「未判定」这个桶的**语料边界**会跟着变，而 granularity 门的判定数/读数直接建立在它上面
+ * （`granularity-audit.selftest.ts` ⑧ 用 `ep-abc-consolidated.md` 锁住「改名洗不掉违规」这一形态）。
+ * 本判据要回答的是「**这条来源行里有没有规范形态的日期**」，故：
+ *   · **位置**（哪一行是线索头、`日期(...)` 字段在哪）= `core/view/clue.ts` 的**唯一一份**解析
+ *     （B8 收口；此前本文件自带 `·\s*日期\(…\)` 正则，是同一族第 5 处）；
+ *   · **形状**（`·` 锚点 + `YYYY-MM-DD` 严格 10 位）= 留在这条判据自己身上 —— 形状是**本门**的语义，
+ *     不是线索头解析的一部分（`clue.ts` 不该为了一个门去收紧通用解析）。
+ * 两处形状要求与旧实现**逐字等价**：旧正则 `/·\s*日期\((\d{4}-\d{2}-\d{2})\)/` 同样要求 `·` 锚点与整 10 位。
  */
-export const declaredDateOf = (text: string): string =>
-  (String(text || "").match(/·\s*日期\((\d{4}-\d{2}-\d{2})\)/) || ["", ""])[1] || "";
+export const declaredDateOf = (text: string): string => {
+  const clue = clueHeaderOf(text, "证据链");
+  if (!/·\s*日期\(/.test(clue)) return "";          // 形状①：日期必须写在 `· 日期(` 之后（旧判据同款锚点）
+  const raw = clueFieldOf(clue, "日期");             // 取值：clue.ts 的字段解析（不 trim，保持旧判据的严格）
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ""; // 形状②：必须是规范 10 位日期
+};

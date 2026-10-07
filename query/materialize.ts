@@ -13,7 +13,8 @@
 //   · **遗忘/收口的判据只有这一份实现**（下面的 `keep`），provider 只接收它、不复制它（判据收一处）；
 //   · **降级必须可见**（ADR-0049）：provider 落到 `unavailable`/`corrupt`/`query-error` ⇒ 本次回退 `fs`
 //     全量（结果不变）并经 `opts.note` 留一条横幅；健康路径**一次都不留痕**（输出逐字节不变）。
-import { readMeta } from "../persistence/meta.js";
+import { readMetaVersioned } from "../persistence/meta.js";
+import type { DegradeNote } from "../persistence/outcomes.js";
 import { isForgettable, isCompacted } from "../core/retention/forget.js";
 import { createCandidateProvider, fsCandidateProvider } from "../core/candidate/provider.js";
 
@@ -29,7 +30,7 @@ export interface MaterializedView {
  */
 export interface MaterializeOpts {
   /** 记一条**能力降级**留痕（ADR-0049）：`(capability, reason, effect)`。缺它时降级照旧发生，只是不上横幅。 */
-  note?: (capability: string, reason: string, effect: string) => void;
+  note?: DegradeNote;
   /** 本会话是否可写（D13 守卫②）：`false`（read-only）⇒ 派生索引不落盘、直接回退 `fs`。缺省按可写。 */
   writable?: boolean;
   /** 写侧已知变更的 rel 集合（D6 门③）：provider 只对这些 rel 做单条 upsert。 */
@@ -53,7 +54,21 @@ const STATE_LABEL: Record<string, string> = {
 /** 唯一一次「物化」：确认 meta（权威 `_meta.json`）→ 算 keep → 由 provider 取候选。 */
 export const materializeAtoms = async (fs: any, ws: string, config: any, opts?: MaterializeOpts): Promise<MaterializedView> => {
   // **`_meta.json` 必须仍然读文件**（D7）：它是权威，索引只做加速；`keep` 的输入必须是最新鲜的 meta。
-  const meta = await readMeta(fs, ws);
+  //
+  // B13（v1.22.x）：这里原先用 `readMeta`，而它**把 `corrupt` 丢掉了** —— `_meta.json` 坏件/读失败时
+  // 拿到的 `{}` 与「全新工作区」逐字相同，于是 pinned/archived/compacted 全部看起来不存在
+  //（唯一痕迹是 `readMetaVersioned` 里一句不可见的 `console.log`）。读侧的判据早就建好了（`:78` 的
+  // `corrupt`），只是**消费点漏接**。现在改用 `readMetaVersioned` 并把 `corrupt` 交给 `opts.note`：
+  // 后果必须说清 —— 本次物化对被遗忘/已收口的条目**判据不生效**，所以返回集合可能比真实活跃集**偏大**。
+  const snap = await readMetaVersioned(fs, ws);
+  if (snap.corrupt) {
+    opts?.note?.(
+      "meta",
+      "`_meta.json` **坏件或读不出来**（与「还没有元数据」是两件事）",
+      "本次按**空元数据**读：forget/compact/pinned 判据全部不生效 ⇒ 可能返回已归档/已收口条目（集合偏大）；请人工修复 `_meta.json`",
+    );
+  }
+  const meta = snap.meta;
   const forget = config?.forget ?? {};
   // 遗忘/收口判据的**唯一**实现（provider 不复制它）。
   const keep = (rel: string) => !isForgettable(rel, meta, forget) && !isCompacted(meta, rel);

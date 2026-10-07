@@ -39,6 +39,18 @@ export interface TemporalGraph {
   sourceTraceIds: string[];
   nodes: TemporalNode[];
   edges: TemporalEdge[];
+  /**
+   * **输入样本不全**（B4，v1.22.x）：构建这张图时，读 `.shadow/observation/<date>/*.md` 与
+   * `.shadow/identity/*.json` 被**跳过/坏件**而**没进图**的条数（两个 reader 各自 `skipped` 之和）。
+   * `> 0` ⇒ 这张图是**不完整输入**派生的（节点/边可能偏少），**不许**被读成「真的只有这些」。
+   * **缺席 = 0**（健康路径不写这个字段 —— 免得被读成「削了 0 条」这种没信息量的读数）。
+   */
+  sourceSkipped?: number;
+  /**
+   * **目录级读不出来**的真实原因（「还没有目录」**不算**，B4 的判据）。有值时上面这张图不可当作全量。
+   * 两者都是**可选**：健康路径上不出现 ⇒ 旧调用方与旧快照逐字节兼容。
+   */
+  sourceReadFailure?: string;
 }
 
 export type TemporalQuery =

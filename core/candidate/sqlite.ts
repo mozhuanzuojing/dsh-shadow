@@ -131,7 +131,7 @@ const failSet = (state: CandidateState, reason: string): CandidateSet =>
 /** `.shadow/atoms/<file>.md` → `atoms`；取不到返回 `""`。 */
 const dirOfRel = (rel: string): string => {
   const parts = String(rel).replace(/\\/g, "/").split("/");
-  const i = parts.indexOf(".shadow");
+  const i = parts.indexOf(SHADOW_ROOT); // A16：单一来源（原硬编码 ".shadow"；改名后会静默恒返回 ""）
   return i >= 0 && parts[i + 1] ? parts[i + 1] : "";
 };
 

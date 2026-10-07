@@ -18,11 +18,15 @@
 //    ⚠ **跨进程未测**（与 `query-log` 同一边界）：两个进程同时写同一段仍可能丢行。
 // ④ 目录由宿主 `writeText` 的 `mkdir -p` 建（`dsh-fs-local`），本函数**不**自己建目录。
 import { isNotFound, errText } from "../core/util.js";
+import type { PersistOutcome } from "./outcomes.js";
 
-export interface AppendOutcome {
-  ok: boolean;
-  reason?: string;
-}
+/**
+ * 一次追加的结果。**形状收在 `persistence/outcomes.ts`**（v1.22.x，判据收一处）——
+ * 本文件此前是它的**唯一**定义处，而 `trajectory/ stance/ selfhood/ reflection/` 那一族写侧
+ * 各自又写了一遍（多半是「没有，只 `console.log`」）。现在写侧只有一个形状。
+ * 旧名保留：`index.ts` 未导出它，但本仓文档/注释里以 `AppendOutcome` 称呼这条契约。
+ */
+export type AppendOutcome = PersistOutcome;
 
 /** 同一个 `ws|rel` 上的「读-改-写」串行化（进程内；随模块生命周期存在）。 */
 const chains = new Map<string, Promise<unknown>>();
@@ -45,7 +49,7 @@ const serialize = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
  * 失败**不静默**：返回 `{ ok:false, reason }`，由调用方决定怎么留痕（`query-log` 走 `deps.noteDegrade`，
  * 审计流走 `core.lastFlushError` + `console.error`）。
  */
-export const appendJsonlLine = async (fs: any, ws: string, rel: string, line: string): Promise<AppendOutcome> => {
+export const appendJsonlLine = async (fs: any, ws: string, rel: string, line: string): Promise<PersistOutcome> => {
   if (!fs || !ws) return { ok: false, reason: "无 fs 或无工作区" };
   if (!rel) return { ok: false, reason: "无追加目标" };
   return serialize(`${ws}|${rel}`, async () => {

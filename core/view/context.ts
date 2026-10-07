@@ -6,6 +6,7 @@
 //   转换视图标注规则、非事实。仍只读/派生，未改写事实源。
 import { scrubUnsafe } from "../../security/scrub.js";
 import { evidencePathsOf, isPathLike, isConcreteLocator } from "../../evidence/paths.js";
+import { isUnder } from "../util.js";
 import type { EvidenceResult } from "../types.js";
 import type { ParsedMemory } from "./episode.js";
 
@@ -21,12 +22,15 @@ export interface ContextRef {
 }
 
 const applyMapping = (value: string, mappings: ContextMapping[]) => {
+  // 前缀判定走 `core/util.ts` 的 `isUnder`（**判据收一处**）：原先是裸 `startsWith`，
+  // 没有边界检查 ⇒ `C:/a/bc` 会被判成命中 `C:/a/b`（与 authorization 侧的分类相反）。
+  // 归一化只在**判定与切片**这一步做，`tail` 因此取自同一份归一化串（原先取原始串 + 原始长度，跨分隔符时不可靠）。
+  const v = String(value || "").replace(/\\/g, "/").replace(/\/+$/, "");
   for (const m of mappings || []) {
-    const f = String(m.from || "").replace(/[/\\]+$/, "");
-    const v = String(value || "").replace(/[/\\]+$/, "");
-    if (m.from && value.replace(/\\/g, "/").startsWith(f.replace(/\\/g, "/"))) {
+    const f = String(m.from || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (m.from && isUnder(v, f)) {
       const to = String(m.to || "").replace(/[/\\]+$/, "");
-      const tail = String(value).slice(String(m.from).length);
+      const tail = v.slice(f.length);
       return { transformed: to + tail, rule: m.rule || `${m.from} → ${m.to}（转换规则,非事实）` };
     }
   }

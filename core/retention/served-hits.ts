@@ -19,6 +19,22 @@ import { mutateMeta } from "../../persistence/meta.js";
  * 把本回合返回的记忆 rel 记一次命中。空数组 / 无 fs 时 no-op。
  * @param turn - 台账回合号（主题召回有冷却时传入；其它入口可传 0）
  * @param observerId - 观察者 agent id（非创建者则进 confirmedBy）
+ *
+ * ## 为什么这里**不需要**区分「并发没抢到」与「写失败」（B24 消费面③：boolean 够用）
+ *
+ * 用的是兼容视图 `mutateMeta`（`true` = 落盘成功**或**无需写入），**不是**四态版本，理由三条：
+ *   ① **没有可执行的分叉**：本函数只 `await` 那一次事务、**不看**结果，也不改变本次读的输出 ——
+ *      `contended` 与 `failed` 在此都只意味着「这一次命中没记上」，**处置完全相同**（都不重试、
+ *      都不上报、都不影响返回值：契约是 `Promise<void>`）。四态拿回来也无处可用；
+ *   ② **本仓已明文裁定这件事可以丢**：ADR-0068 的「重试耗尽的语义」写着「放弃这一次更新
+ *      （**宁可少记一次命中**，也不覆盖别人的写入）并打日志」⇒ `contended` 属**设计内**，不是降级；
+ *   ③ **没有可见信号通道，且真写失败不会只剩这一处静默**：本函数签名只收 `(fs, ws, rels, opts)`，
+ *      调用点在 8+ 个**读**路径上（`noteServedAtoms`），要带信号得改签名 + 全部调用点，去服务一个
+ *      **遥测量**；而 `failed` 是**系统性**的（磁盘满 / EACCES / 坏件），同一条 `_meta.json` 上的
+ *      写侧调用点（`registerMeta` 的 `lastMetaError`、`runCompact` 的 degrade 台账）会在同一次
+ *      flush 里把信号带上横幅 ⇒ 不会出现「只有命中数静默丢」的盲区。
+ * ⚠ 反过来：若将来命中数**变得可执行**（例如据它做裁剪/结算），就必须改调
+ * `mutateMetaVersioned` 并把 `contended` 单独带出去 —— 那时「少记一次」不再是免费的。
  */
 export const recordServedHits = async (
   fs: any,

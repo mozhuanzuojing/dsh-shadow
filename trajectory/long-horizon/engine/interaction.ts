@@ -6,8 +6,13 @@ import { assertResultNoIdentityChain } from "../guard/identity-guard.js";
 import { assertResultNoAuthorityGrowth, assertResultNoSelfConfidence, assertResultNoPreference, assertResultNoInferredObjective } from "../guard/authority-guard.js";
 import { writeInteractionContext, writeHistorySummary, writeContinuityEvent, writeInteractionAdaptationLink } from "../persistence/persist.js";
 import { today } from "../../../core/util.js";
+import type { PersistOutcome } from "../../../persistence/outcomes.js";
 
 const rand = () => Math.random().toString(36).slice(2, 6);
+/** `HistorySummary.accessibility` 是**封闭联合**（`types/history-window.ts`）—— 成员表是唯一一份校验（B14 同族）。 */
+const ACCESSIBILITIES: ReadonlySet<string> = new Set(["available", "forgotten", "recalled"]);
+const accessibilityOf = (raw: unknown): HistorySummary["accessibility"] =>
+  ACCESSIBILITIES.has(String(raw || "")) ? (String(raw) as HistorySummary["accessibility"]) : "available";
 const resultGuards = [
   assertResultNoAuthorityGrowth,    // 224
   assertResultNoSelfConfidence,     // 229
@@ -29,25 +34,26 @@ export const buildHistorySummary = (args: any): { ok: boolean; reason?: string; 
   const sourceRefs = (args?.sourceRefs as string[]) || [];
   const compressionMethod = String(args?.compressionMethod || "");
   if (!sourceRefs.length || !compressionMethod) return { ok: false, reason: "HistorySummary 须 sourceRefs + compressionMethod（摘要是访问辅助）" };
-  const summary: HistorySummary = { id: `hs-${Date.now()}-${rand()}`, sourceRefs, compressionMethod, accessibility: (args?.accessibility as any) || "available" };
+  const summary: HistorySummary = { id: `hs-${Date.now()}-${rand()}`, sourceRefs, compressionMethod, accessibility: accessibilityOf(args?.accessibility) };
   const g = assertSummaryNoRealityField(summary);
   if (!g.ok) return { ok: false, reason: g.reason };
   return { ok: true, summary };
 };
 
 // HistoryContinuityEvent：previous/current accessibility + lineage；结果措辞禁 authority/confidence/preference/identity/objective 漂移。
-export const buildContinuityEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; event?: HistoryContinuityEvent }> => {
+// B2（v1.22.x）：写侧返回三态 ⇒ 本函数把它透传出去（`persist`），由 `query/horizon.ts` 在输出里说明「未落盘」。
+export const buildContinuityEvent = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; event?: HistoryContinuityEvent; persist?: PersistOutcome }> => {
   const historyRef = String(args?.historyRef || "");
   if (!historyRef) return { ok: false, reason: "HistoryContinuityEvent 须 lineage.historyRef（continuity 可追溯）" };
   const result = String(args?.result || "");
   for (const g of resultGuards) { const r = g(result); if (!r.ok) return { ok: false, reason: r.reason }; }
   const event: HistoryContinuityEvent = { id: `he-${Date.now()}-${rand()}`, previousAccessibility: String(args?.previousAccessibility || "forgotten"), currentAccessibility: String(args?.currentAccessibility || "available"), lineage: { historyRef, recallRef: String(args?.recallRef || "") || undefined, adaptationRef: String(args?.adaptationRef || "") || undefined } };
-  await writeContinuityEvent(fs, ws, event);
-  return { ok: true, event };
+  const persist = await writeContinuityEvent(fs, ws, event);
+  return { ok: true, event, persist };
 };
 
 // InteractionAdaptationLink：History→Recall→Adaptation；禁 History→Identity；结果措辞同漂移守卫。
-export const buildInteractionAdaptationLink = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; link?: InteractionAdaptationLink }> => {
+export const buildInteractionAdaptationLink = async (fs: any, ws: string, args: any): Promise<{ ok: boolean; reason?: string; link?: InteractionAdaptationLink; persist?: PersistOutcome }> => {
   const historyRef = String(args?.historyRef || "");
   const recallRef = String(args?.recallRef || "");
   const adaptationRef = String(args?.adaptationRef || "");
@@ -56,6 +62,6 @@ export const buildInteractionAdaptationLink = async (fs: any, ws: string, args: 
   const result = String(args?.result || "");
   for (const g of resultGuards) { const r = g(result); if (!r.ok) return { ok: false, reason: r.reason }; }
   const link: InteractionAdaptationLink = { historyRef, recallRef, adaptationRef };
-  await writeInteractionAdaptationLink(fs, ws, link);
-  return { ok: true, link };
+  const persist = await writeInteractionAdaptationLink(fs, ws, link);
+  return { ok: true, link, persist };
 };

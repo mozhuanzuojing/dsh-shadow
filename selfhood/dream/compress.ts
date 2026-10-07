@@ -3,7 +3,7 @@
 import type { DreamPattern, Hypothesis, DreamResult, AlternativeExplanation } from "./types.js";
 import { readObservationTraces } from "../../subject/observer/trace.js";
 import { buildTemporalGraph } from "../temporal/builder.js";
-import { today } from "../../core/util.js";
+import { today, newId, inDateRange } from "../../core/util.js";
 // 「正/负结果」判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
 // 本文件原有的一份与 `validation/validate.ts` **逐字相同**，且与 `reflection/patterns/success-rate.ts` 答案不同（实测）。
 import { isPositiveOutcome as isPositive } from "../../core/polarity.js";
@@ -74,24 +74,36 @@ export const hypothesize = (p: DreamPattern, observerId: string): Hypothesis => 
 // Offline Compression Cycle：SleepWindow → 读资料 → Pattern Engine → Hypothesis(pending) → DreamResult。
 export const offlineCompression = async (fs: any, ws: string, window: { observerId: string; from?: string; to?: string }): Promise<DreamResult> => {
   const range = { from: window.from || "", to: window.to || "" };
-  const traces = await readObservationTraces(fs, ws);
-  const filtered = traces.filter((t) => {
-    const d = String(t.createdAt || "").slice(0, 10);
-    if (range.from && d && d < range.from) return false;
-    if (range.to && d && d > range.to) return false;
-    return true;
-  });
+  // B4 消费点：`readObservationTraces` 返回 `{ traces, skipped, readFailure? }`。两个信号**随结果带出**
+  //（承载位在 `DreamResult.sourceSkipped` / `sourceReadFailure`），由 `query/observer-kernel.ts` 的
+  // `mode:"offline"` 经 `skippedWarn` / `readCauseWarn` 说给读者 —— 尤其 `no_pattern`：
+  // 「真的没有模式」与「样本被削/读不出来所以没算出模式」必须可区分（ADR-0049，两者处置不同）。
+  const { traces, skipped, readFailure } = await readObservationTraces(fs, ws);
+  // B7：「日期区间过滤」**收一处**到 `core/util.ts` 的 `inDateRange` —— 本文件与
+  // `selfhood/temporal/builder.ts` 原先各写一份**逐字同形**的过滤（同一判据两份实现）。
+  // 语义务必逐字等价：**空日期 ⇒ 通过**（`inDateRange` 内部对 `dateStr` 取前 10 字符，
+  // 且 `from`/`to` 为空即该侧不设限 —— 与下面被删掉的三行判定一致）。
+  const filtered = traces.filter((t) => inDateRange(t.createdAt, range.from, range.to));
   const patterns = detectPatterns(filtered);
-  if (!patterns.length) return { status: "no_pattern", patterns: [], hypotheses: [] };
-  const hypotheses = patterns.map((p) => hypothesize(p, window.observerId));
-  return { status: "generated", patterns, hypotheses };
+  const out: DreamResult = patterns.length
+    ? { status: "generated", patterns, hypotheses: patterns.map((p) => hypothesize(p, window.observerId)) }
+    : { status: "no_pattern", patterns: [], hypotheses: [] };
+  // ⚠ **健康路径不带这两个字段**（不是写 0）—— 与 `query/observatory.ts` 的 `badLines`
+  //   「没有坏行 ⇒ 不带该字段（免得被读成 0）」同一条口径 ⇒ 未削样本时 `dream.json` 与改动前逐字节相同。
+  if (skipped > 0) out.sourceSkipped = skipped;
+  if (readFailure) out.sourceReadFailure = readFailure;
+  return out;
 };
 
 // DreamArtifact 组装（含 provenance，可回答"这个梦是怎么来的"）。
+// ⚠ **刻意不把 `graph.sourceSkipped` / `graph.sourceReadFailure` 抄进 artifact**：本函数是**第二次**读源
+//（只为 provenance 的 id 列表），而 `mode:"offline"` 的读者已经在同一条回复里从 `DreamResult` 拿到同一批信号；
+// `DreamArtifact` 目前**没有**任何读侧消费者（只在 `dream.json` 里落盘）⇒ 抄过去只会多出一个「声明了没人读」
+// 的字段（正是本仓 A6/B5 追的那类病）。若将来真有人渲染 artifact，再把这条 provenance 补上。
 export const buildDreamArtifact = async (fs: any, ws: string, window: SleepWindowArg, result: DreamResult) => {
   const graph = await buildTemporalGraph(fs, ws, { from: window.from, to: window.to });
   return {
-    id: `dream-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: newId("dream"),   // A12 同族（本写面内同一条判据的其它实例）：id 生成收一处到 `core/util.ts`
     observerId: window.observerId,
     sleepWindowId: window.id || "",
     sourceTemporalGraphVersion: graph.graphVersion,

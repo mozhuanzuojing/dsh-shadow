@@ -3,7 +3,7 @@
 // 只读取 Reflection；见不得 ObservationTrace → Identity 直通。
 import type { Reflection } from "../../reflection/types.js";
 import { proposalTypeOfLearning, type CandidateIdentityChange, type IdentityConfidence } from "./types.js";
-import { today } from "../../core/util.js";
+import { today, newId } from "../../core/util.js";
 import { scrubUnsafe } from "../../security/scrub.js";
 
 const clamp = (x: number) => Math.max(0.05, Math.min(0.98, x));
@@ -31,7 +31,9 @@ export const candidateOf = (r: Reflection, fromVersion: string): CandidateIdenti
   const recency = 0.8; // 由 evaluator 依据时距重算（此处默认，evaluator 覆盖）
   const confidence = identityConfidenceOf({ traceCount: r.learning.evidenceCount, successRate: consistency, contradiction, recency });
   return {
-    id: `cic-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    // id 生成收一处（`core/util.ts#newId`，6 位 base36）：B12 的同族 —— 本文件是**纯派生**
+    // （「只读取 Reflection」），而旧版自写 `Math.random()` 4 位 ⇒ 同毫秒内碰撞是**静默覆盖**。
+    id: newId("cic"),
     observerId: r.observerId || "unknown",
     fromVersion,
     proposal: { type: proposalType, content: scrubUnsafe(content) },

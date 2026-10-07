@@ -27,7 +27,8 @@ export const readClaimsDetailed = async (fs: any, ws: string): Promise<{ claims:
   let corrupt = 0;
   try {
     const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/claims`, { cwd: ws });
-    const files = (await fs.listDir(root).catch(() => [])) || [];
+    // A7（`noImplicitAny: true`）：「列目录失败 ⇒ 空列表」的 `.catch` 回调需**显式返回类型**。
+    const files = (await fs.listDir(root).catch((): any[] => [])) || [];
     for (const f of files) {
       if (!f?.name || !f.name.endsWith(".json")) continue;
       try {

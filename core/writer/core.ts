@@ -151,17 +151,25 @@ export interface WriterCore {
    *     这一点由 `test/t8-silent-degradation.test.ts` 的正/负对照锁住。
    */
   degrade: Map<string, DegradeNote>;
-  forgetCfg: Record<string, any>;
-  compactCfg: Record<string, any>;
-  summaryCfg: Record<string, any>;
-  recallCfg: Record<string, any>;
-  retentionCfg: Record<string, any>;
-  episodeCfg: Record<string, any>;
+  // ── 配置派生（A8）────────────────────────────────────────────────────────────
+  // **为什么是 `NonNullable<ShadowConfig["…"]>` 而不是 `Record<string, any>`**：这七个槽原先
+  // 全部退化成任意键的字典，于是 `core.forgetCfg.staleDay`（**拼错** `staleDays`）编译通过、
+  // 运行时静默回落默认值 —— 正是 T8-B（`numOr`）花一整版修掉的「静默回落」换到了**键名面**；
+  // 同时「这个开关到底存不存在」无法被工具回答。
+  // 改成从 `ShadowConfig` **派生**（而不是手抄一遍形状）：形状只有一个事实源，
+  // 配置面加字段时这里自动跟上、不会漂移；`NonNullable` 把 `?:` 与 `?? {}` 的
+  // 「可能缺失」折掉，消费点拿到的是精确字面量键。
+  forgetCfg: NonNullable<ShadowConfig["forget"]>;
+  compactCfg: NonNullable<ShadowConfig["compact"]>;
+  summaryCfg: NonNullable<ShadowConfig["summary"]>;
+  recallCfg: NonNullable<ShadowConfig["recall"]>;
+  retentionCfg: NonNullable<ShadowConfig["retention"]>;
+  episodeCfg: NonNullable<ShadowConfig["episodes"]>;
   writeConsent: boolean;
   episodeGap: number;
   episodeShow: number;
   /** 目录级 L0/L1 sidecar（ADR-0065 / D6，v1.15.35）：默认**开**（派生物，见下）。 */
-  abstractCfg: Record<string, any>;
+  abstractCfg: NonNullable<ShadowConfig["abstracts"]>;
 }
 
 export function createWriterCore(opts: { context: any; config: ShadowConfig; getAgentById: (id: string | undefined) => any }): WriterCore {
@@ -196,7 +204,7 @@ export function createWriterCore(opts: { context: any; config: ShadowConfig; get
     writeConsent: config.writeConsent === true,
     // T8-B（v1.15.64）：`|| 60` / `|| 8` 会把**显式 0** 与「未传」混为一谈 ⇒ 改用 `numOr`。
     // `showInIndex: 0` 的含义是「_index.md 不列 Episodes 段」，此前被吞成 8 ⇒
-    // `writer-materialize.ts:212` 的 `episodeShow > 0` 恒真 = **死分支**（那个开关不存在）。
+    // `core/writer/materialize.ts` 的 `episodeShow > 0` 恒真 = **死分支**（那个开关不存在）。
     episodeGap: numOr(episodeCfg.gapMinutes, 60),
     episodeShow: numOr(episodeCfg.showInIndex, 8),
     abstractCfg: config.abstracts ?? {},

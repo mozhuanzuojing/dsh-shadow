@@ -276,3 +276,50 @@ export const auditLayers = (
   );
   return { violations, fileCycles, layerCycles, unresolved: graph.unresolved, external: graph.external, stats: { files: files.length, edges: graph.edges.length } };
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ④ `tsconfig*.json` 的 `include` 条目**必须真实存在**（A2，v1.22.1）
+//
+// **由来（实测，规范轴评审 A 第 2 条）**：`tsconfig.json` 的 `include` 4 条里 **3 条指向已不存在的位置**
+// （`core/proposal.ts` / `core/decision-outcome.ts` 已搬进 `core/admission/`，`decision/` 整层已按 `T26` 删除），
+// 而 `tsc` **不报错** —— 只要匹配到一个文件（`index.ts`）它就不说「无输入」⇒ 三条失效条目**静默通过**；
+// 更实质的是「显式列出以强制纳入类型门」这个意图已经失效（现在全靠 `index.ts` 的传递 import 图）。
+// 本仓的纪律是「**改完代码，回头核对引用它的文档/配置**」⇒ 这条判据把它变成可执行的门。
+//
+// **为什么判在 lib 而不是 CLI**：与 ⓪（未解析 import 计违规）同一个理由 —— 判据放在 CLI 的打印分支里，
+// `auditLayers()` 的调用方（含 selftest）就看不到它，那正是「判据分叉」的形态。
+// ⚠ 与 `auditLayers` 分开的理由：`auditLayers` 的语料是**源码**（`{path,text}[]`，含 import 图），
+// 而本条的语料是**配置文件**、判据是**文件系统上存不存在** ⇒ 两者共用 CLI，但各有各的入口。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 从 `tsconfig*.json` 文本取 `include` 条目（唯一一份解析；无该键 ⇒ `[]`）。 */
+export const tsconfigIncludes = (text: string): string[] => {
+  // 只认**带引号的键**：`tsconfig.test.json` 顶部有大段 `//` 注释（那是 JSONC、`JSON.parse` 吃不掉），
+  // 而注释里出现过「include」这个词；带引号的 `"include"` 只在真键上出现 ⇒ 不必写第二份 JSONC 剥离器。
+  const m = /"include"\s*:\s*\[([^\]]*)\]/.exec(text);
+  if (!m) return [];
+  return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
+};
+
+/**
+ * `include` 条目存在性判据：**每一条都必须至少匹配到一个真实存在的路径**（不存在即违规）。
+ * `match(entry)` 由调用方注入 —— CLI 走文件系统（含 `**` 通配展开），标定测试走合成集合
+ * （这样「判据本身」与「怎么问文件系统」不会在两处各写一遍）。
+ */
+export const tsconfigIncludeViolations = (
+  configs: { path: string; text: string }[],
+  match: (entry: string) => boolean,
+): { rule: string; why: string; where: string }[] => {
+  const out: { rule: string; why: string; where: string }[] = [];
+  for (const c of configs) {
+    for (const entry of tsconfigIncludes(c.text)) {
+      if (match(entry)) continue;
+      out.push({
+        rule: "tsconfig include 条目必须存在",
+        why: "条目零匹配 ⇒ 它什么都没纳入类型门，而 `tsc` 只要匹配到**一个**文件就不报「无输入」⇒ 该条静默失效（实测：3 条失效条目长期无人发现）",
+        where: `${c.path} 的 include 条目 \`${entry}\``,
+      });
+    }
+  }
+  return out;
+};

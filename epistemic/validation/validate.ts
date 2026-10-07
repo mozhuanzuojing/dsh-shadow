@@ -3,7 +3,7 @@
 import type { FutureEvidence, ValidationArtifact, ValidationResult, ValidationConfidence, AlternativeEvaluation } from "./types.js";
 import { MAX_EVIDENCE_N } from "./types.js";
 import type { Hypothesis } from "../../selfhood/dream/types.js";
-import { today } from "../../core/util.js";
+import { today, newId } from "../../core/util.js";
 // 「正/负结果」的判据**收一处**（ADR-0063/0070）：词表与否决规则见 `core/polarity.ts`。
 // 本文件原有一份**与 `selfhood/dream/compress.ts` 逐字相同**的 `POS`/`NEG`/`isPositive`，且与
 // `reflection/patterns/success-rate.ts` 的 `isPositiveOutcome` **给出不同答案**（实测，见该文件注释）。
@@ -55,7 +55,7 @@ export const expiredByAge = (h: Hypothesis) => {
 };
 
 export const toArtifact = (h: Hypothesis, result: ValidationResult, evidenceIds: string[], evaluatedAt: string): ValidationArtifact => ({
-  id: `va-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+  id: newId("va"),   // A12：id 生成**收一处**到 `core/util.ts`
   hypothesisId: h.id,
   evaluatedAt,
   evidenceIds,

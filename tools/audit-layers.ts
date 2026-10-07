@@ -8,7 +8,10 @@
 //   · 语料 = 仓库下所有 `*.ts`（递归），**排除** SOURCE_EXCLUDED_DIRS + `test` + `tools`
 //     —— 测试与工具允许 import 任何东西，把它们算进来会让本条门禁失去意义；
 //   · 「层」= `layerOf`（根下文件 = `(root)`；mode-family 伞下取第二段，见 ADR-0101）；
-import { readdirSync, readFileSync, statSync } from "node:fs";
+//   · ④（A2）的语料**不是**源码，而是根下的 `tsconfig*.json`：它的 `include` 条目必须至少
+//     匹配到一个真实存在的路径（`**` 通配按 glob 展开）；条目的存在性判据在 lib 里，
+//     这里只负责「怎么问文件系统」（见下方 `includeEntryExists` 处的边界说明）。
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -18,6 +21,8 @@ import {
   DIRECTION_RULES,
   FORBIDDEN_TARGETS_EVERYWHERE,
   auditLayers,
+  tsconfigIncludeViolations,
+  tsconfigIncludes,
 } from "./audit-layers.lib.ts";
 import { classifyCorpus } from "./corpus-health.lib.ts";
 
@@ -65,6 +70,65 @@ if (!health.ok) {
 const report = auditLayers(files);
 const { violations, fileCycles, layerCycles, unresolved, stats } = report;
 
+// ── ④ `tsconfig*.json` 的 `include` 条目必须真实存在（A2）────────────────────────
+// 判据本体在 lib（`tsconfigIncludeViolations`）；这里只回答「怎么问文件系统」这一个问题。
+// 为什么需要一次**全仓文件清单**：`include` 条目可以是 `**` 通配（`tools/**/*.ts`），
+// 指望它恒是单个文件路径是不成立的；而「通配零匹配」正是本次要抓的形态（`decision/**/*.ts`）。
+// ⚠ 边界：跳过 `SOURCE_EXCLUDED_DIRS`（`dist` / `node_modules` / 文档 / 预设）——
+// `include` 是**类型门要纳入的源码位置**，指向构建产物或依赖不算合法意图；
+// 这条边界写在这里，因为它是「怎么问」的一部分，不是判据（判据只回答「零匹配没有」）。
+const CFG_SKIP = new Set(SOURCE_EXCLUDED_DIRS);
+const cfgFiles: string[] = [];
+{
+  const walk = (dir: string, rel: string): void => {
+    for (const name of readdirSync(dir)) {
+      if (CFG_SKIP.has(name)) continue;
+      const full = join(dir, name);
+      let st;
+      try {
+        st = statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) walk(full, `${rel}${name}/`);
+      else cfgFiles.push(`${rel}${name}`);
+    }
+  };
+  walk(ROOT, "");
+}
+/**
+ * 通配 → 正则（唯一一份问法）：`**` 后跟斜杠 = 零层或多层目录、单个 `*` 不跨目录、`?` = 单字符。
+ * ⚠ **不要在本注释里写出「两个星号 + 斜杠」的字面序列** —— 它会**提前终止块注释**，
+ * 让其后半行变成代码（这正是本函数第一版踩过的坑，`npm run audit:layers` 当场是语法错）。
+ */
+const GLOB_LITERAL_SPECIAL = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
+const globToRe = (g: string): RegExp => {
+  let re = "^";
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === "*") {
+      if (g[i + 1] === "*") {
+        if (g[i + 2] === "/") { re += "(?:[^/]+/)*"; i += 2; } else { re += ".*"; i += 1; }
+      } else re += "[^/]*";
+    } else if (c === "?") re += "[^/]";
+    else re += GLOB_LITERAL_SPECIAL.has(c) ? "\\" + c : c;
+  }
+  return new RegExp(re + "$");
+};
+const tsconfigs = readdirSync(ROOT)
+  .filter((n) => /^tsconfig.*\.json$/.test(n))
+  .sort()
+  .map((n) => ({ path: n, text: readFileSync(join(ROOT, n), "utf8") }));
+const entryCount = tsconfigs.reduce((a, c) => a + tsconfigIncludes(c.text).length, 0);
+/** 「这条 include 条目能不能匹配到真实存在的路径」（唯一一份问法；通配先编译再比对）。 */
+const includeEntryExists = (entry: string): boolean => {
+  if (!entry.includes("*")) return existsSync(join(ROOT, entry));
+  const re = globToRe(entry);
+  return cfgFiles.some((f) => re.test(f));
+};
+const includeViolations = tsconfigIncludeViolations(tsconfigs, includeEntryExists);
+violations.push(...includeViolations);
+
 console.log("dsh-shadow 结构门（audit-layers）");
 console.log(`根：${ROOT}`);
 console.log(`口径：*.ts 递归，排除 ${[...SKIP].sort().join(" / ")}；层 = layerOf（伞下第二段，见 ADR-0101），根下文件 = (root)`);
@@ -77,6 +141,12 @@ console.log(`② 纯模块白名单零副作用（${PURE_MODULES.length} 个）`
 for (const p of PURE_MODULES) console.log(`   · ${p}`);
 console.log(`③ 方向禁令（${DIRECTION_RULES.length} 条）+ 任何层 ↛ ${FORBIDDEN_TARGETS_EVERYWHERE.join(" / ")}`);
 for (const r of DIRECTION_RULES) console.log(`   · ${r.from} ↛ ${r.to}（${r.why}）`);
+// ④（A2）：条目零匹配即违规 —— `tsc` 只要匹配到一个文件就不报「无输入」⇒ 失效条目会静默通过。
+console.log(
+  tsconfigs.length
+    ? `④ \`tsconfig*.json\` 的 include 条目必须存在：${tsconfigs.length} 份配置 / ${entryCount} 条条目 · **零匹配 ${includeViolations.length} 条**`
+    : "④ `tsconfig*.json` 的 include 条目必须存在：**一份配置都没找到** ⇒ 本条**不判**（这不是「通过」）",
+);
 console.log("");
 
 if (unresolved.length > 0) {

@@ -3593,8 +3593,12 @@ const plan = async (fs: any, ws: string, objective: string, criteria: string, ca
 // 161：Evaluation 不产生 Value Model（constraint satisfaction，非 better/preferred）。
 {
   const { fs, store } = mkV(new Map());
-  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: [] }]);
-  assert.ok(String(r).includes("satisfiedConstraints") , "输出应约束满足（comparison）");
+  // B5（v1.22.x）：断言改为**只认调用方声明过的**约束 —— 旧断言 `includes("satisfiedConstraints")` 靠的是
+  // 渲染器自己的 `includes("under")` 子串嗅探（criteria 里恰好有 "under"）；现在那两条路径都删了：
+  //   · 声明了 ⇒ 逐字报出；未声明/空数组 ⇒ **整段省略**（不再打印恒真的 `violatedConstraints: —`）。
+  const r = await plan(fs, WS, "reduce latency", "lower latency under constraint X", [{ actionSequence: ["A"], assumptions: [], constraints: ["constraint X"], satisfiedConstraints: ["constraint X"], violatedConstraints: [] }]);
+  assert.ok(String(r).includes("satisfiedConstraints: constraint X"), "输出应报**调用方声明**的约束满足（comparison）");
+  assert.ok(!String(r).includes("violatedConstraints"), "空 violatedConstraints ⇒ 整段省略，不得打印 `—`（那会被读成「没有任何约束被违反」）");
   assert.ok(!String(r).includes("is better") && !String(r).includes("is preferred") && !String(r).includes("is optimal"), "不产 better/preferred/optimal");
   console.log("✔ 161 Evaluation 不产生 Value Model（约束满足非谁最好）");
 }

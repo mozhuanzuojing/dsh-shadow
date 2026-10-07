@@ -107,6 +107,26 @@ import assert from "node:assert/strict";
     assert.equal(mutated, false, "★ 读失败时事务必须报**未落盘**（旧版返回 true = 谎报成功）");
     assert.ok(String(denied.files.get(META)).includes("a.md"), "★★ `a.md` 的 hits/pinned **必须原样保留** —— 旧版会把它整体覆盖成 {\"b.md\":…}（全工作区元数据清零，不可恢复）");
     console.log("✔ ②b `_meta.json` 读失败（≠ 不存在）：不写回空快照、报未落盘、既有 pinned/hits 原样保留（旧版此处清零且报成功）");
+
+    // **②c v1.22.x（B24）：`boolean` 装不下「写成功 / 无需写入 / 写失败 / 并发没抢到」四种含义**。
+    // 旧版 `mutateMeta` 把后两种都返回 `false` ⇒ 调用方无法区分「并发没抢到（可以下次再记）」与
+    // 「写失败（要人管）」。现在有四态的 `mutateMetaVersioned`；兼容视图 `mutateMeta` 保持旧语义
+    //（它就是 ②/②b 那两组断言锁的东西 —— 两侧一起构成回归锁）。
+    {
+      const { mutateMetaVersioned } = await import("../dist/persistence/meta.js");
+      const freshMeta = mkFs();
+      assert.equal(await mutateMetaVersioned(freshMeta as any, WS, (m: any) => { m["a.md"] = { hits: 1 }; }), "ok", "落盘成功 ⇒ ok");
+      assert.equal(await mutateMetaVersioned(freshMeta as any, WS, () => false), "noop", "调用方判定无需写入 ⇒ noop（**不是** failed）");
+      const brokenMeta = mkFs();
+      brokenMeta.files.set(META, "{ 半截 JSON");
+      assert.equal(await mutateMetaVersioned(brokenMeta as any, WS, (m: any) => { m["a.md"] = { hits: 1 }; }), "failed", "坏件不写回 ⇒ failed（与 noop 分开）");
+      // 并发抢不到：`writeText` 永远报版本冲突 ⇒ 三次都重读重试 ⇒ 穷尽后 `contended`。
+      // 这正是旧版说不清的那一种：**不是写失败**（磁盘是好的），但也**不是成功**（这次更新没发生）。
+      const contended = mkFs();
+      contended.writeText = (async () => { throw Object.assign(new Error("FS_STALE_VERSION"), { code: "FS_STALE_VERSION" }); }) as any;
+      assert.equal(await mutateMetaVersioned(contended as any, WS, (m: any) => { m["a.md"] = { hits: 1 }; }), "contended", "三次都没抢到 ⇒ contended");
+      console.log("✔ ②c B24：mutateMetaVersioned 四态（ok / noop / failed / contended），兼容视图 mutateMeta 语义不变");
+    }
   }
 }
 

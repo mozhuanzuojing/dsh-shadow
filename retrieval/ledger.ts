@@ -55,7 +55,10 @@ export const readLedger = async (fs: any, ws: string): Promise<LedgerRead> => {
     if (!parsed || typeof parsed !== "object" || !parsed.served) return { turn: 0, served: {}, corrupt: true };
     return parsed;
   } catch {
-    console.log("[dsh-shadow] _recall_log.json **坏件**（无法解析）：本次按空台账处理 ⇒ **冷却状态可能失效**，请人工修复");
+    // B23（v1.22.x）：此处原有一行 `console.log("[dsh-shadow] _recall_log.json **坏件**…")` —— 已**删掉**。
+    // 理由：本文件头自己就写着「`console.log` 本来就不算 ADR-0049 认可的可见信号」，而 `corrupt` 三态
+    // 现在**已由 `retrieval/cooldown.ts` 经 `noteDegrade` 上横幅**（真信号在那里）。留着这行只会让后来者
+    // 以为「坏件已经有日志了」⇒ 不再走可见信号通道（AGENTS.md「门绿着、判别力没了」的同型风险）。
     return { turn: 0, served: {}, corrupt: true };
   }
 };
@@ -66,8 +69,8 @@ export const writeLedger = async (fs: any, ws: string, data: any): Promise<boole
     const t = await fs.resolve(`${ws}/${SHADOW_ROOT}/_recall_log.json`, { cwd: ws });
     await fs.writeText(t, JSON.stringify(data));
     return true;
-  } catch (e: any) {
-    console.log("[dsh-shadow] recall ledger write failed:", e && e.message);
+  } catch {
+    // B23：同上一处 —— 原先的 `console.log("…recall ledger write failed…")` 已被 `noteDegrade` 取代，删掉。
     return false;
   }
 };

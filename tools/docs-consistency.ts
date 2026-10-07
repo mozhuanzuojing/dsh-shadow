@@ -36,6 +36,29 @@ import { checkCitations } from "./citation-audit.lib.ts";
 const readText = (root: string, rel: string): string => readFileSync(join(root, rel), "utf8").replace(/\r\n?/g, "\n");
 const readLines = (root: string, rel: string): string[] => readText(root, rel).split("\n");
 
+/**
+ * `package.json` 的 `version` —— **唯一一份读取**（B20）。
+ *
+ * 检查 ①（三方版本一致）/ ④（README 行不得复制 CHANGELOG 条目）/ ⑤（已过去的版本都要有 tag）
+ * 三处都要同一个字段，此前三处各写一遍 `JSON.parse(readText(root, "package.json")).version`，
+ * 连「读不到」的报文也各写一条（`❌ 读不到` / `❌ ④ **结构缺失**` / `❌ ⑤ **结构缺失**`）。
+ * ⇒ 收成这一个入口：`line` 是**共用**的结构缺失报文（含解析失败的真实原因，不臆造），
+ * 各检查只管自己的判据，不再各自解释「什么算读不到」。
+ *
+ * ⚠ 只在**确实**读不到时返回 `ok: false`，且调用方一律按**结构缺失（code 2）**报 ——
+ * 缺件不得说成「通过」（ADR-0049）。
+ */
+export const pkgVersionOf = (root: string): { ok: boolean; version: string; line: string } => {
+  try {
+    const v = JSON.parse(readText(root, "package.json"))?.version;
+    const version = typeof v === "string" ? v : "";
+    if (version) return { ok: true, version, line: "" };
+    return { ok: false, version: "", line: "❌ **结构缺失**：`package.json` 里读不到 `version`（字段缺失，或它不是字符串）。" };
+  } catch (e: any) {
+    return { ok: false, version: "", line: `❌ **结构缺失**：读不到 \`package.json\` 的 version：${e?.message || e}` };
+  }
+};
+
 // ── 检查 1：三方版本一致 ─────────────────────────────────────────────────────
 /**
  * 判据（三条必须**逐字**相等）：
@@ -56,10 +79,11 @@ export const checkVersionConsistency = (root: string): { ok: boolean; code: numb
   const norm = (s: string) => s.replace(/^v/, "").trim();
 
   let pkgVersion: string;
-  try {
-    pkgVersion = JSON.parse(read("package.json")).version;
-  } catch (e: any) {
-    return { ok: false, code: 2, lines: [`❌ 读不到 \`package.json\` 的 version：${e?.message || e}`] };
+  {
+    // B20：读 version 的实现只有 `pkgVersionOf` 一份（三处共用）。
+    const pv = pkgVersionOf(root);
+    if (!pv.ok) return { ok: false, code: 2, lines: [pv.line] };
+    pkgVersion = pv.version;
   }
 
   const readmeMatch = read("README.md").match(/^\*\*当前版本\s*[:：]\s*\**\s*`?v?(\d+\.\d+\.\d+)`?/m);
@@ -294,9 +318,10 @@ export const checkReadmeRowNotDuplicate = (root: string): { ok: boolean; code: n
   //   把本文件**其后所有内容**当成字符串抹掉 ⇒ `audit:wiring` 会把这 4 个导出误报成「生产无调用点」。
   //   v1.15.75 实测：加完检查 ④ 后 a1 由 24 跳到 28，被 `audit:ratchet` 拦住（**工具互相干扰**那类缺陷）。
   //   ⇒ 这里直接 `JSON.parse`：既避开该边界，也比正则更对。
-  let ver = "";
-  try { ver = String(JSON.parse(readText(root, "package.json")).version ?? ""); } catch { /* 下面按缺失处理 */ }
-  if (!ver) return { ok: false, code: 2, lines: ["❌ ④ **结构缺失**：`package.json` 里读不到 `version`。"] };
+  // B20：与 ①/⑤ 共用同一份「读 version」实现（此前这里另写一遍 try/JSON.parse）。
+  const pv = pkgVersionOf(root);
+  if (!pv.ok) return { ok: false, code: 2, lines: [pv.line] };
+  const ver = pv.version;
 
   const rowIdx = readme.findIndex((l) => l.startsWith("**当前版本："));
   if (rowIdx < 0) {
@@ -411,9 +436,10 @@ export const readTags = (root: string): string[] | null => {
 };
 
 export const checkVersionTags = (root: string): { ok: boolean; code: number; lines: string[] } => {
-  let ver = "";
-  try { ver = String(JSON.parse(readText(root, "package.json")).version ?? ""); } catch { /* 下面按缺失处理 */ }
-  if (!ver) return { ok: false, code: 2, lines: ["❌ ⑤ **结构缺失**：`package.json` 里读不到 `version`。"] };
+  // B20：与 ①/④ 共用同一份「读 version」实现。
+  const pv = pkgVersionOf(root);
+  if (!pv.ok) return { ok: false, code: 2, lines: [pv.line] };
+  const ver = pv.version;
 
   const versions = [...readText(root, "CHANGELOG.md").matchAll(/^##\s*\[v?(\d+\.\d+\.\d+)\]/gm)].map((m) => m[1]);
   if (!versions.length) {
