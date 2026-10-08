@@ -30,11 +30,13 @@ export async function runAdaptation(deps: ShadowQueryDeps, args: any, ctx: Adapt
   if (mode === "adapt-change") {
     const ch = await buildAdaptationChange(fs, ws, args);
     if (!ch.ok || !ch.change) return scrubFinal(RECALL_PREFIX + "[AdaptationChange Rejected] " + ch.reason + flushWarn);
-    const degrade = unwrittenWarn("AdaptationChange", ch.persist ?? { ok: true }, "`.shadow/adapt/<date>/change-*.json` 没有它：`mode:\"adapt-validation\"` 随后**找不到这次调整**（Adaptation Lineage 断了）。");
+    // 缺字段**不得当成功**（ADR-0049）：`buildAdaptationChange` 的成功路径必带 `persist`，
+    // 故这里缺席 = 上游契约被破坏 ⇒ 显式报「未落盘」，而不是把「未记录」静默读成「写成功」。
+    const degrade = unwrittenWarn("AdaptationChange", ch.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/adapt/<date>/change-*.json` 没有它：`mode:\"adapt-validation\"` 随后**找不到这次调整**（Adaptation Lineage 断了）。");
     return scrubFinal(RECALL_PREFIX + renderChange(ch.change) + degrade + flushWarn);
   }
   const v = await validateAdaptation(fs, ws, args);
   if (!v.ok || !v.validation) return scrubFinal(RECALL_PREFIX + "[AdaptationValidation Rejected] " + v.reason + flushWarn);
-  const degrade = unwrittenWarn("AdaptationValidation", v.persist ?? { ok: true }, "`.shadow/adapt/<date>/validation-*.json` 没有它：这次「问题发生 + 现实反馈」的记录没留下。");
+  const degrade = unwrittenWarn("AdaptationValidation", v.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/adapt/<date>/validation-*.json` 没有它：这次「问题发生 + 现实反馈」的记录没留下。");
   return scrubFinal(RECALL_PREFIX + renderAdaptValidation(v.validation) + degrade + flushWarn);
 }

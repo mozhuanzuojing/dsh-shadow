@@ -2,7 +2,8 @@
 // dsh-shadow —— tools/audit-layers.ts：**结构门**的 CLI（IO 与呈现；判据全在 audit-layers.lib.ts）。
 //
 // 用法：node tools/audit-layers.ts [repoRoot]
-// 退出码：0 = 全部判据通过；1 = 有违规（可接进 `npm run verify`）。
+// 退出码：0 = 全部判据通过；1 = 有违规；**2 = 结构缺失**（语料 / `tsconfig*.json` 读不出来 ⇒ 那一次
+//   「没问题」是**假绿**，见 V7 语料健康门与 ④ 的零配置守卫 —— 三者都接进 `npm run verify`，非 0 即停）。
 //
 // 口径（必须打印出来，否则读数不可解释）：
 //   · 语料 = 仓库下所有 `*.ts`（递归），**排除** SOURCE_EXCLUDED_DIRS + `test` + `tools`
@@ -142,24 +143,21 @@ for (const p of PURE_MODULES) console.log(`   · ${p}`);
 console.log(`③ 方向禁令（${DIRECTION_RULES.length} 条）+ 任何层 ↛ ${FORBIDDEN_TARGETS_EVERYWHERE.join(" / ")}`);
 for (const r of DIRECTION_RULES) console.log(`   · ${r.from} ↛ ${r.to}（${r.why}）`);
 // ④（A2）：条目零匹配即违规 —— `tsc` 只要匹配到一个文件就不报「无输入」⇒ 失效条目会静默通过。
-console.log(
-  tsconfigs.length
-    ? `④ \`tsconfig*.json\` 的 include 条目必须存在：${tsconfigs.length} 份配置 / ${entryCount} 条条目 · **零匹配 ${includeViolations.length} 条**`
-    : "④ `tsconfig*.json` 的 include 条目必须存在：**一份配置都没找到** ⇒ 本条**不判**（这不是「通过」）",
-);
-console.log("");
-
-if (unresolved.length > 0) {
-  // v1.15.55：**未解析的相对 import 计违规**。
-  // 旧行为只是打印（且只显示前 10 条）并注明「暂不计违规」⇒ 把一个 import 路径改坏，
-  // 就能让那条边**从依赖图里消失** ⇒ 「①文件级无环」与「③方向禁令」**静默放行**。
-  // 一个会静默放行的门禁，比没有门禁更危险（它给出的是**虚假的确定性**）。
-  console.log(`✗ 未解析的相对 import（${unresolved.length} 处）—— 计违规：这些边**不在**依赖图里，`);
-  console.log("  无环与方向禁令都看不到它们（路径写错/文件被删/笔误都会造成）。");
-  for (const u of unresolved.slice(0, 10)) console.log(`   ✗ ${u.from}:${u.line} → ${u.spec}`);
-  if (unresolved.length > 10) console.log(`   ……另有 ${unresolved.length - 10} 处（只显示前 10）`);
-  console.log("");
+//
+// ⚠ **零配置 = 结构缺失，既不是「不判」也不是「通过」**（ADR-0049「缺件不静默」）：本条的语料是
+// `tsconfig*.json`，一份都读不到（目录走错 / 递归被截断 / 权限）时**没有可判对象** ⇒ 与上面
+// V7 语料健康门（`:55-68`）**同形**：走 `exit 2`，而不是落进末尾的 `全部判据通过 ✅` + `exit 0`
+// —— 那正是本仓反复记录的「门绿着、判别力没了」。
+// 退出码分工：`2` = 缺件（结构缺失，读不出「有没有问题」）/ `1` = 有违规 / `0` = 判据通过。
+// 为什么这条守卫放在 CLI 而不是 lib：它是**语料存在性**（「有没有可判对象」），不是源码判据；
+// 正反对照由 `audit-layers.selftest.ts` ⑪ 的 **CLI 夹具**覆盖（零配置 ⇒ 2 / 配置齐备 ⇒ 0 / 条目零匹配 ⇒ 1）。
+if (tsconfigs.length === 0) {
+  console.error("④ `tsconfig*.json` 的 include 条目必须存在：**一份配置都没找到**。");
+  console.error("  ⇒ 结构缺失（ADR-0049）⇒ 本条**没有可判对象**，且**不是「通过」** —— 与 V7 语料健康门同形，exit 2。");
+  process.exit(2);
 }
+console.log(`④ \`tsconfig*.json\` 的 include 条目必须存在：${tsconfigs.length} 份配置 / ${entryCount} 条条目 · **零匹配 ${includeViolations.length} 条**`);
+console.log("");
 
 if (layerCycles.length > 0) {
   console.log("已知**非违规**（留档，不判）：层间成环");

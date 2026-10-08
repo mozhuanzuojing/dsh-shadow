@@ -38,11 +38,13 @@ export async function runHorizon(deps: ShadowQueryDeps, args: any, ctx: HorizonC
   if (mode === "horizon-event") {
     const e = await buildContinuityEvent(fs, ws, args);
     if (!e.ok || !e.event) return scrubFinal(RECALL_PREFIX + "[ContinuityEvent Rejected] " + e.reason + flushWarn);
-    const degrade = unwrittenWarn("HistoryContinuityEvent", e.persist ?? { ok: true }, "`.shadow/horizon/<date>/event-*.json` 没有它：accessibility 变迁的审计痕迹没留下。");
+    // 缺字段**不得当成功**（ADR-0049）：`buildContinuityEvent` 的成功路径必带 `persist` ⇒ 缺席 = 上游契约被破坏。
+    const degrade = unwrittenWarn("HistoryContinuityEvent", e.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/horizon/<date>/event-*.json` 没有它：accessibility 变迁的审计痕迹没留下。");
     return scrubFinal(RECALL_PREFIX + renderHorizonEvent(e.event) + degrade + flushWarn);
   }
   const l = await buildInteractionAdaptationLink(fs, ws, args);
   if (!l.ok || !l.link) return scrubFinal(RECALL_PREFIX + "[InteractionLink Rejected] " + l.reason + flushWarn);
-  const degrade = unwrittenWarn("InteractionAdaptationLink", l.persist ?? { ok: true }, "`.shadow/horizon/<date>/link-*.json` 没有它：History→Recall→Adaptation 这条链的**连接边**没留下。");
+  // 缺字段**不得当成功**（ADR-0049）：成功路径必带 `persist` ⇒ 缺席 = 上游契约被破坏，显式报「未落盘」。
+  const degrade = unwrittenWarn("InteractionAdaptationLink", l.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/horizon/<date>/link-*.json` 没有它：History→Recall→Adaptation 这条链的**连接边**没留下。");
   return scrubFinal(RECALL_PREFIX + renderLink(l.link) + degrade + flushWarn);
 }

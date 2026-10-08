@@ -1,7 +1,7 @@
 // dsh-shadow —— federation/reality.ts：G2 Reality Evidence Registry（弱事实，append-only，Observer 只能引用不能拥有）。
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { RealityEvidence } from "./types.js";
-import { today, isNotFound, newId } from "../../core/util.js";
+import { today, isNotFound, newId, errText } from "../../core/util.js";
 
 export const registerRealityEvidence = async (fs: any, ws: string, ev: { observedAt?: string; source: string; observation: string; linkedHypothesis?: string[] }): Promise<{ evidence: RealityEvidence; persisted: boolean }> => {
   const full: RealityEvidence = {
@@ -55,29 +55,50 @@ export const referenceEvidence = async (fs: any, ws: string, id: string, observe
 };
 
 /** 读全部 reality evidence，并**区分「还没有」与「读不出」**（v1.15.61，与 registry/claims 同型）。 */
-export const readRealityEvidenceDetailed = async (fs: any, ws: string): Promise<{ evidence: RealityEvidence[]; corrupt: number }> => {
+export interface RealityEvidenceRead {
+  evidence: RealityEvidence[];
+  /** 单条坏件数（>0 ⇒ 下游「弱事实只有这些」的读数基于不完整输入）。 */
+  corrupt: number;
+  /**
+   * **目录级读不出来**的真实原因（「还没有 `.shadow/reality` 目录」**不算**）。
+   *
+   * **B4 同类补扫（v1.22.x；规格轴复审 (a)-2）**：旧版外层只有一个「无 reality 目录」注释的 `catch`，把
+   * 「读不出来」与「真的还没有」压成同一个返回值。
+   * ⚠ **消费点已接（v1.22.2）**：`query/federation.ts` 的 stability 分支改用 `readRealityEvidenceDetailed`
+   * 并把 `readFailure` 打进输出；**薄包装 `readRealityEvidence` 随之删除**（它拿不到这个字段，
+   * 留着只会让下一个调用方再踩一遍「读不出来 = 没有」）。
+   */
+  readFailure?: string;
+}
+
+export const readRealityEvidenceDetailed = async (fs: any, ws: string): Promise<RealityEvidenceRead> => {
   const out: RealityEvidence[] = [];
   let corrupt = 0;
+  if (!fs || !ws) return { evidence: out, corrupt, readFailure: "无 fs 或无工作区 ⇒ 读不出 .shadow/reality" };
+  let root: any;
   try {
-    const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/reality`, { cwd: ws });
-    // A7（`noImplicitAny: true`）：「列目录失败 ⇒ 空列表」的 `.catch` 回调需**显式返回类型**。
-    const files = (await fs.listDir(root).catch((): any[] => [])) || [];
-    for (const f of files) {
-      if (!f?.name || !f.name.endsWith(".json")) continue;
-      try {
-        const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/reality/${f.name}`, { cwd: ws });
-        out.push(JSON.parse(await fs.readText(p)));
-      } catch {
-        corrupt += 1;
-        console.log(`[dsh-shadow] reality evidence 坏件（已跳过并计数）：${f.name}`);
-      }
+    root = await fs.resolve(`${ws}/${SHADOW_ROOT}/reality`, { cwd: ws });
+  } catch (e: any) {
+    return isNotFound(e) ? { evidence: out, corrupt } : { evidence: out, corrupt, readFailure: `定位 .shadow/reality 失败：${errText(e)}` };
+  }
+  let files: any[] = [];
+  try {
+    files = (await fs.listDir(root)) || [];
+  } catch (e: any) {
+    return isNotFound(e) ? { evidence: out, corrupt } : { evidence: out, corrupt, readFailure: `列举 .shadow/reality 失败：${errText(e)}` };
+  }
+  for (const f of files) {
+    if (!f?.name || !f.name.endsWith(".json")) continue;
+    try {
+      const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/reality/${f.name}`, { cwd: ws });
+      out.push(JSON.parse(await fs.readText(p)));
+    } catch {
+      corrupt += 1;
+      console.log(`[dsh-shadow] reality evidence 坏件（已跳过并计数）：${f.name}`);
     }
-  } catch { /* 无 reality 目录（真的还没有） */ }
+  }
   return { evidence: out, corrupt };
 };
-
-export const readRealityEvidence = async (fs: any, ws: string): Promise<RealityEvidence[]> =>
-  (await readRealityEvidenceDetailed(fs, ws)).evidence;
 
 export const renderRealityEvidence = (ev: RealityEvidence) => {
   const lines = ["[Reality Evidence]"];

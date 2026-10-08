@@ -7,7 +7,7 @@ import { scrubFinal } from "../security/scrub.js";
 import { packetOf, renderPacket, assertPacketBarrier } from "../epistemic/federation/contract.js";
 import { compareProjections, renderDistortion } from "../epistemic/federation/guard.js";
 import { perspectiveOf, renderPerspective, perspectiveIsClean, confidenceOfInput } from "../epistemic/federation/perspective.js";
-import { registerRealityEvidence, referenceEvidence, readRealityEvidence, renderRealityEvidence } from "../epistemic/federation/reality.js";
+import { registerRealityEvidence, referenceEvidence, readRealityEvidenceDetailed, renderRealityEvidence } from "../epistemic/federation/reality.js";
 import { differenceOf, renderDifference } from "../epistemic/federation/difference.js";
 import { perspectiveStateOf, renderStability } from "../epistemic/federation/stability.js";
 import type { ShadowQueryDeps } from "./types.js";
@@ -59,8 +59,13 @@ export async function runFederation(deps: ShadowQueryDeps, args: any, ctx: Feder
     return scrubFinal(RECALL_PREFIX + renderDifference(d) + flushWarn);
   }
   // stability
-  const evs = await readRealityEvidence(fs, ws);
-  const ev = evs.find((e) => e.id === String(args?.realityId || "")) || null;
+  // v1.22.2：改用 Detailed 变体并**消费 `readFailure`** —— 旧实现只取 `.evidence` ⇒ 一份「目录级读不出来」
+  // 会被渲染成「没有这条 reality evidence」，把**事故**说成**不存在**（ADR-0049「缺件不静默」）。
+  const read = await readRealityEvidenceDetailed(fs, ws);
+  const ev = read.evidence.find((e) => e.id === String(args?.realityId || "")) || null;
   const state = perspectiveStateOf(ev, Boolean(args?.hasValidation));
-  return scrubFinal(RECALL_PREFIX + renderStability(state) + flushWarn);
+  const w = read.readFailure
+    ? `\n> ⚠ **读不出** \`.shadow/reality/\`（${read.readFailure}）⇒ 上面「没有这条证据」的结论**不可信**：请先确认该目录可读。`
+    : "";
+  return scrubFinal(RECALL_PREFIX + renderStability(state) + w + flushWarn);
 }

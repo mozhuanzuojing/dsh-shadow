@@ -3,10 +3,13 @@
 //
 // 为什么必须有：门禁的比较/判定函数如果没有负例测试，**门静默失效也没人知道**
 // （hl_mem 那一侧的 `compare_core_v1.py` 就没人调用 —— 见 BACKLOG T14）。
-// 本文件只用**合成夹具**驱动 `audit-layers.lib.ts` 的同一份判据；真仓库的基线由
+// 本文件用**合成夹具**驱动 `audit-layers.lib.ts` 的同一份判据；⑪ 另用 **CLI 夹具**（真起进程）覆盖
+// 「语料存在性 ⇒ 退出码」这一条（它判的是「有没有可判对象」，只在 CLI 层成立）；真仓库的基线由
 // `npm run audit:layers`（接在 `npm run verify` 里）执行，不在这里重复。
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -24,6 +27,7 @@ import {
 } from "./audit-layers.lib.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI = join(HERE, "audit-layers.ts");
 const f = (path: string, text: string) => ({ path, text });
 
 // ⚠ 关键前提：**默认判据表指向真仓库的文件**（`core/paths.ts` 等）。在合成夹具上跑默认表，
@@ -206,21 +210,84 @@ const NO_RULES = { pureModules: [] as string[], directionRules: [] as (typeof DI
   assert.deepEqual(tsconfigIncludes(jsonc), ["index.ts"], "带引号的 include 键必须被正确解析（JSONC 注释不得干扰）");
   assert.equal(tsconfigIncludeViolations(cfg(jsonc), exists).length, 0);
 
-  // **控制变量（无该键）**：`include` 是可选字段 ⇒ 0 条条目、0 条违规（「不判」不是「通过」，
-  // 所以 CLI 会把它作为「一份配置都没找到 ⇒ 本条不判」打印出来）。
+  // **控制变量（无该键）**：`include` 是可选字段 ⇒ 0 条条目、0 条违规（那是 lib 层判据的边界）。
+  // ⚠ 但**「一份配置都没有」是另一回事**：它由 CLI 的语料存在性守卫判成结构缺失（exit 2），
+  // 见 ⑪ —— 这里不重复判，只锁「无该键 ⇒ lib 不报违规」。
   assert.deepEqual(tsconfigIncludes('{"compilerOptions":{}}'), []);
 
   // ★ **防「门被摘掉」**（同 `citation-audit.selftest.ts` ⑧ 的形状）：判据在 lib 里，但只有 CLI
   //   真的调用它、且把结果并进 `violations`（决定退出码的那个数组），它才是一道门 ——
   //   否则「从 CLI 里删掉这一行」会让门更宽松而**照样全绿**。
+  //   ⚠ 匹配前先剥掉整行注释：只在注释里写这串文本不算「挂在退出码上」（那正是本断言要防的形态）。
   const cliSrc = readFileSync(join(HERE, "audit-layers.ts"), "utf8");
-  assert.match(cliSrc, /tsconfigIncludeViolations\(/, "audit-layers.ts 必须调用 include 存在性判据");
+  const cliCode = cliSrc.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  assert.match(cliCode, /tsconfigIncludeViolations\(/, "audit-layers.ts 的**可执行代码**必须调用 include 存在性判据（注释不算）");
   assert.match(
-    cliSrc,
+    cliCode,
     /violations\.push\(\.\.\.includeViolations\)/,
     "include 违规必须并进 `violations`（否则只打印、不改退出码 —— 又是一道「绿而无判别力」的门）",
   );
   console.log("✔ ⑩ tsconfig include 存在性：零匹配被抓到（含 `**` 通配形态与 JSONC 控制变量）、齐备放行、且已真的挂在 CLI 的退出码上");
+}
+
+// ⑪ ④ 的**语料存在性**：零 `tsconfig*.json` ⇒ 结构缺失（exit 2），不是 0「全部通过」、也不是 1「有违规」
+//
+// 为什么这条必须**真起进程**测：它判的是「有没有可判对象」，判据落在 CLI 的前置守卫里（不在 lib），
+// 只有走 `process.exit` 的**退出码**才能证明它真的红了。三个方向缺一不可：
+//   · 零配置 ⇒ **2**（缺件；ADR-0049 —— 旧版会落进 `全部判据通过 ✅` + exit 0，即我报的那条假绿）
+//   · 配置齐备且条目都存在 ⇒ **0**（防「一改就常红 ⇒ 会被绕过」）
+//   · 配置在但 include 条目零匹配 ⇒ **1**（与「缺件」的 2 分工，证明两者可区分）
+{
+  const runCli = (root: string): { code: number; out: string } => {
+    try {
+      return { code: 0, out: execFileSync("node", [CLI, root], { encoding: "utf8" }) };
+    } catch (e: any) {
+      return { code: e.status ?? -1, out: `${e.stdout ?? ""}${e.stderr ?? ""}` };
+    }
+  };
+  // 夹具必须**先过 V7 语料健康门**（哨兵齐备、文件面非空）与 ② 纯模块白名单（白名单里的文件都得在），
+  // 否则会在 ④ 之前 exit 2，测到的就不是本条。
+  //
+  // ⚠ **白名单里的文件由 `PURE_MODULES` 派生，不手抄**（v1.22.2 修）：先前这里硬编码 5 个路径，
+  // 而 `PURE_MODULES` 后来加到 7 个 ⇒ 夹具缺两个文件、「白名单不得腐化」正确地报红，整条 selftest 挂。
+  // 门判得对、夹具陈旧 —— 本仓口径「能推出来的字段不要手写」在这里同样成立：**列表是唯一权威**。
+  // 每个纯模块给一份**无 import** 的最小体（本条只关心「文件在不在」与「有没有 import」）。
+  const BASE: Record<string, string> = {
+    "index.ts": "export const x = 1;\n",
+    ...Object.fromEntries(
+      PURE_MODULES.map((rel) => [rel, rel.endsWith(".ts") ? `export const ${rel.replace(/[^a-zA-Z0-9]+(.)/g, (_, c) => c.toUpperCase())} = 1;\n` : "export {};\n"]),
+    ),
+  };
+  const dirs: string[] = [];
+  const fixture = (extra: Record<string, string>): string => {
+    const d = mkdtempSync(join(tmpdir(), "layers-audit-"));
+    dirs.push(d);
+    for (const [rel, body] of Object.entries({ ...BASE, ...extra })) {
+      const p = join(d, rel);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, body, "utf8");
+    }
+    return d;
+  };
+  try {
+    // **负对照（本条的立命之处）**：一份配置都没有 ⇒ 必须非 0，且要是 2（缺件）而不是 1（违规）
+    const miss = runCli(fixture({}));
+    assert.equal(miss.code, 2, `零 tsconfig*.json 必须按结构缺失 exit 2，不是「全部判据通过」；实际 ${miss.code}：${miss.out}`);
+    assert.match(miss.out, /结构缺失（ADR-0049）/, `报文必须写明结构缺失（而不是「本条不判」或「通过」）：${miss.out}`);
+    assert.ok(!/全部判据通过/.test(miss.out), `零配置时**不得**出现「全部判据通过 ✅」：${miss.out}`);
+
+    // **正对照**：配置齐备且 include 条目都存在 ⇒ 0
+    const ok = runCli(fixture({ "tsconfig.json": '{\n  "include": ["index.ts"]\n}\n' }));
+    assert.equal(ok.code, 0, `配置齐备且条目存在时必须放行（0）；实际 ${ok.code}：${ok.out}`);
+    assert.match(ok.out, /include 条目必须存在：1 份配置 \/ 1 条条目/, `正对照必须打印 ④ 的读数：${ok.out}`);
+
+    // **负对照 2**：配置在、但 include 条目零匹配 ⇒ 1（有违规 ⇒ 与「缺件」的 2 分工）
+    const bad = runCli(fixture({ "tsconfig.json": '{\n  "include": ["core/ghost.ts"]\n}\n' }));
+    assert.equal(bad.code, 1, `include 条目零匹配必须按违规 exit 1；实际 ${bad.code}：${bad.out}`);
+  } finally {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  }
+  console.log("✔ ⑪ ④ 的语料存在性：零配置 ⇒ exit 2（结构缺失，不得「全部通过」）、配置齐备 ⇒ 0、条目零匹配 ⇒ 1");
 }
 
 console.log("");

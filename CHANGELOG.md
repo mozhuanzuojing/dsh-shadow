@@ -3,87 +3,67 @@
 > dsh-shadow 变更历史（Keep a Changelog）。语义化版本。
 > **本文件自 v1.21.15 起只保留一份**：**每版覆盖、不追加**；tag **每版只留一个**（删旧建新）—— 口径见 `AGENTS.md`。
 
-## [v1.22.1] 写侧降级三态化 · 判据收一处 · 文档与状态面回核
+## [v1.22.2] 把上一版自己的洞补上 —— 一处假绿门 · 七处「缺字段当成功」 · 同类扫描真扫净
 
-### 1. 补的是什么洞
+### 1. 为什么要再发一版
 
-主线是 **ADR-0049 / ADR-0085 那一族：失败与成功在读者眼里逐字相同**。
+`v1.22.1` 修完 74 条评审发现后，**又被两轴评审反过来审了一遍**（规范轴 / 规格轴，各一名**独立**评审员）。
+本版修的就是那一轮找出来的东西 —— **其中三条是上一版自己引入的**，这正是「修完要再评一次」的价值。
 
-- **写侧「只 `console.log`、返回 `void`」**：`trajectory/` `stance/` `selfhood/` `reflection/` 下一批写侧函数的契约里
-  **没有返回值**，失败只进日志 —— 而 `console.log` **不算** ADR-0049 认可的可见信号 ⇒ 读侧照旧说「已记录」。
-  最严重的一处是 `query/contverify.ts` 的四个写模式：失败渲染成成功，**同段输出里没有任何反证**（定为 P0）。
-- **恒空的假读数**：`stance/planning/types.ts` 的 `PlanningComparison` 此前**全仓零消费者**，渲染器只能 `(c as any)` +
-  「约束文本含 `under` 子串」嗅探，`violatedConstraints` 因此**恒空** ⇒ 每次都打印 `violatedConstraints: —`，
-  读者读成「没有任何约束被违反」（B5）。
-- **旗标落不回 goal**：`core/admission/intent.ts` 的 `FLAG_GOAL` 只有 7 个键，而 `read_shadow` 的 schema 有 19 个 boolean 参数
-  ⇒ 多处旗标静默回落到 `DEFAULT_GOAL`「召回相关记忆」；而 Intent **有落盘副作用**（写进 `ObserverContext`）。
-  同文件 `FLAG_ORDER` 是**手写的第二份清单**，往一处加而漏另一处就永远取不到 goal（A10 / A28）。
-- **同一事实被写在多处**：记忆线索头解析散在 4 个模块（且口径已分叉：一处取原始串、一处取切开后的数组）；
-  降级措辞散在各层；`HOST_BASELINE` 是验证基线的**第 4 份副本**，而 `audit:docs` ⑦ 只守前三处，
-  这处漂移**永远不会有门报警**，偏偏它印在给用户看的降级横幅里（A1）。
-- **`clean` 落在门的盲区**：`npm run clean` 原先是内联 `node -e "…"` —— 既不是文件也不是 TS，
-  却每个 build / 发版都跑，而 `audit:scripts` 只认文件（A26）。
+> 条目编号 `A*/B*` 与 `(a)/(b)/(c)` 的**出处**是本仓之外的两份评审分册（`.docs/fix/2026-10-07/` 与
+> `.docs/fix/2026-10-08/`）；它们**不随仓库分发**，故此处只留「这一版改了什么」而不复制条目正文。
 
-### 2. 做法与边界
+### 2. 修了什么
 
-| 项 | 处置 | 边界（写清防顺手扩大） |
-|---|---|---|
-| 三态形状 | `persistence/outcomes.ts` 收 `PersistOutcome` / `ReadOutcome<T>` / `DegradeNote` | **零依赖、只有类型**：任一层可引而不再多一条依赖边；只放形状，不放渲染 |
-| 读者可见 | `query/degrade.ts` 收 `unwrittenWarn` / `readCauseWarn` | `ok:true` ⇒ **空串** ⇒ 健康路径输出**逐字节不变** |
-| 判据收一处 | `core/view/clue.ts`（线索头解析，**零 import**，供 `tools/` 在 build 前直引）· `core/host-baseline.ts`（基线从 `package.json` **运行时派生**） | clue.ts 只解析 `> <标签>：<值>` 一类，Reflection 族不进；派生之后**不再给 ⑦ 加比对面**（那会再造一份副本） |
-| 裁决透传 | `query/planning.ts` 真的构造 `PlanningComparison` 交给渲染；空数组 ⇒ 该段**整段省略** | 渲染器只报调用方**真的声明了**的约束，不反过来说「没有违反」 |
-| 旗标门 | 新增 `test/intent-flags.test.ts`：用**真实注册面**取 schema，断言 19 个 boolean 参数都有 goal 映射、顺序表与映射表同源 | 判据是「宿主真正看到的参数面」，不是「源码里有几处 `type:"boolean"`」 |
-| clean | `tools/clean.ts` + `npm run clean` 改指它 | 只搬家不改语义；`force: true` 让「本来就没有」不报错 |
+- **一处会假绿的结构门（A2，本版最严重）**：`audit-layers` 新增的 ④「`tsconfig*.json` 的 include 条目必须存在」
+  在**一份配置都没找到**时只打印「本条**不判**（这不是「通过」）」，却**不产生违规** ⇒ 流程照样走到
+  `全部判据通过 ✅` + `exit 0`。**一个会静默放行的门禁比没有门禁更危险**（它给出虚假的确定性 —— 本文件同一故事
+  在 `v1.15.55` 的「未解析 import 只打印不计违规」上已经演过一次）。
+  现改为与同文件 V7 语料健康门**同形**：结构性缺失 ⇒ **`exit 2`**，并在 selftest 里补**三向对照**
+  （零配置 ⇒ 2 / 配置齐备 ⇒ 0 / 条目零匹配 ⇒ 1）。
+- **「字段缺失」不再被当成「写成功」**：`query/{adaptation,agency,delegation,horizon,recall}.ts` 共 **7 处**
+  `e.persist ?? { ok: true }` —— 而 `persist` 是**可选**字段 ⇒ 「没记录」与「写成功了」在类型上不可分。
+  现改为**显式未落盘**（`{ ok: false, reason }`），并把「理想终态是让字段必填」记进 BACKLOG。
+- **「同类扫描」这次真扫净（B2/B4）**：上一版声称做了同类扫描，实测 `epistemic/**` **仍剩 9 处写侧**
+  （5 个 `Promise<void>` 写口 + 4 处调用点直接丢弃返回值）⇒ `mode:execute` / `verification` / `validation` / `world`
+  至今「写失败与写成功逐字相同」。本版：5 个写口改三态、4 个调用点消费并上横幅；**B4 同族读侧 5 处**
+  也把「目录不存在」与「读失败」分开。改完 `epistemic/**` 同族残留 **0**。
+- **新信号必须有人读**：`query/federation.ts` 的 stability 与 `query/reality-model.ts` 的两条分支此前调用的是
+  **薄包装**（拿不到 `readFailure`）⇒ 「读不出来」仍会被渲染成「没有这条证据」。现改用 Detailed 变体并把原因打进输出；
+  **随之删掉两个因此变死的薄包装**（留着只会让下一个调用方再踩一遍）。
+- **门自己也要被守**：`core/view/clue.ts` 与 `persistence/outcomes.ts` 是零 import 的纯模块，却**没登记进
+  `PURE_MODULES`** —— 白名单制的判据里，漏登 = 它悄悄长出 import 也没人报。已补登记。
+- **两处会让「重放」失败的实现**：`tools/clean.ts` 原先 `rmSync("dist")` 用的是**调用方 CWD 的相对路径**
+  （从别处调用 ⇒ 什么都没删，正是「幽灵产物」的成因；更糟时删错目录）⇒ 改为**相对本文件**定位；
+  `adr/0084` 两处**已知指错**的引用改成符号引用（未冻结 ADR 属「必须修」层），`test/t8-explicit-zero.test.ts`
+  的同族指错（其中一处连路径都不存在）一并改成符号引用。
 
-### 3. 文档与状态面（本轮同批回核）
-
-评审轴（`../.docs/fix/2026-10-07/review-shadow-spec.md`）登记的「文档 vs 实现」缺陷，逐条落地：
-
-| 处 | 文件 | 改动 |
-|---|---|---|
-| ① | `README.md` | 安装/粘贴路径写成**不存在的 `D:` 盘** ⇒ 改成 `G:\project\dsh1\dsh-shadow`；「只读工具**不写工作区**」与同页 `queryLog` 行、与 `core/view/projection-store.ts` 的注释相反 ⇒ 限定为「不写 `atoms/` 权威语料」；复杂度门「热点棘轮只降不升」与 `fresh` 分支相反 ⇒ 补「新热点只记账」；「每个文件自己打印 `ALL PASS ✅`」对 3/59 不成立 ⇒ 限定；`SHADOW_EVAL_ROOT` 的本机值同步换根 |
-| ② | `CONTEXT.md` | 遗忘的「默认**关**」与 README 默认开关表、`core/util.ts` 的 `onByDefault` 相反 ⇒ 改「默认开（v1.15.85）」；新增 `影子存储根`、`ADR 条数口径` 两条术语 |
-| ③ | `MATERIALS.md` | §1 的复核块按新枚举时刻重出（本仓 HEAD / 漂移列）；§1.1 的 24 行**一字未改**（归档层） |
-| ④ | `BACKLOG.md` | 头部那组手写计数改成「判据 + 命令，不写数」；新增 `T29`（ADR 交叉引用被「去数」削断的损害面 + 复现命令）；`satisfiedConstraints` 那条按 B5 的实际收口更新 |
-| ⑤ | `LIVE-VERIFY-checklist.md` | 「现 1.21.0」与已废弃的 `vendor/dsh-shadow` 路径 ⇒ 修正；判定/结论两行由「全部 ✅ 真机验证通过」改成**如实的部分完成** |
-| ⑥ | `docs/maintainers.md` | 模块归属表的「28 个 / 140 格子」⇒ 改「以生成器输出为准」；「core 43 个文件 / 4 个零 import」⇒ 改实测与判据；`reference` 44 项 / 13 分类 ⇒ 改实测读法；`:158-160` 那段「2026-09-12 目录已不在本机、无 t15*」与实测相反 ⇒ 更正；登记 7 个 `.shadow/` 存储根、两个未登记工具、新模块与新工具 |
-| ⑦ | `tools/module-ownership.ts` | 删掉 `decision` 层的死 `OWNS` 条目（该层已按 `T26` 整层删除） |
-| ⑧ | `presets/projection.patch.yml` | **只**补文件头注解：基体的上游代与逐字节结论以 README 的验证基线为准 |
-| ⑨ | `adr/0026` | 末尾**补记**（正文一字未改——已接受 ADR 只写补记）：`epistemic/simulation/types/state.ts` 与 `CounterfactualState` 已删 |
-
-### 4. 验证
+### 3. 验证
 
 | # | 检查项 | 手段 | 结果 |
 |---|---|---|---|
-| 1 | 文档派生字段门 | `node tools/docs-consistency.ts .` | ①–⑦ 见「当前状态」 |
-| 2 | 引用越界门 | `node tools/citation-audit.ts .` | 0 越界 |
-| 3 | 模块归属表 | `node tools/module-ownership.ts` | 由生成器打印，文档不再手写 |
-| 4 | 材料名册 | `node tools/materials-ledger.ts G:\project\dsh1` | 8 份材料 / 本仓 HEAD 见该次枚举 |
-| 5 | 全仓闸门 | `npm run verify` | 由 `npm run release` 的第一步执行（闸门是退出码） |
+| 1 | 全仓闸门 | `npm run verify` | 由 `npm run release` 的第一步执行（闸门是退出码） |
+| 2 | 结构门自证 | `node tools/audit-layers.selftest.ts` | 三向对照：零配置 ⇒ 2 / 齐备 ⇒ 0 / 零匹配 ⇒ 1 |
+| 3 | 文档派生字段门 | `node tools/docs-consistency.ts .` | ①–⑦ 见「当前状态」 |
+| 4 | 引用越界门 | `node tools/citation-audit.ts .` | 0 越界（扫描面含源码 `.ts` 注释） |
 
-### 5. 诚实标注
+### 4. 诚实标注
 
-- **本版**把「文档能对上代码」当**一次核对**，不是**一次保证**：`audit:docs` 的 ①–⑦ 都是必要条件，
-  它答「有没有 / 一致不一致」，答不了「顺序与描述对不对」。
-- **ADR 交叉引用被削断这件事未修**：`adr/0087` 等文件里的 `ADR- / 0051` 这类残片来自 `v1.21.13` 的 D12「全量删数」，
-  而本仓口径是「**冻结 ADR 不改正文、只写补记**」⇒ 恢复编号会与 D12 的既有决定冲突，**需用户裁决**；
-  本轮只在 `BACKLOG` `T29` 登记损害面与复现命令（见该条「需用户裁决」）。
-- **`adr/` 无索引**：文件数与最高编号**不是同一件事**（有断号、有 `-1` 变体）⇒ 口径已写进 `CONTEXT.md`
-  「ADR 条数口径」，但**没有**建索引文件（新增产物须另立决定）。
-- **生成物未回核**：`docs/architecture-seams.*`（`v1.12.2` 的当时证据）与 `docs/absorb-verdict.*` 内容已旧，
-  本轮**不改产物**，只在 `docs/maintainers.md` 注明「勿当现状读」——`citation-audit` 的引用正则扫不到 `.html` / `.candidate.json`
-  （`AGENTS.md` 已记该边界），故它们的过期**不会有任何门报警**。
-- **两处失配的行号引用在源码/测试面，不在本轮写面**：`core/util.ts` 与 `test/t8-explicit-zero.test.ts` 把
-  「`abstracts.showInIndex` 默认 3」的出处写成 `core/types.ts:55`（实为 `indexSchema` 那行）、把 `episodeShow` 的落点写成
-  `materialize.ts:212`（实为 `core/writer/core.ts`）——`citation-audit` 只判**越界**，这两处没越界却指错，需改源码注释与测试（未做）。
-- **`satisfiedConstraints` 仍有两处算法**：B5 只收掉了渲染器的子串嗅探与恒空假读数；
-  `stance/agency/engine.ts` 仍从 `args.candidates` 上按 `satisfied >= violated` 自行挑候选，与 planning 面不同源（`BACKLOG` 已更新）。
-- **未跑 `npm run verify` 全链**：本轮只跑上述只读门；全链由 `npm run release` 的闸门跑。
+- **写侧还有 10 个 `Promise<void>` 写口、7 处 `catch + log` 不在本版写面**（`core/` 6 · `retrieval/` 1 · `query/` 1 ·
+  `core` 内部工具 2），其中 6 处是**已文档化的正当静默**（缓存 / 遥测 / 正文已交付）。⇒ 「这一族**全部**收口」这句话
+  本版**不说**；可说的是「`epistemic/**` 同类残留 0」这个**有 grep 读数**的窄结论。
+- **`A7` 开 `strict` 仍是有据的延后**：实测 `noImplicitAny` 单开 = product 16 / tools 85 / tests 1006 条报错，
+  再加 `strictNullChecks` = 6 / 82 / 849 ⇒ 远超可机械修的范围，**数据留在评审分册里**，不是悄悄略过。
+- **`A25`（`(fs, ws)` 参数对容器化）仍未做**：跨 19 文件 / 3 个写面、当前无缺陷，半程迁移比不迁更坏。
+- **`adr/` 的 54 行交叉引用残片未恢复**：与 `v1.21.13` 的 D12「全量删数」是同一个决定的两面，
+  **需用户裁决**（现只在 `BACKLOG` `T29` 登记损害面与复现命令）。
+- **评审员被限定为只读**：四份分册的「绿/红」来自**静态阅读退出码路径**与**沙箱副本变异**，
+  不是真实门读数；本版发版时才真正跑了一遍全链。
 
 ### 当前状态
 dsh-shadow 是 DSH 记忆插件：读侧 `shadow_query` / `read_shadow` / `recall_shadow`；写侧 `.shadow/atoms` + 保留期 / 失效 / 证据等级；
 治理 = ADR 登记册 · 棘轮 · 引用门 · 文档一致性门 · 分层方向门 · 复杂度预算门 · 脚本语言门；唯一验证入口 `npm run verify`；
 **发版唯一入口 `npm run release`（闸门在第一步）**；评测口径 = dev 切片（默认）/ 留出切片（报告，`--holdout-only`）。
-- **下一批**：`T29`（ADR 引用残片，**需用户裁决**）；`T28`（参考资料目录化 + 节级引用门）；
+- **下一批**：`persist` 改必填（类型上不可能忘）；`T29`（ADR 引用残片，**需用户裁决**）；`T28`（参考资料目录化 + 节级引用门）；
   `adr/` 索引（新增产物须另立决定）；`docs/architecture-seams.*` 的重生成或退役决定。
-- **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料** · **推 `main` 与 tag**（本版提交后需推送 —— 上个版本的提交与 tag 都没推）。
+- **仍等你**：`D2` 填可信根 · `6.3 待定语义` · 一份**冻结语料**。

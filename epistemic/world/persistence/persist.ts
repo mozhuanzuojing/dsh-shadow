@@ -5,14 +5,27 @@
 // —— 直接取 `listDir` 的**第一个**日期（契约与真机实现都是升序 ⇒ 取到**最旧**的快照）。
 import { SHADOW_ROOT } from "../../../core/paths.js";
 import { readLatestSnapshot, type SnapshotRead } from "../../../persistence/snapshots.js";
+import type { PersistOutcome } from "../../../persistence/outcomes.js";
+import { errText } from "../../../core/util.js";
 import type { RepresentationGraph } from "../types.js";
 
-export const writeGraph = async (fs: any, ws: string, g: RepresentationGraph) => {
+/**
+ * 写一份 world 图快照。
+ *
+ * **B2 同类补扫（v1.22.x；规格轴复审 (a)-1）**：旧形态是 `Promise<void>` + `catch { console.log }` ——
+ * `mode:"world"` 的输出当场渲染由这份图派生的 representation，而写失败与成功在读者眼里**逐字相同**
+ *（`readGraph` 随后读到的是旧图或什么都没有）。⇒ 返回 `PersistOutcome`，由 `query/world.ts` 上横幅。
+ */
+export const writeGraph = async (fs: any, ws: string, g: RepresentationGraph): Promise<PersistOutcome> => {
+  if (!fs || !ws) return { ok: false, reason: "无 fs 或无工作区 ⇒ 未写 world graph" };
+  const rel = `${SHADOW_ROOT}/world/${g.generatedAt}/graph.json`;
   try {
-    const rel = `${SHADOW_ROOT}/world/${g.generatedAt}/graph.json`;
     const t = await fs.resolve(`${ws}/${rel}`, { cwd: ws });
     await fs.writeText(t, JSON.stringify(g));
-  } catch (e: any) { console.log("[dsh-shadow] world graph write failed:", e && e.message); }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, reason: `写入 ${rel} 失败：${errText(e)}` };
+  }
 };
 
 /**

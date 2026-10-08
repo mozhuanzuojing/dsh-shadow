@@ -45,6 +45,10 @@ export const PURE_MODULES = [
   "core/util.ts",
   "core/polarity.ts",
   "security/scrub.ts",
+  // v1.22.2 补登记：本轮新增的两个零 import 模块 —— 不登记就**没有任何东西**在守它们「保持纯」
+  // （② 是白名单制：只有列进来的才判；漏登 = 它悄悄长出 import 也没人报）。
+  "core/view/clue.ts",
+  "persistence/outcomes.ts",
 ];
 
 /**

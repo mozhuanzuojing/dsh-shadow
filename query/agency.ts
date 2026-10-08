@@ -35,6 +35,7 @@ export async function runAgency(deps: ShadowQueryDeps, args: any, ctx: AgencyCtx
   const e = await buildAgencyEvent(fs, ws, args);
   if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
   // B2 续修（v1.22.x）：引擎现在把写侧三态带出来（旧版引擎**不消费** `writeAgencyEvent` 的返回值 ⇒ 写失败不可见）。
-  const degradeE = unwrittenWarn("AgencyBoundaryEvent", e.persist ?? { ok: true }, "`.shadow/agency/<date>/event-*.json` 没有它：这次行动的审计痕迹（lineage / 约束检查 / 执行结果）没留下。");
+  // 缺字段**不得当成功**（ADR-0049）：成功路径必带 `persist` ⇒ 缺席 = 上游契约被破坏，显式报「未落盘」。
+  const degradeE = unwrittenWarn("AgencyBoundaryEvent", e.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/agency/<date>/event-*.json` 没有它：这次行动的审计痕迹（lineage / 约束检查 / 执行结果）没留下。");
   return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + degradeE + flushWarn);
 }

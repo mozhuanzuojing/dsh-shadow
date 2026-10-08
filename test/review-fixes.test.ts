@@ -154,14 +154,17 @@ import assert from "node:assert/strict";
   fs.files.set(P, '{"hypothesisId":"h1","events":[{"time":"2026-01-01"}'); // 半截 JSON
   const before = await readTimelineDetailed(fs as any, WS, "h1");
   assert.equal(before.corrupt, true, "坏件必须被识别出来");
-  await appendValidationEvent(fs as any, WS, "h1", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  const refused = await appendValidationEvent(fs as any, WS, "h1", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
   assert.equal(fs.files.get(P), '{"hypothesisId":"h1","events":[{"time":"2026-01-01"}', "★ 坏件**原样保留**（修复前会被 1 条新事件覆盖，历史永久销毁）");
+  assert.equal(refused.persist.ok, false, "B2：拒绝覆盖必须经 `persist` 说出口（旧契约只返回 timeline ⇒ 调用方以为记下了）");
+  assert.match(String(refused.persist.reason), /坏件/, "拒绝的原因必须点名坏件（不是笼统的「写失败」）");
   assert.deepEqual((await readTimeline(fs as any, WS, "h1")).events, [], "读到的仍是空（因为文件确实读不出）—— 但 corrupt 标记已告知调用方");
 
   // 对照：不存在 ⇒ 正常新建并追加
   const fs2 = mkFs();
-  const tl = await appendValidationEvent(fs2 as any, WS, "h2", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
-  assert.equal(tl.events.length, 1, "全新时间线正常追加");
+  const app = await appendValidationEvent(fs2 as any, WS, "h2", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  assert.equal(app.timeline.events.length, 1, "全新时间线正常追加");
+  assert.equal(app.persist.ok, true, "B2：真的落盘 ⇒ `persist.ok:true`（三态不得把成功也报成未落盘）");
   assert.ok(String(fs2.files.get(`${WS}/.shadow/validation/h2.timeline.json`)).includes("e1"), "必须真的落盘");
 
   // **宿主契约的严格桩（v1.15.94）**：`dsh-fs-local` 对不存在的路径抛
@@ -188,14 +191,15 @@ import assert from "node:assert/strict";
   };
   const host = mkHostFs();
   const hPath = `${WS}/.shadow/validation/h3.timeline.json`;
-  const tlHost = await appendValidationEvent(host as any, WS, "h3", { evidenceIds: ["e9"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
-  assert.equal(tlHost.events.length, 1, "宿主形状的「不存在」必须被当成**还没有时间线**（而不是坏件）");
+  const appHost = await appendValidationEvent(host as any, WS, "h3", { evidenceIds: ["e9"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  assert.equal(appHost.timeline.events.length, 1, "宿主形状的「不存在」必须被当成**还没有时间线**（而不是坏件）");
   assert.ok(String(host.files.get(hPath)).includes("e9"), "★ 全新工作区必须真的把时间线写出来（修复前：误判 corrupt ⇒ 拒绝覆盖 ⇒ 永远建不起来）");
 
   // **负对照**：真读失败（权限）仍必须算坏件、仍**拒绝覆盖**（修的是误判，不是把「坏件不落盘」这道闸门拆掉）
   const hostDenied = mkHostFs((p) => p.includes("h4.timeline.json"));
   hostDenied.files.set(`${WS}/.shadow/validation/h4.timeline.json`, '{"hypothesisId":"h4","events":[]}');
-  await appendValidationEvent(hostDenied as any, WS, "h4", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  const denied = await appendValidationEvent(hostDenied as any, WS, "h4", { evidenceIds: ["e1"], result: "validated", alternativeWinner: null, perceptionDelta: "x" } as any);
+  assert.equal(denied.persist.ok, false, "B2：读失败（非「不存在」）算坏件 ⇒ 拒绝覆盖也必须 `persist.ok:false`");
   assert.equal(hostDenied.files.get(`${WS}/.shadow/validation/h4.timeline.json`), '{"hypothesisId":"h4","events":[]}', "**负对照**：读失败（非「不存在」）仍算坏件 ⇒ 原样保留、不落盘");
   console.log("✔ ③b 宿主形状（FS_NOT_FOUND / `cannot read …: not found`）的「不存在」不再被误判成坏件 ⇒ 全新工作区的时间线能建起来；真读失败仍拒绝覆盖");
   console.log("✔ ③ validation timeline 坏件：拒绝覆盖（历史保留），全新时间线正常追加");

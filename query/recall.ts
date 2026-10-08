@@ -33,7 +33,9 @@ export async function runRecall(deps: ShadowQueryDeps, args: any, ctx: RecallCtx
   if (mode === "recall-event") {
     const e = await buildRecallEvent(fs, ws, args);
     if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[RecallEvent Rejected] " + e.reason + flushWarn);
-    const degrade = unwrittenWarn("RecallEvent", e.persist ?? { ok: true }, "`.shadow/recall/<date>/event-*.json` 没有这次忆起：上面这段只是**内存中的对象**（Recall = Access Transition 的审计痕迹没留下）。");
+    // 缺字段**不得当成功**（ADR-0049）：`buildRecallEvent` 的成功路径必带 `persist`（`ok:true` 那支），
+    // 故这里缺席 = 上游契约被破坏 ⇒ 显式报「未落盘」，而不是把「未记录」静默读成「已落盘」。
+    const degrade = unwrittenWarn("RecallEvent", e.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/recall/<date>/event-*.json` 没有这次忆起：上面这段只是**内存中的对象**（Recall = Access Transition 的审计痕迹没留下）。");
     return scrubFinal(RECALL_PREFIX + renderRecallEvent(e.ev) + degrade + flushWarn);
   }
   const v = await validateRecall(fs, ws, args);

@@ -39,6 +39,7 @@ export async function runDelegation(deps: ShadowQueryDeps, args: any, ctx: Deleg
   const e = await recordDelegationEvent(fs, ws, args);
   if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[DelegationEvent Rejected] " + e.reason + flushWarn);
   // B2 续修（v1.22.x）：引擎现在把写侧三态带出来（旧版引擎**不消费** `writeDelegationEvent` 的返回值）。
-  const degradeE = unwrittenWarn("AutonomyBoundaryEvent", e.persist ?? { ok: true }, "`.shadow/delegation/<date>/event-*.json` 没有它：这次委派执行的审计痕迹（scope/约束/执行结果）没留下。");
+  // 缺字段**不得当成功**（ADR-0049）：成功路径必带 `persist` ⇒ 缺席 = 上游契约被破坏，显式报「未落盘」。
+  const degradeE = unwrittenWarn("AutonomyBoundaryEvent", e.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/delegation/<date>/event-*.json` 没有它：这次委派执行的审计痕迹（scope/约束/执行结果）没留下。");
   return scrubFinal(RECALL_PREFIX + renderDelegationEvent(e.ev) + degradeE + flushWarn);
 }

@@ -1,6 +1,7 @@
 // dsh-shadow —— reality/registry.ts：RealityObservation 注册表（append-only，弱事实，不可篡改）。
 import { SHADOW_ROOT } from "../../core/paths.js";
 import type { RealityObservation } from "./types.js";
+import { isNotFound, errText } from "../../core/util.js";
 
 /**
  * 登记一条 RealityObservation。返回**本体 + 是否真的落盘**（v1.15.61）。
@@ -28,29 +29,49 @@ export const registerObservation = async (fs: any, ws: string, ro: RealityObserv
  *   ③ 调用方无法区分「观测只有 2 条」与「10 条里 8 条坏了」——
  *      而下游 `claimOf` 的 `supported` 判据恰恰吃 `obs.length`（ADR-0049 的反面）。
  */
-export const readObservationsDetailed = async (fs: any, ws: string, subjectRef?: string): Promise<{ observations: RealityObservation[]; corrupt: number }> => {
+export interface ObservationsRead {
+  observations: RealityObservation[];
+  /** 单条坏件数（>0 ⇒ 下游 `claimOf` 的 `supported` 判据吃 `obs.length`，结论基于不完整输入）。 */
+  corrupt: number;
+  /**
+   * **目录级读不出来**的真实原因（EACCES / 后端故障 / 只读挂载）—— 「还没有 `model/observations` 目录」
+   * **不算**（那是全新工作区，正常空值）。
+   *
+   * **B4 同类补扫（v1.22.x；规格轴复审 (a)-2）**：旧版外层只有一个「无 model 目录」注释的 `catch`，
+   * 于是「读不出来」与「真的还没有」给出**逐字相同**的返回值 ⇒ 事故被读成「观测只有这些」，
+   * 而下游 `claimOf` 的 `supported` 恰恰吃 `obs.length`（ADR-0049 的反面）。判据复用 `core/util.ts#isNotFound`。
+   */
+  readFailure?: string;
+}
+
+export const readObservationsDetailed = async (fs: any, ws: string, subjectRef?: string): Promise<ObservationsRead> => {
   const out: RealityObservation[] = [];
   let corrupt = 0;
+  if (!fs || !ws) return { observations: out, corrupt, readFailure: "无 fs 或无工作区 ⇒ 读不出 model/observations" };
+  let root: any;
   try {
-    const root = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/observations`, { cwd: ws });
-    // A7（`noImplicitAny: true`）：「列目录失败 ⇒ 空列表」的 `.catch` 回调需**显式返回类型**。
-    const files = (await fs.listDir(root).catch((): any[] => [])) || [];
-    for (const f of files) {
-      if (!f?.name || !f.name.endsWith(".json")) continue;
-      try {
-        const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/observations/${f.name}`, { cwd: ws });
-        const ro = JSON.parse(await fs.readText(p));
-        if (subjectRef && ro.subjectRef !== subjectRef) continue;
-        out.push(ro);
-      } catch {
-        // **单条坏件只丢这一条**（不再中断整个循环），但**必须计数**
-        corrupt += 1;
-        console.log(`[dsh-shadow] reality observation 坏件（已跳过并计数）：${f.name}`);
-      }
+    root = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/observations`, { cwd: ws });
+  } catch (e: any) {
+    return isNotFound(e) ? { observations: out, corrupt } : { observations: out, corrupt, readFailure: `定位 model/observations 失败：${errText(e)}` };
+  }
+  let files: any[] = [];
+  try {
+    files = (await fs.listDir(root)) || [];
+  } catch (e: any) {
+    return isNotFound(e) ? { observations: out, corrupt } : { observations: out, corrupt, readFailure: `列举 model/observations 失败：${errText(e)}` };
+  }
+  for (const f of files) {
+    if (!f?.name || !f.name.endsWith(".json")) continue;
+    try {
+      const p = await fs.resolve(`${ws}/${SHADOW_ROOT}/model/observations/${f.name}`, { cwd: ws });
+      const ro = JSON.parse(await fs.readText(p));
+      if (subjectRef && ro.subjectRef !== subjectRef) continue;
+      out.push(ro);
+    } catch {
+      // **单条坏件只丢这一条**（不再中断整个循环），但**必须计数**
+      corrupt += 1;
+      console.log(`[dsh-shadow] reality observation 坏件（已跳过并计数）：${f.name}`);
     }
-  } catch { /* 无 model 目录（真的还没有） */ }
+  }
   return { observations: out, corrupt };
 };
-
-export const readObservations = async (fs: any, ws: string, subjectRef?: string): Promise<RealityObservation[]> =>
-  (await readObservationsDetailed(fs, ws, subjectRef)).observations;

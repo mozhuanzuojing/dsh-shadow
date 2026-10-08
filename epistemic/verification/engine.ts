@@ -16,6 +16,11 @@ export const runVerification = async (fs: any, root: string, args: any): Promise
   const rg = assertRunHasNoEvaluationField(run); if (!rg.ok) return { ok: false, reason: rg.reason };
   const report: DriftReport = { observedBoundaries: checks.map((c) => ({ boundary: c.boundary, drift: c.status === "violated", evidence: c.evidenceRefs })) };
   const rr = assertReportNoRealityClaim(report); if (!rr.ok) return { ok: false, reason: rr.reason };
-  await writeVerificationRun(fs, root, run);
+  // **B2 同类补扫（规格轴复审 (a)-1）**：写失败**不得**冒充成功（ADR-0049 规则 3）——`run`/`report` 只存在于内存，
+  // 而 `mode:"verification"` 的输出当场就渲染它们。`query/contverify.ts:138` 的 `!v.ok` 分支会把 `reason`
+  // 打进**同一段输出** ⇒ 这里返回 `ok:false`（仍带上 run/report，调用方在 `!ok` 时不会渲染它们）。
+  // ⚠ 若将来要「保留报告正文 + 另附未落盘横幅」，需把三态透传成 `persist?` 并改 contverify 那一行（不在本轮写面）。
+  const persist = await writeVerificationRun(fs, root, run);
+  if (!persist.ok) return { ok: false, reason: `VerificationRun 未落盘：${persist.reason} ⇒ 本次 run/report 只是**内存里的对象**，后续读「${root}/verification/」读不到它。`, run, report };
   return { ok: true, run, report };
 };

@@ -3,8 +3,9 @@
 // 缺陷类（adr/0083 T8，2026-09-12 用户指定的泳道 `T8 → T15 → …` 的第一步）：
 //   `Number(v) || dflt` 把「**显式 0**」与「**未传**」混为一谈 —— `0` 是 falsy ⇒ 用户写的 0 被默认值吞掉。
 //   本仓因此有**三处文档/闸门承诺 0 有意义、代码却不认**：
-//     · `abstracts.showInIndex: 0` —— `core/types.ts:55` **明写**「默认 3，0 = 不列」，实被 `|| 3` 吞；
-//     · `episodes.showInIndex: 0` —— 被 `|| 8` 吞 ⇒ `core/writer-materialize.ts:212` 的
+//     · `abstracts.showInIndex: 0` —— `core/types.ts` 的 `ShadowConfig.abstracts.showInIndex` JSDoc **明写**
+//       「默认 3，0 = 不列」，实被 `|| 3` 吞；
+//     · `episodes.showInIndex: 0` —— 被 `|| 8` 吞 ⇒ `core/writer/core.ts` 的 `episodeShow` 判据那处
 //       `episodeShow > 0` **恒真 = 死分支**，即「关掉 Episodes 段」这个开关**不存在**；
 //     · `episodes` / `compact` 的 `gapMinutes: 0` —— 被 `|| 60` 吞 ⇒ 无法表达「同一分钟才算同一段」。
 //
