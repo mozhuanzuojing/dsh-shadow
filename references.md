@@ -1388,3 +1388,179 @@ contradict n=22 0.8119 / merge n=22 0.9381 / novel n=22 0.4773；**AUROC 0.5926*
   按本仓纪律，**未核到的数字不得当事实用**；
 - 「150,000★」是**报道 2026-05 时点的读数**，与本次 API 读数（268,530★）**不是同一时刻**，两者不构成矛盾；
 - 它的对外经济面（ECC Pro / GitHub App / Sponsors）**只登记形态**，未评价。
+
+### 24. FeiZhuLulu/DeepSeek-Bot（DS Bot）—— **新**（DSH 插件：多 Bot 运行时 + 产品面；**形态不同题，不是同类项目**）
+
+- 链接：https://github.com/FeiZhuLulu/DeepSeek-Bot ｜ npm 包名 **`ds-bot`**（`DeepSeek-Bot@41710f6a` 的 `ds-bot/package.json:2-3`：`name: ds-bot` / `version: 0.1.0`）
+  ｜ 插件 id = **`bot`**（`ds-bot/README.md:56`，与旧包 `dsh-bot` 同名 ⇒ 两者不能同时装）。
+- **材料形态 = 冻结快照**：本轮读 T1 落的 `DeepSeek-Bot--snapshot-v0.1.0`，**浅克隆**（`git log -1` 带 `grafted`），
+  `HEAD` = **tag `v0.1.0`** = **`41710f6aba363457fbed07be8b3ffd69b55ee918`**（`2026-10-10 23:43:11 +08:00`）。
+  ⇒ **本节全部引用 pin `DeepSeek-Bot@41710f6a`**（引用纪律：引外部材料必须同时写下当时 pin 的 sha）。
+- **许可**：**Apache-2.0**（`DeepSeek-Bot--snapshot-v0.1.0/LICENSE:1-2` = `Apache License` / `Version 2.0`）；
+  `NOTICE:10` 记 DeepSeek Harness 为 **MIT**；`NOTICE:12-16` 点名**唯一**一处被复用的实现片段
+  （`ds-bot/dev/desktop-linux/launch.mts` ← DSH 的 `apps/desktop/scripts/dev.ts`，且**不在 npm 包里**）。
+- **规模口径（不写数）**：按本仓「**能由磁盘枚举推出来的数不写在内容面**」（`adr/0111-reference-materials-list-content-split.md:37-38`），
+  本节**只给口径、不给计数**：快照根 = `DeepSeek-Bot--snapshot-v0.1.0/`；**产品面** = `ds-bot/`；宿主面 = `ds-bot/src/host/`；
+  浏览器面 = `ds-bot/src/client/`；测试 = `ds-bot/test/`；判定与可复现工具 = `ds-bot/dev/`。
+- **本节引用口径（两条，都是本轮实测出来的）**：
+  ① 材料**根目录**的文件一律写成**快照目录名限定的路径**（如 `DeepSeek-Bot--snapshot-v0.1.0/README.md:32`），
+  **不写裸 `README.md:NN`** —— 裸文件名会被引用门按**本仓同名文件**解析，得到一个**假判定**（同族：`tools/citation-audit.lib.ts:304-306` 记的那次假阳性）。
+  ② `.js` **不在引用门的扫描面内**（`CITE` 只认 `md|ts|mts|json|ya?ml|py|sh|ps1`，见 `tools/citation-audit.lib.ts:138`）
+  ⇒ 本节的 `*.js:行号` 引用**没有门**，只能人工核 —— 这是**能力边界**，不是本节已通过校验。
+
+#### 24.1 逐子系统：读到的事实（每条带 `文件:行号`）
+
+**① 多 Bot 运行时（每 Bot = 一个 DSH root Session）**
+
+- `ds-bot/index.js:30-31`：插件 `name = 'ds-bot'`，`inject = ['llm','tools','systemPrompt','sessionController','sessions','sessionTitle','workspaceRegistry','connection']`
+  ⇒ **不 patch DSH**，只走文档化的插件 API（与该材料硬规则 1「Plugin only」一致，`DeepSeek-Bot--snapshot-v0.1.0/AGENTS.md:17`）。
+- `ds-bot/index.js:37`：`MODULES` **有序**列表；`:39-51` `apply()` 组 `rt` 后**依次** `install(rt)` ⇒ 判据是**注册顺序**
+  （文件内注释写明「usage meters model requests after every listener that rewrites them」）。
+- `ds-bot/src/host/store.js:15`：整个团队存**一个 JSON**（`version:1` · `mainBotIds` · `bots` · `rooms` · `agents` · `exchanges` · `exchangeTurns` · `questions` · `prefs` · `revision`）；
+  `:167-182` 保存 = **temp 文件 + `rename`**（原子）+ `revision += 1`。
+- 权限**写在工具里、由结构判**：`ds-bot/src/host/tools.js:92-93`（`create_bot` 自述 "Main Bot only"）、`:104`（非 Main Bot 直接返回「Only the Main Bot can create Bots」）、
+  `:115-116` / `:128`（`update_bot` 同款）、`:191`（`create_group`）、`:261`（`delete_group`）、`:286`（`post_to_group`：Main Bot 或本群 admin）；
+  `ds-bot/src/host/roster.js:355`：`A Main Bot cannot be deleted; remove its Main Bot role first`。
+- `ds-bot/src/host/constants.js:44-49`：`TEAM_TOOLS` = 该插件给 Bot 注册的**全部工具名**（含 `read_browser`，只有 Desktop 面有）。
+- 自述形态：`DeepSeek-Bot--snapshot-v0.1.0/README.md:14`（把 DSH 变成 bots）、`:55`（Main Bot = chief，权限最高）、`:81`（每个 Bot 是一个 DSH session，用 DSH 的工具与模型）；
+  `ds-bot/README.md:16-21` 给「你 / Main Bot / 群管理员 / 成员」的权限表。
+- ⚠ 边界（**不是**独立记忆系统）：材料自述「Bots 用**你自己的模型额度**，并在你要求时读写文件、跑命令；重要动作自己看一眼」
+  （`DeepSeek-Bot--snapshot-v0.1.0/README.md:100`），并**显式声明非 DeepSeek 官方产品**（同文件 `:98`）。
+
+**② 群聊回合（一个回合 = 一次 `group_relay` 工具调用）**
+
+- `ds-bot/src/host/groups.js:1-11` 文件头即回合语义：一次只有一个人说、下一个等前一个 post 或 pass 完、`@Name` 把回合递下去；
+  `:20-27` 全是有界预算常量（`ROOM_LOG_MAX` 60 · `ROOM_EXTRA_TURNS` 4 · `ROOM_TURNS_EACH` 2 · `ROOM_ADMIN_TURNS_EACH` 4 …）。
+- `ds-bot/src/host/groups.js:44-48` `unseenLines`：**每个成员各有自己的游标** `room.seen[memberId]`，只送它没看过的行；
+  `:57` `isPass`（`[PASS]` 等形态）· `:63-76` `mentionsIn`（**最长名字先匹配**，`@K你好` 只算 `K`）。
+- `ds-bot/src/host/groups.js:156-179` `roomTurn`：每个成员回合都有 `exchangeId` + **超时 waiter**（`ROOM_REPLY_TIMEOUT_MS` = 240_000，`ds-bot/src/host/constants.js:25`），
+  abort 也归 null ⇒ **一个成员卡住不冻整轮**。
+- `ds-bot/src/host/groups.js:181-246` `runRound`：`limit = slots + 4 (+4 if admin)` 是**硬上限**，超限即停；被 `@` 的成员**重排到下一个位置**，
+  且每人每轮有次数上限 ⇒ 注释原文「**a member cannot set off a storm**」（`:229-231`）。
+- `ds-bot/src/host/groups.js:248-302` `group_relay` 工具：把队列里积压的消息**按序**写进日志（`:258-262`），再由日志决定发言人。
+- 🔎 **本子系统最值钱的一条**：`ds-bot/src/host/groups.js:413-441` —— 群自己那个 Session 的 `llm/stream` 被**拦截、由代码合成** `group_relay` 调用；
+  理由写在注释里：「models drift from 'only call group_relay'（模型会在用户点名时直接去 `message_bot` 某个成员），**所以 relay 这一步在这里是合成的**」
+  ⇒ 又一个「**绝不能错的步骤交给工程逻辑、动态决策才交给模型**」的外部实例（与 §22.1 第 1 条同族，**两个材料互不引用**）。
+- 契约由测试写实：`ds-bot/test/groups.test.js:8-16`（`mentionsIn` 的断言，含 `mail a@K.com` **不算点名**）、`:18-21`（`isPass` 正反例）、
+  `:23-29`（`stripOwnName` 只剥自己名字前缀，`A.b` 与 `Axb` 分立）。
+
+**③ 每成员一 Session 的隔离**
+
+- `ds-bot/src/host/store.js:190-199` 的注释即判据：**每个成员在每个群里说在一个自己的隐藏 Session 里**（`room.sessions[botId]`），
+  「renders the same system prompt and tools as its own chat: the provider's prefix cache is shared, and **a group turn never re-reads the member's private context**」。
+- `ds-bot/src/host/store.js:200-226` 三张索引表（`chatOwners` / `groupOwners` / `pastOwners`）把「一个 Session 替谁说话」变成 O(1) 查表；
+  `:226` `selfOf`、`:228` `isBotSession`（**归档段不算「现在说话的 Session」**）。
+- `ds-bot/src/host/groups.js:107-122` `groupSessionFor`：**首次在群里发言才建**该 Session，并把「本群记录 + 该成员私聊的 brief」作为**第一条消息**
+  （`brief` 位置固定 ⇒ 前缀可缓存）。
+- 自述同句：`ds-bot/README.md:13` 末句「**Each member has its own hidden Session per group, so a group never reads a Bot's private chat**」；
+  来源致谢 `DeepSeek-Bot--snapshot-v0.1.0/README.md:87`（Hermes Agent / Hermes Bot Mode：one session per member per group chat）。
+- 隔离的**反面也登记**：`ds-bot/src/host/groups.js:304-334` —— 私有上下文**只能**经 `read_own_chat` 进群，且**每次使用都写进群日志**（`kind: 'lookup'`，`:329`），群看得见。
+
+**④ 上下文 steward（长对话留在窗口内）**
+
+- `ds-bot/src/host/steward.js:1-8` 文件头：过 check line 后由**一次独立的、小的**模型调用做**一次**决定；
+  `:12-13` 不声明窗口的模型按 **500_000** 算、`checkRatio` 默认 **0.8**；`:16` 硬线 = usable 的 **0.95**；`:20-27` `linesFor` 是纯函数。
+- `:29-41` `STEWARD_SYSTEM`：只认**一行 JSON**（`{"action":"switch"|"compact","reason":…}`）；`:78-90` `parseDecision` **取最后一个**带 action 的 JSON
+  （防模型引用它看到的那段）；`:94-108` `checkpointCount` 靠 `[Checkpoint N]` 标记**数已压缩次数**，`:69` 把该次数回灌给 steward 当判据。
+- `ds-bot/src/host/parts.js:144-149`（**本子系统最硬的事实**）：DSH 自己的压缩入口对 Bot Session **一律不生效** ——
+  `compactIfNeeded` 返回 null、`compactNow` / `compactRegion` 直接 **refuse**（拒绝语 `:153-154`）、`summarize` 被改写成 DS Bot 自己的 checkpoint
+  （包装实现 `:168-197`）⇒ **产品面之所以能「自己管窗口」，是因为它把宿主的压缩面整个接管了**。
+- `ds-bot/src/host/parts.js:438-465` `askSteward`：**只取本条 part 的最近若干行**（`STEWARD_LINES` = 40，`:130`）、**不带 Bot 自己的前缀**（省 token）、
+  `maxTokens: STEWARD_MAX_TOKENS`（4_096，`:128`）且有超时；`:469-479` **steward 失败 / 无答案 ⇒ 判 `switch`**（保守方向：宁可换新 part）。
+- `ds-bot/src/host/parts.js:110-130` 另一组预算（`RECENT_TOKENS` 16_384 · `NOTE_MAX_TOKENS` 8_192 · `NOTE_ATTEMPTS` 2 · 退避 `NOTE_COOLDOWN_MS` `[60s,300s,900s]`）
+  ⇒ **handoff 注记有重试与冷却**，不是一次失败就丢。
+- 契约由测试写实：`ds-bot/test/steward.test.js:5-23`（`linesFor` 的数值与回落：`checkRatio` 非法值一律回 0.8、**check 永不超过 hard**）、
+  `:25-36`（`parseDecision` 正反例，含「引用里的话不算」）。
+- **判定口径可复现（要真钱）**：`ds-bot/dev/steward-eval.mjs:1-10` —— 手写对话结尾 + 期望答案，**走 steward 自己的 prompt 与 request**，
+  打 OpenAI 兼容路由或（`--api messages`）Anthropic Messages 路由，`--runs` 默认 3，自述**每次调用约 3,000 tokens**；`expect` 分 `compact`/`switch`/`either`。
+- 自述：`ds-bot/README.md:23`（两种处置、**聊天里不留标记**、旧内容仍可全文检索）。
+
+**⑤ 记忆：双 scope + **写入侧** review**
+
+- `ds-bot/src/host/memory.js:35` 硬限额：单条 **300** 字 · `MEMORY.md` **4_000** · topic **16_000** · 每 scope **40** 个 topic。
+- 双 scope 的**结构**：`:420-423` `TEAM = { kind:'team' }` / `ownScope(botId)` / `dirOf`（`memory/team/` ↔ `memory/bots/<id>/`）；
+  权限**在写入路径上判**：`:471-479` `writable()`（只读直接抛 · Bot 被删抛 `memory/bot-gone` · 越权抛 `memory/denied`）、
+  `:486` `writesTeam` = **Main Bot 或任一群的 admin**、`:498-502` `writeDenied` 的两条拒绝语。
+- **拒密钥是写入侧硬闸**：`:507-511` `entryProblem`（空 / 超长 / 像密钥或身份证号 ⇒ 拒，并回「keys go to `request_secret`」）；
+  底下的 `:190` `looksLikeKey` 与 `:211` `looksSecret` 是正则判据（中英双语）。
+- **每条改动留史**：`:458-461` `journal()` 追加 `memory/journal.jsonl`（路径 `:414`）；`:565` add 记 after；`:452-457` 写文件同为 **temp + rename**（原子）。
+- **冻结语义**：`:675-700` `sectionFor` —— 一个 Session 的 memory 段**冻结在它开始时的那份**（快照落 `memory/snapshots/<sessionId>.md`，`:674`），
+  且「**角色变了就重新冻一次**」（`:681` 按 `teamRule(isMain, writesTeam)` 判）⇒ 提示词缓存与权限一致；
+  `:708-713` 以 `systemPrompt.section({ name:'bot-memory', order: 645 })` 挂上。
+- **review 在写入侧**：`:1187-1261` `reviewSession` —— 每个 **Session 各自一个游标**（`memory/reviewed.json`，`:1038`），
+  **游标只前进**（`:1203-1205`）、超长积压**分趟读**（`:1206-1212`）、模型答不合规则**整批拒绝并保住游标**
+  （`:1230-1239`：答不是变更表 / 点名了没列出的条目 / 条目记忆装不下 / topic 名非法），达到变更上限则**同一批再读一遍**（`:1243-1253`，`REVIEW_PASSES_MAX` = 4，`:59`）；
+  `:51-58` 是这一层的预算（延迟 2s · `REVIEW_CHANGES_MAX` 8 · 文本上限 16_000 …）。
+- 工具箱：`:770-771` `remember` · `:802-803` `forget` · `:835-836` `recall`；`:750` 的 `SCOPE_WRITE` 描述把「谁能写哪个 scope」**写进工具契约**。
+- 契约由测试写实（**本子系统最有价值的证据**）：`ds-bot/test/memory.test.js:216`（Main Bot / 群 admin 写 team；只有 Main Bot 能动别人的 —— 与 `:486`/`:500` 的实现一一对应）、
+  `:251`（Session 保住它开始时的那份，重启后仍在，直到快照消失）、`:234`（密钥 / 超长 / 满文件被拒 **并给出替代做法**）、
+  `:175`（`remember` 与 `forget` **都进 journal**）、`:305`（删 Bot ⇒ 记忆进 `archive/`）、`:390`（**只读宿主能看不能改**）、
+  `:412`（回合结束后 review 只留用户说的）、`:492`（群里**每个成员各自 review**，admin 可留给 team）、
+  `:878` / `:890`（`memoryReview:false` 只留工具；`memory:false` 连段与面板一起去掉）。
+- 自述：`ds-bot/README.md:90-100`；格式来源致谢 `DeepSeek-Bot--snapshot-v0.1.0/README.md:84`（AgentMemoryRepo 的 Markdown 格式）。
+
+**⑥ secrets（卡片式索取 + 单一脱敏出口）**
+
+- `ds-bot/src/host/secrets.js:1-2` 文件头；`:12` 只经环境变量 `DSH_SECRET_<NAME>` 注入；`:27` 名字归一化（去 `$env:` / `DSH_SECRET_`，非字母数字折成 `_`）。
+- 存储侧：`:126` 载入后 `chmod 0o600`；`:135-152` 写盘 = **temp + `mode: 0o600` + `chmod` + `rename`**。
+- 脱敏出口只有一处：`:529` 把 `redactSecrets` 挂到 `rt`（memory 的 `:506` 也用它 ⇒ **判据收一处**）。
+- 自述的**边界照登**：`ds-bot/README.md:152`（Windows 上文件模式无效）、`:153`（只遮**精确副本**，编码 / 拆分 / 倒序仍能漏）、`:154`（非 HTTPS 明文过网）。
+- 契约由测试写实：`ds-bot/test/home-lock.test.js:121-149` —— **只读宿主**能看见密钥、`secret-set` 被拒、`request_secret` 回「无法出卡」，
+  且**接手后新键是「并」不是「覆盖」**（`:144-149`）。
+
+**⑦ usage（token 用量：日志读 + 流式补记）**
+
+- `ds-bot/src/host/usage.js:1-12` 文件头把口径写清：**Session 会落日志的调用从日志读**（历史调用也算），
+  **不落日志的调用（checkpoint / handoff 注记 / steward / 图片识别 / DSH 标题与压缩）在流式时实时计**；`:230` 落 `usage.sqlite`（派生、可删）。
+- `:53` `foldCalls` 与 DSH 自己的 tokenUsage 投影**同口径**（同一次尝试的后续采样覆盖前一个 · `llm/retry-started` 开新尝试 · fork 的 `reset`）；
+  `:27` 按 **15 分钟**槽聚合；`:545-547` 用 `WeakSet` 保证同一 usage chunk **只计一次**（有的监听器会重放请求）。
+- 自述：`ds-bot/README.md:29`（按时间 / Bot / 模型看，**只算 token 不算钱**）。
+
+**⑧ 单写者锁（一个 DSH home 只能有一个写者）**
+
+- `ds-bot/src/host/home-lock.js:1-9` 文件头即设计与理由：Web 与 Desktop **默认共用 `~/.dsh`**，而各自把团队**整个**写回 ⇒ 两个一起写会互相抹掉；
+  锁文件 = `{pid, host, token, since}`，靠 **mtime 定时心跳**；`staleMs` 默认 **60_000**、`beatMs` **15_000**（`:24`）。
+- **所有权由 token 决定、不由 pid**（`:47` `owns()`）；**同主机的活 pid 才算对手**（`:39-46` `live()`；注释明写「a plugin reload whose dispose never ran is no rival」）。
+- 拿锁用 `writeFileSync(..., { flag: 'wx' })`（`:68`）+ 重试；释放只在**仍持 token** 时删文件（`:83-88`）。
+- 接入面：`ds-bot/src/host/store.js:36`（`state.lock`）· `:49-53` 只读时的用户文案 · `:151-165` `writable()`（**丢了锁就停写**）· `:184` `ctx.effect` 在 dispose 时释放。
+- 只读是**横切**的，不止团队文件：`ds-bot/src/host/memory.js:471-473`（记忆不能改）、`ds-bot/src/host/secrets.js:136-137`（密钥不能写）⇒ 与 `ds-bot/README.md:193` 自述一致。
+- 契约由测试写实：`ds-bot/test/home-lock.test.js:16-29`（第一个拿到 · 第二个只读 · 释放后第二个接手）、`:31-52`（**进程已死 / 心跳过 staleMs / 别的主机** 三种接管路径）、
+  `:54-63`（**发现文件里是别人的 token ⇒ 知道自己已丢锁，且不删别人的锁**）、`:91-119`（走真实 `POST api/bot` 通道：只读 ⇒ 跟随对方改动、接手后 revision 继续 +1）。
+
+#### 24.2 与 dsh-shadow 的关系（**只登记形态差异，不构成吸收裁决**）
+
+**一句判据：本材料不是同类项目。** 它是「**多 Bot 运行时 + 产品面**」（把 DSH 变成一队长期存活的 Bot：群聊、角色权限、密钥卡、用量页、浏览器面板、记忆面板），
+本仓是「**单个宿主内的可核查记忆投影层**」（派生、可复核、**核心路径零 LLM 调用**）。⇒ **不得当替代品、也不得当同题对照项**用；
+要不要借鉴、借鉴哪一条，**不在本节裁决**（那属 `adr/0112`）。
+
+| 面 | DS Bot（`DeepSeek-Bot@41710f6a`） | dsh-shadow（本仓口径见 `adr/0111-reference-materials-list-content-split.md:37-38`） |
+|---|---|---|
+| 形态 | DSH **插件**（宿主内 bundle；`ds-bot/index.js:30-31`） | 宿主内插件（Cordis adapter） |
+| 核心 | 多 Bot 运行时 + UI / 产品面（`ds-bot/README.md:11-30`） | 记忆投影层（派生、可核查） |
+| 模型调用 | **核心路径就是模型**：每 Bot 一个 Session，另有 steward 与 memory review 各一次调用（`ds-bot/src/host/parts.js:438-465` · `ds-bot/src/host/memory.js:1228`） | **核心路径零 LLM 调用**（本仓铁律） |
+| 记忆写入 | **模型在写入侧决定留 / 改 / 删**（`ds-bot/src/host/memory.js:1187-1261`） | 派生式、不猜字段 |
+| 存储 | `$DSH_HOME/bot`（`state.json` 等；`ds-bot/index.js:40`） | `.shadow/` 投影空间 |
+| 宿主面 | DSH Desktop / Web；Node **≥ 22.19**（`DeepSeek-Bot--snapshot-v0.1.0/README.md:32`） | DSH 插件 |
+
+（表中「本仓」一列只写**已在本仓文档里成立**的口径，不出自本材料。）
+
+#### 24.3 还差什么（未读 / 读不到 / 不能复现）
+
+- **未读**：`ds-bot/src/client/`（浏览器面，全部未读）· `ds-bot/src/host/` 里除上文点名者之外的模块（`agents` `channel` `chat-index` `browser` `connectors` `schedules` `models` `prompt` `images` `update` `diagnostics` `text`）·
+  `ds-bot/test/` 里除 `groups` / `home-lock` / `memory`（+ `steward.test.js` 前 40 行）之外的测试 ·
+  `ds-bot/dev/` 的 `mock-llm.mjs` `smoke.mjs` `check.sh` `desktop-linux/`（`steward-eval.mjs` 只读前 70 行、`bench.sh` 只读前 60 行，**均未读完**）·
+  快照根的 `docs/` · `CONTRIBUTING.md` · `README.zh.md` · `ds-bot/scripts/`。
+- **读不到**：**运行时数据不在材料里** —— `bot/`（`state.json` · `state.lock` · `usage.sqlite` · `chat-index.sqlite` · `memory/` · `secrets.json` · `logs/`）
+  落在 `$DSH_HOME/bot`（`ds-bot/index.js:40` · `ds-bot/README.md:159-181`）⇒ **快照里没有一份真实团队数据**；
+  本轮所有**数据结构**判断都来自**代码与测试**，**不是**来自实际文件。
+- **不能复现（本轮零执行证据）**：该仓测试要求一份 **`../deepseek-harness` 检出**（或 `DSH_HARNESS`）（`DeepSeek-Bot--snapshot-v0.1.0/AGENTS.md:25` · `ds-bot/README.md:197`），快照里**没有**；
+  ⇒ 本轮**未跑** `npm ci` / `npm test` / `npm run build` / `dev/check.sh` / smoke，**全部判定是静态阅读**。
+- **未核**：材料自述「与 DSH `0.2.1-alpha.1` 在 Linux 上测过」（`ds-bot/README.md:7`）**未在本机复现**；`docs/` 与截图未看；
+  本材料**在清单面（`MATERIALS.md`）怎么登记**不在本节 —— 同一事实不两处登记（`adr/0111`）。
+
+#### 24.4 结论的**版本有效期**（引用前必读）
+
+- 材料自认会变：`ds-bot/README.md:5` ——「Early release (v0.1). **Features, tools and the saved data format can still change.**」；
+  快照根 `DeepSeek-Bot--snapshot-v0.1.0/CHANGELOG.md:3` ——「Before 1.0, **a minor version can contain breaking changes**」（遵循 SemVer：0.x 的 minor 可破坏）。
+- ⇒ **本节任何事实只在 `DeepSeek-Bot@41710f6a`（= `v0.1.0`）上成立**；v0.1 之内一次 minor 升级就**可能改掉 `state.json` 与 memory 文件格式**。
+  隔版本引用旧行号前**必须重新核**（引用纪律：只写行号 = 一条无法复核、也无法判定过期的断言）。

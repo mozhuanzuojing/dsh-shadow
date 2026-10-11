@@ -27,7 +27,7 @@
 > **本表的数字一行未改**（按 §5 纪律：改数必须重跑枚举命令，而那个根已不可用）；逐份判定见 `adr/0089`。
 > ⇒ **当前态另见 §1.1**（生成器输出，v1.18.0 起）—— **下面这一节只作历史**。
 
-## 1. 名册（8 项，按「对本项目的相关度」排序）
+## 1. 名册（9 项，按「对本项目的相关度」排序）
 
 | # | 目录 | 远端 | HEAD / 版本 | 许可 | 规模（枚举口径见 §0） | 身份 |
 |---|---|---|---|---|---|---|
@@ -39,6 +39,7 @@
 | 6 | `awesome-dsh-plugin` | `mozhuanzuojing/awesome-dsh-plugin` | `271834d5` / 0.1.0 | **CC**（清单类） | 1,726 文件 / 8.5 MB | **DSH 插件清单**（生态索引） |
 | 7 | `ppt-master` | `hugohe3/ppt-master` | `a160e776` | **MIT** | 14,354 文件 / 725 MB | AI 生成原生 PowerPoint（文档→PPT） |
 | 8 | `voyager` | `Nagi-ovo/voyager` | `b68eeac` / pkg `voyager@1.7.1`（版权 Jonathan Braat ⇒ **上游 fork**） | 见 `LICENSE`（版权行 2022 Jonathan Braat） | 56,514 文件 / 610 MB | 与 DSH 有关的 fork（其提交含 `docs(dsh):`） |
+| 9 | `DeepSeek-Bot--snapshot-v0.1.0` | `FeiZhuLulu/DeepSeek-Bot` | `41710f6a` / tag **v0.1.0**（⚠ **注解 tag** ⇒ 引用材料行号时 pin **提交 sha** `41710f6a`） | **Apache-2.0** | 176 文件 / 4,696 KB（**不含** `.git`；含 `.git` 为 201 文件 / 7.35 MB —— 口径 = `tools/materials-ledger.ts`：递归、**含**隐藏文件） | **DSH 插件**（npm 包 `ds-bot@0.1.0`）：把 DSH Desktop / Web 变成「长期存活的 Bot 团队」；**冻结快照**形态 |
 
 **★ 复核（2026-10-07，`adr/0111`）—— 本表**升为当前态**，并推翻原先那两句判词**：
 
@@ -61,6 +62,25 @@
   把它推到 `1dcaf67` ⇒ 那一格**当天就过期了**，可那一句仍写着「HEAD 逐项命中」。
   ⇒ 结论：**「复核过」不等于「复核的读数带了时刻」** —— 本版因此把「**枚举时刻**」当作清单口径四件之一（见文首「清单口径四件」那条）。
 - ⚠ 本表**身份**列（每份材料"是什么"）**不可机械推**，仍由人维护；机械面（HEAD / 许可 / 规模 / 漂移）以生成器为准。
+
+**★ 复核（2026-10-11 追加 —— 名册新增第 9 项 `DeepSeek-Bot--snapshot-v0.1.0`）**：
+
+- **新增形态 = 冻结快照**（用户批准的 Q3 建议①）：目录名含 `--snapshot-<版本>` ⇒ `tools/materials-freshness.ts` 的 `SNAPSHOT_MARK` 按**目录名**判**冻结**、默认**不进「可更新」目标**。**保留 `.git`** —— 本表「工作树 vs HEAD」列依赖它。
+- **枚举时刻 = `2026-10-11 13:00:02 GMT+8`**（`tools/materials-ledger.ts` 自己打印的那一行）；命令 = `node tools/materials-ledger.ts G:\project\dsh1` ⇒ **材料数 9**（本表 1–8 行 + 新增 1 行）。
+- **新增项的事实**（下面每条都指到一条命令；目录简写为 `<snap>` = `G:\project\dsh1\DeepSeek-Bot--snapshot-v0.1.0`）：
+
+| 字段 | 读数 | 命令 |
+|---|---|---|
+| HEAD | `41710f6aba363457fbed07be8b3ffd69b55ee918` | `git -C <snap> rev-parse HEAD` |
+| tag | `v0.1.0`，且**是注解 tag**（`cat-file -t` = `tag`，对象 id `0abfef6dceaafb49ca69c0b4e8fd411f89dd7ea8`）⇒ 引用应 pin **提交 sha** | `git -C <snap> describe --tags` · `git -C <snap> cat-file -t 0abfef6d…` |
+| 工作树 vs HEAD | **干净（= HEAD）**（`--porcelain` 无输出） | `git -C <snap> status --porcelain` |
+| 许可 | **Apache-2.0**（`LICENSE` = `Apache License` / `Version 2.0`；`ds-bot/package.json` 的 `license` 同为 `Apache-2.0`） | 读 `<snap>\LICENSE` · `<snap>\ds-bot\package.json` |
+| 规模（生成器口径：递归、**含**隐藏文件） | 不含 `.git` **176** 文件 / **4,696 KB**；含 `.git` **201** 文件 / **7.35 MB** | `node tools/materials-ledger.ts G:\project\dsh1` |
+| 提交行 | `41710f6a` 2026-10-10 · 「Publish DS Bot 0.1.0」· **(浅)** | 同上（生成器的 `git log -1` 列） |
+
+- **冻结判据的实测**（枚举当日）：`node tools/materials-freshness.ts --only DeepSeek-Bot--snapshot-v0.1.0` ⇒ 本地 `41710f6`、远端默认分支 `main` 现为 `351ae74`、判定「**落后（冻结快照：默认不动）**」、exit 0 ⇒ **它确实不进「可更新」目标**（要动须显式 `--include-frozen`，而那就不再是那个快照）。
+- ⚠ **新增项置于表末，1–8 行的相关度次序未重判**（重排＝改写别人的行）。
+- ⚠ **1–8 行的数字不许用本次枚举「顺手刷新」**：它们是 **2026-10-07 那次**读数，且与本表生成器的口径**不同**（例：第 4 行 `dsh-shadow` 写 37.7 MB，而生成器口径**含** `node_modules` 与 `dist/`）⇒ 刷新它们＝**同时改口径与时刻**，属另一件事。
 
 **另有（非「外来材料」，但同属本工作区）：**
 - `dsh-shadow/.shadow/`（327 KB）——**记忆树本体**（我的思维/决策投影，是本项目的一等数据，不是参考资料）。
@@ -189,7 +209,7 @@ node tools/materials-ledger.ts G:\project\dsh1
 | `../../references-agents/*/AGENTS.md`（**仓库之外的笔记目录**） | **19** | 两级上跳 | ❌ **该目录不存在** |
 | **磁盘本体**（克隆；= 材料 + 上版快照） | **22 → 24** | 2026-09-15 那次 = 22 · 2026-09-25 = 24 · 根 `…\vendor\_src` | ❌ **根在 `D:`/`G:` 均不存在** |
 | 本文件 §1.1 的**生成器输出**（历史快照） | **24** | `D:\project\dsh1\vendor\_src` · 2026-09-25 | ❌ 同上（**永久**不可复核） |
-| **本文件 §1 的名册（当前态）** | **8** | 根 `G:\project\dsh1` · 复核 2026-10-07 | ✅ **8/8 全在，HEAD 逐项一致** |
+| **本文件 §1 的名册（当前态）** | **9** | 根 `G:\project\dsh1` · 复核 2026-10-07（8 项）+ **2026-10-11 新增 1 项** | ✅ 2026-10-07 复核的 8/8 全在、HEAD 逐项一致；**2026-10-11 新增的 `DeepSeek-Bot--snapshot-v0.1.0` 亦在**（枚举时刻 `2026-10-11 13:00:02 GMT+8`，见 §1 的 2026-10-11 复核块） |
 
 - **⚠ 两个路径不是同一级**（原节实测踩过，保留）：`.docs/` 在 `vendor/` 下（`..\.docs\fix\<日期>\`），
   而 `references-agents/` 在 `dsh1/` 下（`..\..\references-agents`）。
@@ -364,6 +384,24 @@ the configured root is the fallback for agentless calls and sessions without a c
 > ⚠ **口径边界**：本节只写这一份的**状态面**；名册面（版本 / 许可 / 规模）在 **§1.1**（生成器输出，勿手改）。
 > ⚠ **§1.1 该行「含 `.git`」字节数上涨**（216 文件 / 5.57 MB → 407 / 8.09 MB）是**本轮只读 git 命令的副产物**
 > （`status` / `log` / `rev-list` 触发 index 刷新与 auto-gc），**不是材料内容变化** —— 对照列「不含 `.git`」两轮**完全一致**（187 文件 / 3,438 KB）。
+
+---
+
+### 2.11 `DeepSeek-Bot--snapshot-v0.1.0`（**2026-10-11 新入 · 冻结快照**）
+
+> **本节只写台账面与身份**（清单面职责）；**逐份的内容核实记录归 `references.md`、判定归 `adr/0112-deepseek-bot-material-verdict.md`** —— 两处不重复登记同一事实（文首「清单口径四件」与 `adr/0111` 的归属）。
+
+| 面 | 读数（口径见 §1 的 2026-10-11 复核块） |
+|---|---|
+| 落盘形态 | `git -c http.proxy=http://127.0.0.1:9910 clone --branch v0.1.0 --depth 1 …` ⇒ **`--depth 1` 浅克隆**（**历史深度不可核**）· **保留 `.git`** · **detached HEAD** 在 tag `v0.1.0` |
+| 远端 / 许可 | `FeiZhuLulu/DeepSeek-Bot` · **Apache-2.0**（`LICENSE`；且 `ds-bot/package.json` 的 `license` 亦为 `Apache-2.0`） |
+| HEAD / 版本 | 提交 `41710f6aba363457fbed07be8b3ffd69b55ee918`（2026-10-10 · 「Publish DS Bot 0.1.0」）· tag `v0.1.0`（**注解 tag** ⇒ pin 用提交 sha） |
+| 规模 | **不含 `.git`：176 文件 / 4,696 KB**；含 `.git`：201 文件 / 7.35 MB |
+| 身份 | **DS Bot** = **DeepSeek Harness 的插件**（npm 包 `ds-bot@0.1.0`）：把 DSH Desktop / Web 变成**一组长期存活的 Bot**（每个 Bot = 一个 DSH 会话，走正常 agent loop；Bot 之间互相发消息、共享群聊；**Main Bot** 有创建/修改/删除其它 Bot 的权限）；README 要求 DSH **0.2.1-alpha.1** |
+| 第三方 | `NOTICE` 记：`ds-bot/dev/desktop-linux/launch.mts` 沿用了 DeepSeek Harness（**MIT**）`apps/desktop/scripts/dev.ts` 的少量行 ⇒ **快照内含他方许可义务**，取用前读 `NOTICE` |
+| 已核面 | 只读了 `README.md` 首 40 行 · `AGENTS.md` · `ds-bot/package.json` 首 30 行 · `LICENSE` 首行 · `NOTICE` 首 20 行 · git 元数据 |
+| **未核 / 未跑** | **176 文件里的绝大部分未读**；**未安装、未构建、未跑测试**（其 `AGENTS.md` 的测试需一份 `../deepseek-harness` 检出 + `npm ci`）；**未联网核对上游** `main` 的差异（只做了「落后到哪个 sha」的新鲜度判定：`351ae74`） |
+| 下一步 | 上游 `main` 已到 `351ae74` 而本地停在 `v0.1.0` —— **这是冻结快照的设计**（`AGENTS.md`「冻结快照不动」）；要动须显式 `--include-frozen`，且**那就不再是那个快照** |
 
 ---
 
