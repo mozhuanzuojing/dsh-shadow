@@ -49,6 +49,7 @@ export const PURE_MODULES = [
   // （② 是白名单制：只有列进来的才判；漏登 = 它悄悄长出 import 也没人报）。
   "core/view/clue.ts",
   "persistence/outcomes.ts",
+  "core/writer/render.ts",   // `adr/0113` §1.4 门1：收口正文渲染器，实测零 import（边界：零 import ≠ 零副作用）
 ];
 
 /**

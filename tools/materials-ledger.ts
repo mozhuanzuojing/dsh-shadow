@@ -14,11 +14,44 @@
 //   · 许可：取 `LICENSE|LICENCE|COPYING*` 里**第一个**的首行 + 关键词识别（识别不出就原样打首行，不猜）。
 //   · 版本：`git log -1`；拿不到 git 时**降级**读 `.git/HEAD` 只给 SHA，并**显式标注降级**（ADR-0049：缺件不静默）。
 //
+// ## `walk` 为什么必须按 **realpath** 给目录去重（2026-10-11 修；由来：材料落盘那一轮把它跑成「卡 40 分钟」）
+//
+// **缺陷**：旧 `walk` 用 `statSync(full)` 判目录后**直接递归** —— 既不 realpath 去重、也不跳 reparse point。
+// 而 `dsh-w/deepseek-harness` 下有**大量 reparse point**（实测 637 个 / 609 个不同 target、单层扇入 ≤3），
+// 且 `vendor` 子树里**互相成环**（例：`vendor/group/node_modules/@deepseek-ai/cordis → vendor/cordis`）
+// ⇒ 路径被指数化：同一命令实测卡在 `dsh-w` **40+ 分钟 / 1716 s CPU** 被 kill。
+//
+// **修法**：只加**目录级 realpath 去重**（每份真实目录只下降一次）。**为什么不止步于「祖先栈守卫」**
+// （只切真环）—— 实测（`dsh-w/deepseek-harness/vendor`：真实 90 目录 / 346 文件）：
+//   · 祖先栈守卫：635 目录访问 / 3,624 文件（**放大 10×**）· 3,635 ms；
+//   · 目录级去重：**90 目录访问 / 346 文件**（= 真实内容）· **379 ms**。
+// ⇒ 只切环仍会把同一批真实目录**重复计数**（菱形扇入），读数偏大；目录级去重同时切环与菱形，
+//   并且**对没有链接的树读数完全不变**（没有真实目录会被访问第二次）。
+//
+// **能力边界（必须知道）**：
+//   · 链接**仍会被跟随**（第一次到达时）⇒ 只在链接后面才可达的内容**算进**该材料；
+//   · 同一真实目录经多条链接到达时**只计一次**（旧行为会重复计）⇒ link 密集的材料**读数会变小**；
+//     无链接的材料读数不变（`MATERIALS.md` §5 记了这件事）。
+//   · 大小写不敏感的平台（`win32` / `darwin`）按**折叠大小写**比较路径 —— 否则同一目录的两种写法
+//     会被当成两个 ⇒ **又掉回环里**（`pathKey` 是这条判据的唯一一处）。
+//   · 文件仍**按条目计**（硬链接的两个名字照旧各算一个）—— 去重只发生在**目录**这一层。
+//
+// **人工复现**（不需要管理员权限、不依赖本机特殊目录 —— `mklink /J` 建 junction 不需要管理员）：
+//   ```powershell
+//   $t = Join-Path $env:TEMP "ml-repro"; Remove-Item $t -Recurse -Force -EA 0
+//   New-Item -ItemType Directory -Force "$t\mat\real\deep" | Out-Null
+//   Set-Content "$t\mat\real\deep\leaf.txt" "x"
+//   cmd /c mklink /J "$t\mat\real\deep\loop" "$t\mat\real"   # 真环：loop 指回 real
+//   cmd /c mklink /J "$t\mat\mirror"         "$t\mat\real"   # 菱形：mirror 也指向 real
+//   node tools/materials-ledger.ts $t                         # 修前不返回（环）；修后 1 文件 / 0 KB
+//   ```
+//   （同一条判据的自检在 `tools/materials-ledger.selftest.ts`，已自动进 `verify`。）
+//
 // **本工具只答「名册面」（存在什么 / 多大 / 什么版本 / 什么许可）。**
 // 「已吸收什么 / 未读什么 / 下一步」**不可机械推** ⇒ 只对已核过的给结论，其余标 `未核`、**不编**
 // （与 `tools/module-ownership.ts` 对 `Owns`/`Writes` 的处理同款）。
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { exclusionLine, isMaterialDir, MATERIALS_ROOT_ENV, requireMaterialsRoot } from "./materials-root.lib.ts";
 
@@ -55,19 +88,56 @@ const git = (dir: string, args: string[]): string | undefined => {
 const GIT_DIR = ".git";
 const isGitDir = (name: string): boolean => name === GIT_DIR;
 
-const walk = (dir: string, includeGit: boolean, out: string[] = []): string[] => {
-  for (const name of readdirSync(dir)) {
-    if (!includeGit && isGitDir(name)) continue;
-    const full = join(dir, name);
-    let st;
+/**
+ * 「同一个真实目录」的**唯一判据**（`walk` 的去重键）。
+ *
+ * 大小写：`realpathSync` 在**大小写不敏感**的文件系统上对同一目录**可能给出不同大小写的字符串**
+ * （链接对象里存的是创建时那份写法）⇒ 不折叠就会把同一目录当成两个 ⇒ **重新掉回环里**。
+ * 折叠只对大小写不敏感的平台做：在大小写敏感的平台上折叠会把两个不同目录误判成一个（**少计**）。
+ */
+const CASE_INSENSITIVE_FS = new Set(["win32", "darwin"]);
+const pathKey = (p: string): string => (CASE_INSENSITIVE_FS.has(process.platform) ? p.toLowerCase() : p);
+
+/**
+ * 递归收集文件路径（口径：**含**隐藏文件；`includeGit=false` 时跳过 `.git`）。
+ *
+ * ⚠ **每份真实目录只下降一次**（`visited` 按 realpath 去重）—— 缺陷、两种守卫的实测对照、
+ * 能力边界与人工复现命令都在**文件头**。去重只发生在**目录**这一层：
+ * 文件仍按条目计（硬链接的两个名字各算一个）；**没有链接的树读数与修前逐字节相同**。
+ */
+const walk = (dir: string, includeGit: boolean): string[] => {
+  const out: string[] = [];
+  const visited = new Set<string>();
+  /** realpath 读不到 ⇒ 退回字面路径：宁可漏切一次环，也不让整张台账因一个坏链接崩掉。 */
+  const realOf = (p: string): string => {
     try {
-      st = statSync(full);
+      return realpathSync(p);
     } catch {
-      continue;
+      return p;
     }
-    if (st.isDirectory()) walk(full, includeGit, out);
-    else out.push(full);
-  }
+  };
+  visited.add(pathKey(realOf(dir)));
+  const rec = (d: string): void => {
+    for (const name of readdirSync(d)) {
+      if (!includeGit && isGitDir(name)) continue;
+      const full = join(d, name);
+      let st;
+      try {
+        st = statSync(full);
+      } catch {
+        continue;
+      }
+      if (!st.isDirectory()) {
+        out.push(full);
+        continue;
+      }
+      const key = pathKey(realOf(full));
+      if (visited.has(key)) continue; // ← 真环与菱形都在这一行被切断
+      visited.add(key);
+      rec(full);
+    }
+  };
+  rec(dir);
   return out;
 };
 
@@ -129,6 +199,7 @@ const STATUS: Record<string, string> = {
   rtk: "见 `adr/0087`/`adr/0090`",
   langextract: "见 `adr/0090`",
   marker: "见 `references.md` §15",
+  "DeepSeek-Bot--snapshot-v0.1.0": "**冻结快照**（状态面见 `MATERIALS.md` §2.11；判定 `adr/0112`）",
 };
 
 const dirs: string[] = (() => {
@@ -163,6 +234,7 @@ console.log(`枚举根：${ROOT}`);
 console.log(`枚举时刻：${nowLocal()}`);
 console.log(exclusionLine());
 console.log("枚举口径：目录 = 根下第一层（**已过排除表**）；文件/字节 = 递归、**含**隐藏文件（分「含 .git」「不含 .git」两栏）；");
+console.log("          目录 = 递归时**按 realpath 去重**（同一真实目录只下降一次 ⇒ 切断 link 环/菱形放大；文件仍按条目计）；");
 console.log("          许可 = `LICENSE|LICENCE|COPYING*` 中第一个的首行 + 关键词识别；版本 = `git log -1`（取不到则降级读 .git/HEAD）。");
 console.log(`材料数：${dirs.length}`);
 console.log("");

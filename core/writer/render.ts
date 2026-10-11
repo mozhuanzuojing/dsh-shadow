@@ -61,7 +61,12 @@ export function consolidateText(ep: any, atoms: any[]): string {
   const materials = Array.from(new Set(atoms.flatMap((a: any) => a.materials || [])));
   const decisions = Array.from(new Set(atoms.flatMap((a: any) => a.decisions || [])));
   const actions = Array.from(new Set(atoms.flatMap((a: any) => a.actions || [])));
-  const userMsgs = atoms.flatMap((a: any) => (a.thinkLines || []).filter((l: string) => /^用户：/.test(l)));
+  // `D1`（`adr/0113` §1.5）：用户消息**只在 `userMessages` 里** —— `core/view/episode.ts` 把以 `用户：`
+  // 开头的正文行收进 `userMessages`，并**恰好把它们排除出 `thinkLines`**。旧版从 `thinkLines` 过滤
+  // `^用户：` ⇒ **恒不命中**（那里的行一定带 `- ` / `[..] [..]` 前缀），于是 `> 概况：` 恒报 0 用户消息、
+  // 用户消息行恒不出现 —— 破的是「**如实**声明」那一半。这里取字段，并与 decisions/actions 同一
+  // `new Set` 去重口径（同一句用户原话跨原子重复时只计一次）。
+  const userMsgs = Array.from(new Set(atoms.flatMap((a: any) => a.userMessages || [])));
   const lines = [`# ${entry}`, "", "> 完整线索"];
   if (materials.length) lines.push(`> 背景/材料：${materials.slice(0, 8).join("、")}`);
   if (decisions.length) lines.push(`> 决策：${decisions.slice(0, 8).map((d: string) => `〔episode〕${d}`).join("；")}`);
@@ -73,6 +78,10 @@ export function consolidateText(ep: any, atoms: any[]): string {
   const at = String(ep.startedAt || "").slice(11, 16) || "--:--";
   for (const d of decisions.slice(0, 20)) lines.push(`- [${at}] [${entry}] 决定 ${d}`);
   for (const a of actions.slice(0, 40)) lines.push(`- [${at}] [${entry}] ${a}`);
-  for (const u of userMsgs.slice(0, 20)) lines.push(`- [${at}] [${entry}] ${u}`);
+  // ⚠ `用户：` 标记**不能省**：收口文件本身会被重新 `parseMemory`（`compact.ts` 落缓存时经 `recOf`、
+  // 冷进程再从磁盘重扫）⇒ 省掉标记这些行会被降级成 `thinkLines`（与 `决定 ` / `改/读 ` 两侧**不对称**），
+  // `mode:"task"` 的触发与元数据分诊也随之丢失。逐字句柄仍是原原子（`Forget≠Delete`）——
+  // 注意 `userMessages` 在解析层已截到 160 字（`adr/0113` §1.5 `V1`）⇒ 这里是**摘要**，不是逐字。
+  for (const u of userMsgs.slice(0, 20)) lines.push(`- [${at}] [${entry}] 用户：${u}`);
   return lines.join("\n") + "\n";
 }
