@@ -12,8 +12,8 @@
   "files": [
     "dist",
     "cordis.patch.yml",
-    "presets",
-    "docs/*.md",
+    "docs/v2/*.md",
+    "docs/adr/*.md",
     "README.md",
     "LICENSE",
     "package.json"
@@ -48,8 +48,7 @@
   "dsh": {
     "bundle": {
       "patch": [
-        "./cordis.patch.yml",
-        "./presets/projection.patch.yml"
+        "./cordis.patch.yml"
       ]
     }
   },
