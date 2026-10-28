@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { runRead } from "../../dist/engine/read/route.js";
-import { makeDeps } from "../helpers.ts";
+import { makeDeps, atomText, WS } from "../helpers.ts";
 
 const deps = makeDeps();
 
@@ -67,5 +67,14 @@ const afterClear = await runRead(deps, {});
 assert.equal(afterClear.ok, true);
 if (afterClear.ok) assert.ok(!afterClear.value.text.includes("能力降级 · test"));
 
-console.log("✔ read：索引/主题/空命中/10 mode/未知 mode 显式/lab 重定向/信号可达且可清");
+// v1 旧日期树在 read_shadow 中可召回（只读，不要求迁移）
+const legacyDeps = makeDeps({
+  [`${WS}/.shadow/2020-01-01/2020-01-01--010101-legacy-entry.md`]: atomText({ entry: "src/legacy.ts", date: "2020-01-01", user: "旧日期树记忆 legacy-marker" }),
+});
+const legacyRead = await runRead(legacyDeps, { topic: "legacy-marker" });
+if (!legacyRead.ok) throw new Error(legacyRead.error.message);
+assert.ok(legacyRead.value.text.includes("legacy-entry"), "v1 旧日期树 atom 应可被召回");
+assert.ok(legacyRead.value.text.includes("LEGACY_READ_ONLY") || legacyRead.value.text.includes("旧日期树"), "旧数据只读必须可见");
+
+console.log("✔ read：索引/主题/空命中/10 mode/未知 mode 显式/lab 重定向/信号可达且可清/v1 旧日期树可读");
 

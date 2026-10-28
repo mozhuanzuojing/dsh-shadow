@@ -144,7 +144,7 @@ shadow_lab({ mode: "index" })
 
 ## 9. 旧存储只读兼容
 
-- v1 日期树 `.shadow/<YYYY-MM-DD>/`：可读、可搜索；**不写入、不删除、不双写**。
+- v1 日期树 `.shadow/<YYYY-MM-DD>/`：可读、可搜索；**不写入、不删除、不双写**。v2 读路径会给出 `LEGACY_READ_ONLY` 横幅，说明这些 atom 只参与召回、不会被迁移。
 - 旧 mode 存储（`shadow/observation/`、`shadow/reflection/` 等）：只读挂载，返回 `legacy: true`。
 - 首次读到旧存储时返回一次 `LEGACY_READ_ONLY` 提示；不静默。
 - 迁移完成不等于删除旧存储；lab 只写各自 `.shadow/<store>/`，不写 atoms/旧存储。

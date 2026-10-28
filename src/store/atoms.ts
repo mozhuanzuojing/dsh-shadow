@@ -5,7 +5,7 @@
  * 写入：临时文件 + rename；先查存在，碰撞换 uid（绝不覆盖）。
  */
 
-import { ATOMS_DIR, atomFileName, isAtomName, newUid, parseAtomName } from "../contract/paths.js";
+import { ATOMS_DIR, SHADOW_DIR, atomFileName, isAtomName, newUid, parseAtomName } from "../contract/paths.js";
 import { err, ok, type Outcome } from "../contract/outcome.js";
 import { dateOf, timeOf, type Clock } from "../contract/time.js";
 import type { ParsedAtom } from "../contract/types.js";
@@ -26,19 +26,41 @@ export interface LoadAtomsResult {
 const join = (ws: string, rel: string): string => `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`;
 
 export const listAtomFiles = async (fs: FsPort, ws: string): Promise<Outcome<AtomFile[]>> => {
-  const dir = join(ws, ATOMS_DIR);
-  const listed = await fs.listDir(dir);
-  if (!listed.ok) {
-    // 首次运行/空工作区：目录不存在是“空”，不是错误；权限/IO 仍是错误。
-    if (listed.error.code === "NOT_FOUND") return ok([]);
-    return listed;
-  }
   const out: AtomFile[] = [];
-  for (const e of listed.value) {
-    if (e.type === "dir" || !isAtomName(e.name)) continue;
-    out.push({ name: e.name, rel: `${ATOMS_DIR}/${e.name}` });
+  const names = new Set<string>();
+  const atoms = await fs.listDir(join(ws, ATOMS_DIR));
+  if (atoms.ok) {
+    for (const e of atoms.value) {
+      if (e.type === "dir" || !isAtomName(e.name)) continue;
+      out.push({ name: e.name, rel: `${ATOMS_DIR}/${e.name}` });
+      names.add(e.name);
+    }
+  } else if (atoms.error.code !== "NOT_FOUND") {
+    // 首次运行/空工作区：目录不存在是“空”，不是错误；权限/IO 仍是错误。
+    return atoms;
   }
-  out.sort((a, b) => a.name.localeCompare(b.name));
+
+  // v1 旧日期树 `.shadow/<YYYY-MM-DD>/*.md`：只读兼容；同名以 atoms/ 为准，避免双份。
+  const root = await fs.listDir(join(ws, SHADOW_DIR));
+  if (!root.ok) {
+    if (root.error.code !== "NOT_FOUND") return root;
+    out.sort((a, b) => a.rel.localeCompare(b.rel));
+    return ok(out);
+  }
+  for (const e of root.value) {
+    if (e.type !== "dir" || !/^\d{4}-\d{2}-\d{2}$/.test(e.name)) continue;
+    const day = await fs.listDir(join(ws, `${SHADOW_DIR}/${e.name}`));
+    if (!day.ok) {
+      if (day.error.code === "NOT_FOUND") continue;
+      return day;
+    }
+    for (const f of day.value) {
+      if (f.type === "dir" || !isAtomName(f.name) || names.has(f.name)) continue;
+      out.push({ name: f.name, rel: `${SHADOW_DIR}/${e.name}/${f.name}` });
+      names.add(f.name);
+    }
+  }
+  out.sort((a, b) => a.rel.localeCompare(b.rel));
   return ok(out);
 };
 

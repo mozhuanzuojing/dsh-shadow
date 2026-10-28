@@ -101,6 +101,17 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   }
   deps.signals.clear("atoms");
   const atoms = loaded.value.atoms;
+  const legacyCount = atoms.filter((a) => /^\.shadow\/\d{4}-\d{2}-\d{2}\//.test(a.rel)).length;
+  if (legacyCount > 0) {
+    deps.signals.note(
+      "legacy",
+      "LEGACY_READ_ONLY",
+      `${legacyCount} 条 v1 旧日期树 atom 以只读方式参与召回`,
+      "可读、可搜索；不写入、不迁移、不删除。要落到 `.shadow/atoms/` 用 tools/migrate-v1.ts --apply。",
+    );
+  } else {
+    deps.signals.clear("legacy");
+  }
   if (!deps.loadAtoms) deps.syncIndex?.(atoms);
   if ("degraded" in loaded.value && loaded.value.degraded) {
     deps.signals.note("index", "DEGRADED", String(loaded.value.degraded), "本次从 atoms 直接读；hits/query-log/lifecycle 可能不生效。");
