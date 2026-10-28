@@ -20,6 +20,7 @@ import {
   renderTasks,
   rankTasks,
 } from "../../domain/views.js";
+import { indexDerivedSection } from "../derived.js";
 import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
@@ -110,7 +111,13 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
 };
 
 export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<ModeOutput> => {
-  const built = buildIndexText(deps, atoms);
+  // 无参读 = 派生件的物化时机（STATUS「派生件物化」）：只写 .shadow/indexes/**，失败留 Signal 不阻塞读。
+  const derived = await indexDerivedSection(
+    { fs: deps.fs, ws: deps.ws, signals: deps.signals },
+    atoms,
+    deps.config.compact.gapMinutes,
+  );
+  const built = buildIndexText(deps, atoms) + derived;
   const existing = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
   if (!existing.ok || existing.value !== built) {
     const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);

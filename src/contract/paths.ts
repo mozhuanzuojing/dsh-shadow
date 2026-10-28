@@ -13,6 +13,8 @@ export const INDEX_MD = `${INDEXES_DIR}/_index.md`;
 export const MATERIALS_DIR = `${INDEXES_DIR}/materials`;
 export const AFFAIRES_DIR = `${INDEXES_DIR}/affaires`;
 export const EPISODES_DIR = `${INDEXES_DIR}/episodes`;
+/** 每 atom 的 abstract（派生、可重建；v2 新增物化目标）。 */
+export const ABSTRACTS_DIR = `${INDEXES_DIR}/abstracts`;
 export const AUDIT_DIR = `${SHADOW_DIR}/audit`;
 export const SOUL_DIR = `${SHADOW_DIR}/soul`;
 export const SOUL_FILE = `${SOUL_DIR}/soul.json`;
