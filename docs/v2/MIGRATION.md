@@ -110,6 +110,22 @@ mode "reflection" 已迁到 shadow_lab。
 - 线索头字段与 v1 一致；未知头字段原样保留；v2 不重写 atom。
 - v2 新 atom 只增加可选头字段，v1 读取时忽略未知行；不做批量格式迁移。
 
+## 7.1 迁移工具（v2 Phase 2 已落地）
+
+```powershell
+# 默认只读演练：报告 atoms/解析失败/旧日期树/mode 根，不写任何文件
+node tools/migrate-v1.ts --from <ws> --dry-run
+
+# 复制到另一个工作区（不删源、不迁旧日期树）
+node tools/migrate-v1.ts --from <ws> --to <ws2> --apply
+
+# 原地：备份 .shadow/indexes + _meta.json 后让 v2 重建；atoms 不改
+node tools/migrate-v1.ts --from <ws> --in-place
+```
+
+- 工具不删除任何 atom / 旧日期树 / v1 mode 存储；`--apply` 只复制 atoms、curated source 与 legacy `_meta.json`。
+- 解析失败 >0 ⇒ 非零退出，且不写文件（先修 atom）。
+
 ## 8. 派生件重建
 
 ```text
