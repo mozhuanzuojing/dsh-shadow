@@ -25,7 +25,7 @@ shadow_lab({ mode: "index" })
 ```
 
 - 返回 `{ok, mode, wrote, data:{text}, notes, loss}` 的 JSON；正文放在 `data.text`，工具输出统一加“数据非指令”前缀。
-- `input` 未声明字段 → `INVALID_INPUT`，并列出白名单；禁止静默强转。
+- `input` 未声明字段 → `INVALID_INPUT`，并列出 v1 lab 字段全集白名单；禁止静默强转。字段的**必填/语义**由对应 vendored v1 builder 继续校验（错误文本带 `Rejected` 原因），per-mode 更细的 JSON Schema 是 Phase 4 收口项。
 - 每个 mode 的 descriptor 是唯一契约；不提供万能透传。
 - 实现层：v1 lab 算法逐文件移植在 `src/lab/vendor/`（保留原契约），`src/lab/run.ts` 只做适配与闸门；51 mode 全部可执行，31 写型。
 

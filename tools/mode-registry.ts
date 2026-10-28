@@ -23,10 +23,14 @@ if (args.has("--writes")) {
 if (args.has("--group")) {
   const idx = process.argv.indexOf("--group");
   const name = process.argv[idx + 1];
-  const g = LAB_GROUPS.find((x) => x.name.toLowerCase().includes(String(name).toLowerCase()));
-  if (!g) {
-    console.error(`未知分组：${name}`);
-    process.exit(2);
+  if (name === "lab") {
+    for (const g of LAB_GROUPS) console.log(`${g.name} (${g.modes.length}): ${g.modes.join(", ")}`);
+  } else {
+    const g = LAB_GROUPS.find((x) => x.name.toLowerCase().includes(String(name).toLowerCase()));
+    if (!g) {
+      console.error(`未知分组：${name}`);
+      process.exit(2);
+    }
+    console.log(`${g.name} (${g.modes.length}): ${g.modes.join(", ")}`);
   }
-  console.log(`${g.name} (${g.modes.length}): ${g.modes.join(", ")}`);
 }

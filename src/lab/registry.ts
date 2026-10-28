@@ -53,7 +53,7 @@ export const LAB_INPUT_FIELDS: readonly string[] = [
   "visibleA", "visibleB", "targetObserverId", "perceptionOnly", "identityContext", "temporalReference",
   "obsConfidence", "valConfidence", "observation", "realityId", "realEvidenceRef", "lensA", "lensB",
   "obsClaimB", "linkedHypothesis", "hasValidation", "subject", "sourcePerspectives", "temporalContext",
-  "validationRefs", "claimId", "relation", "evidence", "from", "to", "condition", "basedOn", "proposal",
+  "validationRefs", "claimId", "relation", "evidence", "condition", "basedOn", "proposal",
   "proposedChange", "basedOnSimulation", "candidateId", "environmentChange", "executionId", "objective",
   "objectiveSource", "criteria", "constraints", "candidates", "simulationRefs", "observedChanges",
   "successIndicator", "unexpectedEffects", "objectiveRef", "authoritySource", "authorityScope", "reason",
