@@ -1,0 +1,107 @@
+{
+  ".shadow/atoms/2026-09-01--090000-alpha-auth-jwt.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 5,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": [
+      "B"
+    ]
+  },
+  ".shadow/atoms/2026-09-02--090000-todo-page.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 3,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": [
+      "B",
+      "C"
+    ]
+  },
+  ".shadow/atoms/2026-09-04--090000-util.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 2,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-02--150000-shadow-index.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 1,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-03--090000-episode-decision.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 4,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-05--090000-ep-fix-auth-consolidated.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 2,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-04--140000-boundary.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 1,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": true,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-05--100000-alpha-multi-1.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 1,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-05--220000-auth-jwt-2.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 3,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  },
+  ".shadow/atoms/2026-09-01--140000-alpha-cost.md": {
+    "created": "2026-09-01",
+    "lastSeen": 0,
+    "hits": 1,
+    "status": "active",
+    "confidence": 0.5,
+    "pinned": false,
+    "createdBy": "A",
+    "confirmedBy": []
+  }
+}

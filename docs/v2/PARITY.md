@@ -139,6 +139,7 @@
 4. **`entry` 质量修复**：v1 仅 `decision` 使用 `entry`；v2 在 `episode/task/recovery` 一致过滤，且 `entry` 正式进 schema。
 5. **`_meta.json`→SQLite 迁移期**：首次导入前后的 hits/status 只允许导入时延差异；parity fixture MUST 在导入完成后运行。
 6. **重定向文案**：v1 无 lab 工具，v2 的「已移至 `shadow_lab`」提示是新文案，不参与 v1 逐字比对。
+7. **合成 oracle 的 topic 排序偏差（已实测）**：19 条 topic 查询在 `fixtures/oracle-v1` 上平均 Jaccard **0.890**（阈值 0.85）；`q02`（limit=1，v1 取到不同 top1）、`q07`（shadow 主题，v2 entry/预算归一化后排序变化）、`q10`（决策，v2 不再压平/截断）是已知偏差。只登记、不掩盖；后续若修排序须重录并说明。
 
 ## 5. 51 个 lab mode 与 `shadow_lab`
 

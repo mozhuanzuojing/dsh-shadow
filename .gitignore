@@ -18,5 +18,9 @@ __pycache__/
 # ── 本仓当工作区时的运行时面（可删可重建）──────────────────
 .shadow/
 
+# 合成 oracle 语料需要进版本控制（仅 fixtures 下）
+!fixtures/oracle-v1/corpus/.shadow/
+!fixtures/oracle-v1/corpus/.shadow/**
+
 # ── 真实语料绝不进仓 ──────────────────────────────────────
 fixtures/**/private/

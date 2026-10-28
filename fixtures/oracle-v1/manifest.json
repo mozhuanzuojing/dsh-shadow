@@ -1,6 +1,6 @@
 {
   "schema": "dsh-shadow/oracle-v1-manifest@1",
-  "generated_at_utc": "2026-10-28T06:53:05.331Z",
+  "generated_at_utc": "2026-10-28T07:03:40.156Z",
   "frozen_clock_local": "2026-09-06 12:00:00",
   "v1": {
     "root": "<v1-root>",
@@ -66,318 +66,371 @@
     },
     "evidenceProvider": "fs"
   },
+  "corpus_root": "fixtures/oracle-v1/corpus",
   "corpus": {
     "file_count": 52,
     "sha256": "03db4d590c9f356c33552e5c5dfd01696bb18183ab3220262ea32edb25cd02ed",
     "files": [
       {
         "rel": ".shadow/_meta.json",
+        "path": "corpus/.shadow/_meta.json",
         "kind": "meta",
         "bytes": 2403,
         "sha256": "6d51693056b626324f1a1cfbe165e71d408a529738efcfc0f78bde9b7cc99be6"
       },
       {
         "rel": ".shadow/atoms/2026-09-01--090000-alpha-auth-jwt.md",
+        "path": "corpus/.shadow/atoms/2026-09-01--090000-alpha-auth-jwt.md",
         "kind": "atom",
         "bytes": 1066,
         "sha256": "416d2b9f48e2c42eb2167d8259bf083470f5c1bc4c227e9ddfcee39b050e731b"
       },
       {
         "rel": ".shadow/atoms/2026-09-01--091000-alpha-auth-filter.md",
+        "path": "corpus/.shadow/atoms/2026-09-01--091000-alpha-auth-filter.md",
         "kind": "atom",
         "bytes": 675,
         "sha256": "6a293db950e241650c26858a35ac55972ca153639338a9e138b94decadbc72a5"
       },
       {
         "rel": ".shadow/atoms/2026-09-01--093000-alpha-openapi.md",
+        "path": "corpus/.shadow/atoms/2026-09-01--093000-alpha-openapi.md",
         "kind": "atom",
         "bytes": 770,
         "sha256": "a83144005187f15b0d17e015ac2af43bf26a9d10e3551cd9ce29d1eb7e97a821"
       },
       {
         "rel": ".shadow/atoms/2026-09-01--140000-alpha-cost.md",
+        "path": "corpus/.shadow/atoms/2026-09-01--140000-alpha-cost.md",
         "kind": "atom",
         "bytes": 976,
         "sha256": "328d541857486a401d402a2d19b412f2c1babd7262a6c84e560e66a9b1334428"
       },
       {
         "rel": ".shadow/atoms/2026-09-02--090000-todo-page.md",
+        "path": "corpus/.shadow/atoms/2026-09-02--090000-todo-page.md",
         "kind": "atom",
         "bytes": 866,
         "sha256": "3c7426fb2ce6c4a1e3a66d05db75ad9035f57f14c1ebf01a8aa72481462d772e"
       },
       {
         "rel": ".shadow/atoms/2026-09-02--091000-todo-sync.md",
+        "path": "corpus/.shadow/atoms/2026-09-02--091000-todo-sync.md",
         "kind": "atom",
         "bytes": 951,
         "sha256": "c273afac8c89a3f98ec4e62773316d4187295e95fb0713a38a5108270388e1da"
       },
       {
         "rel": ".shadow/atoms/2026-09-02--100000-todo-plan.md",
+        "path": "corpus/.shadow/atoms/2026-09-02--100000-todo-plan.md",
         "kind": "atom",
         "bytes": 532,
         "sha256": "d3bc7ac3bc1b2bd47dd9c57977b0cb784682688fca5ab721901bbd13074ab380"
       },
       {
         "rel": ".shadow/atoms/2026-09-02--150000-shadow-index.md",
+        "path": "corpus/.shadow/atoms/2026-09-02--150000-shadow-index.md",
         "kind": "atom",
         "bytes": 765,
         "sha256": "3083d26d56ab874b2e3ecd096bbfe2ab11dd7abe0dddcb9690a2f6b7049ac871"
       },
       {
         "rel": ".shadow/atoms/2026-09-03--090000-episode-decision.md",
+        "path": "corpus/.shadow/atoms/2026-09-03--090000-episode-decision.md",
         "kind": "atom",
         "bytes": 1185,
         "sha256": "9f6e00b7ffd71ffaaa4783c4d47ceaffe86b2f249d9a24425db2144e3634c14f"
       },
       {
         "rel": ".shadow/atoms/2026-09-03--091000-episode-task.md",
+        "path": "corpus/.shadow/atoms/2026-09-03--091000-episode-task.md",
         "kind": "atom",
         "bytes": 732,
         "sha256": "ba12baa88aaca0793674238194d7f02990f7ba944430550d67e2faa6f660ae3d"
       },
       {
         "rel": ".shadow/atoms/2026-09-03--093000-material-ledger.md",
+        "path": "corpus/.shadow/atoms/2026-09-03--093000-material-ledger.md",
         "kind": "atom",
         "bytes": 1120,
         "sha256": "b314daf0a4a075dbf269b30874ca26ac863cc40836ad5e25cc23df974ea60de1"
       },
       {
         "rel": ".shadow/atoms/2026-09-03--120000-zhongwen.md",
+        "path": "corpus/.shadow/atoms/2026-09-03--120000-zhongwen.md",
         "kind": "atom",
         "bytes": 544,
         "sha256": "770b44cf8ae89b4ecd8aae0789619c00efd59330b43a02c5ea586219f0dc9264"
       },
       {
         "rel": ".shadow/atoms/2026-09-04--090000-util.md",
+        "path": "corpus/.shadow/atoms/2026-09-04--090000-util.md",
         "kind": "atom",
         "bytes": 646,
         "sha256": "2f7b3b9b42f857623740000db788fc29cb590f855a954959de501be944888916"
       },
       {
         "rel": ".shadow/atoms/2026-09-04--100000-decision-lineage.md",
+        "path": "corpus/.shadow/atoms/2026-09-04--100000-decision-lineage.md",
         "kind": "atom",
         "bytes": 836,
         "sha256": "28abbfc580187aa53ad78ef6fb6c19542e0a63a603de665974b8c69cbb87eca7"
       },
       {
         "rel": ".shadow/atoms/2026-09-04--110000-decision-lineage-v2.md",
+        "path": "corpus/.shadow/atoms/2026-09-04--110000-decision-lineage-v2.md",
         "kind": "atom",
         "bytes": 770,
         "sha256": "98d9abe62373c27ebb68e7d87c77c1c2ec219a5090dfa598522ad417fa329c07"
       },
       {
         "rel": ".shadow/atoms/2026-09-04--140000-boundary.md",
+        "path": "corpus/.shadow/atoms/2026-09-04--140000-boundary.md",
         "kind": "atom",
         "bytes": 793,
         "sha256": "e593e24ad3efd3bf8b8e33c30abbd2ac7f3617ea7659779378c0d0a16df58a9a"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--090000-ep-fix-auth-consolidated.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--090000-ep-fix-auth-consolidated.md",
         "kind": "atom",
         "bytes": 917,
         "sha256": "e3351908e64d3b89fe187a7b67c2a52e044dd92a9841613d82c360ce379322ae"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--100000-alpha-multi-1.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--100000-alpha-multi-1.md",
         "kind": "atom",
         "bytes": 721,
         "sha256": "305bb299f0dec14efa8716710b6ac0069d7e158eb6c25f6075665d232170ccf8"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--101000-alpha-multi-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--101000-alpha-multi-2.md",
         "kind": "atom",
         "bytes": 544,
         "sha256": "b730521f771feccbc954eb57cef0ac910ea8f797c078027ec11ad6b271da629f"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--102000-alpha-multi-3.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--102000-alpha-multi-3.md",
         "kind": "atom",
         "bytes": 858,
         "sha256": "7b3b22ef9003411d9fa80c9a4c58a9bdc04e6232f1c7b1bf205f3ce2da0e3b44"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--140000-zhongwen-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--140000-zhongwen-2.md",
         "kind": "atom",
         "bytes": 526,
         "sha256": "ce7bd8e9be63c17b6a43055ce2953d99d457647c8bcad1b5a33beb3893a1901d"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--150000-shadow-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--150000-shadow-2.md",
         "kind": "atom",
         "bytes": 582,
         "sha256": "8bb151db00d95014cc2fa3f8e6ca4e3e6ec4f393d573ac8580718f3f2a0b003c"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--160000-task-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--160000-task-2.md",
         "kind": "atom",
         "bytes": 476,
         "sha256": "f22fefb07cddb841a0cbdb4468b0b6d2336494b64572fbbab5807ec3c3e8d10d"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--170000-material-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--170000-material-2.md",
         "kind": "atom",
         "bytes": 1093,
         "sha256": "9970d021f635f93e8090f50bdf8d461162eb69bcceea48ac1b0f831a6705e654"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--180000-badheader.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--180000-badheader.md",
         "kind": "atom",
         "bytes": 159,
         "sha256": "a1049e958a5b6fb65b62c157db0b4602e539437291dd47181b55e67639a6a535"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--190000-empty.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--190000-empty.md",
         "kind": "atom",
         "bytes": 0,
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--200000-shadow-episode.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--200000-shadow-episode.md",
         "kind": "atom",
         "bytes": 772,
         "sha256": "2d0bfb2cff72c36fc56aaa5a44e45704d9dd23fbbbf602008a7220dbb5d7872c"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--210000-alpha-util.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--210000-alpha-util.md",
         "kind": "atom",
         "bytes": 574,
         "sha256": "d8b2b096dcf815aa15e5fab67445da0abc7d2167bfceb7b27376398421c5526e"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--220000-auth-jwt-2.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--220000-auth-jwt-2.md",
         "kind": "atom",
         "bytes": 849,
         "sha256": "ca011e9236aa7aed343894fdfaa6b2a828100f022e17a4504fa7450e941bfd0f"
       },
       {
         "rel": ".shadow/atoms/2026-09-05--230000-no-summary.md",
+        "path": "corpus/.shadow/atoms/2026-09-05--230000-no-summary.md",
         "kind": "atom",
         "bytes": 596,
         "sha256": "2020638dedb4491fc4febae38bcac21130aa2deb4ac1dbde3ab4f9bdfbee1020"
       },
       {
         "rel": ".shadow/query-log/2026-09-03.jsonl",
+        "path": "corpus/.shadow/query-log/2026-09-03.jsonl",
         "kind": "query-log",
         "bytes": 1130,
         "sha256": "3d09442d55fbc7b95658927a9f07382f42bf0bb770426375bd22bd79a53af1d7"
       },
       {
         "rel": "cloudfunctions/todoSync/index.js",
+        "path": "corpus/cloudfunctions/todoSync/index.js",
         "kind": "evidence",
         "bytes": 85,
         "sha256": "d5bbf9f30062a40650ef0033c25fe78ea3056f2beca72f0e30262da05e562951"
       },
       {
         "rel": "docs/api/openapi-gateway.md",
+        "path": "corpus/docs/api/openapi-gateway.md",
         "kind": "evidence",
         "bytes": 80,
         "sha256": "f6dcace855d37e0bf4cd981161789220606436a04d7bf3dec98372bd2018af36"
       },
       {
         "rel": "docs/boundary.md",
+        "path": "corpus/docs/boundary.md",
         "kind": "evidence",
         "bytes": 69,
         "sha256": "e3942c648853209f0ebc06141f38ffa1d1fa045adb197721de3b82bb7cb306a9"
       },
       {
         "rel": "docs/material-ledger.md",
+        "path": "corpus/docs/material-ledger.md",
         "kind": "evidence",
         "bytes": 76,
         "sha256": "568dbb458a426b5d01ab461a5cc78b741c28a527adbbbb8a807da507e9a66944"
       },
       {
         "rel": "docs/no-summary.md",
+        "path": "corpus/docs/no-summary.md",
         "kind": "evidence",
         "bytes": 71,
         "sha256": "1c895f36907d62f0fa14f942642c5f4084cdca68d3f55b124778d8da5d8bcbf4"
       },
       {
         "rel": "docs/plan/todo-backlog.md",
+        "path": "corpus/docs/plan/todo-backlog.md",
         "kind": "evidence",
         "bytes": 78,
         "sha256": "9db2ca6bcd150d26d87f8e7980c58c31de16edfefd13942d93fbab12671fe45e"
       },
       {
         "rel": "docs/task/plan.md",
+        "path": "corpus/docs/task/plan.md",
         "kind": "evidence",
         "bytes": 70,
         "sha256": "351c913af8cd22c5f448316fcb2ba234fc19d9773072d843fbcd9376f09fa9fd"
       },
       {
         "rel": "miniprogram/pages/todo/todo.js",
+        "path": "corpus/miniprogram/pages/todo/todo.js",
         "kind": "evidence",
         "bytes": 83,
         "sha256": "8b4a65a2c5238930441e310d2a9d5a08a0ae3f24a17b385a1f953104513f26a9"
       },
       {
         "rel": "notes/验收清单.md",
+        "path": "corpus/notes/验收清单.md",
         "kind": "evidence",
         "bytes": 74,
         "sha256": "771ffbee4443196587927f83e8144a869b0f8c6814582da0ba8f1b83cd943b17"
       },
       {
         "rel": "spec/alpha.md",
+        "path": "corpus/spec/alpha.md",
         "kind": "evidence",
         "bytes": 66,
         "sha256": "d0f284f9445b64c2c194b4fb84c07a17c3bd9fff9bf9719dee9e6518d8dc074e"
       },
       {
         "rel": "src/alpha/one.ts",
+        "path": "corpus/src/alpha/one.ts",
         "kind": "evidence",
         "bytes": 69,
         "sha256": "9a420d0e26cc4792623d93158dadfe4fe84376860b77ead2e130a9b9d7e954aa"
       },
       {
         "rel": "src/alpha/three.ts",
+        "path": "corpus/src/alpha/three.ts",
         "kind": "evidence",
         "bytes": 71,
         "sha256": "4b42aa24f98c422938d7e6f615774f7e61a5b66b670b58ec8750a66f7465b816"
       },
       {
         "rel": "src/alpha/two.ts",
+        "path": "corpus/src/alpha/two.ts",
         "kind": "evidence",
         "bytes": 69,
         "sha256": "719a218f786173b386f3699a91ef47e9058e4732fe085479dcc9fa86f2687200"
       },
       {
         "rel": "src/auth/AuthFilter.java",
+        "path": "corpus/src/auth/AuthFilter.java",
         "kind": "evidence",
         "bytes": 77,
         "sha256": "2619e2b80a4bb644f60b60e55ca82ca26e340e0ff2bae9f579ef9a04352e27a7"
       },
       {
         "rel": "src/auth/JwtFilter.java",
+        "path": "corpus/src/auth/JwtFilter.java",
         "kind": "evidence",
         "bytes": 76,
         "sha256": "11b8ba251e796ead4aa4ab31a3f930ff338898088c383a0fa0b06404b7dfadaa"
       },
       {
         "rel": "src/common/alpha-util.ts",
+        "path": "corpus/src/common/alpha-util.ts",
         "kind": "evidence",
         "bytes": 77,
         "sha256": "a7913b351a0f8810118793b4c7b8756331ff46462905b6424e426087feed2449"
       },
       {
         "rel": "src/common/Util.java",
+        "path": "corpus/src/common/Util.java",
         "kind": "evidence",
         "bytes": 73,
         "sha256": "cce1cc9350a9318d0eaccc2288271773fff8c9b6a9c601d8782c4117c6ddf65f"
       },
       {
         "rel": "src/decision/lineage.ts",
+        "path": "corpus/src/decision/lineage.ts",
         "kind": "evidence",
         "bytes": 76,
         "sha256": "152a90e8d31e639748e6d25f14a81c7867d1364081255b6fd69a8494ed0758c8"
       },
       {
         "rel": "src/episode/decision-runner.ts",
+        "path": "corpus/src/episode/decision-runner.ts",
         "kind": "evidence",
         "bytes": 83,
         "sha256": "576d3b7b9f8c66e2d93d0ca40a2d228c5d6aa012131825bc9ac50bfdc50ef103"
       },
       {
         "rel": "src/episode/task-runner.ts",
+        "path": "corpus/src/episode/task-runner.ts",
         "kind": "evidence",
         "bytes": 79,
         "sha256": "11fef8115efe17ffdcfa1011be6402961fde09f33966292dcbbcfbcd853825a6"

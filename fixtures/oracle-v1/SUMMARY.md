@@ -3,6 +3,7 @@
 - v1 基线：`D:\project\local-workbench\_work\dsh-shadow` · commit `e755b32407a0d5f236c6e5c34ca2235fdf58ca57` · version `1.22.2`
 - 冻结时钟：`2026-09-06 12:00:00`（本地时间；语料日期 2026-09-01…09-05）
 - 语料：52 个文件（30 atoms + 20 evidence + `_meta.json` + `query-log`）/ sha256 `03db4d590c9f356c33552e5c5dfd01696bb18183ab3220262ea32edb25cd02ed`
+- 语料夹具：`D:\project\dsh-shadow\fixtures\oracle-v1\corpus`（逐文件同路径、同内容；manifest `corpus_root = "fixtures/oracle-v1/corpus"`）
 - 运行：**200** 条（20 查询 × 10 mode）· ok **200** · error **0** · skipped 0
 - 输出目录：`D:\project\dsh-shadow\fixtures\oracle-v1`
 
