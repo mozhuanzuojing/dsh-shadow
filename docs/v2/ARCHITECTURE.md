@@ -54,6 +54,8 @@
 | `surface` | 工具名/参数/enum、工具描述、宿主事件、prompt 段 | 业务规则、落盘格式 |
 | `engine/read` | mode 路由、候选召回、排序、预算、信封、loss 披露 | 文件写入、证据裁决 |
 | `engine/write` | 事件→批次→atom、索引触发、失败可见性 | 读侧排序、lab 语义 |
+| `engine/toolset` | 工具集台账：能力目录、探测、审批门、安装、能力预检 | 文件写入、读路径召回 |
+| `engine/derived` | 四类派生件（材料卡/纪要/Episode/abstract）的确定性物化 | 权威内容、召回排序 |
 | `engine/lab` | 51 mode 的输入校验、读写边界、结果形状 | source 落盘细节、工具 schema |
 | `lab/vendor` | v1 lab 算法逐文件移植（保留原契约） | 核心读路径、atoms 写 |
 | `domain` | atom/clue/lifecycle/evidence/verdict/projection 的纯函数 | I/O、配置、日志 |
@@ -84,9 +86,15 @@
 
 实验：shadow_lab
   → surface 只校验 {mode,input,write}
-  → engine/lab descriptor（运行时校验 input）
+  → engine/lab descriptor（per-mode schema 校验 input）
   → 读 handler 或写 handler（write:true 才允许）
-  → store（写型只写 `.shadow/<store>/`，不写 atoms）→ 结果信封
+  → store（写型只写 `.shadow/<store>/`，不写 atoms；lab fs 门面兜底 WRITE_DENIED）→ 结果信封
+
+派生：无参 read_shadow
+  → engine/read.indexView
+  → engine/derived.plan（确定性：atoms + compact.gapMinutes；无时钟/随机）
+  → store/derived/indexes/{materials,affaires,episodes,abstracts}
+    （内容不变不写；预算截断披露；失败留 Signal、不阻塞读）
 
 工具集：shadow_toolset
   → catalog（签入清单）
@@ -103,6 +111,10 @@
 | `soul/soul.json` | source（curated） | 否 | 人设/价值观/边界（v2 只读） |
 | `resources/*.md` | source（curated，planned） | 否 | 资源卡；v2-dev 未接 |
 | `indexes/_index.md` | derived | 是 | 目录索引；无参读时物化 |
+| `indexes/materials/*.md` | derived | 是 | 材料卡（路径/引用次数/首末出现/相关记忆）；无参读物化 |
+| `indexes/affaires/*.md` | derived | 是 | 纪要（按 `project\|agent` 聚合 Episode） |
+| `indexes/episodes/*.md` | derived | 是 | Episode 视图（起止/决策/动作/记忆引用） |
+| `indexes/abstracts/*.md` | derived | 是 | 每条 atom 的 abstract（无摘要显式写「未采集」） |
 | `indexes/index.sqlite` | derived | 是 | parsed atoms / hits / meta / query_log |
 | `_meta.json` | legacy | 否（保留） | v1 元数据；v2 **不读取/不导入**（迁移工具可备份） |
 | `audit/` | sidecar（append-only） | 否 | 审计流 |
@@ -137,6 +149,7 @@
 1. `atoms/` 是唯一记忆权威（v2 新名含 uid6；v1 旧名只读可读）；`indexes/` 与 SQLite 可整份删除后重建。
 2. 写路径只能产生新文件，不改旧 atom。
 3. 所有降级都有可见信号；没有“无信号降级”。
-4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta）。atoms 只能经写侧采集；`shadow_lab` 写型只写各自 `.shadow/<store>/`，**永不写 atoms**。
+4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta/query_log）。atoms 只能经写侧采集；`shadow_lab` 写型只写各自 `.shadow/<store>/`，**永不写 atoms**——该边界由 lab fs 门面在**写操作处**强制（`WRITE_DENIED`），不只靠字段校验。
 5. 旧日期树/旧 mode 存储不属于 v2 运行时数据面：不读取、不写入、不删除；迁移是显式工具，不是读路径。
 6. 当前态文档不写行号；归档文档不改正文。
+7. 遗忘（Forget≠Delete）只把记忆移出活跃集（索引/召回/Episode/派生物化），**不删文件**；默认配置（`forget.minHits=0`、`maxActive=0`）不启用陈旧类遗忘；披露必须同时给「条数 / 原因 / 未删除」。

@@ -75,28 +75,37 @@
 - `npm pack`：375 文件 / 259 KB（unpacked 762 KB）；含 dist（其中 lab vendor 284 文件）、docs/v2 6 份、ADR 14；不含 src/test/tools/fixtures。
 - 轻量 tag `v2.0.0` 指向发布提交；`legacy-v1` 保留；npm registry 未发布（ADR-0012 另议）。
 
+### Phase 6 — 工程缺口收口（2026-10-28，v2.1.0）
+- **shadow_toolset 真实台账**：新增 `src/engine/toolset/`（目录 107 条 = provider 2 + reference 105 · 17 分类；默认只探 provider，`survey:"all"` 全探；`need` 预检只读）。install fail-closed：无审批通道/无 agent/非 `allowed-once` 一律不装并给可复制命令；装后重探再报（新增 `no-recipe`/`unverified` 状态，避免「未执行/未验证」被塞进 failed）。`toolset.enabled:false` 不注册。
+- **forget / retention / compact 接线**：新增 `src/domain/lifecycle.ts`；读时统一裁决（状态类 archived/superseded/compacted + 陈旧类 + maxActive），移出活跃集并在输出披露「条数 / 原因 / 未删除」；`shadow-manifest`/`shadow-report` 披露活跃 vs 已遗忘。默认配置不启用陈旧类遗忘（升级不改变召回面）；meta 缺失不做陈旧类遗忘（hits 未知 ≠ 0）。
+- **派生件物化**：新增 `src/engine/derived.ts`；无参读物化 `indexes/{materials,affaires,episodes,abstracts}`（确定性、内容不变不写、预算截断披露、写失败留 Signal 不阻塞读、atoms 零新增）。
+- **lab per-mode JSON Schema**：新增 `src/lab/schema.ts`，51/51 覆盖（200 字段条目 / 134 唯一字段 / 30 必填条目 / 8 枚举 / 4 permissive）；未知字段列出该 mode 允许集，类型/枚举/必填显式拒绝。
+- **lab 写边界加固**：lab fs 门面对 `.shadow/atoms` 写入一律 `WRITE_DENIED`；`workspace-record.kind` 锁形态（禁 `../`、分隔符、保留目录）。
+- 验证：`npm run verify` 34/34 测试 · audit-layers 184 文件 · docs-check 绿；v2.1.0 发版（见 CHANGELOG）。
+- **未做**：拆 `dsh-shadow-lab` 独立包（core 移除 lab 属 breaking；设计与迁移步骤见 ADR-0013，未执行）。
+
 ## 未完成（按优先级）
 
-1. **派生件物化**：材料卡/纪要/Episode/abstracts 的派生与缓存（当前只有 `_index.md` 落盘，其余在读时内存派生）。
-2. **retention/forget/compact**：v2 配置已有，行为未接；Forget≠Delete 契约需在 v2 落地。
-3. **shadow_toolset 真实台账**：当前显式报 unavailable；需移植目录/探测/审批安装。
-4. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言。
-5. **真实 DSH E2E**：headless profile 与隔离 `v2web` Web profile 已跑通（含 lab、含卸载/恢复回滚）；WSL 远端与日常 `desktop` profile 的安装/切换未做。
-6. **npm publish**：registry 尚未发布（v2.0.0 只发了 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
-8. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
+1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。
+2. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言（派生件物化让无参读多了 ≤68 次 I/O，未做基准）。
+3. **真实 DSH E2E**：headless profile 与隔离 `v2web` Web profile 已跑通（含 lab、含卸载/恢复回滚）；v2.1.0 新能力（toolset 真机探测、派生件、forget）只在单测/e2e 层验证，真机 Web 复测未做；WSL 远端与日常 `desktop` profile 的安装/切换未做。
+4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
+5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 
 ## 关键数字（可重放）
 
 ```powershell
-npm run verify                 # 22/22 + layers + docs
+npm run verify                 # 34/34 + layers + docs
 node tools/corpus-bench.ts 1000
 node tools/corpus-bench.ts 8000
 node tools/migrate-v1.ts --from fixtures\oracle-v1\corpus --dry-run
 node test/parity/topic.test.ts
 ```
 
-- 核心 schema：`read_shadow` 12 参数；4 工具合计 2,538 字符。
-- 测试：22 文件/检查（unit + failure + parity + e2e）。
+- 核心 schema：`read_shadow` 12 参数；4 工具合计 2,729 字符（toolset 真实台账后）；lab 51 mode 的 input 契约在 `src/lab/schema.ts`。
+- 测试：34 文件/检查（unit + failure + parity + e2e）。
+- 派生件：无参读最多 68 个派生文件（材料卡 24 · 纪要 8 · Episode 12 · abstract 24），内容不变不写。
+- 工具集台账：107 条（provider 2 + reference 105）· 17 分类。
 - 真实语料：168 atoms、0 解析失败（只读 dry-run；未 in-place）。
 - 8k 合成：query 106ms（目标 ≤300ms）。
 

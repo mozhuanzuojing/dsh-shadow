@@ -2,6 +2,38 @@
 
 本文件覆盖每个发版；历史在 git tag（ADR-0012）。迁移步骤见 [docs/v2/MIGRATION.md](./docs/v2/MIGRATION.md)，当前实现状态见 [docs/v2/STATUS.md](./docs/v2/STATUS.md)。
 
+## [2.1.0] — 2026-10-28
+
+工程缺口收口版：影子工具集从占位变成真实台账，遗忘契约落地，派生件开始物化，lab 输入契约按 mode 拆开并加固写边界。
+
+### 新增
+
+- **shadow_toolset 真实台账**：107 条能力目录（provider 2 + reference 105 · 17 分类）；`survey`/`category`/`need` 只读探测（默认只探插件内接线项，`survey:"all"` 才全探）；`install` 显式请求 + 宿主 `allowed-once` 审批 + 安装后重探，新增 `no-recipe`/`unverified` 状态，拒绝路径一律给可复制命令。
+- **forget / retention / compact 接线**：新增 `domain/lifecycle.ts`；读时裁决状态类（archived/superseded/compacted）、陈旧类（`age>=staleDays && hits<minHits`）与 `maxActive` 上限，移出活跃集并在输出披露「条数/原因/未删除（Forget≠Delete）」；`shadow-manifest`/`shadow-report` 披露活跃 vs 已遗忘。`retention.*` 本已接在召回打分，`compact.gapMinutes` 本已接在 Episode 边界。
+- **派生件物化**：无参 `read_shadow` 时物化 `indexes/{materials,affaires,episodes,abstracts}`（确定性：只由 atoms + `compact.gapMinutes` 决定，无时钟/随机；内容不变不写；预算截断在索引输出披露；写失败留 `index.derived` Signal、不阻塞读；atoms 零新增）。
+- **lab per-mode JSON Schema**：`src/lab/schema.ts` 覆盖 51/51 mode（200 字段条目 / 134 唯一字段 / 30 必填条目 / 8 枚举 / 4 permissive）；未知字段错误列出**该 mode** 允许集；类型/枚举/必填显式拒绝，不做静默强转。
+- **lab 写边界加固**：lab fs 门面对 `.shadow/atoms` 的任何写入一律 `WRITE_DENIED`（不只靠字段校验）；`workspace-record.kind` 锁形态（禁 `../`、路径分隔符、保留目录）。
+- `toolset.enabled:false` 不再注册 `shadow_toolset`；`normalizeConfig` 移除 forget/toolset 的「尚未接线」warning。
+
+### 行为变化（升级注意）
+
+- **lab 输入契约收紧**：20 个 mode 现在有必填字段（此前空 input 也能执行）；未知字段只允许该 mode 的字段表。此前被放行但无人读取的 20 个 v1 core 参数（`topic`/`limit`/`asOf`/`observer`/`soul`/`taste`/…）现在 `INVALID_INPUT`；v1 会静默回落的枚举值（offline trigger、horizon-summary accessibility、recall-event accessibilityBefore/After）现在显式拒绝。
+- **forget 默认不启用**：`minHits=0` / `maxActive=0` 表示关闭对应判据（v1 的 `minHits=0` 是非法值回落 1）；默认不改变召回面。meta 缺失（只读沙箱/索引不可用）不做陈旧类遗忘。
+- **派生件写入**：无参读会写 `indexes/`（首次最多 68 个文件）；派生件无 GC，删除 `indexes/` 可整份重建。
+- **工具集安装**：`install` 仍只在显式调用时发生，且必须拿到宿主 `allowed-once`；装后重探未检出时返回 `unverified`（不宣称成功、也不断言失败）。
+
+### 验证
+
+- `npm run verify`：34/34 测试（新增 toolset 4+1、lifecycle/forget 2、derived 1+1、lab-schema 1、lab-write-guard 1、toolset-config 1）；audit-layers 184 文件；docs-check 绿。
+- 单测/e2e 均为假 runner / 假 approval / MemoryFs 或临时目录，不真装软件、不碰真实 `.shadow`。
+
+### 已知限制（2.1.0）
+
+- `shadow_toolset` 真机安装路径未验证（测试用假 runner）；台账是 v1 2026-09 快照，不是本机实测；非 Windows 下 winget-only 条目的处置未测。
+- lab 与 core 仍同包；拆 `dsh-shadow-lab` 属 breaking，设计与迁移见 ADR-0013（未执行）。
+- `model-claim.validations` 恢复可达（v1 已知语义缺口：outcome 由调用方给，未与 `.shadow/validation` 交叉核对），schema 里标 permissive 并写明风险。
+- 派生件无 8k 语料 perf 基准；真实只读沙箱下的派生写入未真机验证。
+
 ## [2.0.0] — 2026-10-28
 
 v2 重写首发：**atoms 是唯一权威，派生索引可整份重建，降级可见**。core 10 mode 常驻，研究面 51 mode 收进可选 lab。

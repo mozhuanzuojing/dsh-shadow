@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（12 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（13 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -16,6 +16,7 @@
 | [0010](./0010-docs-and-governance-reset.md) | 文档/治理重置与 verify 分层 | accepted |
 | [0011](./0011-test-strategy.md) | 测试策略（oracle/parity/failure/perf） | accepted |
 | [0012](./0012-release-and-versioning.md) | 发版与版本策略 | accepted |
+| [0013](./0013-lab-package-split.md) | 拆分 dsh-shadow-lab 独立包（设计，未执行） | proposal |
 
 ## 状态枚举
 

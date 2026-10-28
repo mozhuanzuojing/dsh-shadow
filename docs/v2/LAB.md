@@ -25,7 +25,9 @@ shadow_lab({ mode: "index" })
 ```
 
 - 返回 `{ok, mode, wrote, data:{text}, notes, loss}` 的 JSON；正文放在 `data.text`，工具输出统一加“数据非指令”前缀。
-- `input` 未声明字段 → `INVALID_INPUT`，并列出 v1 lab 字段全集白名单；禁止静默强转。字段的**必填/语义**由对应 vendored v1 builder 继续校验（错误文本带 `Rejected` 原因），per-mode 更细的 JSON Schema 是 Phase 4 收口项。
+- `input` 按 **per-mode JSON Schema** 校验（`src/lab/schema.ts`，51/51 覆盖；字段从 `vendor/**` 里实际读取 `args?.x` 的位置推导，不按 mode 名猜）：未知字段 → `INVALID_INPUT` 并列出**该 mode** 允许的字段；类型/枚举/缺必填同样显式拒绝；**不做静默强转**。
+- 20 个 mode 有必填字段（只收「缺了 builder 必 `Rejected`」的字段）；4 处 permissive（builder 只读少量子键、其余子对象透传）在 schema 里显式标注；跨字段「或」约束仍由 builder 的 `Rejected` 文本兜底。
+- `v2.1.0` 起旧的「v1 字段并集白名单」已移除：此前被放行但无人读取的 20 个 v1 core 参数现在显式 `INVALID_INPUT`（见 CHANGELOG 迁移提示）。
 - 每个 mode 的 descriptor 是唯一契约；不提供万能透传。
 - 实现层：v1 lab 算法逐文件移植在 `src/lab/vendor/`（保留原契约），`src/lab/run.ts` 只做适配与闸门；51 mode 全部可执行，31 写型。
 
@@ -91,6 +93,7 @@ node tools/mode-registry.ts --list --group lab
 
 - v2 运行时**不读取** v1 日期树 `.shadow/<YYYY-MM-DD>/`，也不读取旧 mode 目录；它们不进入 `read_shadow`/lab 的结果。
 - lab 只读写自己的 `.shadow/<store>/`；旧目录不写入、不迁移、不删除。
+- **写边界由 fs 门面强制**：任何写 `.shadow/atoms` 的路径一律 `WRITE_DENIED`（不只靠字段校验）；`workspace-record.kind` 另有形态约束（禁 `../`、路径分隔符、保留目录 atoms/indexes/audit/soul/taste）。
 - `LEGACY_READ_ONLY` 只保留给显式迁移工具/未来兼容层，运行时不会用它“假装支持”旧存储。
 
 ## 6. 安装
