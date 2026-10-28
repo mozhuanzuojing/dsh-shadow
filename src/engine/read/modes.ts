@@ -86,14 +86,15 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
 };
 
 export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<ModeOutput> => {
-  const cached = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
-  if (cached.ok) {
-    return { body: cached.value, matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
+  const built = buildIndexText(deps, atoms);
+  const existing = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
+  if (!existing.ok || existing.value !== built) {
+    const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);
+    if (!w.ok) {
+      deps.signals.note("index-md", w.error.code, `索引写入失败（${w.error.message}）`, "本次返回现场派生索引；磁盘 `_index.md` 未更新，外部读者可能看到旧索引。");
+    }
   }
-  if (cached.error.code !== "NOT_FOUND") {
-    deps.signals.note("index-md", cached.error.code, `索引读取失败（${cached.error.message}）`, "本次回退为现场派生索引；磁盘索引可能是旧的");
-  }
-  return { body: buildIndexText(deps, atoms), matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
+  return { body: built, matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
 };
 
 export const conflictRels = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Set<string>> => {

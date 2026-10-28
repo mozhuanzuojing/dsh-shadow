@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply } from "../../dist/index.js";
@@ -49,6 +49,10 @@ try {
 
   const ql = await tools.get("read_shadow").execute({ mode: "query-log" }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
   assert.ok(ql.includes("Query Observatory") && ql.includes("查询次数"), "query-log 应记录真实查询");
+
+  const indexOut = await tools.get("read_shadow").execute({}, { agent: { id: "s1", session: { header: { cwd: ws } } } });
+  assert.ok(indexOut.includes("shadow 目录说明与索引"), "无参应返回索引");
+  assert.ok(existsSync(join(ws, ".shadow", "indexes", "_index.md")), "无参读应物化 indexes/_index.md");
 
   const missing = await tools.get("read_shadow").execute({ mode: "definitely-not" }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
   assert.ok(missing.includes("未知 mode"), "未知 mode 必须显式报错");

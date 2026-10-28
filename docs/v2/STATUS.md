@@ -25,6 +25,7 @@
 - 读 Outcome：目录/单文件读失败可见；空 ≠ 失败（测试）。
 - 未知 mode 显式错误 + 最近邻；lab mode 显式重定向（测试）。
 - Signal 成功清除；query-log/hits 真实记录（e2e）。
+- 无参读物化 `indexes/_index.md`（内容变化才写；e2e 断言）；材料卡/纪要/Episode/abstracts 尚未物化。
 - DB-first 读路径：SQLite 存 parsed JSON；1k warm 10ms/query 28ms；8k warm 90ms/query 261ms（`tools/corpus-bench.ts`）。
 - 真实 v1 语料 dry-run：168 atoms / 0 parse failure / 754 旧日期树文件（`tools/migrate-v1.ts`）。
 - topic parity：19 查询平均 Jaccard 0.890（阈值 0.85；偏差登记在 PARITY §4.3）。
@@ -37,7 +38,7 @@
 ## 未完成（按优先级）
 
 1. **Phase 3 lab**：`packages/lab` + `shadow_lab({mode,input,write})` + 51 mode 适配（当前只做了重定向提示）。
-2. **派生件物化**：`indexes/_index.md` 写盘、材料卡/纪要/Episode/abstracts 的派生与缓存（当前 `_index.md` 只在读时内存构建）。
+2. **派生件物化**：材料卡/纪要/Episode/abstracts 的派生与缓存（当前只有 `_index.md` 落盘，其余在读时内存派生）。
 3. **retention/forget/compact**：v2 配置已有，行为未接；Forget≠Delete 契约需在 v2 落地。
 4. **shadow_toolset 真实台账**：当前显式报 unavailable；需移植目录/探测/审批安装。
 5. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言。
