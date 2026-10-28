@@ -18,16 +18,20 @@ export interface IndexLoadResult extends LoadAtomsResult {
 }
 
 export class IndexCache {
-  private map = new Map<string, IndexDb>();
+  private map = new Map<string, Promise<Outcome<IndexDb>>>();
+  private opened = new Map<string, IndexDb>();
 
   async get(fs: FsPort, ws: string): Promise<Outcome<IndexDb>> {
     const key = norm(ws);
     const hit = this.map.get(key);
-    if (hit) return ok(hit);
-    const opened = await IndexDb.open(`${key}/${INDEX_DB}`);
-    if (!opened.ok) return opened;
-    this.map.set(key, opened.value);
-    return opened;
+    if (hit) return hit;
+    const p = IndexDb.open(`${key}/${INDEX_DB}`).then((r) => {
+      if (r.ok) this.opened.set(key, r.value);
+      else this.map.delete(key);
+      return r;
+    });
+    this.map.set(key, p);
+    return p;
   }
 
   /** DB-first：文件名集合一致 ⇒ 直接读 parsed JSON；`full` 时再比 size/mtime。 */
@@ -56,7 +60,13 @@ export class IndexCache {
         }
         if (statsOk) {
           const atoms = index.allParsed();
-          if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
+          if (atoms.length === files.value.length) {
+            if (index.metaCount() === 0) {
+              const metaErr = await this.importLegacyMeta(index, fs, ws, atoms);
+              if (metaErr) return ok({ atoms, errors: [], source: "db", degraded: metaErr });
+            }
+            return ok({ atoms, errors: [], source: "db" });
+          }
         }
       }
       const loaded = await loadAtoms(fs, ws);
@@ -76,7 +86,8 @@ export class IndexCache {
       if (!replaced.ok) {
         return ok({ ...loaded.value, source: "fs", degraded: `派生索引写失败：${replaced.error.message}` });
       }
-      await this.importLegacyMeta(index, fs, ws, loaded.value.atoms);
+      const metaErr = await this.importLegacyMeta(index, fs, ws, loaded.value.atoms);
+      if (metaErr) return ok({ ...loaded.value, source: "fs", degraded: `legacy meta：${metaErr}` });
       return ok({ ...loaded.value, source: "fs" });
     } catch (e) {
       // SQLite 查询/解析抛错：回退 fs，读仍可用；调用方负责把它变成可见 Signal。
@@ -87,15 +98,19 @@ export class IndexCache {
     }
   }
 
-  /** v1 `_meta.json` 一次性导入（只补缺，不覆盖 v2 新 hits）。 */
-  private async importLegacyMeta(index: IndexDb, fs: FsPort, ws: string, atoms: ParsedAtom[]): Promise<void> {
+  /** v1 `_meta.json` 一次性导入（只补缺，不覆盖 v2 新 hits）；返回可见错误（坏件≠空件）。 */
+  private async importLegacyMeta(index: IndexDb, fs: FsPort, ws: string, atoms: ParsedAtom[]): Promise<string | undefined> {
     const text = await fs.readText(`${ws}/.shadow/_meta.json`);
-    if (!text.ok) return;
+    if (!text.ok) {
+      return text.error.code === "NOT_FOUND" ? undefined : `legacy _meta 读取失败：${text.error.message}`;
+    }
     try {
       const parsed = JSON.parse(text.value) as Record<string, { hits?: number; status?: string; pinned?: boolean; created?: string }>;
-      index.importMeta(parsed, new Set(atoms.map((a) => a.rel)));
-    } catch {
-      /* 坏件不阻塞读；hits/status 缺失可见于 query-log/report */
+      const n = index.importMeta(parsed, new Set(atoms.map((a) => a.rel)));
+      if (Object.keys(parsed).length > 0 && n === 0) return "legacy _meta 导入 0 条（rel 不在当前 atoms 或 SQL 失败）";
+      return undefined;
+    } catch (e) {
+      return `legacy _meta 坏件：${e instanceof Error ? e.message : String(e)}`;
     }
   }
 
@@ -119,7 +134,8 @@ export class IndexCache {
   }
 
   closeAll(): void {
-    for (const db of this.map.values()) db.close();
+    for (const db of this.opened.values()) db.close();
+    this.opened.clear();
     this.map.clear();
   }
 }

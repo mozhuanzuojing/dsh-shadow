@@ -22,11 +22,14 @@ import { buildAtomText, primaryEntry, projectName, type Trace } from "./atom-tex
 
 export interface CaptureDeps {
   fs: FsPort;
+  /** 按 agent 取带会话 sandboxPolicy 的 fs；缺省用 fs。 */
+  fsFor?: (agentId: string | undefined) => FsPort;
   config: NormalizedConfig;
   clock: Clock;
   signals: SignalStore;
   resolveWs: (agentId: string | undefined) => string | null;
   getAgentById?: (id: string | undefined) => any;
+  getInitiator?: () => any;
 }
 
 export interface FlushResult {
@@ -44,6 +47,8 @@ export class Capture {
   readonly cwdBySession = new Map<string, string>();
   /** agent id → 会话 cwd（session id 与 agent id 不一定相同）。 */
   readonly cwdByAgent = new Map<string, string>();
+  /** agent id → session（用于按会话解析 sandboxPolicy）。 */
+  readonly sessionByAgent = new Map<string, any>();
   private pending = new Map<string, Trace[]>();
   private goals = new Map<string, string>();
   private attempts = new Map<string, number>();
@@ -76,7 +81,7 @@ export class Capture {
   onFsObserved(target: any, _observation: any, actor: any): void {
     const abs = target?.displayPath || target?.targetKey || "";
     if (!abs) return;
-    const id = this.agentIdOf(actor);
+    const id = this.agentIdOf(actor) || this.initiatorId();
     const ws = this.deps.resolveWs(id);
     // 无 ws 不丢事件：先入 pending，flush 时再解析；解析不出来则可见失败、pending 保留。
     const rel = ws ? under(abs, ws) || abs : abs;
@@ -85,13 +90,13 @@ export class Capture {
   }
 
   onToolsResult(exec: any): void {
-    const id = exec?.agent?.id;
+    const id = exec?.agent?.id || this.initiatorId();
     const tool = String(exec?.name || "tool");
     this.push(id, { kind: "action", text: `调用 ${tool}`, comp: tool, source: "tool" });
   }
 
   onGoalChanged(payload: any): void {
-    const id = payload?.agent?.id;
+    const id = payload?.agent?.id || this.initiatorId();
     const change = payload?.change;
     const obj = change?.goal?.objective || "";
     if (id && (change?.operation === "clear" || change?.goal === undefined)) this.goals.delete(String(id));
@@ -108,6 +113,7 @@ export class Capture {
     if (!m) return;
     const id = this.deps.getAgentById?.(sid)?.id || (sid ? String(sid) : undefined);
     if (id && cwd) this.cwdByAgent.set(String(id), String(cwd));
+    if (id) this.sessionByAgent.set(String(id), session);
     const text = sanitizeText(m.text);
     if (m.kind === "assistant") {
       this.push(id, { kind: "assistant", text: `我：${text}`, comp: "", source: "assistant" });
@@ -126,6 +132,15 @@ export class Capture {
     const nested = thing.agent && typeof thing.agent === "object" ? thing.agent.id : undefined;
     const direct = typeof thing.id === "string" ? thing.id : undefined;
     return (typeof nested === "string" && nested) || direct || undefined;
+  }
+
+  private initiatorId(): string | undefined {
+    try {
+      const a = this.deps.getInitiator?.();
+      return typeof a?.id === "string" ? a.id : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private isPureAction(arr: Trace[]): boolean {
@@ -161,12 +176,13 @@ export class Capture {
         return err("UNAVAILABLE", "无法解析工作区");
       }
       this.deps.signals.clear("capture.scope");
+      const fs = this.deps.fsFor?.(id) ?? this.deps.fs;
       const consent = this.deps.config.capture.consent && !this.explicitRemember(arr);
       const pure = this.isPureAction(arr);
       const auditOnly = consent || (pure && this.deps.config.capture.echo === "audit");
 
       if (auditOnly) {
-        const a = await this.appendAudit(ws, id, arr);
+        const a = await this.appendAudit(ws, id, arr, fs);
         if (!a.ok) {
           this.note("capture.audit", a.error.code, a.error.message, "本批动作没有落盘；pending 保留可重试。");
           return a;
@@ -195,7 +211,7 @@ export class Capture {
         goal: this.goals.get(id) ?? "",
         summary: this.deps.config.capture.summary,
       });
-      const w = await writeAtom(this.deps.fs, ws, { entry, text, date, time: last.at.replace(/:/g, "") }, this.deps.clock);
+      const w = await writeAtom(fs, ws, { entry, text, date, time: last.at.replace(/:/g, "") }, this.deps.clock);
       if (!w.ok) {
         const n = (this.attempts.get(id) ?? 0) + 1;
         this.attempts.set(id, n);
@@ -208,6 +224,7 @@ export class Capture {
       this.deps.signals.clear("capture.audit");
       this.deps.signals.clear("capture.pending");
       this.deps.signals.clear("capture.scope");
+      this.deps.signals.clear("capture.consent");
       return ok({ written: 1, audit: 0, retained: this.pending.get(id)?.length ?? 0, rel: w.value.rel });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -225,7 +242,7 @@ export class Capture {
     else this.pending.delete(id);
   }
 
-  private async appendAudit(ws: string, agentId: string, arr: Trace[]): Promise<Outcome<void>> {
+  private async appendAudit(ws: string, agentId: string, arr: Trace[], fs: FsPort): Promise<Outcome<void>> {
     const date = arr[0]?.date || this.deps.clock.today();
     const rel = `${AUDIT_DIR}/${date}.jsonl`;
     const line = JSON.stringify({
@@ -233,7 +250,7 @@ export class Capture {
       agent: agentId,
       events: arr,
     }) + "\n";
-    return this.deps.fs.appendText(`${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`, line);
+    return fs.appendText(`${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`, line);
   }
 
   async flushAll(): Promise<void> {

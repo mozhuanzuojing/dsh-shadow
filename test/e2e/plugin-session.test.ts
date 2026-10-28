@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply } from "../../dist/index.js";
+import { hostFs } from "../host-fs.ts";
 
 const ws = mkdtempSync(join(tmpdir(), "dsh-shadow-v2-session-"));
 const handlers = new Map<string, Function>();
@@ -12,6 +13,7 @@ const services: any = {
   tools: { register: (def: any) => tools.set(def.name, def) },
   systemPrompt: { context: () => {} },
   agents: { get: (id: string) => agents.get(id), currentInitiator: () => null },
+  fs: hostFs,
 };
 const ctx: any = {
   get: (k: string) => services[k],
@@ -39,3 +41,4 @@ try {
 }
 
 console.log("✔ e2e session：session id ≠ agent id、无 shadowRoot → 写/读同一会话 cwd");
+

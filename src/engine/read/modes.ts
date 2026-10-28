@@ -33,6 +33,13 @@ const errText = (what: string, e: string): ModeOutput => ({
 
 const entryOf = (a: ParsedAtom): string => a.entry || a.slug || "(无入口)";
 
+const bump = (deps: ReadDeps, rels: Iterable<string>, at: string): void => {
+  if (!deps.config.telemetry.hits || !deps.index) return;
+  const r = deps.index.bumpHitsMany(rels, at);
+  if (!r.ok) deps.signals.note("telemetry", r.error.code, r.error.message, "hits 未写入：排序可能少了最近的命中权重。");
+  else deps.signals.clear("telemetry");
+};
+
 export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
   const today = deps.clock.today();
   const byDate = new Map<string, ParsedAtom[]>();
@@ -56,31 +63,48 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
   lines.push("## 今日摘要");
   const todayAtoms = atoms.filter((a) => a.date === today);
   lines.push(todayAtoms.length ? `今日 ${todayAtoms.length} 条记忆${todayTopics.size ? `，主题：${[...todayTopics].slice(0, 10).join("、")}` : ""}。` : "（今日暂无）");
+  const omitted: string[] = [];
   lines.push("", "## 近期记忆（按日期）");
-  const dates = [...byDate.keys()].sort().reverse().slice(0, 20);
+  const allDates = [...byDate.keys()].sort().reverse();
+  const dates = allDates.slice(0, 20);
+  if (allDates.length > dates.length) omitted.push(`日期 ${allDates.length - dates.length} 个`);
   if (!dates.length) lines.push("（暂无）");
+  let dayOmitted = 0;
+  let dayTotal = 0;
   for (const d of dates) {
     lines.push(`- ${d}`);
-    for (const a of (byDate.get(d) ?? []).sort((x, y) => x.name.localeCompare(y.name)).slice(0, 40)) {
-      lines.push(`  - \`${a.name}\``);
-    }
+    const all = (byDate.get(d) ?? []).sort((x, y) => x.name.localeCompare(y.name));
+    dayTotal += all.length;
+    const shown = all.slice(0, 40);
+    dayOmitted += all.length - shown.length;
+    for (const a of shown) lines.push(`  - \`${a.name}\``);
   }
+  if (dayOmitted > 0) omitted.push(`单日记忆 ${dayOmitted} 条（共 ${dayTotal}）`);
   lines.push("", "## 主题索引（入口/主题 → 记忆文件）");
-  const topicKeys = [...topics.keys()].sort().slice(0, 40);
+  const allTopics = [...topics.keys()].sort();
+  const topicKeys = allTopics.slice(0, 40);
+  if (allTopics.length > topicKeys.length) omitted.push(`主题 ${allTopics.length - topicKeys.length} 个`);
   if (!topicKeys.length) lines.push("（暂无）");
   for (const t of topicKeys) lines.push(`- \`${t}\` → ${topics.get(t)!.slice(0, 6).join("、")}`);
   lines.push("", "## 意识轨迹（按时间，可反推方向）");
-  const sorted = [...atoms].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)).slice(-60);
+  const allSorted = [...atoms].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const sorted = allSorted.slice(-60);
+  if (allSorted.length > sorted.length) omitted.push(`轨迹 ${allSorted.length - sorted.length} 条`);
   if (!sorted.length) lines.push("（暂无）");
   for (const a of sorted) lines.push(`- ${a.date} ${a.time} \`${a.name}\``);
   const eps = deriveEpisodes(atoms, deps.config.compact.gapMinutes);
   lines.push("", "## 任务回溯（Episodes）", "");
   if (!eps.length) lines.push("（暂无连续任务片段，当前仅原子记忆）");
   else {
-    for (const e of eps.slice(-8).reverse()) {
+    const shownEps = eps.slice(-8);
+    if (eps.length > shownEps.length) omitted.push(`Episode ${eps.length - shownEps.length} 个`);
+    for (const e of shownEps.reverse()) {
       const range = e.startedAt === e.endedAt ? e.startedAt.slice(5, 16) : `${e.startedAt.slice(5, 16)}–${e.endedAt.slice(5, 16)}`;
       lines.push(`- ${range} · ${e.title} · ${e.memoryCount} 条记忆 · ${e.decisions.length} 决策`);
     }
+  }
+  if (omitted.length) {
+    lines.push("", `> 未返回：${omitted.join("；")}（索引是派生视图，按主题/entry 穿透比整篇读回更省）`);
   }
   return lines.join("\n");
 };
@@ -139,8 +163,8 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
     conflictRels: conflicts,
     supersededRels: supersededRels(atoms),
   });
-  const maxChars = Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
-  const limit = Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit)));
+  const maxChars = deps.maxChars ?? Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
+  const limit = deps.limit ?? Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit) || deps.config.recall.limit));
   const result = selectWithinBudget(scored, tokens, maxChars, limit);
   if (!result.matched) {
     return {
@@ -153,7 +177,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   }
   const staleCount = scored.filter((s) => s.stale).length;
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  if (deps.config.telemetry.hits) for (const rel of result.rels) deps.index?.bumpHits(rel, at);
+  bump(deps, result.rels, at);
   return {
     body: renderTopicRecall(topic, result, staleCount),
     matched: result.matched,
@@ -167,22 +191,26 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
 export const recoveryView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): Promise<ModeOutput> => {
   const topic = String(req.topic ?? "").trim();
   const tasks = deriveTasks(atoms);
-  const refs = await contextRefs(deps, atoms);
-  const limit = Math.max(1, Math.min(30, Number(req.limit ?? 1)));
+  const limit = deps.limit ?? Math.max(1, Math.min(30, Number(req.limit ?? 1) || 1));
   const ranked = rankTasks(tasks, topic);
   const chosen = ranked.slice(0, limit);
+  // 只核验被选中任务的 memoryRefs，不对全语料做证据 stat（P0-02）。
+  const wanted = new Set(chosen.flatMap((t) => t.memoryRefs));
+  const refs = wanted.size ? await contextRefs(deps, atoms.filter((a) => wanted.has(a.rel))) : [];
   const body = chosen.length
     ? chosen.map((t) => renderRecoveryFor(topic, t, refs)).join("\n\n---\n\n")
     : renderRecovery(topic, tasks, refs);
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  if (deps.config.telemetry.hits) for (const t of chosen) for (const rel of t.memoryRefs) deps.index?.bumpHits(rel, at);
+  bump(deps, chosen.flatMap((t) => t.memoryRefs), at);
   return { body, matched: tasks.length, returned: chosen.length, dropped: Math.max(0, tasks.length - chosen.length), examples: [] };
 };
 
 export const episodeView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
-  const eps = deriveEpisodes(atoms, deps.config.compact.gapMinutes);
-  const body = renderEpisodes(eps, String(req.topic ?? ""));
-  return { body, matched: eps.length, returned: eps.length, dropped: 0, examples: [] };
+  const all = deriveEpisodes(atoms, deps.config.compact.gapMinutes);
+  const limit = deps.limit ?? 10;
+  const shown = all.slice(0, limit);
+  const body = renderEpisodes(shown, String(req.topic ?? ""));
+  return { body, matched: all.length, returned: shown.length, dropped: Math.max(0, all.length - shown.length), examples: [] };
 };
 
 export const decisionView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
@@ -190,16 +218,31 @@ export const decisionView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput 
   return { body: renderDecisions(dl), matched: dl.count, returned: dl.count, dropped: 0, examples: [] };
 };
 
-export const taskView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
-  const tasks = deriveTasks(atoms);
-  const body = renderTasks(tasks, String(req.topic ?? ""));
-  return { body, matched: tasks.length, returned: tasks.length, dropped: 0, examples: [] };
+export const taskView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
+  const all = deriveTasks(atoms);
+  const limit = deps.limit ?? 10;
+  const shown = all.slice(0, limit);
+  const body = renderTasks(shown, String(req.topic ?? ""));
+  return { body, matched: all.length, returned: shown.length, dropped: Math.max(0, all.length - shown.length), examples: [] };
 };
 
 export const contextView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): Promise<ModeOutput> => {
-  const refs = await contextRefs(deps, atoms);
-  const body = renderContextRefs(refs, String(req.topic ?? ""));
-  return { body, matched: refs.length, returned: refs.length, dropped: 0, examples: [] };
+  const MAX_ATOMS = 200;
+  const subset = atoms.slice(0, MAX_ATOMS);
+  const refs = await contextRefs(deps, subset);
+  const limit = deps.limit ?? Math.max(1, Math.min(30, Number(req.limit ?? 10) || 10));
+  const shown = refs.slice(0, limit);
+  const body = renderContextRefs(shown, String(req.topic ?? ""));
+  const notes: string[] = [];
+  if (atoms.length > subset.length) notes.push(`> 未核验：${atoms.length - subset.length} 条 atom（上限 ${MAX_ATOMS}；避免全语料 stat 风暴）`);
+  if (refs.length > shown.length) notes.push(`> 未返回的 context 引用：${refs.length - shown.length} 条（limit=${limit}）`);
+  return {
+    body: notes.length ? `${body}\n\n${notes.join("\n")}` : body,
+    matched: refs.length,
+    returned: shown.length,
+    dropped: Math.max(0, refs.length - shown.length),
+    examples: refs.slice(limit, limit + 5).map((r) => r.value),
+  };
 };
 
 const contextRefs = async (deps: ReadDeps, atoms: ParsedAtom[]) =>
@@ -225,7 +268,7 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
       return { s, type };
     })
     .filter((x) => !scope || scope.has(x.type))
-    .slice(0, Math.max(1, Math.min(30, Number(req.limit ?? 8))));
+    .slice(0, deps.limit ?? Math.max(1, Math.min(30, Number(req.limit ?? 8) || 8)));
   if (!items.length) {
     return { body: `（无匹配 ShadowNode：${topic}）\n> 下一步：换更短的词，或放宽 scope。`, matched: 0, returned: 0, dropped: 0, examples: [] };
   }
@@ -234,12 +277,12 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
     lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${s.atom.rel}`);
   }
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  if (deps.config.telemetry.hits) for (const { s } of items) deps.index?.bumpHits(s.atom.rel, at);
+  bump(deps, items.map((x) => x.s.atom.rel), at);
   const dropped = Math.max(0, scored.length - items.length);
   return { body: lines.join("\n"), matched: scored.length, returned: items.length, dropped, examples: scored.slice(items.length, items.length + 5).map((x) => x.atom.rel) };
 };
 
-export const knowledgeView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
+export const knowledgeView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
   const topic = String(req.topic ?? "").toLowerCase();
   const sections = new Map<string, string[]>();
   for (const a of atoms) {
@@ -254,12 +297,15 @@ export const knowledgeView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput
     }
   }
   if (!sections.size) return { body: "（暂无知识树章节）", matched: 0, returned: 0, dropped: 0, examples: [] };
+  const all = [...sections.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const limit = deps.limit ?? 10;
+  const shown = all.slice(0, limit);
   const lines = ["# Knowledge Tree", "> 免向量保留树；只列标题与来源，不转 chunk。", ""];
-  for (const [title, rels] of [...sections.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const [title, rels] of shown) {
     lines.push(`## ${title}`);
     for (const r of rels.slice(0, 5)) lines.push(`- ${r}`);
   }
-  return { body: lines.join("\n"), matched: sections.size, returned: sections.size, dropped: 0, examples: [] };
+  return { body: lines.join("\n"), matched: all.length, returned: shown.length, dropped: Math.max(0, all.length - shown.length), examples: [] };
 };
 
 export const queryLogView = (deps: ReadDeps): ModeOutput => {

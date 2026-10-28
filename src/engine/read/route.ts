@@ -104,7 +104,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   if (!deps.loadAtoms) deps.syncIndex?.(atoms);
   if ("degraded" in loaded.value && loaded.value.degraded) {
     deps.signals.note("index", "DEGRADED", String(loaded.value.degraded), "本次从 atoms 直接读；hits/query-log/lifecycle 可能不生效。");
-  } else if (loaded.value.errors.length === 0) {
+  } else if (deps.index && loaded.value.errors.length === 0) {
     deps.signals.clear("index");
   }
   if (loaded.value.errors.length) {
@@ -121,11 +121,13 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 
   const mode = modeRes.value;
   const meta = metaOf(deps, atoms);
-  const depsWithMeta: ReadDeps = { ...deps, meta };
   const rawMax = Number(req.maxTokens ?? deps.config.recall.budget);
   const maxTokens = Number.isFinite(rawMax) ? Math.max(256, Math.min(8000, rawMax)) : deps.config.recall.budget;
   const maxChars = maxTokens * 4;
-  const limit = Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit) || deps.config.recall.limit));
+  const modeLimitDefault = mode === "recovery" ? 1 : mode === "query" ? 8 : deps.config.recall.limit;
+  const rawLimit = Number(req.limit ?? modeLimitDefault);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(30, rawLimit)) : modeLimitDefault;
+  const depsWithMeta: ReadDeps = { ...deps, meta, limit, maxChars };
 
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
@@ -140,10 +142,10 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   else if (mode === "recovery") out = await recoveryView(depsWithMeta, atoms, req);
   else if (mode === "episode") out = episodeView(depsWithMeta, atoms, req);
   else if (mode === "decision") out = decisionView(atoms, req);
-  else if (mode === "task") out = taskView(atoms, req);
+  else if (mode === "task") out = taskView(depsWithMeta, atoms, req);
   else if (mode === "context") out = await contextView(depsWithMeta, atoms, req);
   else if (mode === "query") out = queryView(depsWithMeta, atoms, req);
-  else if (mode === "knowledge") out = knowledgeView(atoms, req);
+  else if (mode === "knowledge") out = knowledgeView(depsWithMeta, atoms, req);
   else if (mode === "query-log") out = queryLogView(depsWithMeta);
   else if (mode === "shadow-report") out = reportView(depsWithMeta, atoms);
   else if (mode === "shadow-manifest") out = await manifestView(depsWithMeta, atoms);
@@ -164,7 +166,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
     limit,
   });
   if (deps.config.telemetry.queryLog) {
-    deps.index?.recordQuery(
+    const qr = deps.index?.recordQuery(
       mode,
       String(req.topic ?? ""),
       out.returned,
@@ -172,6 +174,11 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
       Date.now() - started,
       `${deps.clock.today()}T${deps.clock.stamp()}`,
     );
+    if (qr && !qr.ok) {
+      deps.signals.note("telemetry", qr.error.code, qr.error.message, "query-log 未写入：观测样本会少这一条。");
+    } else if (qr) {
+      deps.signals.clear("telemetry");
+    }
   }
   return ok({ text, mode, matched: out.matched, returned: out.returned, dropped: out.dropped });
 };

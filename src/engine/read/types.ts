@@ -20,6 +20,9 @@ export interface ReadDeps {
   index?: IndexDb;
   meta?: Map<string, AtomMeta>;
   verify?: (path: string) => Promise<ContextStatus>;
+  /** route 归一化后的 limit/maxChars；handler 只读这份，避免各自再解析 req。 */
+  limit?: number;
+  maxChars?: number;
   /** DB-first 加载器；未提供时回退 fs 全量读。 */
   loadAtoms?: () => Promise<Outcome<LoadAtomsResult>>;
   /** 读时把已载入原子并入派生索引；失败由实现方留 Signal，不阻塞读。 */

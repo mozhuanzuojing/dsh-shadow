@@ -297,6 +297,11 @@ export class IndexDb {
     return new Set(rows.map((r) => String(r.rel ?? "")));
   }
 
+  metaCount(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM meta").get() as { n?: number } | undefined;
+    return Number(row?.n ?? 0);
+  }
+
   /** 从 parsed JSON 直接还原 ParsedAtom（DB-first 读路径）。 */
   allParsed(): import("../contract/types.js").ParsedAtom[] {
     const rows = this.db.prepare("SELECT parsed FROM atoms ORDER BY date DESC, time DESC").all() as { parsed?: string }[];
@@ -305,7 +310,9 @@ export class IndexDb {
       const s = String(r.parsed ?? "");
       if (!s) continue;
       try {
-        out.push(JSON.parse(s) as import("../contract/types.js").ParsedAtom);
+        const a = JSON.parse(s) as Record<string, unknown>;
+        if (typeof a.rel !== "string" || typeof a.name !== "string" || typeof a.body !== "string" || typeof a.date !== "string") continue;
+        out.push(a as unknown as import("../contract/types.js").ParsedAtom);
       } catch {
         /* 坏行跳过；下次 replaceAll 重建 */
       }
@@ -393,23 +400,45 @@ export class IndexDb {
   }
 
   bumpHits(rel: string, at: string): void {
+    this.bumpHitsMany([rel], at);
+  }
+
+  /** 批量 hits：单事务；失败返回 Outcome，调用方负责变成可见 Signal。 */
+  bumpHitsMany(rels: Iterable<string>, at: string): Outcome<{ count: number }> {
     try {
-      this.db.prepare(
+      const stmt = this.db.prepare(
         `INSERT INTO meta (rel,hits,status,first_at,last_at) VALUES (?,1,'active',?,?)
          ON CONFLICT(rel) DO UPDATE SET hits = meta.hits + 1, last_at = excluded.last_at`,
-      ).run(rel, at, at);
-    } catch {
-      /* telemetry 失败不阻塞读；调用方按需留 Signal */
+      );
+      let n = 0;
+      this.db.exec("BEGIN");
+      for (const rel of rels) {
+        if (!rel) continue;
+        stmt.run(rel, at, at);
+        n++;
+      }
+      this.db.exec("COMMIT");
+      return ok({ count: n });
+    } catch (e) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      return err("IO", `hits 写入失败：${e instanceof Error ? e.message : String(e)}`, { path: this.path }, true);
     }
   }
 
-  recordQuery(mode: string, query: string, returned: number, matched: number, latencyMs: number, at: string): void {
+  recordQuery(mode: string, query: string, returned: number, matched: number, latencyMs: number, at: string): Outcome<void> {
     try {
       this.db.prepare(
         "INSERT INTO query_log (at,mode,query,returned,matched,latency_ms) VALUES (?,?,?,?,?,?)",
       ).run(at, mode, query, returned, matched, latencyMs);
-    } catch {
-      /* telemetry 失败不阻塞读 */
+      // 观测表有界：只留最近 1000 条，避免无界增长。
+      this.db.exec("DELETE FROM query_log WHERE id NOT IN (SELECT id FROM query_log ORDER BY id DESC LIMIT 1000)");
+      return ok(undefined);
+    } catch (e) {
+      return err("IO", `query-log 写入失败：${e instanceof Error ? e.message : String(e)}`, { path: this.path }, true);
     }
   }
 

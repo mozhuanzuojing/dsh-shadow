@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply } from "../../dist/index.js";
+import { hostFs } from "../host-fs.ts";
 
 const ws = mkdtempSync(join(tmpdir(), "dsh-shadow-v2-"));
 const handlers = new Map<string, Function>();
@@ -11,7 +12,7 @@ const services: any = {
   tools: { register: (def: any) => tools.set(def.name, def) },
   systemPrompt: { context: () => {} },
   agents: { get: () => ({ id: "s1" }), currentInitiator: () => null },
-  fs: undefined,
+  fs: hostFs,
   llm: undefined,
   agentDefaultModel: undefined,
 };
@@ -62,3 +63,4 @@ try {
 }
 
 console.log("✔ e2e：apply → 事件采集 → flush → read_shadow → SQLite 索引；未知 mode 显式");
+

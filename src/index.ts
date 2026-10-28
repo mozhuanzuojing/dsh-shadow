@@ -12,7 +12,8 @@ import type { ContextStatus } from "./contract/types.js";
 import { SignalStore } from "./engine/signals.js";
 import type { ReadDeps } from "./engine/read/types.js";
 import { Capture } from "./engine/write/capture.js";
-import { realFs } from "./store/fs.js";
+import type { FsPort } from "./store/fs.js";
+import { HostFs } from "./store/host-fs.js";
 import { IndexCache } from "./store/index-cache.js";
 import { makeCoreTools, type DepsFactory } from "./surface/tools.js";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
@@ -38,6 +39,21 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     console.error("[dsh-shadow] 宿主缺少 ctx.on / ctx.inject / ctx.get；插件无法挂载。");
     return () => {};
   }
+  const rawFs = ctx.get("fs");
+  if (!rawFs) {
+    console.error("[dsh-shadow] 宿主缺少 fs 服务；v2 不回退到 node:fs（会绕过 DSH 沙箱）。插件不挂载。");
+    return () => {};
+  }
+  const baseFs = new HostFs(rawFs);
+  const policyFor = (session: any): any => {
+    try {
+      const sp = ctx.get("sandboxPolicy");
+      return sp && typeof sp.resolve === "function" ? sp.resolve({ session }) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const isReadOnly = (policy: any): boolean => policy?.mode === "read-only" || policy?.mode === "readonly";
 
   let capture: Capture;
   const resolveWsFor = (id: string | undefined): string | null => {
@@ -48,7 +64,11 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     return r.ws;
   };
   capture = new Capture({
-    fs: realFs,
+    fs: baseFs,
+    fsFor: (id: string | undefined): FsPort => {
+      const session = id ? capture?.sessionByAgent.get(id) : undefined;
+      return baseFs.withPolicy(policyFor(session), session?.header?.cwd);
+    },
     config,
     clock: systemClock,
     signals,
@@ -60,13 +80,24 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
         return undefined;
       }
     },
+    getInitiator: () => {
+      try {
+        return ctx.get("agents")?.currentInitiator?.();
+      } catch {
+        return undefined;
+      }
+    },
   });
 
   ctx.on("fs/observed", (target: any, observation: any, actor: any) => capture.onFsObserved(target, observation, actor));
   ctx.on("tools/result", (exec: any) => capture.onToolsResult(exec));
   ctx.on("goal/changed", (payload: any) => capture.onGoalChanged(payload));
   ctx.on("session/event", (session: any, event: any) => capture.onSessionEvent(session, event));
-  ctx.on("agent/turn-stopping", (payload: any) => capture.flush(payload?.agent?.id));
+  ctx.on("agent/turn-stopping", (payload: any) => {
+    const ag = payload?.agent;
+    if (ag?.id && ag.session?.header?.cwd) capture.cwdByAgent.set(String(ag.id), String(ag.session.header.cwd));
+    return capture.flush(ag?.id);
+  });
   ctx.on("session/flush", () => capture.flushAll());
 
   const depsFactory: DepsFactory = async (exec: ExecLike | undefined): Promise<Outcome<ReadDeps>> => {
@@ -75,31 +106,39 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     if (resolved.notice) signals.note("scope", "FALLBACK", resolved.notice, "读/写可能落在进程 cwd，而不是会话工作区。");
     else signals.clear("scope");
 
-    const opened = await indexCache.get(realFs, resolved.ws);
+    const session = exec?.agent?.session;
+    const policy = policyFor(session);
+    const fsPort = baseFs.withPolicy(policy, session?.header?.cwd);
+    const readOnly = isReadOnly(policy);
     let index: ReadDeps["index"];
-    if (opened.ok) {
-      index = opened.value;
-      signals.clear("index");
+    if (readOnly) {
+      signals.note("index", "READ_ONLY", "会话为只读沙箱", "本次不打开/不写 SQLite；从 atoms 直接读，hits/query-log 不生效。");
     } else {
-      signals.note("index", opened.error.code, opened.error.message, "派生索引不可用：本次仍可从 atoms 读取，但 hits/query-log/生命周期不生效。");
+      const opened = await indexCache.get(fsPort, resolved.ws);
+      if (opened.ok) {
+        index = opened.value;
+        signals.clear("index");
+      } else {
+        signals.note("index", opened.error.code, opened.error.message, "派生索引不可用：本次仍可从 atoms 读取，但 hits/query-log/生命周期不生效。");
+      }
     }
 
     const verify = async (p: string): Promise<ContextStatus> => {
-      const st = await realFs.stat(absOf(resolved.ws, p));
+      const st = await fsPort.stat(absOf(resolved.ws, p));
       if (st.ok) return "validated";
       return st.error.code === "NOT_FOUND" ? "stale" : "unknown";
     };
 
     const idx = index;
     return ok({
-      fs: realFs,
+      fs: fsPort,
       ws: resolved.ws,
       config,
       clock: systemClock,
       signals,
       index,
       verify,
-      loadAtoms: idx ? () => indexCache.load(idx, realFs, resolved.ws, config.index.verify) : undefined,
+      loadAtoms: idx ? () => indexCache.load(idx, fsPort, resolved.ws, config.index.verify) : undefined,
       syncIndex: (atoms) => {
         if (!index) return;
         const r = indexCache.sync(index, atoms);

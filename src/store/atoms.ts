@@ -103,6 +103,11 @@ export const writeAtom = async (
     const name = atomFileName(date, time, entrySlug, uid);
     const dest = join(ws, `${ATOMS_DIR}/${name}`);
     if (await fs.exists(dest)) continue;
+    if (fs.atomicRename === false) {
+      const w = await fs.writeText(dest, input.text);
+      if (!w.ok) return w;
+      return ok({ rel: `${ATOMS_DIR}/${name}`, name, atom: parseAtom(input.text, `${ATOMS_DIR}/${name}`, name) });
+    }
     const tmp = join(ws, `${ATOMS_DIR}/.${name}.tmp`);
     const w = await fs.writeText(tmp, input.text);
     if (!w.ok) return w;

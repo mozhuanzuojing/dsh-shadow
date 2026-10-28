@@ -111,6 +111,7 @@
 ## 6. 并发模型
 
 - **source 只追加**：atom 文件名含时间 + 入口 + uid6；写入前 exists、碰撞换 uid；临时文件 + rename。
+- **宿主 fs**：文本 I/O 一律经 `ctx.get("fs")` 的 HostFs，写入带会话 `sandboxPolicy`；缺 fs 服务不挂载、不回退 node:fs；只读会话不打开 SQLite。
 - **同 agent 串行 flush**：`engine/write` 用 promise 链串行；flush 只消费快照 seq，期间新事件留 pending。
 - **跨进程**：v2-dev 无 `.shadow/.lock`；依赖唯一命名 + SQLite 事务。锁/`BUSY` 是 Phase 3 目标。
 - **SQLite**：WAL、`busy_timeout=3000`；读失败回退 fs 并留 Signal；不把坏件当空件。

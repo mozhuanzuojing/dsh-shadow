@@ -11,6 +11,8 @@ import { err, ok, type Outcome } from "../contract/outcome.js";
 export interface FsEntry {
   name: string;
   type: "file" | "dir" | "other";
+  size?: number;
+  version?: string;
 }
 
 export interface FsStat {
@@ -20,6 +22,8 @@ export interface FsStat {
 }
 
 export interface FsPort {
+  /** false = 宿主没有原子 rename（如 DSH fs 只暴露 writeText）；writeAtom 直接写目标并依赖 exists 守卫。 */
+  atomicRename?: boolean;
   resolve(p: string): Promise<{ displayPath: string }>;
   readText(p: string): Promise<Outcome<string>>;
   writeText(p: string, text: string): Promise<Outcome<FsStat>>;
