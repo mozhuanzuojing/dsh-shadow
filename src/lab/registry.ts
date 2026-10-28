@@ -1,7 +1,9 @@
 /**
- * v2 lab — 51 mode 的注册表、写面与输入白名单。
+ * v2 lab — 51 mode 的注册表、写面与分组。
  *
- * 算法层是从 v1 逐文件移植的 `vendor/`（保留原契约）；这里只做 v2 的入口、校验与写权限闸。
+ * 算法层是从 v1 逐文件移植的 `vendor/`（保留原契约）；这里只做 v2 的入口与写权限闸。
+ * 输入字段不再有「v1 字段并集白名单」：逐 mode 的允许字段/必填/类型/枚举在 `schema.ts`（LAB_MODE_SCHEMAS），
+ * 由 builder 的实际读取点推导 —— 并集白名单既不知道某 mode 读什么，也会把 builder 直读但 v1 未声明的字段判成非法。
  */
 
 import { LAB_MODES, nearestModes } from "../contract/modes.js";
@@ -43,33 +45,6 @@ export const LAB_GROUPS: ReadonlyArray<{ name: string; modes: readonly string[] 
   { name: "Workspace", modes: ["workspace-context", "workspace-record"] },
   { name: "核心派生 / 诊断", modes: ["index"] },
 ];
-
-/** v1 read_shadow 的入参白名单；lab 只允许这些字段（`mode`/`write` 由顶层持有）。 */
-export const LAB_INPUT_FIELDS: readonly string[] = [
-  "topic", "limit", "debug", "kg", "soul", "experience", "asOf", "observer", "project", "raw", "judgment",
-  "claim", "taste", "verifyEvidence", "identity", "context", "goal", "realityAnchor", "lens", "state",
-  "from", "to", "minCount", "minRecency", "maxContradiction", "halfLifeDays", "at", "trigger",
-  "hypothesisId", "observedAt", "actualOutcome", "observationType", "sourceObserverId", "obsClaim",
-  "visibleA", "visibleB", "targetObserverId", "perceptionOnly", "identityContext", "temporalReference",
-  "obsConfidence", "valConfidence", "observation", "realityId", "realEvidenceRef", "lensA", "lensB",
-  "obsClaimB", "linkedHypothesis", "hasValidation", "subject", "sourcePerspectives", "temporalContext",
-  "validationRefs", "claimId", "relation", "evidence", "condition", "basedOn", "proposal",
-  "proposedChange", "basedOnSimulation", "candidateId", "environmentChange", "executionId", "objective",
-  "objectiveSource", "criteria", "constraints", "candidates", "simulationRefs", "observedChanges",
-  "successIndicator", "unexpectedEffects", "objectiveRef", "authoritySource", "authorityScope", "reason",
-  "selectedCandidateId", "actionCandidate", "identityRef", "constraintCheck", "executionResult",
-  "delegationId", "allowedScope", "expiration", "revocation", "action", "satisfiedConstraints", "now",
-  "originalRef", "forgottenAt", "recalledRef", "triggerType", "sourceRef", "observationRefs", "status",
-  "sourceExperience", "adaptationScope", "target", "changeObserved", "validationReferences",
-  "sideEffectsObserved", "basedOnHistory", "sourceRefs", "compressionMethod", "accessibility", "historyRef",
-  "previousAccessibility", "recallRef", "adaptationRef", "interactionStyle", "outputPreference",
-  "defaultProtocol", "planningCannotCreateObjective", "records", "observerId", "continuityRef", "kind",
-  "content", "evidenceRefs", "runtimeVersion", "max_tokens",
-];
-
-export const LAB_INPUT_SET: ReadonlySet<string> = new Set(LAB_INPUT_FIELDS);
-
-/** `index` 只读诊断允许 max_tokens；其余 mode 忽略它。 */
 
 export const isLabWriteMode = (m: string): boolean => LAB_WRITE_MODES.has(m);
 

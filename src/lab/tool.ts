@@ -13,7 +13,7 @@ const renderText = (_args: unknown, value: string): { type: "text"; text: string
 const description = (): string => {
   const groups = LAB_GROUPS.map((g) => `${g.name}：${g.modes.join(" / ")}`).join("；");
   return `研究/边界能力统一入口，51 个 mode（默认只读；写型 31 个必须 write:true）。${groups}。` +
-    "index 是只读诊断，重建走 ops。input 字段按 mode 白名单校验；未知字段显式失败。";
+    "index 是只读诊断，重建走 ops。input 按该 mode 的 JSON Schema 校验：未知字段/类型/枚举/缺必填 → INVALID_INPUT，错误列出该 mode 允许字段。";
 };
 
 export const makeLabTools = (depsFactory: DepsFactory): RegisteredTool[] => [
@@ -23,7 +23,7 @@ export const makeLabTools = (depsFactory: DepsFactory): RegisteredTool[] => [
     parameters: params(
       {
         mode: str("51 个 lab mode 之一（如 federation / temporal / index）；未知值返回 UNKNOWN_MODE + 最近邻。"),
-        input: obj("mode 专属字段；由白名单校验，未知字段返回 INVALID_INPUT。"),
+        input: obj("mode 专属字段；按该 mode 的 per-mode schema 校验（未知字段/类型/枚举/缺必填 → INVALID_INPUT，错误列出允许字段）。"),
         write: bool("默认 false；写型 mode 必须显式 true；只读 mode 带 true 返回 WRITE_DENIED。"),
       },
       ["mode"],
