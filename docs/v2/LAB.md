@@ -85,14 +85,13 @@ node tools/mode-registry.ts --list --group lab
 | `WRITE_DENIED` | 只读 mode 被要求写 | 去掉 `write` 或换写型 mode |
 | `MISSING_DEP` | 缺 LLM/CLI/外部依赖 | 按提示安装或关闭该能力 |
 | `CORRUPT_DERIVED` | 派生件坏且重建失败 | 修 source 后重建 |
-| `LEGACY_READ_ONLY` | 试图写旧存储 | 改为写 `.shadow/<store>/` |
+| `LEGACY_READ_ONLY` | 显式迁移工具遇到旧存储 | 改为写 `.shadow/<store>/`；运行时不会返回此码 |
 
-## 5. 旧存储兼容
+## 5. 旧存储（不支持）
 
-- v1 日期树 `.shadow/<YYYY-MM-DD>/` 与旧 mode 目录：可读，返回 `legacy: true`。
-- 首次读取时附一次 `LEGACY_READ_ONLY` 提示；不打断调用。
-- 不双写、不迁移、不删除；旧 atom 直接可读，未知头字段忽略但保留。
-- lab 的迁移只允许显式 `write:true` 操作；v1 存储目录 MUST NOT 删除。
+- v2 运行时**不读取** v1 日期树 `.shadow/<YYYY-MM-DD>/`，也不读取旧 mode 目录；它们不进入 `read_shadow`/lab 的结果。
+- lab 只读写自己的 `.shadow/<store>/`；旧目录不写入、不迁移、不删除。
+- `LEGACY_READ_ONLY` 只保留给显式迁移工具/未来兼容层，运行时不会用它“假装支持”旧存储。
 
 ## 6. 安装
 

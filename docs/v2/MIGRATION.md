@@ -1,13 +1,13 @@
 # dsh-shadow v2 · v1 → v2 迁移
 
 > 面向 v1 使用者与维护者。验收基线见 `PARITY.md`；工具形态见 `LAB.md`；分层见 `ARCHITECTURE.md`。
-> 原则：**只增不删、旧存储只读、失败可见、可回滚**。
+> 原则：**只增不删、旧存储不读取、失败可见、可回滚**。
 
 ## 1. 原则
 
 1. `.shadow/atoms/` 与 v1 完全兼容；v2 不重写、不迁移、不删除旧 atom。
-2. 旧日期树 `.shadow/<YYYY-MM-DD>/` 与旧 mode 存储**只读**；永不写入、永不删除。
-3. `_meta.json` 是 v1 legacy：v2 首次运行一次性导入 SQLite，之后只读、不再写；hits/meta 由 SQLite `meta` 表承担。派生件（`indexes/`、SQLite）可整份重建，重建不读网络。
+2. 旧日期树 `.shadow/<YYYY-MM-DD>/` 与旧 mode 存储**不在 v2 运行时数据面**：不读取、不写入、不删除；需要时用显式迁移工具转换。
+3. `_meta.json` 是 v1 legacy：v2 **不读取/不导入**；迁移工具可原样备份，hits/meta 只由 v2 SQLite `meta` 表承担。派生件（`indexes/`、SQLite）可整份重建，重建不读网络。
 4. 旧调用不静默落回默认：迁移中的 mode 返回 `MODE_MOVED` 与目标调用示例。
 5. v1 配置旧键最多兼容一个 minor，读取时 warn；不做静默语义转换。
 
@@ -130,7 +130,7 @@ node tools/migrate-v1.ts --from <ws> --in-place
 
 ```text
 # 1) 停宿主（或只读挂载）
-# 2) 备份派生件；_meta.json 原样保留（v2 只读导入）
+# 2) 备份派生件；_meta.json 原样保留（v2 不读取/不导入）
 .shadow/indexes/
 # 3) 重建：删 indexes/index.sqlite 后下一次读自动重建；无参 read_shadow() 物化 _index.md
 rm .shadow/indexes/index.sqlite
@@ -140,14 +140,14 @@ shadow_lab({ mode: "index" })
 
 - 重建只读 `atoms/`、`roles/`、`affaires/`、`soul/`、`resources/`。
 - 重建失败保留旧派生件；不产生半成品。
-- SQLite 索引可单独删除；`_meta.json`、旧日期树、v1 mode 存储备份后原样保留、不删除；v2 只读导入。
+- SQLite 索引可单独删除；`_meta.json`、旧日期树、v1 mode 存储备份后原样保留、不删除；v2 不读取/不导入。
 
-## 9. 旧存储只读兼容
+## 9. 旧数据：不支持（明确边界）
 
-- v1 日期树 `.shadow/<YYYY-MM-DD>/`：可读、可搜索；**不写入、不删除、不双写**。
-- 旧 mode 存储（`shadow/observation/`、`shadow/reflection/` 等）：只读挂载，返回 `legacy: true`。
-- 首次读到旧存储时返回一次 `LEGACY_READ_ONLY` 提示；不静默。
-- 迁移完成不等于删除旧存储；lab 只写各自 `.shadow/<store>/`，不写 atoms/旧存储。
+- v1 日期树 `.shadow/<YYYY-MM-DD>/`：**v2 不读取、不索引、不召回**；文件保留，不写入、不删除。
+- 旧 mode 存储（`.shadow/observation/`、`.shadow/reflection/` 等）：v2 运行时不读取、不挂载；lab 只写自己的 `.shadow/<store>/`。
+- `_meta.json`：v2 不读取、不导入；hits/status 从 v2 SQLite 开始积累。
+- 需要旧记忆进入 v2：显式运行迁移工具，把要保留的内容转换/复制到 `.shadow/atoms/`；不转换就不会出现在召回里。
 
 ## 10. 回滚
 
@@ -163,4 +163,4 @@ shadow_lab({ mode: "index" })
 - [ ] `npm run verify` 与 `npm run verify:corpus` 均通过。
 - [ ] `read_shadow` 10 mode、`shadow_lab` 每族 1 个只读 mode、`shadow_toolset({survey:true})` 冒烟。
 - [ ] 写型 mode 缺 `write:true` 返回 `WRITE_REQUIRED`；移出 read_shadow 的参数返回 `PARAM_MOVED`。
-- [ ] 旧日期树可读且无写入；`_meta.json` 只导入一次；回滚演练一次。
+- [ ] 旧日期树未被读取、未被写入；`_meta.json` 未被导入；回滚演练一次。

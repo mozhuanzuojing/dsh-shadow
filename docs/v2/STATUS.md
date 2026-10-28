@@ -32,7 +32,7 @@
 - recovery 只核验被选中任务的 memoryRefs；context 有 200 atom 核验上限并披露（测试）。
 - DB-first 读路径：SQLite 存 parsed JSON；1k warm 7ms/query 26ms；8k warm 67ms/query 106ms（`tools/corpus-bench.ts`）。
 - 新鲜度：默认 token（文件名集合）；`index.verify:"full"` 比 size/mtime（测试）。
-- v1 `_meta.json` 一次性导入 SQLite meta（只补缺，不覆盖新 hits）；坏件/读失败可见。
+- 读路径不导入 v1 `_meta.json`（旧 hits/status 不迁移；v2 从空开始）。
 - 真实 v1 语料 dry-run：168 atoms / 0 parse failure / 754 旧日期树文件（`tools/migrate-v1.ts`）。
 - topic parity：19 查询平均 Jaccard 0.890（阈值 0.85；偏差登记在 PARITY §4.3）。
 

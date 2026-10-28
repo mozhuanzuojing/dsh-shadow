@@ -60,13 +60,7 @@ export class IndexCache {
         }
         if (statsOk) {
           const atoms = index.allParsed();
-          if (atoms.length === files.value.length) {
-            if (index.metaCount() === 0) {
-              const metaErr = await this.importLegacyMeta(index, fs, ws, atoms);
-              if (metaErr) return ok({ atoms, errors: [], source: "db", degraded: metaErr });
-            }
-            return ok({ atoms, errors: [], source: "db" });
-          }
+          if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
         }
       }
       const loaded = await loadAtoms(fs, ws);
@@ -86,8 +80,6 @@ export class IndexCache {
       if (!replaced.ok) {
         return ok({ ...loaded.value, source: "fs", degraded: `派生索引写失败：${replaced.error.message}` });
       }
-      const metaErr = await this.importLegacyMeta(index, fs, ws, loaded.value.atoms);
-      if (metaErr) return ok({ ...loaded.value, source: "fs", degraded: `legacy meta：${metaErr}` });
       return ok({ ...loaded.value, source: "fs" });
     } catch (e) {
       // SQLite 查询/解析抛错：回退 fs，读仍可用；调用方负责把它变成可见 Signal。
@@ -95,22 +87,6 @@ export class IndexCache {
       const loaded = await loadAtoms(fs, ws);
       if (!loaded.ok) return loaded;
       return ok({ ...loaded.value, source: "fs", degraded: `派生索引异常：${message}` });
-    }
-  }
-
-  /** v1 `_meta.json` 一次性导入（只补缺，不覆盖 v2 新 hits）；返回可见错误（坏件≠空件）。 */
-  private async importLegacyMeta(index: IndexDb, fs: FsPort, ws: string, atoms: ParsedAtom[]): Promise<string | undefined> {
-    const text = await fs.readText(`${ws}/.shadow/_meta.json`);
-    if (!text.ok) {
-      return text.error.code === "NOT_FOUND" ? undefined : `legacy _meta 读取失败：${text.error.message}`;
-    }
-    try {
-      const parsed = JSON.parse(text.value) as Record<string, { hits?: number; status?: string; pinned?: boolean; created?: string }>;
-      const n = index.importMeta(parsed, new Set(atoms.map((a) => a.rel)));
-      if (Object.keys(parsed).length > 0 && n === 0) return "legacy _meta 导入 0 条（rel 不在当前 atoms 或 SQL 失败）";
-      return undefined;
-    } catch (e) {
-      return `legacy _meta 坏件：${e instanceof Error ? e.message : String(e)}`;
     }
   }
 

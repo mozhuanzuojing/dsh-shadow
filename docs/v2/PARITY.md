@@ -78,7 +78,7 @@
 | B1 | 133 参数 | 21 核心参数（+ lab 3） | **净减 112 = 移除 113 + 新增 `entry` 1**；发布说明 MUST 逐个列出并指向 `shadow_lab`/`shadow_toolset`；旧参数不再被接受（不是静默忽略） |
 | B2 | 62 mode 全在 `read_shadow` | 10 core + 1 toolset + 51 lab | `10+1+51=62`；`read_shadow({mode:"<lab>"})` MUST 返回显式重定向到 `shadow_lab`，保留一个版本后再改为未知 mode 失败 |
 | B3 | `read_shadow` 承载研究 mode | 不再承载 | 同上；`index` 归 lab；`toolset` 归 `shadow_toolset` |
-| B4 | `_meta.json` 元数据 | SQLite `hits`/`meta` 表（派生） | v2 仅一次性导入 legacy `_meta.json`（之后只读、不再写）；`.shadow/atoms` 仍是唯一 source；SQLite 可重建 |
+| B4 | `_meta.json` 元数据 | SQLite `hits`/`meta` 表（派生） | v2 **不导入** legacy `_meta.json`；v2 hits/meta 从空开始；`.shadow/atoms` 仍是唯一 source；SQLite 可重建 |
 | B5 | 9 个布尔透镜 + `asOf`/`observer`/`kg` 全在 `read_shadow` | 5 个核心透镜（`soul`/`taste`/`experience`/`judgment`/`verifyEvidence`）+ 7 个移入 lab（`identity`/`context`/`project`/`claim` + `asOf`/`observer`/`kg`） | 7 个参数移出 `read_shadow`，经 `shadow_lab.input` 表达；lab 的 51 mode 计数不变 |
 
 ## 4. parity 验收
@@ -137,7 +137,7 @@
 2. **所有 handler 预算生效**：v1 只有主题召回/索引按 `max_tokens` 截断，v2 的 `episode/task/context/knowledge/recovery` 也必须受预算约束并自报。
 3. **`recall_shadow.limit` 生效**：v1 实际恒返回 1 个任务；v2 按 `limit` 返回，但默认仍为 1。
 4. **`entry` 质量修复**：v1 仅 `decision` 使用 `entry`；v2 在 `episode/task/recovery` 一致过滤，且 `entry` 正式进 schema。
-5. **`_meta.json`→SQLite 迁移期**：首次导入前后的 hits/status 只允许导入时延差异；parity fixture MUST 在导入完成后运行。
+5. **`_meta.json` 不迁移**：v2 hits/status 从空开始；若做历史命中 parity，fixture 直接注入 meta 映射，不依赖运行时导入。
 6. **重定向文案**：v1 无 lab 工具，v2 的「已移至 `shadow_lab`」提示是新文案，不参与 v1 逐字比对。
 7. **合成 oracle 的 topic 排序偏差（已实测）**：19 条 topic 查询在 `fixtures/oracle-v1` 上平均 Jaccard **0.890**（阈值 0.85）；`q02`（limit=1，v1 取到不同 top1）、`q07`（shadow 主题，v2 entry/预算归一化后排序变化）、`q10`（决策，v2 不再压平/截断）是已知偏差。只登记、不掩盖；后续若修排序须重录并说明。
 

@@ -297,11 +297,6 @@ export class IndexDb {
     return new Set(rows.map((r) => String(r.rel ?? "")));
   }
 
-  metaCount(): number {
-    const row = this.db.prepare("SELECT COUNT(*) AS n FROM meta").get() as { n?: number } | undefined;
-    return Number(row?.n ?? 0);
-  }
-
   /** 从 parsed JSON 直接还原 ParsedAtom（DB-first 读路径）。 */
   allParsed(): import("../contract/types.js").ParsedAtom[] {
     const rows = this.db.prepare("SELECT parsed FROM atoms ORDER BY date DESC, time DESC").all() as { parsed?: string }[];
@@ -351,33 +346,6 @@ export class IndexDb {
       lastAt: row.last_at ? String(row.last_at) : undefined,
       pinned: Number(row.pinned ?? 0) === 1,
     };
-  }
-
-  /** v1 `_meta.json` 一次性导入：只补 meta 表里还没有的 rel，不覆盖 v2 已累积的 hits。 */
-  importMeta(rows: Record<string, { hits?: number; status?: string; pinned?: boolean; created?: string }>, keep: Set<string>): number {
-    try {
-      const stmt = this.db.prepare(
-        `INSERT INTO meta (rel,hits,status,first_at,last_at,pinned) VALUES (?,?,?,?,?,?)
-         ON CONFLICT(rel) DO NOTHING`,
-      );
-      let n = 0;
-      this.db.exec("BEGIN");
-      for (const [rel, v] of Object.entries(rows)) {
-        if (!keep.has(rel)) continue;
-        const at = v.created ? `${v.created}T00:00:00` : null;
-        stmt.run(rel, Number(v.hits) || 0, String(v.status || "active"), at, at, v.pinned ? 1 : 0);
-        n++;
-      }
-      this.db.exec("COMMIT");
-      return n;
-    } catch {
-      try {
-        this.db.exec("ROLLBACK");
-      } catch {
-        /* ignore */
-      }
-      return 0;
-    }
   }
 
   /** 一次读出全部 meta（8k 条也只是一次查询）。 */

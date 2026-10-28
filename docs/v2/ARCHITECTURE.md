@@ -31,7 +31,7 @@
 │ store/     持久化                                             │
 │  source/  atoms · roles · affaires · soul · resources         │
 │  derived/ _index · projections · abstracts · sqlite           │
-│  legacy/  v1 日期树只读适配器                                  │
+│  legacy/  v1 日期树不进入 v2 运行时（仅迁移工具可读）        │
 ├──────────────────────────────────────────────────────────────┤
 │ contract/  类型 · schema · 错误码 · 配置（11 键）              │
 └──────────────────────────────────────────────────────────────┘
@@ -59,7 +59,7 @@
 | `domain` | atom/clue/lifecycle/evidence/verdict/projection 的纯函数 | I/O、配置、日志 |
 | `store/source` | atom 文件、soul、roles、affaires、resources | 索引、缓存 |
 | `store/derived` | `_index.md`、projections、abstracts、sqlite（含 hits/meta 表） | 权威内容 |
-| `store/legacy` | v1 日期树/旧 atom 名只读读取 | 任何写入 |
+| `store/legacy` | 无运行时适配；迁移工具可显式读 v1 旧文件 | 任何运行时读取/写入 |
 | `contract` | 类型、JSON schema、错误码、11 键配置 | 行为 |
 | `ops` | verify / release / migrate / diagnostics | 运行时路径 |
 
@@ -104,10 +104,10 @@
 | `resources/*.md` | source（curated，planned） | 否 | 资源卡；v2-dev 未接 |
 | `indexes/_index.md` | derived | 是 | 目录索引；无参读时物化 |
 | `indexes/index.sqlite` | derived | 是 | parsed atoms / hits / meta / query_log |
-| `_meta.json` | legacy | 否（保留） | v1 元数据；v2 一次性导入 SQLite meta 后只读 |
+| `_meta.json` | legacy | 否（保留） | v1 元数据；v2 **不读取/不导入**（迁移工具可备份） |
 | `audit/` | sidecar（append-only） | 否 | 审计流 |
 | `.shadow/.lock` | planned | — | Phase 3 跨进程锁；v2-dev 未实现 |
-| `<YYYY-MM-DD>/` | legacy | 否 | v1 日期树，只读 |
+| `<YYYY-MM-DD>/` | legacy | 否 | v1 日期树；v2 **不读取、不迁移** |
 
 ## 6. 并发模型
 
@@ -129,7 +129,7 @@
 | 未知 mode | `INVALID`（文案含 `UNKNOWN_MODE` 语义） | 落回默认召回 |
 | v1 旧 mode | `INVALID` + `shadow_lab` 迁移提示（`MODE_MOVED` 语义） | 静默忽略 |
 | 写型 mode 缺 `write:true` | `WRITE_REQUIRED` | 默认写 |
-| 旧存储写请求 | `UNAVAILABLE`（`LEGACY_READ_ONLY` 语义，lab 后续接） | 写 v1 日期树 |
+| 旧存储写请求 | 不提供（v2 不读/不写旧日期树） | 写 v1 日期树 |
 | 锁/版本冲突 | `BUSY` / `CONFLICT`（Phase 3） | 丢更新后报成功 |
 
 ## 8. 不变量
@@ -138,5 +138,5 @@
 2. 写路径只能产生新文件，不改旧 atom。
 3. 所有降级都有可见信号；没有“无信号降级”。
 4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta）。atoms 只能经写侧采集；`shadow_lab` 写型只写各自 `.shadow/<store>/`，**永不写 atoms**。
-5. 旧存储只读；迁移不删除旧文件。
+5. 旧日期树/旧 mode 存储不属于 v2 运行时数据面：不读取、不写入、不删除；迁移是显式工具，不是读路径。
 6. 当前态文档不写行号；归档文档不改正文。
