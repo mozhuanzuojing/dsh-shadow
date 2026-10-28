@@ -40,7 +40,6 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
   for (const k of Object.keys(c as Record<string, unknown>)) {
     if (!known.has(k)) warnings.push(`未知配置键：${k}（v2 只认 ${[...known].join(" / ")}）`);
   }
-  if (c.forget !== undefined) warnings.push("forget.* 在 v2-dev 尚未接线（配置被读取但暂不改变行为）");
   if (c.recall?.cooldownTurns !== undefined) warnings.push("recall.cooldownTurns 在 v2-dev 尚未接线");
   if (c.recall?.lossDisclosure !== undefined) warnings.push("recall.lossDisclosure 在 v2-dev 尚未接线");
   if (c.index?.provider !== undefined) warnings.push("index.provider 在 v2-dev 尚未接线（当前固定 sqlite）");

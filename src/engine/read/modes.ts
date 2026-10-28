@@ -20,6 +20,7 @@ import {
   renderTasks,
   rankTasks,
 } from "../../domain/views.js";
+import type { ForgetResult } from "../../domain/lifecycle.js";
 import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
@@ -331,7 +332,7 @@ export const queryLogView = (deps: ReadDeps): ModeOutput => {
   }
 };
 
-export const reportView = (deps: ReadDeps, atoms: ParsedAtom[]): ModeOutput => {
+export const reportView = (deps: ReadDeps, atoms: ParsedAtom[], forgetting?: ForgetResult): ModeOutput => {
   const withSummary = atoms.filter((a) => a.summary).length;
   const withDecisions = atoms.filter((a) => a.decisions.length).length;
   const withMaterials = atoms.filter((a) => a.materials.length).length;
@@ -340,7 +341,8 @@ export const reportView = (deps: ReadDeps, atoms: ParsedAtom[]): ModeOutput => {
   const top = [...entries.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   const lines = [
     "# Shadow Fitness Report（诊断，不增强）",
-    `- 原子：${atoms.length}`,
+    `- 原子：${atoms.length}（活跃）`,
+    `- 已遗忘：${forgetting?.total ?? 0}（Forget≠Delete：文件保留，不计入以上统计）`,
     `- 有摘要：${withSummary}（${atoms.length ? Math.round((withSummary / atoms.length) * 100) : 0}%）`,
     `- 有决策：${withDecisions}`,
     `- 有材料：${withMaterials}`,
@@ -354,13 +356,14 @@ export const reportView = (deps: ReadDeps, atoms: ParsedAtom[]): ModeOutput => {
   return { body: lines.join("\n"), matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
 };
 
-export const manifestView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<ModeOutput> => {
+export const manifestView = async (deps: ReadDeps, atoms: ParsedAtom[], forgetting?: ForgetResult): Promise<ModeOutput> => {
   const listed = await deps.fs.listDir(`${deps.ws}/.shadow`);
   const dirs = listed.ok ? listed.value.map((e) => `${e.type === "dir" ? "dir " : "file"} ${e.name}`) : ["（`.shadow/` 不可读）"];
   const lines = [
     "# Shadow Manifest",
     `- 工作区：\`${deps.ws}\``,
-    `- atoms：${atoms.length}`,
+    `- atoms：${atoms.length}（活跃）`,
+    `- 已遗忘：${forgetting?.total ?? 0}（文件保留在 atoms/，不参与默认召回）`,
     `- 索引：${deps.index ? "SQLite 可用" : "未打开"}`,
     "",
     "## .shadow/",

@@ -10,6 +10,7 @@ import { SOUL_FILE, TASTE_FILE } from "../../contract/paths.js";
 import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
+import { computeForgetting, renderForgetNotice } from "../../domain/lifecycle.js";
 import { loadAtoms } from "../../store/atoms.js";
 import { budgetText, envelope } from "./render.js";
 import {
@@ -121,6 +122,9 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 
   const mode = modeRes.value;
   const meta = metaOf(deps, atoms);
+  // Forget≠Delete：只把遗忘项移出活跃集，文件不删（domain/lifecycle.ts）。
+  const forgetting = computeForgetting(atoms, meta, deps.config.forget, new Date(`${deps.clock.today()}T00:00:00`));
+  const activeAtoms = forgetting.active;
   const rawMax = Number(req.maxTokens ?? deps.config.recall.budget);
   const maxTokens = Number.isFinite(rawMax) ? Math.max(256, Math.min(8000, rawMax)) : deps.config.recall.budget;
   const maxChars = maxTokens * 4;
@@ -133,28 +137,30 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   const lensRequested = !String(req.mode ?? "").trim()
     && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true);
   if (lensRequested) {
-    const lens = await lensText(depsWithMeta, req, atoms);
+    const lens = await lensText(depsWithMeta, req, activeAtoms);
     out = lens !== undefined
-      ? { body: lens, matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] }
-      : await topicView(depsWithMeta, atoms, req);
-  } else if (mode === "index") out = await indexView(depsWithMeta, atoms);
-  else if (mode === "recall") out = await topicView(depsWithMeta, atoms, req);
-  else if (mode === "recovery") out = await recoveryView(depsWithMeta, atoms, req);
-  else if (mode === "episode") out = episodeView(depsWithMeta, atoms, req);
-  else if (mode === "decision") out = decisionView(atoms, req);
-  else if (mode === "task") out = taskView(depsWithMeta, atoms, req);
-  else if (mode === "context") out = await contextView(depsWithMeta, atoms, req);
-  else if (mode === "query") out = queryView(depsWithMeta, atoms, req);
-  else if (mode === "knowledge") out = knowledgeView(depsWithMeta, atoms, req);
+      ? { body: lens, matched: activeAtoms.length, returned: activeAtoms.length, dropped: 0, examples: [] }
+      : await topicView(depsWithMeta, activeAtoms, req);
+  } else if (mode === "index") out = await indexView(depsWithMeta, activeAtoms);
+  else if (mode === "recall") out = await topicView(depsWithMeta, activeAtoms, req);
+  else if (mode === "recovery") out = await recoveryView(depsWithMeta, activeAtoms, req);
+  else if (mode === "episode") out = episodeView(depsWithMeta, activeAtoms, req);
+  else if (mode === "decision") out = decisionView(activeAtoms, req);
+  else if (mode === "task") out = taskView(depsWithMeta, activeAtoms, req);
+  else if (mode === "context") out = await contextView(depsWithMeta, activeAtoms, req);
+  else if (mode === "query") out = queryView(depsWithMeta, activeAtoms, req);
+  else if (mode === "knowledge") out = knowledgeView(depsWithMeta, activeAtoms, req);
   else if (mode === "query-log") out = queryLogView(depsWithMeta);
-  else if (mode === "shadow-report") out = reportView(depsWithMeta, atoms);
-  else if (mode === "shadow-manifest") out = await manifestView(depsWithMeta, atoms);
-  else out = await topicView(depsWithMeta, atoms, req);
+  else if (mode === "shadow-report") out = reportView(depsWithMeta, activeAtoms, forgetting);
+  else if (mode === "shadow-manifest") out = await manifestView(depsWithMeta, activeAtoms, forgetting);
+  else out = await topicView(depsWithMeta, activeAtoms, req);
 
   const debug = req.debug
-    ? `\n\n> debug：mode=${mode} · 原子 ${atoms.length} · tokens ${tokenize(String(req.topic ?? "")).length} · 命中 ${out.matched} · 返回 ${out.returned} · 丢弃 ${out.dropped}`
+    ? `\n\n> debug：mode=${mode} · 原子 ${activeAtoms.length}（遗忘 ${forgetting.total}）· tokens ${tokenize(String(req.topic ?? "")).length} · 命中 ${out.matched} · 返回 ${out.returned} · 丢弃 ${out.dropped}`
     : "";
-  const body = budgetText(out.body + debug, maxChars);
+  const forgetNotice = renderForgetNotice(forgetting);
+  const merged = forgetNotice ? `${out.body}\n\n${forgetNotice}` : out.body;
+  const body = budgetText(merged + debug, maxChars);
   const text = envelope({
     body,
     signals: deps.signals.render(),
