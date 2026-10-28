@@ -27,35 +27,35 @@ npm run typecheck:tests
 | 层 | 位置 | 允许 | 禁止 |
 |---|---|---|---|
 | unit | `test/unit/` | 纯函数、内存夹具 | fs、网络、宿主 |
-| contract | `test/contract/` | 工具 schema、模式清单、错误码、信封 | 真实语料 |
-| e2e | `test/e2e/` | 临时 `.shadow`、真实 store | 真实用户工作区 |
-| corpus | `test/corpus/` | 冻结快照、检索基线 | 联网、LLM |
+| failure | `test/failure/` | 失败注入（读写/并发/scope） | 真实用户语料 |
+| parity | `test/parity/` | 冻结 `fixtures/oracle-v1` 快照 | 联网、LLM |
+| e2e | `test/e2e/` | 临时 `.shadow`、真实 store、fake 宿主 | 真实用户工作区 |
 
 - 每个 test 文件独立进程运行；不共享全局注册表。
-- 新增 mode / 参数 / 错误码必须同时加 contract 测试。
+- 新增 mode / 参数 / 错误码必须同时加 schema/契约测试（当前在 `test/unit/schema.test.ts`）。
 - 测试失败信息必须列出实际值；禁止空占位（如 `缺 ${""}`）。
 
 ## 4. 验证：三条命令
 
 ```text
-npm run verify          # 自包含：build + typecheck + contract + unit + e2e(fake)
-npm run verify:corpus   # 冻结语料：retrieval baseline + granularity + ratchet
-npm run verify:release  # 发版闸门：verify + 版本三处 + tag/推送校验
+npm run verify          # 自包含：build + typecheck + unit/failure/parity/e2e + layers + docs
+npm run verify:corpus   # 语料基准：1k/8k 合成语料耗时（手动，需先 build）
+npm run verify:release  # 发版预检：verify + dist/package 预检（完整 release 在 Phase 5）
 ```
 
 - `verify` 不联网、不读用户 `.shadow`、不依赖 `node_modules` 之外的状态。
-- `verify:corpus` 必须显式声明语料根（`SHADOW_EVAL_ROOT`）；缺根 **exit 2**，不是通过。
+- `verify:corpus` 用合成语料，不读用户记忆；输出耗时，不设硬阈值（Phase 2 后补）。
 - 任何门失败即停；禁止 `--skip`。
 
-## 5. 发版
+## 5. 发版（Phase 5 目标；当前只有预检）
 
 ```text
-npm run release
+npm run release         # 当前=release-check 预检；Phase 5 接完整 release
 ```
 
-顺序：三方版本一致 → `verify:release` → `git add/commit` → 删旧 tag → 打新 tag → 推分支与 tag → 打印 `HEAD` 与 `tag→sha`。
+顺序（目标）：三方版本一致 → `verify:release` → `git add/commit` → 删旧 tag → 打新 tag → 推分支与 tag → 打印 `HEAD` 与 `tag→sha`。
 
-- 版本只改三处：`package.json`、`README.md` 当前版本行、`CHANGELOG.md` 首条。
+- 版本三处：`package.json`、`README.md` 当前版本行、发布说明。
 - 不使用 `--force` / `--tags`；tag 指向发布提交。
 - 发布后核对：`git rev-parse --short vX.Y.Z` = `HEAD`。
 

@@ -24,6 +24,9 @@ const normalizeMode = (req: ReadRequest): Outcome<string> => {
   const raw = String(req.mode ?? "").trim();
   if (!raw) return ok(String(req.topic ?? "").trim() ? "recall" : "index");
   if (isCoreMode(raw)) return ok(raw);
+  if (raw === "recall") {
+    return err("INVALID", "mode:\"recall\" 不是公开 mode；不传 mode、只传 topic 即主题召回。", { mode: raw });
+  }
   if (isLabMode(raw)) {
     return err(
       "INVALID",
@@ -44,7 +47,7 @@ const metaOf = (deps: ReadDeps, atoms: ParsedAtom[]): Map<string, AtomMeta> => {
   try {
     return deps.index.metaMap();
   } catch (e) {
-    deps.signals.note("index", "META_READ", `派生 meta 读取失败（${e instanceof Error ? e.message : String(e)}）`, "本次 hits/lifecycle 按空处理；atoms 仍可读。");
+    deps.signals.note("index.meta", "META_READ", `派生 meta 读取失败（${e instanceof Error ? e.message : String(e)}）`, "本次 hits/lifecycle 按空处理；atoms 仍可读。");
     return new Map();
   }
 };
@@ -111,12 +114,18 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
       `${loaded.value.errors.length} 个记忆文件读取失败（首个：${loaded.value.errors[0]!.rel}）`,
       "召回面比实际记忆少；坏件与空件不同，请先修复这些文件。",
     );
+  } else {
+    deps.signals.clear("atoms.partial");
+    deps.signals.clear("index.meta");
   }
 
   const mode = modeRes.value;
   const meta = metaOf(deps, atoms);
   const depsWithMeta: ReadDeps = { ...deps, meta };
-  const maxChars = Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
+  const rawMax = Number(req.maxTokens ?? deps.config.recall.budget);
+  const maxTokens = Number.isFinite(rawMax) ? Math.max(256, Math.min(8000, rawMax)) : deps.config.recall.budget;
+  const maxChars = maxTokens * 4;
+  const limit = Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit) || deps.config.recall.limit));
 
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
@@ -152,15 +161,18 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
     dropped: out.dropped,
     droppedExamples: out.examples,
     next: out.next,
+    limit,
   });
-  deps.index?.recordQuery(
-    mode,
-    String(req.topic ?? ""),
-    out.returned,
-    out.matched,
-    Date.now() - started,
-    `${deps.clock.today()}T${deps.clock.stamp()}`,
-  );
+  if (deps.config.telemetry.queryLog) {
+    deps.index?.recordQuery(
+      mode,
+      String(req.topic ?? ""),
+      out.returned,
+      out.matched,
+      Date.now() - started,
+      `${deps.clock.today()}T${deps.clock.stamp()}`,
+    );
+  }
   return ok({ text, mode, matched: out.matched, returned: out.returned, dropped: out.dropped });
 };
 

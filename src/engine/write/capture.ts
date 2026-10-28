@@ -42,6 +42,8 @@ const HARD_CAP = 500;
 
 export class Capture {
   readonly cwdBySession = new Map<string, string>();
+  /** agent id → 会话 cwd（session id 与 agent id 不一定相同）。 */
+  readonly cwdByAgent = new Map<string, string>();
   private pending = new Map<string, Trace[]>();
   private goals = new Map<string, string>();
   private attempts = new Map<string, number>();
@@ -60,6 +62,7 @@ export class Capture {
     if (!agentId) this.note("capture.unattributed", "NO_AGENT", "事件没有可归属的 agent", "已落到 __unknown__ 桶；可能跨会话串线，请检查宿主归属。");
     const arr = this.pending.get(id) ?? [];
     arr.push({ at: this.deps.clock.stamp(), seq: ++this.seq, date: rec.date ?? this.deps.clock.today(), ...rec });
+    if (agentId) this.deps.signals.clear("capture.unattributed");
     if (arr.length > HARD_CAP) {
       const dropped = arr.splice(0, arr.length - HARD_CAP);
       this.note("capture.pending", "OVERFLOW", `pending 超过硬上限，丢弃最旧 ${dropped.length} 条事件`, "这些事件不再进入 atoms；先修 flush 失败/consent 积压。");
@@ -75,11 +78,10 @@ export class Capture {
     if (!abs) return;
     const id = this.agentIdOf(actor);
     const ws = this.deps.resolveWs(id);
-    if (!ws) {
-      this.note("capture.scope", "NO_WS", "fs/observed 无法解析工作区", "该动作不会进入记忆；请配置 shadowRoot 或确保 session cwd 存在。");
-      return;
-    }
-    this.push(id, { kind: "action", text: `改/读 ${under(abs, ws) || abs}`, comp: component(abs, ws), source: "fs" });
+    // 无 ws 不丢事件：先入 pending，flush 时再解析；解析不出来则可见失败、pending 保留。
+    const rel = ws ? under(abs, ws) || abs : abs;
+    const comp = ws ? component(abs, ws) : "";
+    this.push(id, { kind: "action", text: `改/读 ${rel}`, comp, source: "fs" });
   }
 
   onToolsResult(exec: any): void {
@@ -105,6 +107,7 @@ export class Capture {
     const m = extractMessage(event);
     if (!m) return;
     const id = this.deps.getAgentById?.(sid)?.id || (sid ? String(sid) : undefined);
+    if (id && cwd) this.cwdByAgent.set(String(id), String(cwd));
     const text = sanitizeText(m.text);
     if (m.kind === "assistant") {
       this.push(id, { kind: "assistant", text: `我：${text}`, comp: "", source: "assistant" });
@@ -157,6 +160,7 @@ export class Capture {
         this.note("capture.scope", "NO_WS", "flush 无法解析工作区", "pending 保留；配置 shadowRoot 或修复 session cwd 后再试。");
         return err("UNAVAILABLE", "无法解析工作区");
       }
+      this.deps.signals.clear("capture.scope");
       const consent = this.deps.config.capture.consent && !this.explicitRemember(arr);
       const pure = this.isPureAction(arr);
       const auditOnly = consent || (pure && this.deps.config.capture.echo === "audit");
@@ -169,8 +173,12 @@ export class Capture {
         }
         this.consume(id, lastSeq);
         this.attempts.delete(id);
+        this.deps.signals.clear("capture.flush");
+        this.deps.signals.clear("capture.audit");
+        this.deps.signals.clear("capture.pending");
+        this.deps.signals.clear("capture.scope");
         if (consent) this.note("capture.consent", "CONSENT", "capture.consent=true 且本批无显式「记住」", "只写 audit 流，不写 atoms；要落记忆请显式说「记住」。");
-        return ok({ written: 0, audit: arr.length, retained: 0 });
+        return ok({ written: 0, audit: arr.length, retained: this.pending.get(id)?.length ?? 0 });
       }
 
       const last = arr[arr.length - 1]!;
@@ -197,7 +205,10 @@ export class Capture {
       this.consume(id, lastSeq);
       this.attempts.delete(id);
       this.deps.signals.clear("capture.flush");
-      return ok({ written: 1, audit: 0, retained: 0, rel: w.value.rel });
+      this.deps.signals.clear("capture.audit");
+      this.deps.signals.clear("capture.pending");
+      this.deps.signals.clear("capture.scope");
+      return ok({ written: 1, audit: 0, retained: this.pending.get(id)?.length ?? 0, rel: w.value.rel });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.note("capture.flush", "THROW", message, "flush 抛错；pending 保留，下一次 flush 可重试。");

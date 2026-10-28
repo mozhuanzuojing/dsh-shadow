@@ -80,6 +80,13 @@ export const evidencePathsOf = (text: string): string[] =>
 
 export const isConcreteLocator = (p: string): boolean => !/[<>{}*?]/.test(String(p ?? ""));
 
+/** 路径形态：含分隔符或扩展名；用于把工具名（pwsh/read）排除出证据材料。 */
+export const isPathLike = (p: unknown): boolean => {
+  const t = String(p ?? "").trim();
+  if (!t || /\s/.test(t)) return false;
+  return /[/\\]/.test(t) || /\.[A-Za-z0-9]{1,8}$/.test(t);
+};
+
 export const slug = (s: unknown): string => {
   const t = String(s ?? "")
     .toLowerCase()

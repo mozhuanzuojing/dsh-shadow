@@ -98,40 +98,37 @@
 | 路径 | 类别 | 可删/可重建 | 说明 |
 |---|---|---|---|
 | `atoms/<date>--<HHMMSS>-<entry>--<uid6>.md` | source | 否 | 一条记忆一个文件；v1 旧名继续可读 |
-| `roles/` · `affaires/` | source | 否 | 投影空间的多轴权威 |
-| `soul/soul.json` | source（curated） | 否 | 人设/价值观/边界 |
-| `resources/*.md` | source（curated） | 否 | 资源卡 |
-| `indexes/_index.md` | derived | 是 | 目录索引 |
-| `indexes/projections/` | derived | 是 | 便利贴视图 |
-| `indexes/abstracts/` | derived | 是 | 分桶摘要 |
-| `indexes/shadow-index/` | derived | 是 | SQLite 派生索引与元数据 |
-| `_meta.json` | legacy | 否（保留） | v1 元数据；v2 一次性导入 SQLite 后只读，不再写 |
-| `query-log/` | sidecar | 是 | 查询观测 |
+| `roles/` · `affaires/` | source（planned） | 否 | 投影空间多轴权威；v2-dev 未接 |
+| `soul/soul.json` | source（curated） | 否 | 人设/价值观/边界（v2 只读） |
+| `resources/*.md` | source（curated，planned） | 否 | 资源卡；v2-dev 未接 |
+| `indexes/_index.md` | derived | 是 | 目录索引；无参读时物化 |
+| `indexes/index.sqlite` | derived | 是 | parsed atoms / hits / meta / query_log |
+| `_meta.json` | legacy | 否（保留） | v1 元数据；v2 一次性导入 SQLite meta 后只读 |
 | `audit/` | sidecar（append-only） | 否 | 审计流 |
-| `.lock` | 运行时 | 是 | workspace 写锁 |
+| `.shadow/.lock` | planned | — | Phase 3 跨进程锁；v2-dev 未实现 |
 | `<YYYY-MM-DD>/` | legacy | 否 | v1 日期树，只读 |
 
 ## 6. 并发模型
 
-- **source 只追加**：atom 文件名含时间 + 入口 + uid6，恒唯一；只追加，不覆盖。
-- **workspace 单写者**：`engine/write` 持 `.shadow/.lock`；锁超时返回 `BUSY`，不静默排队。
-- **元数据**：SQLite 单写连接；v1 `_meta.json` 首次运行一次性导入，之后只读；冲突返回 `BUSY`，不丢更新。
-- **SQLite**：WAL、单写连接；锁冲突时读侧走 fs，写侧返回 `BUSY`。
-- **派生重建幂等**：重建只读 source；中途失败保留旧派生件，不产生半成品。
-- **读者不阻塞**：读侧可读旧派生件；新鲜度由 mtime/version 判断，过期只提示，不自动改写 source。
+- **source 只追加**：atom 文件名含时间 + 入口 + uid6；写入前 exists、碰撞换 uid；临时文件 + rename。
+- **同 agent 串行 flush**：`engine/write` 用 promise 链串行；flush 只消费快照 seq，期间新事件留 pending。
+- **跨进程**：v2-dev 无 `.shadow/.lock`；依赖唯一命名 + SQLite 事务。锁/`BUSY` 是 Phase 3 目标。
+- **SQLite**：WAL、`busy_timeout=3000`；读失败回退 fs 并留 Signal；不把坏件当空件。
+- **派生重建幂等**：重建只读 source；失败保留旧派生件（`_index.md` 原子写是 Phase 2 待办）。
+- **新鲜度**：默认 token（文件名集合）；`index.verify:"full"` 比 size/mtime。
 
 ## 7. 失败模型
 
 | 情况 | 返回 | 禁止 |
 |---|---|---|
-| 缺外部依赖（LLM/CLI） | `MISSING_DEP` + 能力降级说明 | 静默回落默认结果 |
-| 派生件坏/读不到 | `CORRUPT_DERIVED` 或重建后继续 | 把坏件当空件 |
-| source 写失败 | `WRITE_FAILED` + 可见横幅 | 声称已落盘 |
-| 未知 mode | `UNKNOWN_MODE` | 落回默认召回 |
-| v1 旧 mode | `MODE_MOVED` + 目标调用示例 | 静默忽略 |
-| 写型 mode 缺 `write:true` | `WRITE_REQUIRED` | 默认写 |
-| 旧存储写请求 | `LEGACY_READ_ONLY` | 写 v1 日期树 |
-| 锁/版本冲突 | `BUSY` / `CONFLICT` | 丢更新后报成功 |
+| 缺外部依赖（LLM/CLI） | `UNAVAILABLE` + 能力降级说明 | 静默回落默认结果 |
+| 派生件坏/读不到 | `CORRUPT` / 回退 fs + Signal | 把坏件当空件 |
+| source 写失败 | `IO` / `PERMISSION` + 可见横幅 | 声称已落盘 |
+| 未知 mode | `INVALID`（文案含 `UNKNOWN_MODE` 语义） | 落回默认召回 |
+| v1 旧 mode | `INVALID` + `shadow_lab` 迁移提示（`MODE_MOVED` 语义） | 静默忽略 |
+| 写型 mode 缺 `write:true` | `INVALID`（`WRITE_REQUIRED` 语义，lab 落地时实现） | 默认写 |
+| 旧存储写请求 | `UNAVAILABLE`（`LEGACY_READ_ONLY` 语义，lab 落地时实现） | 写 v1 日期树 |
+| 锁/版本冲突 | `BUSY` / `CONFLICT`（Phase 3） | 丢更新后报成功 |
 
 ## 8. 不变量
 

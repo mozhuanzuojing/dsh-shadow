@@ -30,22 +30,53 @@ export class IndexCache {
     return opened;
   }
 
-  /** DB-first：文件名集合一致 ⇒ 直接读 parsed JSON；否则从 fs 全量读并重建。 */
-  async load(index: IndexDb, fs: FsPort, ws: string): Promise<Outcome<IndexLoadResult>> {
+  /** DB-first：文件名集合一致 ⇒ 直接读 parsed JSON；`full` 时再比 size/mtime。 */
+  async load(index: IndexDb, fs: FsPort, ws: string, verify: "token" | "full" = "token"): Promise<Outcome<IndexLoadResult>> {
     try {
       const files = await listAtomFiles(fs, ws);
       if (!files.ok) return files;
       const names = index.names();
-      if (names.size === files.value.length && files.value.every((f) => names.has(f.rel))) {
-        const atoms = index.allParsed();
-        if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
+      const sameNames = names.size === files.value.length && files.value.every((f) => names.has(f.rel));
+      if (sameNames) {
+        let statsOk = true;
+        if (verify === "full") {
+          const known = index.fileStats();
+          for (const f of files.value) {
+            const st = await fs.stat(`${ws}/${f.rel}`);
+            if (!st.ok) {
+              statsOk = false;
+              break;
+            }
+            const prev = known.get(f.rel);
+            if (!prev || prev.size !== st.value.size || Math.abs(prev.mtime - st.value.mtimeMs) > 1) {
+              statsOk = false;
+              break;
+            }
+          }
+        }
+        if (statsOk) {
+          const atoms = index.allParsed();
+          if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
+        }
       }
       const loaded = await loadAtoms(fs, ws);
       if (!loaded.ok) return loaded;
-      const replaced = index.replaceAll(loaded.value.atoms);
+      const knownStats = index.fileStats();
+      const stats = new Map<string, { size: number; mtime: number }>();
+      for (const a of loaded.value.atoms) {
+        const prev = knownStats.get(a.rel);
+        if (prev && verify !== "full") {
+          stats.set(a.rel, prev);
+          continue;
+        }
+        const st = await fs.stat(`${ws}/${a.rel}`);
+        if (st.ok) stats.set(a.rel, { size: st.value.size, mtime: st.value.mtimeMs });
+      }
+      const replaced = index.replaceAll(loaded.value.atoms, stats);
       if (!replaced.ok) {
         return ok({ ...loaded.value, source: "fs", degraded: `派生索引写失败：${replaced.error.message}` });
       }
+      await this.importLegacyMeta(index, fs, ws, loaded.value.atoms);
       return ok({ ...loaded.value, source: "fs" });
     } catch (e) {
       // SQLite 查询/解析抛错：回退 fs，读仍可用；调用方负责把它变成可见 Signal。
@@ -53,6 +84,18 @@ export class IndexCache {
       const loaded = await loadAtoms(fs, ws);
       if (!loaded.ok) return loaded;
       return ok({ ...loaded.value, source: "fs", degraded: `派生索引异常：${message}` });
+    }
+  }
+
+  /** v1 `_meta.json` 一次性导入（只补缺，不覆盖 v2 新 hits）。 */
+  private async importLegacyMeta(index: IndexDb, fs: FsPort, ws: string, atoms: ParsedAtom[]): Promise<void> {
+    const text = await fs.readText(`${ws}/.shadow/_meta.json`);
+    if (!text.ok) return;
+    try {
+      const parsed = JSON.parse(text.value) as Record<string, { hits?: number; status?: string; pinned?: boolean; created?: string }>;
+      index.importMeta(parsed, new Set(atoms.map((a) => a.rel)));
+    } catch {
+      /* 坏件不阻塞读；hits/status 缺失可见于 query-log/report */
     }
   }
 

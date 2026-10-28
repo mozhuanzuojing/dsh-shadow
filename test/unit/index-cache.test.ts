@@ -34,6 +34,19 @@ try {
   if (!third.ok) throw new Error(third.error.message);
   assert.equal(third.value.source, "fs");
   assert.equal(third.value.atoms.length, 6);
+
+  // 原地改内容：token 默认看不到；full 必须回 fs 并读到新内容
+  const changed = { ...seed };
+  const target = `${ws}/.shadow/atoms/2026-09-09--100000-src-new.md`;
+  changed[target] = `${seed[target]}\n- [11:00:00] [src/new.ts] 用户：changed-content-marker\n`;
+  const fs3 = new MemoryFs(changed);
+  const tokenLoad = await cache.load(idx.value, fs3, ws, "token");
+  if (!tokenLoad.ok) throw new Error(tokenLoad.error.message);
+  assert.equal(tokenLoad.value.source, "db", "token 模式只按文件名集合");
+  const fullLoad = await cache.load(idx.value, fs3, ws, "full");
+  if (!fullLoad.ok) throw new Error(fullLoad.error.message);
+  assert.equal(fullLoad.value.source, "fs", "full 模式应发现 size/mtime 变化");
+  assert.ok(fullLoad.value.atoms.some((a) => a.body.includes("changed-content-marker")));
 } finally {
   cache.closeAll();
   rmSync(ws, { recursive: true, force: true });

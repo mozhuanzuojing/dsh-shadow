@@ -15,6 +15,8 @@ export interface EnvelopeInput {
   dropped?: number;
   droppedExamples?: string[];
   next?: string;
+  /** 本次 limit；有丢弃时用于披露 `limit=N 上限 M 条`。 */
+  limit?: number;
 }
 
 export const envelope = (input: EnvelopeInput): string => {
@@ -22,8 +24,9 @@ export const envelope = (input: EnvelopeInput): string => {
   if ((input.dropped ?? 0) > 0) {
     const m = input.matched ?? 0;
     const r = input.returned ?? 0;
+    const reason = input.limit !== undefined ? `；原因：limit=${input.limit} 上限 ${m} 条。` : "。";
     parts.push("");
-    parts.push(`> 未返回的命中：${input.dropped} 条（命中 ${m} · 本次返回 ${r}）`);
+    parts.push(`> 未返回的命中：${input.dropped} 条（命中 ${m} · 本次返回 ${r}）${reason}`);
     if (input.droppedExamples?.length) parts.push(`> 未返回示例：${input.droppedExamples.slice(0, 5).join("、")}`);
     parts.push(`> 下一步：${input.next ?? "提高 max_tokens 或收窄 topic 后再查。"}`);
   }

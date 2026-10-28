@@ -50,6 +50,14 @@ if (!rec2.ok) throw new Error(rec2.error.message);
 assert.equal(rec2.value.returned, 2, "recall_shadow.limit 应生效");
 assert.ok((rec2.value.text.match(/# ⤴ 记忆恢复/g) ?? []).length >= 2, "limit=2 应给 2 个恢复包");
 
+const limited = await runRead(deps, { topic: "src", limit: 1 });
+if (!limited.ok) throw new Error(limited.error.message);
+assert.ok(/limit=1 上限 \d+ 条/.test(limited.value.text), `截断信封应披露 limit：\n${limited.value.text.slice(-400)}`);
+
+const nan = await runRead(deps, { topic: "alpha", maxTokens: Number.NaN });
+if (!nan.ok) throw new Error(nan.error.message);
+assert.ok(nan.value.text.includes("alpha"), "NaN max_tokens 不得把正文清空");
+
 deps.signals.note("test", "PERMISSION", "denied", "结果可能为空");
 const withSignal = await runRead(deps, {});
 assert.equal(withSignal.ok, true);

@@ -63,7 +63,7 @@
 核对：
 
 ```powershell
-node tools/mode-registry.ts --list   # read 10 / toolset 1 / lab 51
+# mode 清单唯一来源：src/contract/modes.ts（10 core + 1 toolset + 51 lab）
 ```
 
 ## 5. `read_shadow` 研究 mode 迁移提示
@@ -132,8 +132,8 @@ node tools/migrate-v1.ts --from <ws> --in-place
 # 1) 停宿主（或只读挂载）
 # 2) 备份派生件；_meta.json 原样保留（v2 只读导入）
 .shadow/indexes/
-# 3) 重建
-npm run rebuild:derived -- <workspace>
+# 3) 重建：删 indexes/index.sqlite 后下一次读自动重建；无参 read_shadow() 物化 _index.md
+rm .shadow/indexes/index.sqlite
 # 4) 校验（只读）
 shadow_lab({ mode: "index" })
 ```

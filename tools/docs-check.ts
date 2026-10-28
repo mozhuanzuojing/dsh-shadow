@@ -22,7 +22,7 @@ if (missing.length) {
 }
 
 const budget: Record<string, number> = {
-  "README.md": 20_000,
+  "README.md": 12_000,
   "docs/adr/README.md": 8_000,
   "docs/v2/ARCHITECTURE.md": 30_000,
   "docs/v2/CONVENTIONS.md": 20_000,

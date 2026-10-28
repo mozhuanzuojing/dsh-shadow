@@ -31,6 +31,14 @@ assert.equal(pr.ok, true);
 if (pr.ok) assert.ok(pr.value.text.includes("atoms.partial"), "部分读失败应可见");
 assert.ok(partial.signals.active().some((s) => s.capability === "atoms.partial"));
 
+// 修复后（换回完整 fs、复用同一 signals）必须清除 sticky 的 partial 信号
+const healed = makeDeps();
+healed.signals = partial.signals;
+const hr = await runRead(healed, {});
+assert.equal(hr.ok, true);
+if (hr.ok) assert.ok(!hr.value.text.includes("atoms.partial"), "修好后不应继续挂 partial 横幅");
+assert.ok(!partial.signals.active().some((s) => s.capability === "atoms.partial"));
+
 const fallback = makeDeps();
 fallback.ws = WS;
 assert.ok(fallback.signals.render() === "");

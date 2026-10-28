@@ -6,7 +6,7 @@
 
 import { INDEX_MD } from "../../contract/paths.js";
 import type { ParsedAtom } from "../../contract/types.js";
-import { evidencePathsOf, isConcreteLocator, tokenize } from "../../domain/text.js";
+import { evidencePathsOf, isConcreteLocator, isPathLike, tokenize } from "../../domain/text.js";
 import {
   deriveContextRefs,
   deriveDecisions,
@@ -106,7 +106,7 @@ export const conflictRels = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise
   if (!deps.verify) return out;
   for (const a of atoms) {
     const paths = [...new Set([...a.materials, ...evidencePathsOf(a.body)])]
-      .filter((p) => isConcreteLocator(p))
+      .filter((p) => isPathLike(p) && isConcreteLocator(p))
       .slice(0, 12);
     for (const p of paths) {
       if ((await deps.verify(p)) === "stale") {
@@ -153,7 +153,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   }
   const staleCount = scored.filter((s) => s.stale).length;
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  for (const rel of result.rels) deps.index?.bumpHits(rel, at);
+  if (deps.config.telemetry.hits) for (const rel of result.rels) deps.index?.bumpHits(rel, at);
   return {
     body: renderTopicRecall(topic, result, staleCount),
     matched: result.matched,
@@ -175,7 +175,7 @@ export const recoveryView = async (deps: ReadDeps, atoms: ParsedAtom[], req: Rea
     ? chosen.map((t) => renderRecoveryFor(topic, t, refs)).join("\n\n---\n\n")
     : renderRecovery(topic, tasks, refs);
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  for (const t of chosen) for (const rel of t.memoryRefs) deps.index?.bumpHits(rel, at);
+  if (deps.config.telemetry.hits) for (const t of chosen) for (const rel of t.memoryRefs) deps.index?.bumpHits(rel, at);
   return { body, matched: tasks.length, returned: chosen.length, dropped: Math.max(0, tasks.length - chosen.length), examples: [] };
 };
 
@@ -234,7 +234,7 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
     lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${s.atom.rel}`);
   }
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
-  for (const { s } of items) deps.index?.bumpHits(s.atom.rel, at);
+  if (deps.config.telemetry.hits) for (const { s } of items) deps.index?.bumpHits(s.atom.rel, at);
   const dropped = Math.max(0, scored.length - items.length);
   return { body: lines.join("\n"), matched: scored.length, returned: items.length, dropped, examples: scored.slice(items.length, items.length + 5).map((x) => x.atom.rel) };
 };
@@ -276,6 +276,7 @@ export const queryLogView = (deps: ReadDeps): ModeOutput => {
       "## 最近 10 条",
     ];
     for (const r of s.rows.slice(0, 10)) lines.push(`- ${r.mode} · \`${r.query}\` · 命中 ${r.matched} · 返回 ${r.returned}`);
+    deps.signals.clear("query-log");
     return { body: lines.join("\n"), matched: s.total, returned: s.total, dropped: 0, examples: [] };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

@@ -65,7 +65,9 @@ CREATE TABLE IF NOT EXISTS atoms (
   user_messages TEXT NOT NULL DEFAULT '[]',
   actions TEXT NOT NULL DEFAULT '[]',
   hash TEXT NOT NULL DEFAULT '',
-  parsed TEXT NOT NULL DEFAULT ''
+  parsed TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  mtime REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_atoms_date ON atoms(date);
 CREATE INDEX IF NOT EXISTS idx_atoms_entry ON atoms(entry);
@@ -146,6 +148,16 @@ export class IndexDb {
       } catch {
         /* 列已存在 */
       }
+      try {
+        db.exec("ALTER TABLE atoms ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
+      } catch {
+        /* 列已存在 */
+      }
+      try {
+        db.exec("ALTER TABLE atoms ADD COLUMN mtime REAL NOT NULL DEFAULT 0");
+      } catch {
+        /* 列已存在 */
+      }
       return ok(new IndexDb(db, path));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -166,20 +178,22 @@ export class IndexDb {
     return Number(row?.n ?? 0);
   }
 
-  /** 整库重建（原子批 ≤ 2k 时快；大库由上层增量）。 */
-  replaceAll(atoms: ParsedAtom[]): Outcome<{ count: number }> {
+  /** 整库重建（原子批 ≤ 2k 时快；大库由上层增量）。stats 用于 full 新鲜度判定。 */
+  replaceAll(atoms: ParsedAtom[], stats?: Map<string, { size: number; mtime: number }>): Outcome<{ count: number }> {
     try {
       this.db.exec("BEGIN");
       this.db.exec("DELETE FROM atoms");
       const stmt = this.db.prepare(
-        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed,size,mtime)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       );
       for (const a of atoms) {
+        const st = stats?.get(a.rel);
         stmt.run(
           a.rel, a.name, a.date, a.time, a.slug, a.uid ?? "", a.entry, a.project, a.agent, a.goal,
           a.summary, a.body, a.kind, JSON.stringify(a.materials), JSON.stringify(a.decisions),
           JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body), JSON.stringify(a),
+          st?.size ?? 0, st?.mtime ?? 0,
         );
       }
       this.db.exec("COMMIT");
@@ -194,23 +208,25 @@ export class IndexDb {
     }
   }
 
-  upsert(atoms: ParsedAtom[]): Outcome<{ count: number }> {
+  upsert(atoms: ParsedAtom[], stats?: Map<string, { size: number; mtime: number }>): Outcome<{ count: number }> {
     try {
       this.db.exec("BEGIN");
       const stmt = this.db.prepare(
-        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed,size,mtime)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(rel) DO UPDATE SET
            name=excluded.name,date=excluded.date,time=excluded.time,slug=excluded.slug,uid=excluded.uid,
            entry=excluded.entry,project=excluded.project,agent=excluded.agent,goal=excluded.goal,
            summary=excluded.summary,body=excluded.body,kind=excluded.kind,materials=excluded.materials,
-           decisions=excluded.decisions,user_messages=excluded.user_messages,actions=excluded.actions,hash=excluded.hash,parsed=excluded.parsed`,
+           decisions=excluded.decisions,user_messages=excluded.user_messages,actions=excluded.actions,hash=excluded.hash,parsed=excluded.parsed,size=excluded.size,mtime=excluded.mtime`,
       );
       for (const a of atoms) {
+        const st = stats?.get(a.rel);
         stmt.run(
           a.rel, a.name, a.date, a.time, a.slug, a.uid ?? "", a.entry, a.project, a.agent, a.goal,
           a.summary, a.body, a.kind, JSON.stringify(a.materials), JSON.stringify(a.decisions),
           JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body), JSON.stringify(a),
+          st?.size ?? 0, st?.mtime ?? 0,
         );
       }
       this.db.exec("COMMIT");
@@ -262,6 +278,17 @@ export class IndexDb {
   hashMap(): Map<string, string> {
     const rows = this.db.prepare("SELECT rel, hash FROM atoms").all() as { rel?: string; hash?: string }[];
     return new Map(rows.map((r) => [String(r.rel ?? ""), String(r.hash ?? "")]));
+  }
+
+  /** rel → 文件 size/mtime；full 新鲜度判定用。 */
+  fileStats(): Map<string, { size: number; mtime: number }> {
+    const rows = this.db.prepare("SELECT rel, size, mtime FROM atoms").all() as { rel?: string; size?: number; mtime?: number }[];
+    const out = new Map<string, { size: number; mtime: number }>();
+    for (const r of rows) {
+      const rel = String(r.rel ?? "");
+      if (rel) out.set(rel, { size: Number(r.size ?? 0), mtime: Number(r.mtime ?? 0) });
+    }
+    return out;
   }
 
   /** 已索引的 rel 集合（读时快速判断是否需要重建）。 */
@@ -317,6 +344,33 @@ export class IndexDb {
       lastAt: row.last_at ? String(row.last_at) : undefined,
       pinned: Number(row.pinned ?? 0) === 1,
     };
+  }
+
+  /** v1 `_meta.json` 一次性导入：只补 meta 表里还没有的 rel，不覆盖 v2 已累积的 hits。 */
+  importMeta(rows: Record<string, { hits?: number; status?: string; pinned?: boolean; created?: string }>, keep: Set<string>): number {
+    try {
+      const stmt = this.db.prepare(
+        `INSERT INTO meta (rel,hits,status,first_at,last_at,pinned) VALUES (?,?,?,?,?,?)
+         ON CONFLICT(rel) DO NOTHING`,
+      );
+      let n = 0;
+      this.db.exec("BEGIN");
+      for (const [rel, v] of Object.entries(rows)) {
+        if (!keep.has(rel)) continue;
+        const at = v.created ? `${v.created}T00:00:00` : null;
+        stmt.run(rel, Number(v.hits) || 0, String(v.status || "active"), at, at, v.pinned ? 1 : 0);
+        n++;
+      }
+      this.db.exec("COMMIT");
+      return n;
+    } catch {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      return 0;
+    }
   }
 
   /** 一次读出全部 meta（8k 条也只是一次查询）。 */

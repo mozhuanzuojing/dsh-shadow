@@ -41,9 +41,11 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
 
   let capture: Capture;
   const resolveWsFor = (id: string | undefined): string | null => {
-    const cwd = id ? capture?.cwdBySession.get(id) : undefined;
+    const cwd = id ? capture?.cwdByAgent.get(id) ?? capture?.cwdBySession.get(id) : undefined;
     const r = resolveWorkspace({ agent: { id, session: { header: { cwd } } } }, config);
-    return r?.ws ?? null;
+    // 写侧不走进程 cwd 兜底：解析不出工作区 ⇒ 拒绝落盘并保留 pending，让失败可见。
+    if (!r || r.kind === "fallback") return null;
+    return r.ws;
   };
   capture = new Capture({
     fs: realFs,
@@ -83,8 +85,9 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     }
 
     const verify = async (p: string): Promise<ContextStatus> => {
-      const exists = await realFs.exists(absOf(resolved.ws, p));
-      return exists ? "validated" : "stale";
+      const st = await realFs.stat(absOf(resolved.ws, p));
+      if (st.ok) return "validated";
+      return st.error.code === "NOT_FOUND" ? "stale" : "unknown";
     };
 
     const idx = index;
@@ -96,7 +99,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       signals,
       index,
       verify,
-      loadAtoms: idx ? () => indexCache.load(idx, realFs, resolved.ws) : undefined,
+      loadAtoms: idx ? () => indexCache.load(idx, realFs, resolved.ws, config.index.verify) : undefined,
       syncIndex: (atoms) => {
         if (!index) return;
         const r = indexCache.sync(index, atoms);
@@ -129,7 +132,8 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   });
 
   return () => {
-    capture.cleanup();
+    // 先同步关索引（释放 SQLite 句柄），再异步尽力落盘；宿主不 await 时仍是 best-effort。
     indexCache.closeAll();
+    void capture.flushAll().finally(() => capture.cleanup());
   };
 }

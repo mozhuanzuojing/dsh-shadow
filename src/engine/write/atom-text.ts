@@ -4,6 +4,7 @@
 
 import type { AtomAxes } from "../../contract/types.js";
 import { fmtTime } from "../../contract/time.js";
+import { isPathLike } from "../../domain/text.js";
 
 export interface Trace {
   at: string;
@@ -34,7 +35,8 @@ const uniq = (arr: string[]): string[] => Array.from(new Set(arr.filter(Boolean)
 const cut = (s: unknown, n: number): string => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
 const pathOfAction = (text: string): string => {
-  const m = /^(?:改\/读|调用)\s+(.+)$/.exec(text.trim());
+  // 只有 fs 动作带路径；工具名（调用 pwsh）不是材料。
+  const m = /^改\/读\s+(.+)$/.exec(text.trim());
   return m ? m[1]!.trim() : "";
 };
 
@@ -72,8 +74,7 @@ export const buildAtomText = (traces: Trace[], opts: AtomTextOpts): string => {
   const actions = traces.filter((t) => t.kind === "action");
   const users = traces.filter((t) => t.kind === "user");
   const decisions = traces.filter((t) => t.kind === "decision");
-  const materials = uniq(actions.map((a) => pathOfAction(a.text)).filter((p) => p && !p.startsWith(".shadow"))).slice(0, 12);
-  const axes: AtomAxes = {
+  const materials = uniq(actions.map((a) => pathOfAction(a.text)).filter((p) => p && !p.startsWith(".shadow") && isPathLike(p))).slice(0, 12);  const axes: AtomAxes = {
     locus: opts.ws,
     when: `${opts.date} ${fmtTime(opts.time)}`,
     soul: "default",
@@ -91,6 +92,7 @@ export const buildAtomText = (traces: Trace[], opts: AtomTextOpts): string => {
   lines.push(`> 证据链：来源(决策·动作·用户) · 日期(${opts.date}) · 证据(${materials.slice(0, 6).join("、") || "—"})`);
   lines.push(`> 概况：${actions.length} 动作 · ${users.length} 用户消息 · ${decisions.length} 决策`);
   if (opts.project) lines.push(`> 项目：${opts.project}`);
+  if (opts.goal) lines.push(`> 目标：${cut(opts.goal, 160)}`);
   if (opts.agentId) lines.push(`> Agent：${opts.agentId}`);
   if (opts.summary !== "off") lines.push(`> 摘要：${deterministicSummary(traces, opts.goal)}`);
   lines.push(`> 覆盖：${traces.length} 条事件${materials.length >= 12 ? "（材料已截断到 12 条）" : ""}`);
