@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS atoms (
   decisions TEXT NOT NULL DEFAULT '[]',
   user_messages TEXT NOT NULL DEFAULT '[]',
   actions TEXT NOT NULL DEFAULT '[]',
-  hash TEXT NOT NULL DEFAULT ''
+  hash TEXT NOT NULL DEFAULT '',
+  parsed TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_atoms_date ON atoms(date);
 CREATE INDEX IF NOT EXISTS idx_atoms_entry ON atoms(entry);
@@ -139,6 +140,12 @@ export class IndexDb {
         /* 老版本/受限文件系统不支持 WAL 不构成失败 */
       }
       db.exec(SCHEMA);
+      // 兼容旧库：CREATE IF NOT EXISTS 不会补列
+      try {
+        db.exec("ALTER TABLE atoms ADD COLUMN parsed TEXT NOT NULL DEFAULT ''");
+      } catch {
+        /* 列已存在 */
+      }
       return ok(new IndexDb(db, path));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -165,14 +172,14 @@ export class IndexDb {
       this.db.exec("BEGIN");
       this.db.exec("DELETE FROM atoms");
       const stmt = this.db.prepare(
-        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       );
       for (const a of atoms) {
         stmt.run(
           a.rel, a.name, a.date, a.time, a.slug, a.uid ?? "", a.entry, a.project, a.agent, a.goal,
           a.summary, a.body, a.kind, JSON.stringify(a.materials), JSON.stringify(a.decisions),
-          JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body),
+          JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body), JSON.stringify(a),
         );
       }
       this.db.exec("COMMIT");
@@ -191,19 +198,19 @@ export class IndexDb {
     try {
       this.db.exec("BEGIN");
       const stmt = this.db.prepare(
-        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO atoms (rel,name,date,time,slug,uid,entry,project,agent,goal,summary,body,kind,materials,decisions,user_messages,actions,hash,parsed)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(rel) DO UPDATE SET
            name=excluded.name,date=excluded.date,time=excluded.time,slug=excluded.slug,uid=excluded.uid,
            entry=excluded.entry,project=excluded.project,agent=excluded.agent,goal=excluded.goal,
            summary=excluded.summary,body=excluded.body,kind=excluded.kind,materials=excluded.materials,
-           decisions=excluded.decisions,user_messages=excluded.user_messages,actions=excluded.actions,hash=excluded.hash`,
+           decisions=excluded.decisions,user_messages=excluded.user_messages,actions=excluded.actions,hash=excluded.hash,parsed=excluded.parsed`,
       );
       for (const a of atoms) {
         stmt.run(
           a.rel, a.name, a.date, a.time, a.slug, a.uid ?? "", a.entry, a.project, a.agent, a.goal,
           a.summary, a.body, a.kind, JSON.stringify(a.materials), JSON.stringify(a.decisions),
-          JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body),
+          JSON.stringify(a.userMessages), JSON.stringify(a.actions), hashBody(a.body), JSON.stringify(a),
         );
       }
       this.db.exec("COMMIT");
@@ -255,6 +262,28 @@ export class IndexDb {
   hashMap(): Map<string, string> {
     const rows = this.db.prepare("SELECT rel, hash FROM atoms").all() as { rel?: string; hash?: string }[];
     return new Map(rows.map((r) => [String(r.rel ?? ""), String(r.hash ?? "")]));
+  }
+
+  /** 已索引的 rel 集合（读时快速判断是否需要重建）。 */
+  names(): Set<string> {
+    const rows = this.db.prepare("SELECT rel FROM atoms").all() as { rel?: string }[];
+    return new Set(rows.map((r) => String(r.rel ?? "")));
+  }
+
+  /** 从 parsed JSON 直接还原 ParsedAtom（DB-first 读路径）。 */
+  allParsed(): import("../contract/types.js").ParsedAtom[] {
+    const rows = this.db.prepare("SELECT parsed FROM atoms ORDER BY date DESC, time DESC").all() as { parsed?: string }[];
+    const out: import("../contract/types.js").ParsedAtom[] = [];
+    for (const r of rows) {
+      const s = String(r.parsed ?? "");
+      if (!s) continue;
+      try {
+        out.push(JSON.parse(s) as import("../contract/types.js").ParsedAtom);
+      } catch {
+        /* 坏行跳过；下次 replaceAll 重建 */
+      }
+    }
+    return out;
   }
 
   /** 按 token 做粗筛（SQL LIKE）；精确打分在 domain/rank。 */

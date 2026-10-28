@@ -87,6 +87,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       return exists ? "validated" : "stale";
     };
 
+    const idx = index;
     return ok({
       fs: realFs,
       ws: resolved.ws,
@@ -95,6 +96,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       signals,
       index,
       verify,
+      loadAtoms: idx ? () => indexCache.load(idx, realFs, resolved.ws) : undefined,
       syncIndex: (atoms) => {
         if (!index) return;
         const r = indexCache.sync(index, atoms);

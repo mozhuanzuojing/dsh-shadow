@@ -90,7 +90,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   const modeRes = normalizeMode(req);
   if (!modeRes.ok) return modeRes;
 
-  const loaded = await loadAtoms(deps.fs, deps.ws);
+  const loaded = deps.loadAtoms ? await deps.loadAtoms() : await loadAtoms(deps.fs, deps.ws);
   if (!loaded.ok) {
     deps.signals.note(
       "atoms",
@@ -102,7 +102,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   }
   deps.signals.clear("atoms");
   const atoms = loaded.value.atoms;
-  deps.syncIndex?.(atoms);
+  if (!deps.loadAtoms) deps.syncIndex?.(atoms);
   if (loaded.value.errors.length) {
     deps.signals.note(
       "atoms.partial",
@@ -124,9 +124,9 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
     const lens = await lensText(depsWithMeta, req, atoms);
     out = lens !== undefined
       ? { body: lens, matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] }
-      : topicView(depsWithMeta, atoms, req);
+      : await topicView(depsWithMeta, atoms, req);
   } else if (mode === "index") out = await indexView(depsWithMeta, atoms);
-  else if (mode === "recall") out = topicView(depsWithMeta, atoms, req);
+  else if (mode === "recall") out = await topicView(depsWithMeta, atoms, req);
   else if (mode === "recovery") out = await recoveryView(depsWithMeta, atoms, req);
   else if (mode === "episode") out = episodeView(depsWithMeta, atoms, req);
   else if (mode === "decision") out = decisionView(atoms, req);
@@ -137,7 +137,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   else if (mode === "query-log") out = queryLogView(depsWithMeta);
   else if (mode === "shadow-report") out = reportView(depsWithMeta, atoms);
   else if (mode === "shadow-manifest") out = await manifestView(depsWithMeta, atoms);
-  else out = topicView(depsWithMeta, atoms, req);
+  else out = await topicView(depsWithMeta, atoms, req);
 
   const debug = req.debug
     ? `\n\n> debug：mode=${mode} · 原子 ${atoms.length} · tokens ${tokenize(String(req.topic ?? "")).length} · 命中 ${out.matched} · 返回 ${out.returned} · 丢弃 ${out.dropped}`
@@ -156,3 +156,4 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 };
 
 export const isRecallMode = (mode: string): boolean => RECALL_MODES.has(mode);
+
