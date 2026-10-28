@@ -108,8 +108,12 @@ node tools/mode-registry.ts --list --group lab
 5) 重启 profile；dsh --profile web --dump-config 应无 Error
 6) 新会话确认 read_shadow / shadow_toolset / shadow_lab 出现在工具列表
 
-# npm 包
-pnpm add dsh-shadow
+# npm registry（尚未发布；v2.0.0 只发 git tag，ADR-0012）
+# 发布后才可用：pnpm add dsh-shadow
+
+# 本地 tarball（当前可用）
+npm run build; npm pack
+pnpm add file:<path>/dsh-shadow-2.0.0.tgz
 ```
 
 - `shadow_lab` **默认不注册**；`lab.enabled:true` 才注册（避免 51 mode 挤占默认 schema）。

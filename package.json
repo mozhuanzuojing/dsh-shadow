@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "2.0.0-dev.0",
+  "version": "2.0.0",
   "description": "dsh-shadow v2 — 给 agent 记「为什么」的投影记忆：atoms 是唯一权威，派生索引可重建，降级可见，研究面在可选 lab。",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,6 +14,7 @@
     "cordis.patch.yml",
     "docs/v2/*.md",
     "docs/adr/*.md",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE",
     "package.json"

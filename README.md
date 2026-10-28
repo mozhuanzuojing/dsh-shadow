@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
 >
-> 状态：**v2 重写中（Phase 1）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；v2 尚未发布 npm。
+> 状态：**v2.0.0 已发布（2026-10-28，tag `v2.0.0`）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
@@ -18,19 +18,27 @@
 | `read_shadow` | 12 | 10 个核心 mode + 5 个核心透镜 |
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
-| `shadow_toolset` | 4 | 工具集台账（v2 Phase 1 显式 unavailable） |
+| `shadow_toolset` | 4 | 工具集台账（v2.0.0 显式 unavailable，见「已知限制」） |
 | `shadow_lab`（可选） | 3 | 51 个研究 mode；`lab.enabled:true` 时注册，写型需 `write:true` |
 
 核心 mode：`recovery` · `query` · `episode` · `decision` · `task` · `context` · `knowledge` · `query-log` · `shadow-report` · `shadow-manifest`。
 
-## 安装（开发态）
+## 安装
+
+v2.0.0 以 git tag 发布，**npm registry 尚未发布**（ADR-0012）。两种装法：
 
 ```powershell
-# 以 link: 方式装进 DSH profile（示例）
+# 方式一：本地 link（开发态 / 本机验证）
 # profile package.json: "dsh-shadow": "link:D:/project/dsh-shadow"
 npm install
 npm run build
 npm run verify
+
+# 方式二：从 tag 构建 tarball
+git checkout v2.0.0
+npm install; npm run build; npm pack      # → dsh-shadow-2.0.0.tgz
+# 在 DSH profile 目录：pnpm add file:<path>/dsh-shadow-2.0.0.tgz
+# profile 的 dsh.profile.bundles 加 "dsh-shadow"；要 lab 再在 cordis.patch.yml 开 lab.enabled
 ```
 
 新克隆后 `npm run verify` 是自包含的（不要求工作区有 `.shadow`）；需要真实语料的 benchmark 走 `npm run verify:corpus`。
@@ -42,7 +50,16 @@ npm run verify
 - [v1 → v2 迁移](./docs/v2/MIGRATION.md)
 - [研究面 lab](./docs/v2/LAB.md)
 - [Parity 与契约](./docs/v2/PARITY.md)
+- [当前实现状态](./docs/v2/STATUS.md) · [变更记录](./CHANGELOG.md) · [发版策略 ADR](./docs/adr/0012-release-and-versioning.md)
 - v1 归档：[docs/v1/](./docs/v1/)
+
+## 已知限制（v2.0.0）
+
+- `shadow_toolset` 显式 unavailable（台账未移植；不探测、不编造命令）。
+- 派生件只物化 `indexes/_index.md`；材料卡/纪要/Episode/abstracts 仍在读时派生。
+- `forget`/`retention`/`compact` 配置存在、行为未接。
+- lab 与 core 同包（`src/lab/vendor/`）；ADR-0012 的独立包 `dsh-shadow-lab` 与 per-mode JSON Schema 未落地。
+- **旧 v1 存储不做支持**：运行时只读 `.shadow/atoms/`，日期树与 `_meta.json` 不读不导入。
 
 ## 明确不做
 
