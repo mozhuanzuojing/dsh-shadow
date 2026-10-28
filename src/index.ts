@@ -11,6 +11,7 @@ import { systemClock } from "./contract/time.js";
 import type { ContextStatus } from "./contract/types.js";
 import { SignalStore } from "./engine/signals.js";
 import type { ReadDeps } from "./engine/read/types.js";
+import { Capture } from "./engine/write/capture.js";
 import { realFs } from "./store/fs.js";
 import { IndexCache } from "./store/index-cache.js";
 import { makeCoreTools, type DepsFactory } from "./surface/tools.js";
@@ -37,6 +38,34 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     console.error("[dsh-shadow] 宿主缺少 ctx.on / ctx.inject / ctx.get；插件无法挂载。");
     return () => {};
   }
+
+  let capture: Capture;
+  const resolveWsFor = (id: string | undefined): string | null => {
+    const cwd = id ? capture?.cwdBySession.get(id) : undefined;
+    const r = resolveWorkspace({ agent: { id, session: { header: { cwd } } } }, config);
+    return r?.ws ?? null;
+  };
+  capture = new Capture({
+    fs: realFs,
+    config,
+    clock: systemClock,
+    signals,
+    resolveWs: resolveWsFor,
+    getAgentById: (id) => {
+      try {
+        return ctx.get("agents")?.get(id);
+      } catch {
+        return undefined;
+      }
+    },
+  });
+
+  ctx.on("fs/observed", (target: any, observation: any, actor: any) => capture.onFsObserved(target, observation, actor));
+  ctx.on("tools/result", (exec: any) => capture.onToolsResult(exec));
+  ctx.on("goal/changed", (payload: any) => capture.onGoalChanged(payload));
+  ctx.on("session/event", (session: any, event: any) => capture.onSessionEvent(session, event));
+  ctx.on("agent/turn-stopping", (payload: any) => capture.flush(payload?.agent?.id));
+  ctx.on("session/flush", () => capture.flushAll());
 
   const depsFactory: DepsFactory = async (exec: ExecLike | undefined): Promise<Outcome<ReadDeps>> => {
     const resolved = resolveWorkspace(exec, config);
@@ -98,6 +127,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   });
 
   return () => {
+    capture.cleanup();
     indexCache.closeAll();
   };
 }

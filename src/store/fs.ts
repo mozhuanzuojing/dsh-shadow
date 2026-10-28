@@ -23,6 +23,7 @@ export interface FsPort {
   resolve(p: string): Promise<{ displayPath: string }>;
   readText(p: string): Promise<Outcome<string>>;
   writeText(p: string, text: string): Promise<Outcome<FsStat>>;
+  appendText(p: string, text: string): Promise<Outcome<void>>;
   listDir(p: string): Promise<Outcome<FsEntry[]>>;
   stat(p: string): Promise<Outcome<FsStat>>;
   exists(p: string): Promise<boolean>;
@@ -64,6 +65,15 @@ export const realFs: FsPort = {
       await fsp.writeFile(p, text, "utf8");
       const st = await fsp.stat(p);
       return ok({ size: st.size, mtimeMs: st.mtimeMs, version: `${st.size}:${Math.floor(st.mtimeMs)}` });
+    } catch (e) {
+      return mapError(e, p);
+    }
+  },
+  async appendText(p, text) {
+    try {
+      await fsp.mkdir(path.dirname(p), { recursive: true });
+      await fsp.appendFile(p, text, "utf8");
+      return ok(undefined);
     } catch (e) {
       return mapError(e, p);
     }
@@ -152,6 +162,13 @@ export class MemoryFs implements FsPort {
     this.files.set(key, text);
     this.clock += 1;
     return ok({ size: Buffer.byteLength(text, "utf8"), mtimeMs: this.clock, version: `v${this.clock}` });
+  }
+
+  async appendText(p: string, text: string): Promise<Outcome<void>> {
+    const key = this.norm(p);
+    this.files.set(key, (this.files.get(key) ?? "") + text);
+    this.clock += 1;
+    return ok(undefined);
   }
 
   async listDir(p: string): Promise<Outcome<FsEntry[]>> {
