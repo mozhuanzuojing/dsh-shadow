@@ -7,6 +7,22 @@
 import type { FsPort } from "../store/fs.js";
 
 const pathOf = (t: any): string => String(t?.displayPath ?? t?.targetKey ?? t ?? "");
+
+/**
+ * 硬边界：lab **永不写 atoms**（docs/v2/LAB.md / ARCHITECTURE §8：atoms 是唯一记忆权威）。
+ *
+ * 为什么在 fs 门面拦而不是只靠字段 schema：写路径可能由 vendored builder 用 input 拼出来
+ * （典型：workspace-record 的 kind 拼进 `.shadow/<kind>/`）。只校验字段值挡不住所有拼法，
+ * 在**所有写操作汇合的唯一门面**上按路径段判定，才是不依赖调用方式的契约。
+ * 判定用「相邻两段 = .shadow + atoms」而不是字符串包含：兼容相对/绝对、正反斜杠、大小写。
+ */
+const hitsAtomsPath = (raw: string): boolean => {
+  const parts = String(raw ?? "").replace(/\\/g, "/").toLowerCase().split("/").filter((s) => s && s !== ".");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (parts[i] === ".shadow" && parts[i + 1] === "atoms") return true;
+  }
+  return false;
+};
 const fail = (message: string, code?: string): never => {
   throw Object.assign(new Error(message), { code: code ?? "IO" });
 };
@@ -25,6 +41,7 @@ export const toV1Fs = (port: FsPort): any => {
       return unwrap(await port.readText(pathOf(t)));
     },
     async writeText(t: any, text: string) {
+      if (hitsAtomsPath(pathOf(t))) fail("lab 不允许写 .shadow/atoms（atoms 是唯一记忆权威，写操作被拒绝）", "WRITE_DENIED");
       return unwrap(await port.writeText(pathOf(t), text));
     },
     async listDir(t: any) {
@@ -42,6 +59,7 @@ export const toV1Fs = (port: FsPort): any => {
       return unwrap(await port.stat(pathOf(t)));
     },
     async appendText(t: any, text: string) {
+      if (hitsAtomsPath(pathOf(t))) fail("lab 不允许写 .shadow/atoms（atoms 是唯一记忆权威，写操作被拒绝）", "WRITE_DENIED");
       return unwrap(await port.appendText(pathOf(t), text));
     },
     processPath(t: any) {

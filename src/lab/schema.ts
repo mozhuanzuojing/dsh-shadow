@@ -38,6 +38,10 @@ export interface LabField {
   description: string;
   /** 封闭枚举（只对 kind:"string"）：取自 builder 的联合类型/正则白名单，不在值域内即拒绝。 */
   enum?: readonly string[];
+  /** 形态约束（只对 kind:"string"）：值会被拼进存储路径/文件名时必须锁定形态（路径安全）。 */
+  pattern?: RegExp;
+  /** pattern 不满足时给人的可执行提示（进错误文本）。 */
+  patternHint?: string;
 }
 
 export interface LabModeSchema {
@@ -55,6 +59,13 @@ export interface LabModeSchema {
 
 const S = (description: string, enumValues?: readonly string[]): LabField =>
   enumValues ? { kind: "string", description, enum: enumValues } : { kind: "string", description };
+/** 会被拼进路径/文件名的字符串字段：形态约束是**路径安全**，不是风格偏好。 */
+const SP = (description: string, pattern: RegExp, patternHint: string): LabField => ({
+  kind: "string",
+  description: `${description}（形态约束：${patternHint}）`,
+  pattern,
+  patternHint,
+});
 const N = (description: string): LabField => ({ kind: "number", description });
 const B = (description: string): LabField => ({ kind: "boolean", description });
 const SA = (description: string): LabField => ({ kind: "string_array", description });
@@ -251,11 +262,15 @@ export const LAB_MODE_SCHEMAS: Readonly<Record<LabMode, LabModeSchema>> = {
     source: "vendor/query/contverify.ts → vendor/trajectory/continuity/engine.ts",
     fields: {
       workspace: S("这条 world 记录属于哪个工作区；空串被 builder 拒绝（禁跨项目/落全局）。读点：buildWorkspaceRecord"),
-      kind: S('记录 kind；决定落盘子目录 .shadow/<kind>/（缺省 "observation"）。读点：buildWorkspaceRecord'),
+      kind: SP(
+        '记录 kind；决定落盘子目录 .shadow/<kind>/（缺省 "observation"）。读点：buildWorkspaceRecord',
+        /^(?!atoms$|indexes$|audit$|soul$|taste$)[a-z][a-z0-9_-]{0,31}$/,
+        '小写字母开头，仅 a-z0-9_-；禁路径分隔符/点，禁保留目录（atoms/indexes/audit/soul/taste）',
+      ),
       content: S("记录内容（world 层事实；与 observer 层的「无具体内容」边界相反）。读点：buildWorkspaceRecord"),
     },
     required: ["workspace"],
-    note: "kind 会被拼进存储路径 —— schema 只校验字符串类型，不校验路径安全性（见报告遗留风险）。",
+    note: "kind 会被拼进存储路径：schema 锁形态（禁 ../、分隔符、保留目录）；lab fs 门面另有兜底——任何写 .shadow/atoms 的路径一律 WRITE_DENIED。",
   },
 
   // ── Delegation（3；2 写）──────────────────────────────────────────────────────────
@@ -701,6 +716,17 @@ export const validateLabInput = (mode: LabMode, input: Record<string, unknown>):
     );
   }
   for (const [field, spec] of Object.entries(schema.fields)) {
+    if (!spec.pattern || !(field in input)) continue;
+    const value = input[field];
+    if (typeof value === "string" && value !== "" && !spec.pattern.test(value)) {
+      return err(
+        "INVALID_INPUT",
+        'mode "' + mode + '" 字段 "' + field + '" 形态不合法：' + (spec.patternHint ?? spec.pattern.source) + "（实际 " + JSON.stringify(value) + "）",
+        { mode, field, pattern: spec.pattern.source, actual: value },
+      );
+    }
+  }
+  for (const [field, spec] of Object.entries(schema.fields)) {
     if (!spec.enum || !(field in input)) continue;
     const value = input[field];
     if (!spec.enum.includes(value as string)) {
@@ -717,9 +743,9 @@ export const validateLabInput = (mode: LabMode, input: Record<string, unknown>):
 const fieldJsonSchema = (field: LabField): JsonSchema => {
   switch (field.kind) {
     case "string":
-      return field.enum
-        ? { type: "string", description: field.description, enum: [...field.enum] }
-        : { type: "string", description: field.description };
+      if (field.enum) return { type: "string", description: field.description, enum: [...field.enum] };
+      if (field.pattern) return { type: "string", description: field.description, pattern: field.pattern.source };
+      return { type: "string", description: field.description };
     case "number":
       return { type: "number", description: field.description };
     case "boolean":

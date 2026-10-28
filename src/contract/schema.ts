@@ -5,7 +5,7 @@
  */
 
 export type JsonSchema =
-  | { type: "string"; description?: string; enum?: string[]; default?: unknown }
+  | { type: "string"; description?: string; enum?: string[]; pattern?: string; default?: unknown }
   | { type: "number"; description?: string; default?: unknown; minimum?: number; maximum?: number }
   | { type: "boolean"; description?: string; default?: unknown }
   | { type: "array"; description?: string; items?: JsonSchema }

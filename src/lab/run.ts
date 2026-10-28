@@ -127,7 +127,10 @@ export const runLab = async (
     body = await dispatch(mode, args, v1deps, ctx);
   } catch (e) {
     // vendored v1 代码内部大多返回失败文本；未捕获异常必须变成显式失败，不得裸抛给工具框架。
-    return err("INTERNAL", `lab mode "${mode}" 执行异常：${e instanceof Error ? e.message : String(e)}`, { mode });
+    // fs 门面的 atoms 写入拦截（WRITE_DENIED）保留原错误码，不被归一成 INTERNAL。
+    const denied = (e as { code?: unknown } | null)?.code === "WRITE_DENIED";
+    const message = e instanceof Error ? e.message : String(e);
+    return err(denied ? "WRITE_DENIED" : "INTERNAL", `lab mode "${mode}" 执行${denied ? "被拒绝" : "异常"}：${message}`, { mode });
   }
   if (body === undefined) return err("NOT_PORTED", `lab mode "${mode}" 尚未接上执行器。`, { mode });
 
