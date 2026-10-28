@@ -2,7 +2,7 @@
  * v2 lab — 51 mode 的统一执行入口。
  *
  * 算法来自 vendored v1 lab（`vendor/query/*` 与依赖闭包）；这里只做：
- * 输入白名单 → write 闸 → v1 依赖/fs 适配 → 分派 → v2 Outcome/结构化结果。
+ * 逐 mode schema 的字段闸 → write 闸 → 类型/必填/枚举 → v1 依赖/fs 适配 → 分派 → v2 Outcome/结构化结果。
  */
 
 import { err, ok, type Outcome } from "../contract/outcome.js";
@@ -11,12 +11,9 @@ import { RECALL_PREFIX } from "../domain/text.js";
 import type { SignalStore } from "../engine/signals.js";
 import type { FsPort } from "../store/fs.js";
 import { toV1Fs } from "./fs.js";
-import {
-  LAB_MODE_SET,
-  LAB_INPUT_SET,
-  isLabWriteMode,
-  unknownLabMode,
-} from "./registry.js";
+import { LAB_MODE_SET, isLabWriteMode, unknownLabMode } from "./registry.js";
+import { labAllowedFields, labUnknownFields, validateLabInput } from "./schema.js";
+import type { LabMode } from "../contract/modes.js";
 import { runContVerify } from "./vendor/query/contverify.js";
 import { runObserverKernel } from "./vendor/query/observer-kernel.js";
 import { runValidation } from "./vendor/query/validation.js";
@@ -85,11 +82,13 @@ export const runLab = async (
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return err("INVALID_INPUT", `shadow_lab.input 必须是对象；mode "${mode}" 的字段见 docs/v2/LAB.md。`, { mode });
   }
-  const unknown = Object.keys(input as Record<string, unknown>).filter((k) => !LAB_INPUT_SET.has(k));
+  const typed = input as Record<string, unknown>;
+  const unknown = labUnknownFields(mode as LabMode, typed);
   if (unknown.length) {
+    const allowed = labAllowedFields(mode as LabMode);
     return err(
       "INVALID_INPUT",
-      `mode "${mode}" 不接受字段：${unknown.join(", ")}；允许字段：${[...LAB_INPUT_SET].sort().join(", ")}`,
+      `mode "${mode}" 不接受字段：${unknown.join(", ")}；允许字段：${allowed.length ? allowed.join(", ") : "（无）"}`,
       { mode, unknown },
     );
   }
@@ -101,6 +100,10 @@ export const runLab = async (
   if (!writeRequired && write) {
     return err("WRITE_DENIED", `mode "${mode}" 是只读；不能带 write:true。`, { mode });
   }
+  // 写闸先于类型/必填：写型 mode 的第一道契约是「显式 write:true」，不是「参数齐不齐」——
+  // 先报 WRITE_REQUIRED 才不会把「漏了 write」误诊成「漏了字段」。两者都在任何写之前。
+  const checked = validateLabInput(mode as LabMode, typed);
+  if (!checked.ok) return checked;
 
   const agentId = deps.agent?.id || "lab";
   const fs = toV1Fs(deps.fs);

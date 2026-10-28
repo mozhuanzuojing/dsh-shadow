@@ -4,6 +4,7 @@ import { SignalStore } from "../../dist/engine/signals.js";
 import { runLab } from "../../dist/lab/run.js";
 import { LAB_MODES } from "../../dist/contract/modes.js";
 import { LAB_WRITE_MODES } from "../../dist/lab/registry.js";
+import { LAB_MODE_SCHEMAS, type LabField } from "../../dist/lab/schema.js";
 import { MemoryFs } from "../../dist/store/fs.js";
 import { WS } from "../helpers.ts";
 
@@ -18,10 +19,29 @@ const makeDeps = () => ({
 assert.equal(LAB_MODES.length, 51);
 assert.equal(LAB_WRITE_MODES.size, 31, "写型 mode 必须是 31 个");
 
+// per-mode schema 落地后，必填字段缺失会在写闸之后被 INVALID_INPUT 拒绝（PARITY §5.2）。
+// 「51 mode 全部可执行」的基线保留，但循环改为喂该 mode 的最小合法字段 —— 断言强度不降：
+// 仍然是 51/51 成功且正文非空，另外由 lab-schema.test.ts 锁住「空必填 → 显式拒绝」。
+const sampleValue = (field: LabField): unknown => {
+  if (field.enum?.length) return field.enum[0];
+  switch (field.kind) {
+    case "string": return "x";
+    case "number": return 1;
+    case "boolean": return true;
+    case "string_array": return ["x"];
+    case "object_array": return [];
+    case "object": return {};
+  }
+};
+const minimalInput = (mode: (typeof LAB_MODES)[number]): Record<string, unknown> => {
+  const schema = LAB_MODE_SCHEMAS[mode];
+  return Object.fromEntries((schema.required ?? []).map((field) => [field, sampleValue(schema.fields[field])]));
+};
+
 const failures: string[] = [];
 for (const mode of LAB_MODES) {
   const write = LAB_WRITE_MODES.has(mode);
-  const r = await runLab(makeDeps(), { mode, input: {}, write });
+  const r = await runLab(makeDeps(), { mode, input: minimalInput(mode), write });
   if (!r.ok) failures.push(`${mode}: ${r.error.code} ${r.error.message}`);
   else if (!r.value.data.text.trim()) failures.push(`${mode}: empty body`);
 }
