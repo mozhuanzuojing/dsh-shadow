@@ -4,25 +4,19 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# ── 构建产物（可重出；不进 git。npm 包仍带 dist：见 package.json files + prepublishOnly）──
+# ── 构建产物 ───────────────────────────────────────────────
 dist/
-docs/*.visual-check.*
+packages/*/dist/
+*.tsbuildinfo
 
-# ── 本机草稿 / 临时（不进版本控制，也不进审计语料）────────────
-# 本地草稿目录（v1.15.86）：见 tools/audit-wiring.ts / audit-drift.ts 的 SKIP_DIRS
-_research/
+# ── 本机草稿 / 临时 ───────────────────────────────────────
 _tmp/
+_research/
 __pycache__/
 *.pyc
 
-# 仓内误落的取证备份（v1.19.1 实测：默认路径写错 → 仓库内 `.docs/`，5.5 MB 差点进库）
-# 约定落点在仓库外：`../.docs/fix/<日期>/`（见 AGENTS.md）
-.docs/
-
-# 编辑器 / 本机工具目录
-.cursor/
-.yonbuddy/
-
-# ── 本仓当工作区时的运行时面（可删可重建，不入版本控制）──────
-# 记忆树 + 派生索引（ADR-0095 · T17-B：`.shadow/index.sqlite` 及旁路文件）
+# ── 本仓当工作区时的运行时面（可删可重建）──────────────────
 .shadow/
+
+# ── 真实语料绝不进仓 ──────────────────────────────────────
+fixtures/**/private/
