@@ -47,6 +47,9 @@ try {
   assert.ok(out.includes("src-alpha-ts"), "召回应命中新 atom");
   assert.ok(statSync(join(ws, ".shadow", "indexes", "index.sqlite")).size > 0, "SQLite 索引应落盘");
 
+  const ql = await tools.get("read_shadow").execute({ mode: "query-log" }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
+  assert.ok(ql.includes("Query Observatory") && ql.includes("查询次数"), "query-log 应记录真实查询");
+
   const missing = await tools.get("read_shadow").execute({ mode: "definitely-not" }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
   assert.ok(missing.includes("未知 mode"), "未知 mode 必须显式报错");
 } finally {

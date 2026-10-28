@@ -87,6 +87,7 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
 };
 
 export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome<ReadResult>> => {
+  const started = Date.now();
   const modeRes = normalizeMode(req);
   if (!modeRes.ok) return modeRes;
 
@@ -152,6 +153,14 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
     droppedExamples: out.examples,
     next: out.next,
   });
+  deps.index?.recordQuery(
+    mode,
+    String(req.topic ?? ""),
+    out.returned,
+    out.matched,
+    Date.now() - started,
+    `${deps.clock.today()}T${deps.clock.stamp()}`,
+  );
   return ok({ text, mode, matched: out.matched, returned: out.returned, dropped: out.dropped });
 };
 

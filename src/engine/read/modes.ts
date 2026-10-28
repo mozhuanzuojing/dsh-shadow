@@ -140,6 +140,8 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
     };
   }
   const staleCount = scored.filter((s) => s.stale).length;
+  const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
+  for (const rel of result.rels) deps.index?.bumpHits(rel, at);
   return {
     body: renderTopicRecall(topic, result, staleCount),
     matched: result.matched,
@@ -160,6 +162,8 @@ export const recoveryView = async (deps: ReadDeps, atoms: ParsedAtom[], req: Rea
   const body = chosen.length
     ? chosen.map((t) => renderRecoveryFor(topic, t, refs)).join("\n\n---\n\n")
     : renderRecovery(topic, tasks, refs);
+  const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
+  for (const t of chosen) for (const rel of t.memoryRefs) deps.index?.bumpHits(rel, at);
   return { body, matched: tasks.length, returned: chosen.length, dropped: Math.max(0, tasks.length - chosen.length), examples: [] };
 };
 
@@ -217,6 +221,8 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
   for (const { s, type } of items) {
     lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${s.atom.rel}`);
   }
+  const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
+  for (const { s } of items) deps.index?.bumpHits(s.atom.rel, at);
   const dropped = Math.max(0, scored.length - items.length);
   return { body: lines.join("\n"), matched: scored.length, returned: items.length, dropped, examples: scored.slice(items.length, items.length + 5).map((x) => x.atom.rel) };
 };
