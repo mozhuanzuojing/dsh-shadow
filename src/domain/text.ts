@@ -73,6 +73,13 @@ export const topicsInText = (text: string, fallback?: string): string[] => {
   return [...set];
 };
 
+const PATH_RE = /(?:[A-Za-z]:[\\/]|\/|\.{1,2}\/)?[A-Za-z0-9_\-./\\]{3,}\.(?:md|ts|js|json|py|yaml|yml|html|css|mjs|sh|ps1|txt|sqlite)\b/g;
+
+export const evidencePathsOf = (text: string): string[] =>
+  [...String(text ?? "").matchAll(PATH_RE)].map((m) => m[0]!);
+
+export const isConcreteLocator = (p: string): boolean => !/[<>{}*?]/.test(String(p ?? ""));
+
 export const slug = (s: unknown): string => {
   const t = String(s ?? "")
     .toLowerCase()
