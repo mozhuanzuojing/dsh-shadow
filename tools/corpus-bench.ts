@@ -58,7 +58,7 @@ try {
     loadAtoms: () => cache.load(idx.value, fs, ws),
     index: idx.value,
   };
-  const q = await runRead(deps, { topic: "alpha", max_tokens: 1600 });
+  const q = await runRead(deps, { topic: "alpha", maxTokens: 1600 });
   if (!q.ok) throw new Error(q.error.message);
   const tQuery = performance.now();
 
@@ -76,4 +76,5 @@ try {
   cache.closeAll();
   rmSync(ws, { recursive: true, force: true });
 }
+
 
