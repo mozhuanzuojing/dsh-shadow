@@ -45,6 +45,11 @@ const lens = await runRead(deps, { soul: true });
 assert.equal(lens.ok, true);
 if (lens.ok) assert.ok(lens.value.text.includes("尚未配置") || lens.value.text.includes("Soul"));
 
+const rec2 = await runRead(deps, { mode: "recovery", limit: 2 });
+if (!rec2.ok) throw new Error(rec2.error.message);
+assert.equal(rec2.value.returned, 2, "recall_shadow.limit 应生效");
+assert.ok((rec2.value.text.match(/# ⤴ 记忆恢复/g) ?? []).length >= 2, "limit=2 应给 2 个恢复包");
+
 deps.signals.note("test", "PERMISSION", "denied", "结果可能为空");
 const withSignal = await runRead(deps, {});
 assert.equal(withSignal.ok, true);

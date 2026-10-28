@@ -6,7 +6,7 @@
 
 import { INDEX_MD } from "../../contract/paths.js";
 import type { ParsedAtom } from "../../contract/types.js";
-import { tokenize } from "../../domain/text.js";
+import { evidencePathsOf, isConcreteLocator, tokenize } from "../../domain/text.js";
 import {
   deriveContextRefs,
   deriveDecisions,
@@ -16,9 +16,11 @@ import {
   renderDecisions,
   renderEpisodes,
   renderRecovery,
+  renderRecoveryFor,
   renderTasks,
+  rankTasks,
 } from "../../domain/views.js";
-import { scoreAtoms, selectWithinBudget, renderTopicRecall } from "./recall.js";
+import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
 const errText = (what: string, e: string): ModeOutput => ({
@@ -94,16 +96,36 @@ export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Mo
   return { body: buildIndexText(deps, atoms), matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
 };
 
-export const topicView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {
+export const conflictRels = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Set<string>> => {
+  const out = new Set<string>();
+  if (!deps.verify) return out;
+  for (const a of atoms) {
+    const paths = [...new Set([...a.materials, ...evidencePathsOf(a.body)])]
+      .filter((p) => isConcreteLocator(p))
+      .slice(0, 12);
+    for (const p of paths) {
+      if ((await deps.verify(p)) === "stale") {
+        out.add(a.rel);
+        break;
+      }
+    }
+  }
+  return out;
+};
+
+export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): Promise<ModeOutput> => {
   const topic = String(req.topic ?? "").trim();
   const tokens = tokenize(topic);
   if (!tokens.length) {
     return { body: `（查询为空）\n> 下一步：给一个主题词，如 \`read_shadow("auth")\`。`, matched: 0, returned: 0, dropped: 0, examples: [] };
   }
+  const conflicts = await conflictRels(deps, atoms);
   const scored = scoreAtoms(atoms, tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
+    conflictRels: conflicts,
+    supersededRels: supersededRels(atoms),
   });
   const maxChars = Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
   const limit = Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit)));
@@ -132,8 +154,13 @@ export const recoveryView = async (deps: ReadDeps, atoms: ParsedAtom[], req: Rea
   const topic = String(req.topic ?? "").trim();
   const tasks = deriveTasks(atoms);
   const refs = await contextRefs(deps, atoms);
-  const body = renderRecovery(topic, tasks, refs);
-  return { body, matched: tasks.length, returned: body.startsWith("（未在投影空间") ? 0 : 1, dropped: 0, examples: [] };
+  const limit = Math.max(1, Math.min(30, Number(req.limit ?? 1)));
+  const ranked = rankTasks(tasks, topic);
+  const chosen = ranked.slice(0, limit);
+  const body = chosen.length
+    ? chosen.map((t) => renderRecoveryFor(topic, t, refs)).join("\n\n---\n\n")
+    : renderRecovery(topic, tasks, refs);
+  return { body, matched: tasks.length, returned: chosen.length, dropped: Math.max(0, tasks.length - chosen.length), examples: [] };
 };
 
 export const episodeView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): ModeOutput => {

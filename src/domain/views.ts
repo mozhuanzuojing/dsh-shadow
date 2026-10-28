@@ -337,24 +337,27 @@ export const renderContextRefs = (refs: ContextRef[], topic?: string): string =>
 // ── Recovery ─────────────────────────────────────────────
 
 export const bestTask = (tasks: TaskView[], query: string): TaskView | null => {
+  const ranked = rankTasks(tasks, query);
+  return ranked[0] ?? null;
+};
+
+/** 按查询 token 对任务排序（确定性；同分保持原序）。 */
+export const rankTasks = (tasks: TaskView[], query: string): TaskView[] => {
   const q = String(query ?? "");
   const chunks = uniq([
     ...tokenizeLoose(q),
     ...q.split(/([a-zA-Z0-9]+|[^a-zA-Z0-9]+)/i).map((s) => s.trim()).filter((s) => s && /[a-zA-Z0-9\u4e00-\u9fff]/.test(s)),
   ]);
-  if (!chunks.length) return tasks[0] ?? null;
-  let best: TaskView | null = null;
-  let bestScore = 0;
-  for (const t of tasks) {
-    const hay = [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.decisions.map((d) => d.reason), ...t.outcomes, ...t.evidence].join(" ").toLowerCase();
-    let score = 0;
-    for (const tok of chunks) if (hay.includes(tok)) score += 1;
-    if (score > bestScore) {
-      bestScore = score;
-      best = t;
-    }
-  }
-  return best;
+  if (!chunks.length) return [...tasks];
+  return tasks
+    .map((t) => {
+      const hay = [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.decisions.map((d) => d.reason), ...t.outcomes, ...t.evidence].join(" ").toLowerCase();
+      let score = 0;
+      for (const tok of chunks) if (hay.includes(tok)) score += 1;
+      return { t, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.t);
 };
 
 const tokenizeLoose = (s: string): string[] =>
