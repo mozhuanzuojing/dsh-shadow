@@ -15,7 +15,7 @@ import { Capture } from "./engine/write/capture.js";
 import type { FsPort } from "./store/fs.js";
 import { HostFs } from "./store/host-fs.js";
 import { IndexCache } from "./store/index-cache.js";
-import { makeCoreTools, type DepsFactory } from "./surface/tools.js";
+import { makeCoreTools, type DepsFactory, type ToolsetDepsFactory } from "./surface/tools.js";
 import { makeLabTools } from "./lab/tool.js";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
 
@@ -165,10 +165,26 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     });
   };
 
+  /**
+   * 工具集依赖：审批通道**惰性**从宿主取（apply 时可能还没就绪，或宿主没有该服务）；
+   * 取不到 → install 一律 fail closed（只给可复制命令，不代装）。agent 从工具 execute 的 exec 取。
+   */
+  const toolsetDepsFactory: ToolsetDepsFactory = (exec) => ({
+    getApproval: () => {
+      try {
+        return ctx.get("approval");
+      } catch {
+        return undefined;
+      }
+    },
+    agent: exec?.agent,
+    signals,
+  });
+
   ctx.inject(["tools"], (toolsCtx: CtxLike) => {
     const service = toolsCtx.get("tools");
     if (!service) return;
-    for (const tool of makeCoreTools(depsFactory)) service.register(tool);
+    for (const tool of makeCoreTools(depsFactory, toolsetDepsFactory)) service.register(tool);
     if (config.lab.enabled) {
       for (const tool of makeLabTools(depsFactory)) service.register(tool);
     }
