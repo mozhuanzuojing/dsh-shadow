@@ -1,0 +1,61 @@
+{
+  "name": "dsh-shadow",
+  "version": "2.0.0-dev.0",
+  "description": "dsh-shadow v2 — 给 agent 记「为什么」的投影记忆：atoms 是唯一权威，派生索引可重建，降级可见，研究面在可选 lab。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "presets",
+    "docs/*.md",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "clean": "node tools/clean.ts",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:tools": "tsc -p tsconfig.tools.json",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
+    "test": "npm run build && node tools/test.ts",
+    "audit:layers": "node tools/audit-layers.ts",
+    "docs:check": "node tools/docs-check.ts",
+    "verify": "npm run typecheck && npm run typecheck:tools && npm run typecheck:tests && npm run test && npm run audit:layers && npm run docs:check",
+    "verify:corpus": "node tools/corpus-bench.ts",
+    "verify:release": "npm run verify && node tools/release-check.ts",
+    "release": "node tools/release.ts",
+    "migrate:v1": "node tools/migrate-v1.ts"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "agent-memory",
+    "memory-tree",
+    "plugin"
+  ],
+  "engines": {
+    "node": ">=26",
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/projection.patch.yml"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  }
+}
