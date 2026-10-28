@@ -35,10 +35,15 @@ const toRequest = (args: Record<string, unknown>): ReadRequest => ({
 });
 
 const executeRead = async (depsFactory: DepsFactory, args: Record<string, unknown>, exec: any): Promise<string> => {
-  const d = await depsFactory(exec as ExecLike | undefined);
-  if (!d.ok) return renderPlain(`> ⚠ shadow 不可用（${d.error.code}）：${d.error.message}`);
-  const r = await runRead(d.value, toRequest(args));
-  return renderReadOutcome(r, d.value.signals);
+  try {
+    const d = await depsFactory(exec as ExecLike | undefined);
+    if (!d.ok) return renderPlain(`> ⚠ shadow 不可用（${d.error.code}）：${d.error.message}`);
+    const r = await runRead(d.value, toRequest(args));
+    return renderReadOutcome(r, d.value.signals);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return renderPlain(`> ⚠ shadow 内部错误：${message}\n> 这是失败，不是「没有记忆」；请保留此消息并检查 .shadow/ 与索引。`);
+  }
 };
 
 export const makeReadTool = (depsFactory: DepsFactory): RegisteredTool => ({

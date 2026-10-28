@@ -7,6 +7,8 @@ import { fmtTime } from "../../contract/time.js";
 
 export interface Trace {
   at: string;
+  /** 事件所属本地日期（YYYY-MM-DD）；跨日 flush 时用事件日期，不拿 flush 时刻。 */
+  date: string;
   kind: "action" | "user" | "assistant" | "decision";
   text: string;
   comp: string;

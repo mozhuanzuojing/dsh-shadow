@@ -92,7 +92,11 @@ export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Mo
     const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);
     if (!w.ok) {
       deps.signals.note("index-md", w.error.code, `索引写入失败（${w.error.message}）`, "本次返回现场派生索引；磁盘 `_index.md` 未更新，外部读者可能看到旧索引。");
+    } else {
+      deps.signals.clear("index-md");
     }
+  } else {
+    deps.signals.clear("index-md");
   }
   return { body: built, matched: atoms.length, returned: atoms.length, dropped: 0, examples: [] };
 };
@@ -120,7 +124,14 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   if (!tokens.length) {
     return { body: `（查询为空）\n> 下一步：给一个主题词，如 \`read_shadow("auth")\`。`, matched: 0, returned: 0, dropped: 0, examples: [] };
   }
-  const conflicts = await conflictRels(deps, atoms);
+  const base = scoreAtoms(atoms, tokens, {
+    config: deps.config,
+    meta: deps.meta ?? new Map(),
+    todayStr: deps.clock.today(),
+  });
+  // 证据冲突核验有 I/O：只对基础分前 200 名做，避免 8k 语料 × 12 路径的 stat 风暴。
+  const topRels = new Set(base.slice(0, 200).map((s) => s.atom.rel));
+  const conflicts = await conflictRels(deps, atoms.filter((a) => topRels.has(a.rel)));
   const scored = scoreAtoms(atoms, tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
@@ -253,18 +264,24 @@ export const knowledgeView = (atoms: ParsedAtom[], req: ReadRequest): ModeOutput
 
 export const queryLogView = (deps: ReadDeps): ModeOutput => {
   if (!deps.index) return { body: "（尚无查询记录：telemetry 未启用或索引不可用）", matched: 0, returned: 0, dropped: 0, examples: [] };
-  const s = deps.index.queryLogSummary();
-  if (!s.total) return { body: "（尚无查询记录）", matched: 0, returned: 0, dropped: 0, examples: [] };
-  const lines = [
-    "# Query Observatory",
-    `- 查询次数：${s.total}`,
-    `- 命中总数：${s.matched}`,
-    `- 返回总数：${s.returned}`,
-    "",
-    "## 最近 10 条",
-  ];
-  for (const r of s.rows.slice(0, 10)) lines.push(`- ${r.mode} · \`${r.query}\` · 命中 ${r.matched} · 返回 ${r.returned}`);
-  return { body: lines.join("\n"), matched: s.total, returned: s.total, dropped: 0, examples: [] };
+  try {
+    const s = deps.index.queryLogSummary();
+    if (!s.total) return { body: "（尚无查询记录）", matched: 0, returned: 0, dropped: 0, examples: [] };
+    const lines = [
+      "# Query Observatory",
+      `- 查询次数：${s.total}`,
+      `- 命中总数：${s.matched}`,
+      `- 返回总数：${s.returned}`,
+      "",
+      "## 最近 10 条",
+    ];
+    for (const r of s.rows.slice(0, 10)) lines.push(`- ${r.mode} · \`${r.query}\` · 命中 ${r.matched} · 返回 ${r.returned}`);
+    return { body: lines.join("\n"), matched: s.total, returned: s.total, dropped: 0, examples: [] };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    deps.signals.note("query-log", "READ_FAILED", message, "查询观测不可读；不代表「还没查过」。");
+    return { body: `（查询观测读取失败：${message}）`, matched: 0, returned: 0, dropped: 0, examples: [] };
+  }
 };
 
 export const reportView = (deps: ReadDeps, atoms: ParsedAtom[]): ModeOutput => {

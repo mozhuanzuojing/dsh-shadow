@@ -5,7 +5,7 @@
  */
 
 import { err, ok, type Outcome } from "../../contract/outcome.js";
-import { isCoreMode, isLabMode, nearestModes } from "../../contract/modes.js";
+import { CORE_MODES, isCoreMode, isLabMode, nearestModes } from "../../contract/modes.js";
 import { SOUL_FILE, TASTE_FILE } from "../../contract/paths.js";
 import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
@@ -33,25 +33,20 @@ const normalizeMode = (req: ReadRequest): Outcome<string> => {
   }
   return err(
     "INVALID",
-    `未知 mode:"${raw}"。read_shadow 只接受 10 个核心 mode：${[...requireCore()].join(" / ")}；最近邻：${nearestModes(raw).join(" / ")}。`,
+    `未知 mode:"${raw}"。read_shadow 只接受 10 个核心 mode：${[...CORE_MODES].join(" / ")}；最近邻：${nearestModes(raw).join(" / ")}。`,
     { mode: raw, suggestions: nearestModes(raw) },
   );
 };
 
-const requireCore = (): readonly string[] => {
-  // 避免循环依赖：静态清单与 contract/modes 保持一致由测试守。
-  return ["recovery", "query", "episode", "decision", "task", "context", "knowledge", "query-log", "shadow-report", "shadow-manifest"];
-};
-
 const metaOf = (deps: ReadDeps, atoms: ParsedAtom[]): Map<string, AtomMeta> => {
   if (deps.meta) return deps.meta;
-  const map = new Map<string, AtomMeta>();
-  if (!deps.index) return map;
-  for (const a of atoms) {
-    const m = deps.index.getMeta(a.rel);
-    if (m) map.set(a.rel, m);
+  if (!deps.index) return new Map();
+  try {
+    return deps.index.metaMap();
+  } catch (e) {
+    deps.signals.note("index", "META_READ", `派生 meta 读取失败（${e instanceof Error ? e.message : String(e)}）`, "本次 hits/lifecycle 按空处理；atoms 仍可读。");
+    return new Map();
   }
-  return map;
 };
 
 const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): Promise<string | undefined> => {
@@ -104,6 +99,11 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   deps.signals.clear("atoms");
   const atoms = loaded.value.atoms;
   if (!deps.loadAtoms) deps.syncIndex?.(atoms);
+  if ("degraded" in loaded.value && loaded.value.degraded) {
+    deps.signals.note("index", "DEGRADED", String(loaded.value.degraded), "本次从 atoms 直接读；hits/query-log/lifecycle 可能不生效。");
+  } else if (loaded.value.errors.length === 0) {
+    deps.signals.clear("index");
+  }
   if (loaded.value.errors.length) {
     deps.signals.note(
       "atoms.partial",

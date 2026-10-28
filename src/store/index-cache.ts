@@ -13,6 +13,8 @@ const norm = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+
 
 export interface IndexLoadResult extends LoadAtomsResult {
   source: "db" | "fs";
+  /** 索引层失败时回退 fs 的原因；调用方应留可见 Signal。 */
+  degraded?: string;
 }
 
 export class IndexCache {
@@ -30,17 +32,28 @@ export class IndexCache {
 
   /** DB-first：文件名集合一致 ⇒ 直接读 parsed JSON；否则从 fs 全量读并重建。 */
   async load(index: IndexDb, fs: FsPort, ws: string): Promise<Outcome<IndexLoadResult>> {
-    const files = await listAtomFiles(fs, ws);
-    if (!files.ok) return files;
-    const names = index.names();
-    if (names.size === files.value.length && files.value.every((f) => names.has(f.rel))) {
-      const atoms = index.allParsed();
-      if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
+    try {
+      const files = await listAtomFiles(fs, ws);
+      if (!files.ok) return files;
+      const names = index.names();
+      if (names.size === files.value.length && files.value.every((f) => names.has(f.rel))) {
+        const atoms = index.allParsed();
+        if (atoms.length === files.value.length) return ok({ atoms, errors: [], source: "db" });
+      }
+      const loaded = await loadAtoms(fs, ws);
+      if (!loaded.ok) return loaded;
+      const replaced = index.replaceAll(loaded.value.atoms);
+      if (!replaced.ok) {
+        return ok({ ...loaded.value, source: "fs", degraded: `派生索引写失败：${replaced.error.message}` });
+      }
+      return ok({ ...loaded.value, source: "fs" });
+    } catch (e) {
+      // SQLite 查询/解析抛错：回退 fs，读仍可用；调用方负责把它变成可见 Signal。
+      const message = e instanceof Error ? e.message : String(e);
+      const loaded = await loadAtoms(fs, ws);
+      if (!loaded.ok) return loaded;
+      return ok({ ...loaded.value, source: "fs", degraded: `派生索引异常：${message}` });
     }
-    const loaded = await loadAtoms(fs, ws);
-    if (!loaded.ok) return loaded;
-    index.replaceAll(loaded.value.atoms);
-    return ok({ ...loaded.value, source: "fs" });
   }
 
   /** 读时增量对账：count 不符 → 整库重建；否则只 upsert 内容变化/新增的 rel。 */

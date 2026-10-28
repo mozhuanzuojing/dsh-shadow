@@ -45,6 +45,8 @@ export class Capture {
   private pending = new Map<string, Trace[]>();
   private goals = new Map<string, string>();
   private attempts = new Map<string, number>();
+  /** 同一 agent 串行 flush，避免 auto-flush 与 turn-stopping 并发重复写。 */
+  private chains = new Map<string, Promise<Outcome<FlushResult>>>();
 
   constructor(private readonly deps: CaptureDeps) {}
 
@@ -52,17 +54,19 @@ export class Capture {
     this.deps.signals.note(capability, code, message, effect);
   }
 
-  push(agentId: string | undefined, rec: Omit<Trace, "at">): void {
+  push(agentId: string | undefined, rec: Omit<Trace, "at" | "date"> & { date?: string }): void {
     const id = agentId || UNKNOWN;
     if (!agentId) this.note("capture.unattributed", "NO_AGENT", "事件没有可归属的 agent", "已落到 __unknown__ 桶；可能跨会话串线，请检查宿主归属。");
     const arr = this.pending.get(id) ?? [];
-    arr.push({ at: this.deps.clock.stamp(), ...rec });
+    arr.push({ at: this.deps.clock.stamp(), date: rec.date ?? this.deps.clock.today(), ...rec });
     if (arr.length > HARD_CAP) {
       const dropped = arr.splice(0, arr.length - HARD_CAP);
       this.note("capture.pending", "OVERFLOW", `pending 超过硬上限，丢弃最旧 ${dropped.length} 条事件`, "这些事件不再进入 atoms；先修 flush 失败/consent 积压。");
     }
     this.pending.set(id, arr);
-    if (arr.length >= MAX_PENDING) void this.flush(id);
+    if (arr.length >= MAX_PENDING) {
+      void this.flush(id).catch((e) => this.note("capture.flush", "THROW", String(e), "自动 flush 抛错；pending 仍在，下一次 flush 可重试。"));
+    }
   }
 
   onFsObserved(target: any, _observation: any, actor: any): void {
@@ -128,60 +132,88 @@ export class Capture {
     return arr.some((t) => t.kind === "user" && isExplicitRemember(t.text));
   }
 
+  /** 同一 agent 串行：并发调用会排队，后一个能看到前一个之后的新事件。 */
   async flush(agentId: string | undefined): Promise<Outcome<FlushResult>> {
     const id = agentId || UNKNOWN;
-    const arr = this.pending.get(id) ?? [];
-    if (!arr.length) return ok({ written: 0, audit: 0, retained: 0 });
-    const ws = this.deps.resolveWs(id);
-    if (!ws) {
-      this.note("capture.scope", "NO_WS", "flush 无法解析工作区", "pending 保留；配置 shadowRoot 或修复 session cwd 后再试。");
-      return err("UNAVAILABLE", "无法解析工作区");
+    const prev = this.chains.get(id) ?? Promise.resolve<Outcome<FlushResult>>(ok({ written: 0, audit: 0, retained: 0 }));
+    const next = prev.catch(() => ok({ written: 0, audit: 0, retained: 0 })).then(() => this.flushOnce(id));
+    this.chains.set(id, next);
+    try {
+      return await next;
+    } finally {
+      if (this.chains.get(id) === next) this.chains.delete(id);
     }
-    const consent = this.deps.config.capture.consent && !this.explicitRemember(arr);
-    const pure = this.isPureAction(arr);
-    const auditOnly = consent || (pure && this.deps.config.capture.echo === "audit");
+  }
 
-    if (auditOnly) {
-      const a = await this.appendAudit(ws, id, arr);
-      if (!a.ok) {
-        this.note("capture.audit", a.error.code, a.error.message, "本批动作没有落盘；pending 保留可重试。");
-        return a;
+  /** 只消费调用开始时的快照；flush 期间新 push 的事件留在 pending。 */
+  private async flushOnce(id: string): Promise<Outcome<FlushResult>> {
+    try {
+      const arr = [...(this.pending.get(id) ?? [])];
+      if (!arr.length) return ok({ written: 0, audit: 0, retained: 0 });
+      const ws = this.deps.resolveWs(id);
+      if (!ws) {
+        this.note("capture.scope", "NO_WS", "flush 无法解析工作区", "pending 保留；配置 shadowRoot 或修复 session cwd 后再试。");
+        return err("UNAVAILABLE", "无法解析工作区");
       }
-      this.pending.delete(id);
-      this.attempts.delete(id);
-      if (consent) this.note("capture.consent", "CONSENT", "capture.consent=true 且本批无显式「记住」", "只写 audit 流，不写 atoms；要落记忆请显式说「记住」。");
-      return ok({ written: 0, audit: arr.length, retained: 0 });
-    }
+      const consent = this.deps.config.capture.consent && !this.explicitRemember(arr);
+      const pure = this.isPureAction(arr);
+      const auditOnly = consent || (pure && this.deps.config.capture.echo === "audit");
 
-    const lastAt = arr[arr.length - 1]!.at || this.deps.clock.stamp();
-    const date = this.deps.clock.today();
-    const project = projectName(ws);
-    const entry = primaryEntry(arr, ws);
-    const text = buildAtomText(arr, {
-      ws,
-      entry,
-      date,
-      time: lastAt.replace(/:/g, ""),
-      agentId: id === UNKNOWN ? "" : id,
-      project,
-      goal: this.goals.get(id) ?? "",
-      summary: this.deps.config.capture.summary,
-    });
-    const w = await writeAtom(this.deps.fs, ws, { entry, text, date, time: lastAt.replace(/:/g, "") }, this.deps.clock);
-    if (!w.ok) {
-      const n = (this.attempts.get(id) ?? 0) + 1;
-      this.attempts.set(id, n);
-      this.note("capture.flush", w.error.code, w.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；atoms 未写入。`);
-      return w;
+      if (auditOnly) {
+        const a = await this.appendAudit(ws, id, arr);
+        if (!a.ok) {
+          this.note("capture.audit", a.error.code, a.error.message, "本批动作没有落盘；pending 保留可重试。");
+          return a;
+        }
+        this.consume(id, arr.length);
+        this.attempts.delete(id);
+        if (consent) this.note("capture.consent", "CONSENT", "capture.consent=true 且本批无显式「记住」", "只写 audit 流，不写 atoms；要落记忆请显式说「记住」。");
+        return ok({ written: 0, audit: arr.length, retained: 0 });
+      }
+
+      const last = arr[arr.length - 1]!;
+      const date = last.date || this.deps.clock.today();
+      const project = projectName(ws);
+      const entry = primaryEntry(arr, ws);
+      const text = buildAtomText(arr, {
+        ws,
+        entry,
+        date,
+        time: last.at.replace(/:/g, ""),
+        agentId: id === UNKNOWN ? "" : id,
+        project,
+        goal: this.goals.get(id) ?? "",
+        summary: this.deps.config.capture.summary,
+      });
+      const w = await writeAtom(this.deps.fs, ws, { entry, text, date, time: last.at.replace(/:/g, "") }, this.deps.clock);
+      if (!w.ok) {
+        const n = (this.attempts.get(id) ?? 0) + 1;
+        this.attempts.set(id, n);
+        this.note("capture.flush", w.error.code, w.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；atoms 未写入。`);
+        return w;
+      }
+      this.consume(id, arr.length);
+      this.attempts.delete(id);
+      this.deps.signals.clear("capture.flush");
+      return ok({ written: 1, audit: 0, retained: 0, rel: w.value.rel });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.note("capture.flush", "THROW", message, "flush 抛错；pending 保留，下一次 flush 可重试。");
+      return err("INTERNAL", `flush 抛错：${message}`);
     }
-    this.pending.delete(id);
-    this.attempts.delete(id);
-    this.deps.signals.clear("capture.flush");
-    return ok({ written: 1, audit: 0, retained: 0, rel: w.value.rel });
+  }
+
+  /** 只移除本次已消费的前 n 条；flush 期间新增的事件保留。 */
+  private consume(id: string, n: number): void {
+    const cur = this.pending.get(id) ?? [];
+    if (!cur.length) return;
+    cur.splice(0, Math.min(n, cur.length));
+    if (cur.length) this.pending.set(id, cur);
+    else this.pending.delete(id);
   }
 
   private async appendAudit(ws: string, agentId: string, arr: Trace[]): Promise<Outcome<void>> {
-    const date = this.deps.clock.today();
+    const date = arr[0]?.date || this.deps.clock.today();
     const rel = `${AUDIT_DIR}/${date}.jsonl`;
     const line = JSON.stringify({
       at: `${date}T${fmtTime(arr[0]?.at?.replace(/:/g, "") ?? "000000")}`,

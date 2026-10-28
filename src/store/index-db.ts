@@ -319,6 +319,25 @@ export class IndexDb {
     };
   }
 
+  /** 一次读出全部 meta（8k 条也只是一次查询）。 */
+  metaMap(): Map<string, AtomMeta> {
+    const rows = this.db.prepare("SELECT * FROM meta").all() as Record<string, unknown>[];
+    const out = new Map<string, AtomMeta>();
+    for (const row of rows) {
+      const rel = String(row.rel ?? "");
+      if (!rel) continue;
+      out.set(rel, {
+        rel,
+        hits: Number(row.hits ?? 0),
+        status: String(row.status ?? "active") as AtomMeta["status"],
+        firstAt: row.first_at ? String(row.first_at) : undefined,
+        lastAt: row.last_at ? String(row.last_at) : undefined,
+        pinned: Number(row.pinned ?? 0) === 1,
+      });
+    }
+    return out;
+  }
+
   bumpHits(rel: string, at: string): void {
     try {
       this.db.prepare(
