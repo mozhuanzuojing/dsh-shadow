@@ -184,7 +184,11 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   ctx.inject(["tools"], (toolsCtx: CtxLike) => {
     const service = toolsCtx.get("tools");
     if (!service) return;
-    for (const tool of makeCoreTools(depsFactory, toolsetDepsFactory)) service.register(tool);
+    for (const tool of makeCoreTools(depsFactory, toolsetDepsFactory)) {
+      // toolset.enabled:false ⇒ 不注册台账（显式关闭；默认 true）。
+      if (tool.name === "shadow_toolset" && !config.toolset.enabled) continue;
+      service.register(tool);
+    }
     if (config.lab.enabled) {
       for (const tool of makeLabTools(depsFactory)) service.register(tool);
     }

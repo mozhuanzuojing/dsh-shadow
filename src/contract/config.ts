@@ -43,7 +43,6 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
   if (c.recall?.cooldownTurns !== undefined) warnings.push("recall.cooldownTurns 在 v2-dev 尚未接线");
   if (c.recall?.lossDisclosure !== undefined) warnings.push("recall.lossDisclosure 在 v2-dev 尚未接线");
   if (c.index?.provider !== undefined) warnings.push("index.provider 在 v2-dev 尚未接线（当前固定 sqlite）");
-  if (c.toolset !== undefined) warnings.push("toolset 在 v2-dev 尚未接线（shadow_toolset 显式 unavailable）");
   return {
     shadowRoot: typeof c.shadowRoot === "string" && c.shadowRoot.trim() ? c.shadowRoot.trim() : undefined,
     projectRoot: typeof c.projectRoot === "string" && c.projectRoot.trim() ? c.projectRoot.trim() : undefined,
