@@ -6,10 +6,18 @@ import type { Outcome } from "../contract/outcome.js";
 import { params, str, num, bool, type ToolSpec } from "../contract/schema.js";
 import { runRead } from "../engine/read/route.js";
 import type { ReadDeps, ReadRequest } from "../engine/read/types.js";
+import { runToolset } from "../engine/toolset/run.js";
+import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
 import type { ExecLike } from "./workspace.js";
 
 export type DepsFactory = (exec: ExecLike | undefined) => Promise<Outcome<ReadDeps>>;
+
+/**
+ * 工具集依赖工厂：与读侧 deps 分开 —— 台账不需要工作区/索引，
+ * 唯一需要的外部依赖是「宿主审批通道（惰性取，可能没有）」与 exec.agent。
+ */
+export type ToolsetDepsFactory = (exec: any) => ToolsetDeps;
 
 export interface RegisteredTool extends ToolSpec {
   output: { schema: { type: "string" }; render: (args: unknown, value: string) => { type: "text"; text: string }[] };
@@ -98,28 +106,53 @@ export const makeQueryTool = (depsFactory: DepsFactory): RegisteredTool => ({
     executeRead(depsFactory, { mode: "query", topic: String(args.query ?? "").trim(), scope: args.scope, limit: args.limit }, exec),
 });
 
-export const makeToolsetTool = (depsFactory: DepsFactory): RegisteredTool => ({
+/**
+ * 工具集台账入口：surface 只做「参数 → engine → 文本」。
+ *
+ * 为什么**不走**读侧 depsFactory：台账不读 .shadow、不打开索引、不解析工作区；
+ * 它只需要「宿主审批通道（惰性取）」与 exec.agent（审批凭据）。
+ * 探测/安装/渲染全在 engine/toolset；这里只负责把失败转成可见文本 + Signal。
+ */
+export const makeToolsetTool = (toolsetFactory?: ToolsetDepsFactory): RegisteredTool => ({
   name: "shadow_toolset",
   description:
-    "工具集台账/能力预检（v2 Phase 1 尚未移植）。当前版本显式报 unavailable，不伪造探测结果；安装需显式请求 + 宿主审批。",
+    "工具集台账（真实能力目录）：默认只读巡检，只探测插件内接线项；survey:\"all\" 才并行探测全部 reference。" +
+    "need 按能力需求预检（只读、不安装）；install 是外部副作用——必须显式指定、先经宿主 allowed-once 审批，" +
+    "未授予一律不装并给可复制命令；装后重新探测再报，不凭退出码宣称成功。" +
+    "探测失败只说「未检出」，不等于「未安装」（PATH 是宿主进程启动时的快照）。参数优先级：install > need > survey/category。",
   parameters: params({
-    survey: str("providers（默认）或 all。"),
-    category: str("只列某个分类。"),
-    need: { type: "array", description: "按能力需求反查（如 [\"全文搜索\"]）。", items: str("能力") },
-    install: str("显式安装某个条目的 CLI（需宿主 allowed-once 审批）。"),
+    survey: str("providers（默认，只探插件内接线项）或 all（并行探测全部条目）。"),
+    category: str("只列某个分类（如「搜索与查找」）；未知分类显式失败。"),
+    need: { type: "array", description: "按能力需求反查并预检（如 [\"全文搜索\"]）；只读、不安装。", items: str("能力") },
+    install: str("显式安装某个条目的 CLI（需宿主 allowed-once 审批；无审批/拒绝/取消一律不装）。"),
   }),
   output: { schema: { type: "string" }, render: renderText },
   execute: async (args, exec) => {
-    const d = await depsFactory(exec as ExecLike | undefined);
-    const sig = d.ok ? d.value.signals : undefined;
-    if (args.install) return renderPlain("（shadow_toolset 的安装面在 v2 Phase 1 尚未移植；本版不执行任何安装，也不伪造结果。）", sig);
-    return renderPlain("（shadow_toolset 在 v2 Phase 1 尚未移植；本版不探测、不编造命令。用 `need` 的旧行为在 lab 落地前不可用。）", sig);
+    // 依赖工厂也放进 try：宿主服务未就绪时给可见失败，而不是把异常抛给工具调用栈。
+    let deps: ToolsetDeps | undefined;
+    try {
+      deps = toolsetFactory ? toolsetFactory(exec) : { agent: exec?.agent };
+      const r = await runToolset(deps, args);
+      if (!r.ok) {
+        // 非法输入是可见的「拒绝」（错误文本已说明），不算降级；只有内部失败才留能力降级 Signal。
+        if (r.error.code === "INTERNAL") {
+          deps.signals?.note("toolset", r.error.code, r.error.message, "本次工具集结果不可用：这是失败，不是「没有工具」。");
+        }
+        return renderPlain(`> ⚠ shadow_toolset 失败（${r.error.code}）：${r.error.message}`, deps.signals);
+      }
+      deps.signals?.clear("toolset");
+      return renderPlain(r.value, deps.signals);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      deps?.signals?.note("toolset", "INTERNAL", message, "本次工具集结果不可用：这是失败，不是「没有工具」。");
+      return renderPlain(`> ⚠ shadow_toolset 内部错误：${message}`, deps?.signals);
+    }
   },
 });
 
-export const makeCoreTools = (depsFactory: DepsFactory): RegisteredTool[] => [
+export const makeCoreTools = (depsFactory: DepsFactory, toolsetFactory?: ToolsetDepsFactory): RegisteredTool[] => [
   makeReadTool(depsFactory),
   makeRecallTool(depsFactory),
   makeQueryTool(depsFactory),
-  makeToolsetTool(depsFactory),
+  makeToolsetTool(toolsetFactory),
 ];
