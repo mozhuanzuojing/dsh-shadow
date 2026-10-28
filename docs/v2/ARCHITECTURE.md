@@ -107,7 +107,7 @@
 | `_meta.json` | legacy | 否（保留） | v1 元数据；v2 一次性导入 SQLite meta 后只读 |
 | `audit/` | sidecar（append-only） | 否 | 审计流 |
 | `.shadow/.lock` | planned | — | Phase 3 跨进程锁；v2-dev 未实现 |
-| `<YYYY-MM-DD>/` | legacy | 否 | v1 日期树，只读读入并参与召回 |
+| `<YYYY-MM-DD>/` | legacy | 否 | v1 日期树，只读 |
 
 ## 6. 并发模型
 

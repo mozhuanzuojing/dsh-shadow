@@ -60,16 +60,5 @@ if (!partial.ok) throw new Error("load failed");
 assert.equal(partial.value.errors.length, 1);
 assert.equal(partial.value.errors[0]!.code, "PERMISSION");
 
-// v1 旧日期树只读兼容：`.shadow/<YYYY-MM-DD>/*.md` 必须被 loadAtoms 读到
-const legacyFs = new MemoryFs({
-  [`${WS}/.shadow/2020-01-01/2020-01-01--010101-legacy-entry.md`]: atomText({ entry: "src/legacy.ts", date: "2020-01-01" }),
-});
-const legacy = await loadAtoms(legacyFs, WS);
-assert.equal(legacy.ok, true);
-if (!legacy.ok) throw new Error("legacy load failed");
-assert.equal(legacy.value.atoms.length, 1);
-assert.equal(legacy.value.atoms[0]!.rel, ".shadow/2020-01-01/2020-01-01--010101-legacy-entry.md");
-assert.equal(legacy.value.atoms[0]!.date, "2020-01-01");
-
-console.log("✔ atoms：唯一命名、同秒不覆盖、读缺失 NOT_FOUND、写失败显式、部分读失败可见、v1 日期树只读");
+console.log("✔ atoms：唯一命名、同秒不覆盖、读缺失 NOT_FOUND、写失败显式、部分读失败可见");
 
