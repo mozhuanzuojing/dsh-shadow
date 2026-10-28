@@ -29,8 +29,13 @@ class SlowFs extends MemoryFs {
 
 // 2) flush 期间新 push：快照只消费开始时的事件，新事件留到下一次
 {
-  const gate = Promise.withResolvers<void>();
-  const started = Promise.withResolvers<void>();
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => { resolve = r; });
+    return { promise, resolve };
+  };
+  const gate = deferred();
+  const started = deferred();
   let gated = false;
   class GateFs extends MemoryFs {
     override async writeText(p: string, text: string) {
