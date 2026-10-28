@@ -1,0 +1,43 @@
+// @ts-nocheck — vendored v1 lab implementation, adapted via LabHost
+// dsh-shadow —— query/agency.ts：Agency Boundary Kernel seam（v0.35）。
+// 从 query/query.ts 迁出：agency-context（immutable snapshot）/ agency-select（reason=constraint_satisfied）/
+// agency-event（audit + lineage）。Agency ≠ Autonomy：行动能力不得自造目的、不因成功而扩张、不升级为自主。
+// 契约与 query.ts 原实现逐字一致，仅入口改为 runAgency(deps,args,ctx)；返回 undefined 表示非本族 mode。
+import { RECALL_PREFIX } from "../core/util.js";
+import { scrubFinal } from "../security/scrub.js";
+import { renderContext as renderAgencyContext, renderSelection, renderEvent } from "../stance/agency/render.js";
+import { buildAgencyContext, pickAgencySelection, buildAgencyEvent } from "../stance/agency/engine.js";
+import { writeAgencyContext } from "../stance/agency/persistence.js";
+import { unwrittenWarn } from "./degrade.js";
+import type { ShadowQueryDeps } from "./types.js";
+
+export interface AgencyCtx { fs: any; ws: string; flushWarn: string }
+
+const MODES = new Set(["agency-context", "agency-select", "agency-event"]);
+
+/** Returns the rendered body for an agency mode, or undefined if not one of this family. */
+export async function runAgency(deps: ShadowQueryDeps, args: any, ctx: AgencyCtx): Promise<string | undefined> {
+  const mode = String(args?.mode || "");
+  if (!MODES.has(mode)) return undefined;
+  const { fs, ws, flushWarn } = ctx;
+  if (mode === "agency-context") {
+    const c = buildAgencyContext(args);
+    if (!c.ok || !c.ctx) return scrubFinal(RECALL_PREFIX + "[AgencyContext Rejected] " + c.reason + flushWarn);
+    const w = await writeAgencyContext(fs, ws, c.ctx);
+    // B2：写失败必须与成功可区分（旧版 `Promise<void>` + `catch { console.log }`）。
+    const degrade = unwrittenWarn("AgencyContext", w, "`.shadow/agency/<date>/context-*.json` 没有它：上面这段只是**内存中的对象**（Agency 授权事实的不可变快照没留下）。");
+    return scrubFinal(RECALL_PREFIX + renderAgencyContext(c.ctx) + degrade + flushWarn);
+  }
+  if (mode === "agency-select") {
+    const s = pickAgencySelection(args);
+    if (!s.ok || !s.sel) return scrubFinal(RECALL_PREFIX + "[AgencySelection Rejected] " + (s.reject || "") + flushWarn);
+    return scrubFinal(RECALL_PREFIX + renderSelection(s.sel) + flushWarn);
+  }
+  const e = await buildAgencyEvent(fs, ws, args);
+  if (!e.ok || !e.ev) return scrubFinal(RECALL_PREFIX + "[AgencyEvent Rejected] " + e.reason + flushWarn);
+  // B2 续修（v1.22.x）：引擎现在把写侧三态带出来（旧版引擎**不消费** `writeAgencyEvent` 的返回值 ⇒ 写失败不可见）。
+  // 缺字段**不得当成功**（ADR-0049）：成功路径必带 `persist` ⇒ 缺席 = 上游契约被破坏，显式报「未落盘」。
+  const degradeE = unwrittenWarn("AgencyBoundaryEvent", e.persist ?? { ok: false, reason: "生产者未返回 persist" }, "`.shadow/agency/<date>/event-*.json` 没有它：这次行动的审计痕迹（lineage / 约束检查 / 执行结果）没留下。");
+  return scrubFinal(RECALL_PREFIX + renderEvent(e.ev) + degradeE + flushWarn);
+}
+

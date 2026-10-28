@@ -25,11 +25,12 @@ const ctx: any = {
   inject: (_deps: string[], cb: Function) => cb({ get: (k: string) => services[k] }),
 };
 
-const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" } });
+const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" }, lab: { enabled: true } });
 try {
   assert.ok(tools.has("read_shadow"), "read_shadow 应注册");
   assert.ok(tools.has("recall_shadow"), "recall_shadow 应注册");
   assert.ok(tools.has("shadow_query"), "shadow_query 应注册");
+  assert.ok(tools.has("shadow_lab"), "lab.enabled 时 shadow_lab 应注册");
 
   await handlers.get("session/event")!(
     { id: "s1", header: { cwd: ws } },
@@ -57,6 +58,13 @@ try {
 
   const missing = await tools.get("read_shadow").execute({ mode: "definitely-not" }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
   assert.ok(missing.includes("未知 mode"), "未知 mode 必须显式报错");
+
+  const lab = await tools.get("shadow_lab").execute({ mode: "federation", input: { obsClaim: "alpha 可回滚" } }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
+  assert.ok(lab.includes('"ok": true'), lab.slice(0, 160));
+  assert.ok(lab.includes("Federation Packet"), "lab mode 应真实执行");
+
+  const labWriteMissing = await tools.get("shadow_lab").execute({ mode: "observer-config", input: {} }, { agent: { id: "s1", session: { header: { cwd: ws } } } });
+  assert.ok(labWriteMissing.includes("WRITE_REQUIRED"), "写型 mode 缺 write:true 必须拒绝");
 } finally {
   cleanup();
   rmSync(ws, { recursive: true, force: true });

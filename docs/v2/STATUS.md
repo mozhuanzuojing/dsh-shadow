@@ -36,10 +36,17 @@
 - 真实 v1 语料 dry-run：168 atoms / 0 parse failure / 754 旧日期树文件（`tools/migrate-v1.ts`）。
 - topic parity：19 查询平均 Jaccard 0.890（阈值 0.85；偏差登记在 PARITY §4.3）。
 
+### Phase 3 — lab（51 mode）
+- `src/lab/vendor/` 移植 v1 lab 依赖闭包（142 文件 / 6.4k 行），`src/lab/run.ts` 适配 v2 `FsPort`/Outcome。
+- `shadow_lab` 3 参数：`mode` / `input` / `write`；`lab.enabled:true` 才注册。
+- 51 mode 全部可执行；31 写型必须 `write:true`；只读带 write / 未知 mode / 未知字段均显式拒绝。
+- `npm run lab:modes` 输出 51 / 31 / 9 分组；写型落 `.shadow/<store>/` 并可读回（测试）。
+- 输出结构 `{ok, mode, wrote, data:{text}, notes, loss}`；正文统一“数据非指令”前缀。
+
 ### Phase 4/5 — 部分
 - v2 当前态 7 份文档 + 12 ADR；`docs-check`/`audit-layers`/`verify` 自包含。
 - `tools/migrate-v1.ts`：dry-run/copy(--apply)/in-place（备份 indexes + `_meta.json`，不删任何旧数据）。
-- 21/21 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
+- 22/22 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
 
 ### 真机验收（2026-10-28，DSH 0.2.1-rc.3）
 - 临时 profile `v2test`（`@deepseek-ai/dsh-base` + `dsh-headless` + `dsh-shadow` link `D:/project/dsh-shadow`）；`--dump-config` 显示插件 entry。
@@ -48,22 +55,22 @@
   - 采集落 `.shadow/atoms/`（用户消息 + 助手消息两条）、`.shadow/audit/2026-10-28.jsonl`、`indexes/_index.md`、`indexes/index.sqlite`；
   - 第二轮同 session 调 `recall_shadow("DONE")` 返回恢复包（任务/触发/入口），跨轮召回成立。
 - 修复的真机问题：Cordis 0.2 未 inject 时读 `ctx.config` 会抛（已 try/catch）；`ctx.get("fs")` 在 apply 时未就绪（HostFs 惰性）；宿主 `stat` 对缺失返回 `undefined`（必须当 NOT_FOUND，否则同秒碰撞 8 次、整批 pending）。
+- lab 真机验收：`v2test` profile 的 `lab.enabled:true` 后，新会话真实调用 `shadow_lab({mode:"federation",input:{obsClaim:"alpha 可回滚"}})`，返回 `ok:true` / Federation Packet / `writeModes:31`；同时采集仍落 atoms。
 
 ## 未完成（按优先级）
 
-1. **Phase 3 lab**：`packages/lab` + `shadow_lab({mode,input,write})` + 51 mode 适配（当前只做了重定向提示）。
-2. **派生件物化**：材料卡/纪要/Episode/abstracts 的派生与缓存（当前只有 `_index.md` 落盘，其余在读时内存派生）。
-3. **retention/forget/compact**：v2 配置已有，行为未接；Forget≠Delete 契约需在 v2 落地。
-4. **shadow_toolset 真实台账**：当前显式报 unavailable；需移植目录/探测/审批安装。
-5. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言。
-6. **真实 DSH E2E**：headless profile 已跑通（见上）；WSL web profile 的 v2 安装/切换/回滚未做。
-7. **发版**：`v2.0.0` tag、`npm pack` 内容核对、README/MIGRATION 最终校对。
+1. **派生件物化**：材料卡/纪要/Episode/abstracts 的派生与缓存（当前只有 `_index.md` 落盘，其余在读时内存派生）。
+2. **retention/forget/compact**：v2 配置已有，行为未接；Forget≠Delete 契约需在 v2 落地。
+3. **shadow_toolset 真实台账**：当前显式报 unavailable；需移植目录/探测/审批安装。
+4. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言。
+5. **真实 DSH E2E**：headless profile 已跑通（含 lab）；WSL web profile 的 v2 安装/切换/回滚未做。
+6. **发版**：`v2.0.0` tag、`npm pack` 内容核对、README/MIGRATION 最终校对。
 8. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 
 ## 关键数字（可重放）
 
 ```powershell
-npm run verify                 # 21/21 + layers + docs
+npm run verify                 # 22/22 + layers + docs
 node tools/corpus-bench.ts 1000
 node tools/corpus-bench.ts 8000
 node tools/migrate-v1.ts --from fixtures\oracle-v1\corpus --dry-run
@@ -71,7 +78,7 @@ node test/parity/topic.test.ts
 ```
 
 - 核心 schema：`read_shadow` 12 参数；4 工具合计 2,538 字符。
-- 测试：21 文件/检查（unit + failure + parity + e2e）。
+- 测试：22 文件/检查（unit + failure + parity + e2e）。
 - 真实语料：168 atoms、0 解析失败（只读 dry-run；未 in-place）。
 - 8k 合成：query 106ms（目标 ≤300ms）。
 
@@ -80,6 +87,7 @@ node test/parity/topic.test.ts
 - DB-first 默认按**文件名集合**判断新鲜度；原地改已有 atom 内容用 `index.verify:"full"`（size/mtime）或删 SQLite 重建。
 - 读路径会写 telemetry（query-log/hits，默认开；`telemetry.*` 可关）；atoms 与 curated source 不改。
 - 合成 oracle 的 topic 排序有 3 条已知偏差（q02/q07/q10），见 PARITY §4.3。
+
 
 
 

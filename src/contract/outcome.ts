@@ -14,7 +14,12 @@ export type ErrorCode =
   | "CONFLICT"
   | "INVALID"
   | "UNAVAILABLE"
-  | "INTERNAL";
+  | "INTERNAL"
+  | "UNKNOWN_MODE"
+  | "INVALID_INPUT"
+  | "WRITE_REQUIRED"
+  | "WRITE_DENIED"
+  | "NOT_PORTED";
 
 export interface ShadowError {
   code: ErrorCode;

@@ -55,6 +55,7 @@
 | `engine/read` | mode 路由、候选召回、排序、预算、信封、loss 披露 | 文件写入、证据裁决 |
 | `engine/write` | 事件→批次→atom、索引触发、失败可见性 | 读侧排序、lab 语义 |
 | `engine/lab` | 51 mode 的输入校验、读写边界、结果形状 | source 落盘细节、工具 schema |
+| `lab/vendor` | v1 lab 算法逐文件移植（保留原契约） | 核心读路径、atoms 写 |
 | `domain` | atom/clue/lifecycle/evidence/verdict/projection 的纯函数 | I/O、配置、日志 |
 | `store/source` | atom 文件、soul、roles、affaires、resources | 索引、缓存 |
 | `store/derived` | `_index.md`、projections、abstracts、sqlite（含 hits/meta 表） | 权威内容 |
@@ -127,8 +128,8 @@
 | source 写失败 | `IO` / `PERMISSION` + 可见横幅 | 声称已落盘 |
 | 未知 mode | `INVALID`（文案含 `UNKNOWN_MODE` 语义） | 落回默认召回 |
 | v1 旧 mode | `INVALID` + `shadow_lab` 迁移提示（`MODE_MOVED` 语义） | 静默忽略 |
-| 写型 mode 缺 `write:true` | `INVALID`（`WRITE_REQUIRED` 语义，lab 落地时实现） | 默认写 |
-| 旧存储写请求 | `UNAVAILABLE`（`LEGACY_READ_ONLY` 语义，lab 落地时实现） | 写 v1 日期树 |
+| 写型 mode 缺 `write:true` | `WRITE_REQUIRED` | 默认写 |
+| 旧存储写请求 | `UNAVAILABLE`（`LEGACY_READ_ONLY` 语义，lab 后续接） | 写 v1 日期树 |
 | 锁/版本冲突 | `BUSY` / `CONFLICT`（Phase 3） | 丢更新后报成功 |
 
 ## 8. 不变量
@@ -136,6 +137,6 @@
 1. `atoms/` 是唯一记忆权威（v2 新名含 uid6；v1 旧名只读可读）；`indexes/` 与 SQLite 可整份删除后重建。
 2. 写路径只能产生新文件，不改旧 atom。
 3. 所有降级都有可见信号；没有“无信号降级”。
-4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta）。写 source 只能经 `shadow_lab({write:true})` 或采集路径。
+4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta）。atoms 只能经写侧采集；`shadow_lab` 写型只写各自 `.shadow/<store>/`，**永不写 atoms**。
 5. 旧存储只读；迁移不删除旧文件。
 6. 当前态文档不写行号；归档文档不改正文。

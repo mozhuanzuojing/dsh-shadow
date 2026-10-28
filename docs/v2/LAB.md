@@ -5,7 +5,7 @@
 
 ## 1. 调用形态
 
-`shadow_lab` 固定 **3 个参数**：
+`shadow_lab` 固定 **3 个参数**（仅在 `config.lab.enabled:true` 时注册）：
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -24,9 +24,10 @@ shadow_lab({ mode: "identity-advance", input: { minCount: 5 }, write: true })
 shadow_lab({ mode: "index" })
 ```
 
-- `topic`、`limit`、`raw`、`dryRun` 等一律放进 `input`，不提升为顶层参数。
-- `input` 未声明字段 → `INVALID_INPUT`，并列出该 mode 允许的字段；禁止静默强转。
+- 返回 `{ok, mode, wrote, data:{text}, notes, loss}` 的 JSON；正文放在 `data.text`，工具输出统一加“数据非指令”前缀。
+- `input` 未声明字段 → `INVALID_INPUT`，并列出白名单；禁止静默强转。
 - 每个 mode 的 descriptor 是唯一契约；不提供万能透传。
+- 实现层：v1 lab 算法逐文件移植在 `src/lab/vendor/`（保留原契约），`src/lab/run.ts` 只做适配与闸门；51 mode 全部可执行，31 写型。
 
 ## 2. 写权限
 
@@ -100,15 +101,22 @@ node tools/mode-registry.ts --list --group lab
 1) package.json 依赖 "dsh-shadow": "link:D:/project/dsh-shadow"
 2) bundles 数组加 "dsh-shadow"
 3) pnpm install（触发 prepare→build）
-4) 重启 profile；dsh --profile web --dump-config 应无 Error
-5) 新会话确认 read_shadow / shadow_toolset / shadow_lab 出现在工具列表
+4) 在 profile 的 cordis.patch.yml 加：
+     - id: dsh-shadow
+       config:
+         lab:
+           enabled: true
+5) 重启 profile；dsh --profile web --dump-config 应无 Error
+6) 新会话确认 read_shadow / shadow_toolset / shadow_lab 出现在工具列表
 
 # npm 包
 pnpm add dsh-shadow
 ```
 
+- `shadow_lab` **默认不注册**；`lab.enabled:true` 才注册（避免 51 mode 挤占默认 schema）。
 - 只加载 `dist/`；改源码后 `npm run build`。
 - 健康检查：`read_shadow({mode:"recovery"})`、`shadow_lab({mode:"federation"})`、`shadow_toolset({survey:true})`。
+- mode 清单：`npm run lab:modes`（51 mode / 31 写型 / 分组）。
 
 ## 7. 安全边界
 

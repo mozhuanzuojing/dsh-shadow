@@ -19,7 +19,7 @@
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `shadow_toolset` | 4 | 工具集台账（v2 Phase 1 显式 unavailable） |
-| `shadow_lab`（可选） | 3 | 51 个研究 mode，独立包，默认不注册 |
+| `shadow_lab`（可选） | 3 | 51 个研究 mode；`lab.enabled:true` 时注册，写型需 `write:true` |
 
 核心 mode：`recovery` · `query` · `episode` · `decision` · `task` · `context` · `knowledge` · `query-log` · `shadow-report` · `shadow-manifest`。
 

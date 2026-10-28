@@ -16,6 +16,7 @@ import type { FsPort } from "./store/fs.js";
 import { HostFs } from "./store/host-fs.js";
 import { IndexCache } from "./store/index-cache.js";
 import { makeCoreTools, type DepsFactory } from "./surface/tools.js";
+import { makeLabTools } from "./lab/tool.js";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
 
 export const name = "dsh-shadow";
@@ -168,6 +169,9 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     const service = toolsCtx.get("tools");
     if (!service) return;
     for (const tool of makeCoreTools(depsFactory)) service.register(tool);
+    if (config.lab.enabled) {
+      for (const tool of makeLabTools(depsFactory)) service.register(tool);
+    }
   });
 
   ctx.inject(["systemPrompt"], (promptCtx: CtxLike) => {
