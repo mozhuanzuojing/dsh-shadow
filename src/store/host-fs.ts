@@ -9,11 +9,13 @@ import { err, ok, type Outcome } from "../contract/outcome.js";
 import type { FsEntry, FsPort, FsStat } from "./fs.js";
 
 type AnyRaw = Record<string, any>;
+type RawSource = AnyRaw | (() => AnyRaw | undefined);
 
 const hostMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 const mapHostError = <T>(e: unknown, p: string): Outcome<T> => {
   const msg = hostMessage(e);
+  if (/UNAVAILABLE:\s*fs 服务未就绪/.test(msg)) return err("UNAVAILABLE", "fs 服务未就绪", { path: p }, true);
   if (/ENOENT|FS_NOT_FOUND|not found|no such file/i.test(msg)) return err("NOT_FOUND", `目标不存在：${p}`, { path: p });
   if (/EACCES|EPERM|denied|permission/i.test(msg)) return err("PERMISSION", `无权访问：${p}`, { path: p });
   if (/BUSY|locked|stale version|CONFLICT/i.test(msg)) return err("BUSY", `文件忙/版本冲突：${p}`, { path: p }, true);
@@ -28,18 +30,29 @@ const unwrap = <T>(x: any, p: string): Outcome<T> => {
 };
 
 export class HostFs implements FsPort {
-  readonly atomicRename: boolean;
   constructor(
-    private readonly raw: AnyRaw,
+    private readonly rawSource: RawSource,
     private readonly policy?: any,
     private readonly cwd?: string,
-  ) {
-    this.atomicRename = typeof raw.rename === "function";
+  ) {}
+
+  private rawOrNull(): AnyRaw | undefined {
+    return typeof this.rawSource === "function" ? this.rawSource() : this.rawSource;
+  }
+
+  private get raw(): AnyRaw {
+    const r = this.rawOrNull();
+    if (!r) throw new Error("UNAVAILABLE: fs 服务未就绪");
+    return r;
+  }
+
+  get atomicRename(): boolean {
+    return typeof this.rawOrNull()?.rename === "function";
   }
 
   /** 同一底层 fs，换 session 策略（同一会话/agent 的写围栏）。 */
   withPolicy(policy: any, cwd?: string): HostFs {
-    return new HostFs(this.raw, policy, cwd ?? this.cwd);
+    return new HostFs(this.rawSource, policy, cwd ?? this.cwd);
   }
 
   private async target(p: string): Promise<any> {
@@ -122,9 +135,11 @@ export class HostFs implements FsPort {
       const t = await this.target(p);
       if (typeof this.raw.stat === "function") {
         const r = await this.raw.stat(t);
+        if (r === undefined || r === null) return err("NOT_FOUND", `目标不存在：${p}`, { path: p });
         const u = unwrap<any>(r, p);
         if (!u.ok) return u;
         const s = u.value ?? {};
+        if (s === undefined || s === null) return err("NOT_FOUND", `目标不存在：${p}`, { path: p });
         return ok({ size: Number(s.size ?? 0), mtimeMs: Number(s.mtimeMs ?? s.mtime ?? 0), version: s.version ? String(s.version) : undefined });
       }
       // 无 stat：从父目录 entry 取 size/version（DSH listDir 的 entry 带这两项）
@@ -179,3 +194,4 @@ export class HostFs implements FsPort {
     }
   }
 }
+

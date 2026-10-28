@@ -39,7 +39,15 @@
 ### Phase 4/5 — 部分
 - v2 当前态 7 份文档 + 12 ADR；`docs-check`/`audit-layers`/`verify` 自包含。
 - `tools/migrate-v1.ts`：dry-run/copy(--apply)/in-place（备份 indexes + `_meta.json`，不删任何旧数据）。
-- 20/20 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
+- 21/21 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
+
+### 真机验收（2026-10-28，DSH 0.2.1-rc.3）
+- 临时 profile `v2test`（`@deepseek-ai/dsh-base` + `dsh-headless` + `dsh-shadow` link `D:/project/dsh-shadow`）；`--dump-config` 显示插件 entry。
+- 临时工作区 `D:\project\local-workbench\_work\v2-e2e-ws`；新开 headless 会话（`session-8cbfca7f-…`）：
+  - `read_shadow()` 被真实调用，返回索引；
+  - 采集落 `.shadow/atoms/`（用户消息 + 助手消息两条）、`.shadow/audit/2026-10-28.jsonl`、`indexes/_index.md`、`indexes/index.sqlite`；
+  - 第二轮同 session 调 `recall_shadow("DONE")` 返回恢复包（任务/触发/入口），跨轮召回成立。
+- 修复的真机问题：Cordis 0.2 未 inject 时读 `ctx.config` 会抛（已 try/catch）；`ctx.get("fs")` 在 apply 时未就绪（HostFs 惰性）；宿主 `stat` 对缺失返回 `undefined`（必须当 NOT_FOUND，否则同秒碰撞 8 次、整批 pending）。
 
 ## 未完成（按优先级）
 
@@ -48,14 +56,14 @@
 3. **retention/forget/compact**：v2 配置已有，行为未接；Forget≠Delete 契约需在 v2 落地。
 4. **shadow_toolset 真实台账**：当前显式报 unavailable；需移植目录/探测/审批安装。
 5. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言。
-6. **真实 DSH E2E**：只在 fake ctx + 真实临时目录跑过；WSL web profile 的 v2 安装/切换/回滚未做。
+6. **真实 DSH E2E**：headless profile 已跑通（见上）；WSL web profile 的 v2 安装/切换/回滚未做。
 7. **发版**：`v2.0.0` tag、`npm pack` 内容核对、README/MIGRATION 最终校对。
 8. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 
 ## 关键数字（可重放）
 
 ```powershell
-npm run verify                 # 20/20 + layers + docs
+npm run verify                 # 21/21 + layers + docs
 node tools/corpus-bench.ts 1000
 node tools/corpus-bench.ts 8000
 node tools/migrate-v1.ts --from fixtures\oracle-v1\corpus --dry-run
@@ -63,7 +71,7 @@ node test/parity/topic.test.ts
 ```
 
 - 核心 schema：`read_shadow` 12 参数；4 工具合计 2,538 字符。
-- 测试：20 文件/检查（unit + failure + parity + e2e）。
+- 测试：21 文件/检查（unit + failure + parity + e2e）。
 - 真实语料：168 atoms、0 解析失败（只读 dry-run；未 in-place）。
 - 8k 合成：query 106ms（目标 ≤300ms）。
 
@@ -72,5 +80,6 @@ node test/parity/topic.test.ts
 - DB-first 默认按**文件名集合**判断新鲜度；原地改已有 atom 内容用 `index.verify:"full"`（size/mtime）或删 SQLite 重建。
 - 读路径会写 telemetry（query-log/hits，默认开；`telemetry.*` 可关）；atoms 与 curated source 不改。
 - 合成 oracle 的 topic 排序有 3 条已知偏差（q02/q07/q10），见 PARITY §4.3。
+
 
 

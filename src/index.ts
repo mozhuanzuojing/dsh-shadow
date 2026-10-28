@@ -28,7 +28,16 @@ const absOf = (ws: string, p: string): string =>
 
 export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   const warnings: string[] = [];
-  const raw = rawConfig && Object.keys(rawConfig).length ? rawConfig : (ctx?.config ?? {});
+  const raw = rawConfig && Object.keys(rawConfig).length
+    ? rawConfig
+    : (() => {
+        try {
+          return (ctx?.config ?? {}) as any;
+        } catch {
+          // Cordis 0.2 的守卫：未 inject("config") 时读 ctx.config 会抛；无配置时按空处理。
+          return {};
+        }
+      })();
   const config = normalizeConfig(raw, warnings);
   if (warnings.length) console.warn(`[dsh-shadow] 配置提醒：\n  · ${warnings.join("\n  · ")}`);
 
@@ -39,12 +48,13 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     console.error("[dsh-shadow] 宿主缺少 ctx.on / ctx.inject / ctx.get；插件无法挂载。");
     return () => {};
   }
-  const rawFs = ctx.get("fs");
-  if (!rawFs) {
-    console.error("[dsh-shadow] 宿主缺少 fs 服务；v2 不回退到 node:fs（会绕过 DSH 沙箱）。插件不挂载。");
-    return () => {};
-  }
-  const baseFs = new HostFs(rawFs);
+  const baseFs = new HostFs(() => {
+    try {
+      return ctx.get("fs");
+    } catch {
+      return undefined;
+    }
+  });
   const policyFor = (session: any): any => {
     try {
       const sp = ctx.get("sandboxPolicy");
@@ -93,10 +103,13 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   ctx.on("tools/result", (exec: any) => capture.onToolsResult(exec));
   ctx.on("goal/changed", (payload: any) => capture.onGoalChanged(payload));
   ctx.on("session/event", (session: any, event: any) => capture.onSessionEvent(session, event));
-  ctx.on("agent/turn-stopping", (payload: any) => {
+  ctx.on("agent/turn-stopping", async (payload: any) => {
     const ag = payload?.agent;
     if (ag?.id && ag.session?.header?.cwd) capture.cwdByAgent.set(String(ag.id), String(ag.session.header.cwd));
-    return capture.flush(ag?.id);
+    const r = await capture.flush(ag?.id);
+    // 无 agent.id 的事件落在 __unknown__ 桶：turn-stopping 也要给它一次落盘机会。
+    const u = await capture.flush(undefined);
+    return r.ok ? u : r;
   });
   ctx.on("session/flush", () => capture.flushAll());
 
