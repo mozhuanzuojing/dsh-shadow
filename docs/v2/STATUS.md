@@ -33,7 +33,7 @@
 ### Phase 4/5 — 部分
 - v2 当前态 7 份文档 + 12 ADR；`docs-check`/`audit-layers`/`verify` 自包含。
 - `tools/migrate-v1.ts`：dry-run/copy(--apply)/in-place（备份 indexes + `_meta.json`，不删任何旧数据）。
-- 16/16 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
+- 17/17 测试通过；核心 schema 2,538 字符；`read_shadow` 12 参数。
 
 ## 未完成（按优先级）
 
@@ -57,7 +57,7 @@ node test/parity/topic.test.ts
 ```
 
 - 核心 schema：`read_shadow` 12 参数；4 工具合计 2,538 字符。
-- 测试：16 文件/检查（unit + failure + parity + e2e）。
+- 测试：17 文件/检查（unit + failure + parity + e2e）。
 - 真实语料：168 atoms、0 解析失败（只读 dry-run；未 in-place）。
 - 8k 合成：query 261ms（目标 ≤300ms）。
 
@@ -66,3 +66,4 @@ node test/parity/topic.test.ts
 - DB-first 默认按**文件名集合**判断新鲜度；原地改已有 atom 内容需 `index.verify:"full"`（尚未实现）或删 SQLite 重建。
 - 读路径会写 telemetry（query-log/hits）；atoms 与 curated source 不改。
 - 合成 oracle 的 topic 排序有 3 条已知偏差（q02/q07/q10），见 PARITY §4.3。
+

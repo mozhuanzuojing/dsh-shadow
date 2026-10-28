@@ -45,6 +45,7 @@ export class Capture {
   private pending = new Map<string, Trace[]>();
   private goals = new Map<string, string>();
   private attempts = new Map<string, number>();
+  private seq = 0;
   /** 同一 agent 串行 flush，避免 auto-flush 与 turn-stopping 并发重复写。 */
   private chains = new Map<string, Promise<Outcome<FlushResult>>>();
 
@@ -54,11 +55,11 @@ export class Capture {
     this.deps.signals.note(capability, code, message, effect);
   }
 
-  push(agentId: string | undefined, rec: Omit<Trace, "at" | "date"> & { date?: string }): void {
+  push(agentId: string | undefined, rec: Omit<Trace, "at" | "date" | "seq"> & { date?: string }): void {
     const id = agentId || UNKNOWN;
     if (!agentId) this.note("capture.unattributed", "NO_AGENT", "事件没有可归属的 agent", "已落到 __unknown__ 桶；可能跨会话串线，请检查宿主归属。");
     const arr = this.pending.get(id) ?? [];
-    arr.push({ at: this.deps.clock.stamp(), date: rec.date ?? this.deps.clock.today(), ...rec });
+    arr.push({ at: this.deps.clock.stamp(), seq: ++this.seq, date: rec.date ?? this.deps.clock.today(), ...rec });
     if (arr.length > HARD_CAP) {
       const dropped = arr.splice(0, arr.length - HARD_CAP);
       this.note("capture.pending", "OVERFLOW", `pending 超过硬上限，丢弃最旧 ${dropped.length} 条事件`, "这些事件不再进入 atoms；先修 flush 失败/consent 积压。");
@@ -150,6 +151,7 @@ export class Capture {
     try {
       const arr = [...(this.pending.get(id) ?? [])];
       if (!arr.length) return ok({ written: 0, audit: 0, retained: 0 });
+      const lastSeq = arr[arr.length - 1]!.seq;
       const ws = this.deps.resolveWs(id);
       if (!ws) {
         this.note("capture.scope", "NO_WS", "flush 无法解析工作区", "pending 保留；配置 shadowRoot 或修复 session cwd 后再试。");
@@ -165,7 +167,7 @@ export class Capture {
           this.note("capture.audit", a.error.code, a.error.message, "本批动作没有落盘；pending 保留可重试。");
           return a;
         }
-        this.consume(id, arr.length);
+        this.consume(id, lastSeq);
         this.attempts.delete(id);
         if (consent) this.note("capture.consent", "CONSENT", "capture.consent=true 且本批无显式「记住」", "只写 audit 流，不写 atoms；要落记忆请显式说「记住」。");
         return ok({ written: 0, audit: arr.length, retained: 0 });
@@ -192,7 +194,7 @@ export class Capture {
         this.note("capture.flush", w.error.code, w.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；atoms 未写入。`);
         return w;
       }
-      this.consume(id, arr.length);
+      this.consume(id, lastSeq);
       this.attempts.delete(id);
       this.deps.signals.clear("capture.flush");
       return ok({ written: 1, audit: 0, retained: 0, rel: w.value.rel });
@@ -203,12 +205,12 @@ export class Capture {
     }
   }
 
-  /** 只移除本次已消费的前 n 条；flush 期间新增的事件保留。 */
-  private consume(id: string, n: number): void {
+  /** 只移除 seq ≤ lastSeq 的事件；flush 期间新增/溢出重排都不会误删。 */
+  private consume(id: string, lastSeq: number): void {
     const cur = this.pending.get(id) ?? [];
     if (!cur.length) return;
-    cur.splice(0, Math.min(n, cur.length));
-    if (cur.length) this.pending.set(id, cur);
+    const rest = cur.filter((t) => t.seq > lastSeq);
+    if (rest.length) this.pending.set(id, rest);
     else this.pending.delete(id);
   }
 
