@@ -18,6 +18,7 @@ export interface NormalizedConfig {
   telemetry: Required<NonNullable<ShadowConfig["telemetry"]>>;
   toolset: Required<NonNullable<ShadowConfig["toolset"]>>;
   lab: Required<NonNullable<ShadowConfig["lab"]>>;
+  autoRecall: Required<NonNullable<ShadowConfig["autoRecall"]>>;
   warnings: string[];
 }
 
@@ -35,7 +36,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
   const c = raw ?? {};
   const known = new Set([
     "shadowRoot", "projectRoot", "capture", "recall", "retention", "forget",
-    "compact", "index", "telemetry", "toolset", "lab",
+    "compact", "index", "telemetry", "toolset", "lab", "autoRecall",
   ]);
   for (const k of Object.keys(c as Record<string, unknown>)) {
     if (!known.has(k)) warnings.push(`未知配置键：${k}（v2 只认 ${[...known].join(" / ")}）`);
@@ -82,6 +83,10 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
     },
     toolset: { enabled: c.toolset?.enabled !== false },
     lab: { enabled: c.lab?.enabled === true },
+    autoRecall: {
+      enabled: c.autoRecall?.enabled === true,
+      limit: Math.max(1, Math.min(5, numOr(c.autoRecall?.limit, 2))),
+    },
     warnings,
   };
 };

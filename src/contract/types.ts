@@ -183,4 +183,5 @@ export interface ShadowConfig {
   telemetry?: { queryLog?: boolean; hits?: boolean };
   toolset?: { enabled?: boolean };
   lab?: { enabled?: boolean };
+  autoRecall?: { enabled?: boolean; limit?: number };
 }
