@@ -19,6 +19,9 @@ export const CODE_EXTS = new Set<string>([
 export const SKIP_DIRS = new Set<string>([
   "node_modules", "dist", "build", "out", "target", "vendor", "coverage", "__pycache__",
   ".venv", "venv", "env", ".next", ".nuxt", ".cache", ".turbo", ".gradle", ".idea", "bin", "obj",
+  // 常见「非源码/生成/第三方/打包产物」目录（验收时发现 asar 解包副本会严重污染结果）
+  "asar", "third_party", "third-party", "thirdparty", "external", "generated", "gen", "__generated__",
+  "storybook-static", "bower_components", "jspm_packages",
 ]);
 
 export const isCodeFile = (name: string): boolean => {

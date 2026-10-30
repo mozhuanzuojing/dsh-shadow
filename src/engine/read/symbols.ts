@@ -154,7 +154,17 @@ export const searchSymbols = async (
   const maxTotalBytes = Math.max(50_000, Number(opts.maxTotalBytes ?? 4_000_000) || 4_000_000);
   const empty: SymbolSearchResult = { hits: [], scannedFiles: 0, parsedFiles: 0, truncated: false };
   if (!q) return empty;
-  const needles = Array.from(new Set((q.toLowerCase().split(/[^a-z0-9_]+/).filter((t) => t.length >= 2) || []).concat(q.toLowerCase())));
+  // 符号检索的 needle：ASCII 词要求 ≥3 字符（避免 "go" 命中 "gone"），中文 ≥2 字符。
+  const tokens = q.split(/[^A-Za-z0-9_\u4e00-\u9fff]+/).filter(Boolean);
+  const needles = Array.from(
+    new Set(
+      tokens
+        .filter((t) => (/[\u4e00-\u9fff]/.test(t) ? t.length >= 2 : t.length >= 3))
+        .map((t) => t.toLowerCase())
+        .concat(q.length >= 3 && !/\s/.test(q) ? [q.toLowerCase()] : []),
+    ),
+  );
+  if (!needles.length) return empty;
 
   const hits: SymbolHit[] = [];
   const stats = { scannedFiles: 0, parsedFiles: 0, truncated: false };
