@@ -8,6 +8,7 @@ import { runRead } from "../engine/read/route.js";
 import type { ReadDeps, ReadRequest } from "../engine/read/types.js";
 import { runToolset } from "../engine/toolset/run.js";
 import { searchCode } from "../engine/read/code-search.js";
+import { searchCodeIndexed } from "../engine/read/code-index.js";
 import { searchSymbols } from "../engine/read/symbols.js";
 import { loadIgnore } from "../engine/read/ignore.js";
 import { makeHttpEmbedder, searchEmbedding } from "../engine/read/embedding.js";
@@ -189,7 +190,17 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       const query = String(args.query ?? "").trim();
       const limit = typeof args.limit === "number" ? args.limit : undefined;
       const ignore = await loadIgnore(d.value.fs, d.value.ws, (d.value.config as any)?.codeSearch);
-      const r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
+      const idx = (d.value.config as any)?.codeSearch?.index;
+      let r: { text: string };
+      if (idx?.enabled !== false) {
+        try {
+          r = await searchCodeIndexed({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore, maxChunks: idx?.maxChunks, maxBytes: idx?.maxBytes });
+        } catch {
+          r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
+        }
+      } else {
+        r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
+      }
       // 阶段 2：tree-sitter 符号（定义/入口）。不可用时显式披露，不影响 BM25 结果。
       let extra = "";
       try {

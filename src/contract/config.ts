@@ -93,6 +93,11 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
         ? c.codeSearch!.exclude!.filter((x): x is string => typeof x === "string" && !!x.trim())
         : [],
       useGitignore: c.codeSearch?.useGitignore !== false,
+      index: {
+        enabled: c.codeSearch?.index?.enabled !== false,
+        maxChunks: Math.max(1, Math.min(200000, numOr(c.codeSearch?.index?.maxChunks, 20000))),
+        maxBytes: Math.max(100_000, Math.min(200_000_000, numOr(c.codeSearch?.index?.maxBytes, 16_000_000))),
+      },
       embedding: {
         enabled: c.codeSearch?.embedding?.enabled === true,
         baseURL: typeof c.codeSearch?.embedding?.baseURL === "string" && c.codeSearch.embedding.baseURL.trim() ? c.codeSearch.embedding.baseURL.trim() : "http://127.0.0.1:3425/v1",

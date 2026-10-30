@@ -2,6 +2,13 @@
 
 本文件覆盖每个发版；历史在 git tag（ADR-0012）。迁移步骤见 [docs/v2/MIGRATION.md](./docs/v2/MIGRATION.md)，当前实现状态见 [docs/v2/STATUS.md](./docs/v2/STATUS.md)。
 
+## [Unreleased]
+
+### 新增
+
+- **Cursor 式代码索引**（ADR-0021）：`search_code` 默认改用持久索引 `.shadow/indexes/code/search-index.json`——tree-sitter **语法块**（function/class/interface…，超 1500 字符递归拆）、**增量刷新**（size+mtime 未变不读内容）、**trigram 候选裁剪** + BM25；索引不可写/异常时回退实时扫描。新增 `codeSearch.index` 配置（默认启用，`maxChunks=20000` / `maxBytes=16MB`）。
+- 测试：`test/unit/trigram.test.ts`、`ast-chunk.test.ts`、`code-index.test.ts`（无变化 0 重读 / 改一文件只重读 1 个 / 候选裁剪）。
+
 ## [2.2.0] — 2026-10-30
 
 记忆与代码检索版：相似任务召回、项目事实、技能卡物化、自动召回，以及 `search_code`（BM25 + tree-sitter 符号 + 可选 embedding）。

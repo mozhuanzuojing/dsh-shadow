@@ -187,6 +187,7 @@ export interface ShadowConfig {
   codeSearch?: {
     exclude?: string[];
     useGitignore?: boolean;
+    index?: { enabled?: boolean; maxChunks?: number; maxBytes?: number };
     embedding?: { enabled?: boolean; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
   };
 }
