@@ -12,6 +12,7 @@ import { tokenize } from "../../domain/text.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
 import { computeForgetting, renderForgetNotice } from "../../domain/lifecycle.js";
 import { loadAtoms } from "../../store/atoms.js";
+import { archiveDays } from "../../store/archive.js";
 import { budgetText, envelope } from "./render.js";
 import {
   contextView, decisionView, episodeView, indexView, knowledgeView, manifestView,
@@ -124,6 +125,21 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   }
 
   const mode = modeRes.value;
+  // 冷区日切：只在“无参 index 读”触发；只归档、不删热文件（删除是后续独立步骤）。
+  // 只读沙箱没有 SQLite（deps.index 为空），不做写盘。
+  if (mode === "index" && deps.index) {
+    const ar = await archiveDays(deps.fs, deps.ws, atoms, deps.clock.today());
+    if (ar.errors.length) {
+      deps.signals.note(
+        "archive",
+        "PARTIAL",
+        `按日归档有 ${ar.errors.length} 项失败（首个：${ar.errors[0]}）`,
+        "热文件未删除；下次无参读会重试；已成功归档的日期不受影响。",
+      );
+    } else {
+      deps.signals.clear("archive");
+    }
+  }
   const meta = metaOf(deps, atoms);
   // Forget≠Delete：只把遗忘项移出活跃集，文件不删（domain/lifecycle.ts）。
   const forgetting = computeForgetting(atoms, meta, deps.config.forget, new Date(`${deps.clock.today()}T00:00:00`));

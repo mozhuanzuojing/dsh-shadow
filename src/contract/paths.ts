@@ -16,6 +16,10 @@ export const EPISODES_DIR = `${INDEXES_DIR}/episodes`;
 /** 每 atom 的 abstract（派生、可重建；v2 新增物化目标）。 */
 export const ABSTRACTS_DIR = `${INDEXES_DIR}/abstracts`;
 export const AUDIT_DIR = `${SHADOW_DIR}/audit`;
+/** 冷区：按日归档的完整原文（JSONL）+ 人读摘要（Markdown）；由日切作业写入。 */
+export const ARCHIVE_DIR = `${SHADOW_DIR}/archive`;
+export const ARCHIVE_MANIFEST = `${ARCHIVE_DIR}/_index.json`;
+export const ARCHIVE_LOCK = `${SHADOW_DIR}/.archive.lock`;
 export const SOUL_DIR = `${SHADOW_DIR}/soul`;
 export const SOUL_FILE = `${SOUL_DIR}/soul.json`;
 export const TASTE_FILE = `${SHADOW_DIR}/taste/taste.json`;

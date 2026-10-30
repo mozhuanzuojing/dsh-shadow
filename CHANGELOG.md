@@ -6,10 +6,11 @@
 
 （无）
 
-## [2.3.0] — 2026-10-30
+## [2.4.0] — 2026-10-30
 
 ### 新增
 
+- **按日归档（安全版）**：无参 `read_shadow` 把 `date < today` 的 atoms 写成 `.shadow/archive/<date>.jsonl`（完整原文）+ `<date>.md`（人读导航），回读校验行数/uid/`sha256` 后登记 `_index.json`；带 `.shadow/.archive.lock` 互斥，锁占用/校验失败可见且**不删热文件**。`atoms/` 这一版一个文件都不删；删除热文件留作后续独立步骤。
 - **P0 记忆体量治理**（2026-10-30）：
   - **`maxActive` 默认 2000**：活跃集超出后按最旧移出（标 `archived`），**文件不删**（Forget≠Delete）；`minHits=0` 仍表示陈旧类遗忘默认关闭。
   - **派生件 GC**：无参读物化后清理本轮 plan 不再产出的四类派生卡，并把每个 `*.history/` 收敛到最近 2 个版本；v1 遗留 `projections/` 不删。删除量/失败以 Signal 披露。
