@@ -21,6 +21,7 @@ import { buildLessonCards, type LessonCard } from "./domain/lessons.js";
 import { buildAutoRecallHint } from "./domain/auto-recall.js";
 import { loadAtoms } from "./store/atoms.js";
 import { dateOf } from "./contract/time.js";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
 
 export const name = "dsh-shadow";
@@ -53,6 +54,20 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   // 供 systemPrompt.context 每步同步读取（召回本身异步，在 turn-stopping 预刷新）。
   const lastUserBySession = new Map<string, string>();
   const cardsBySession = new Map<string, LessonCard[]>();
+  // 调试探针（仅 DSH_SHADOW_AUTORECALL_DEBUG=1）：写工作区 .shadow/indexes/auto-recall.debug.log，
+  // 用于真机确认 systemPrompt.context 是否被调用、缓存是否命中。默认关闭，不影响行为。
+  const debugLog = (cwd: unknown, line: string): void => {
+    if (process.env.DSH_SHADOW_AUTORECALL_DEBUG !== "1") return;
+    try {
+      const base = String(cwd ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+      if (!base) return;
+      const dir = `${base}/.shadow/indexes`;
+      mkdirSync(dir, { recursive: true });
+      appendFileSync(`${dir}/auto-recall.debug.log`, `${new Date().toISOString()} ${line}\n`);
+    } catch {
+      // 探针自身失败不影响任何行为
+    }
+  };
   const textOfEvent = (event: any): string => {
     const d = event?.data;
     if (typeof d?.text === "string") return d.text;
@@ -137,13 +152,21 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
         const sess = ag?.session;
         if (sess?.id) {
           const d = await depsFactory({ agent: ag } as any);
-          if (d.ok) {
+          if (!d.ok) debugLog(sess?.header?.cwd, `cache-refresh deps-failed ${d.error.code}`);
+          else {
             const loaded = d.value.loadAtoms ? await d.value.loadAtoms() : await loadAtoms(d.value.fs, d.value.ws);
-            if (loaded.ok) cardsBySession.set(String(sess.id), buildLessonCards(loaded.value.atoms));
+            if (!loaded.ok) debugLog(sess?.header?.cwd, `cache-refresh load-failed ${loaded.error.code}`);
+            else {
+              const cards = buildLessonCards(loaded.value.atoms);
+              cardsBySession.set(String(sess.id), cards);
+              debugLog(sess?.header?.cwd, `cache-refreshed session=${String(sess.id)} cards=${cards.length}`);
+            }
           }
+        } else {
+          debugLog(ag?.session?.header?.cwd, "cache-refresh skipped: no session id");
         }
-      } catch {
-        // 自动召回是附加物：刷新失败只是"下次不注入"，不影响主流程，也不留伪成功。
+      } catch (e) {
+        debugLog(ag?.session?.header?.cwd, `cache-refresh error ${e instanceof Error ? e.message : String(e)}`);
       }
     }
     return r.ok ? u : r;
@@ -248,12 +271,18 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       text: (context: any) => {
         try {
           if (!config.autoRecall.enabled) return "";
-          const sid = context?.agent?.session?.id;
+          const sess = context?.agent?.session;
+          const sid = sess?.id;
           if (!sid) return "";
           const cards = cardsBySession.get(String(sid));
           const q = lastUserBySession.get(String(sid)) ?? "";
-          if (!cards || !cards.length || !q) return "";
-          return buildAutoRecallHint(cards, q, dateOf(new Date()), config.autoRecall.limit);
+          if (!cards || !cards.length || !q) {
+            debugLog(sess?.header?.cwd, `text() skipped session=${String(sid)} cards=${cards?.length ?? 0} hasQuery=${!!q}`);
+            return "";
+          }
+          const hint = buildAutoRecallHint(cards, q, dateOf(new Date()), config.autoRecall.limit);
+          debugLog(sess?.header?.cwd, `text() injected session=${String(sid)} cards=${cards.length} hintChars=${hint.length}`);
+          return hint;
         } catch {
           return "";
         }

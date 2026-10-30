@@ -1,6 +1,6 @@
 # ADR-0018: 自动召回（auto-recall）spike 结论与设计
 
-- 状态：**accepted（实现已接线、单测通过；真机 prompt-echo 验证未完成）**
+- 状态：**accepted（实现已接线；真机已验证 context 每步调用 + 缓存命中 + hint 返回）**
 - 日期：2026-10-30
 - 关联：ADR-0016（相似任务召回）、ADR-0006（模式/预算）、`@deepseek-ai/dsh-system-prompt` / `dsh-agent-loop` / `dsh-agent`（下称"宿主源码"）
 - 定位：回答「能不能不靠 agent 主动调工具，把相关记忆自动带到模型上下文里」。
@@ -41,6 +41,10 @@
 ## 实现状态（2026-10-30）
 
 - 已实现：`contract.autoRecall { enabled:false, limit:2 }`（默认关、limit 钳 1..5）；`domain/auto-recall.ts` 纯函数提示；`index.ts` 在 `session/event(user/message)` 记最后一句、在 `agent/turn-stopping` 异步刷新 `LessonCard` 缓存、并注册 `systemPrompt.context({name:"dsh-shadow:auto-recall", order:130, text:(ctx)=>…})`（同步读缓存、异常返回空）。
-- 单测：`test/unit/auto-recall.test.ts`（提示内容/无关不注入/空返回/配置默认关+钳制）；`npm run verify` **40/40**；commit `0aa7f69`。
-- **真机 prompt-echo 未完成（如实）**：在隔离 `v2web`（已开 `autoRecall.enabled`）建会话、先种 JWT 任务、再要求模型原样贴出「dsh-shadow 自动召回」行；模型在 `recall_shadow`+grep 的工具循环里卡住 **3 分 32 秒**无产出，终止主机。**这是模型/网关侧卡住，不构成"注入失败"的证据**，但也**不能据此宣称真机通过**。注入机制本身有源码级证据（`assemble()` 每步求值 + `RuntimeContextProjection` 把 contexts 作为 "Current runtime context…" 附到 messages）与本会话运行时段落实证。
-- 待办：换一个稳定模型或直接抓运行时 messages（而非让模型转述）完成一次真机确认；确认 `context.agent.session.id` 与 `session/event` 的 id 同源。
+- 单测：`test/unit/auto-recall.test.ts`；`npm run verify` **41/41**；commit `0aa7f69`。
+- **真机验证（已通过）**：隔离 `v2web`（已开 `autoRecall.enabled`）+ `DSH_SHADOW_AUTORECALL_DEBUG=1` 的**文件探针**（写 `.shadow/indexes/auto-recall.debug.log`，避开模型转述的不确定性）：
+  - `text()` 在**每步**被调用（同一会话多次）；
+  - 第 1 轮前 `cards=0`（跳过）→ turn-stopping 后 `cache-refreshed session=… cards=1`；
+  - 第 2 轮同会话 `text() injected session=… cards=1 hintChars=140` ⇒ **缓存命中且返回了 140 字符提示**。
+  - 证据：`D:\project\local-workbench\_work\v2web\evidence\auto-recall-20261030\auto-recall.debug.log`。
+- 仍待（效果评估，不是注入验证）：hint 是否真的改善模型行为；以及确认 `context.agent.session.id` 与 `session/event` 的 id 同源（探针显示同会话一致）。
