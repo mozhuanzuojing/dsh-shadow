@@ -15,7 +15,7 @@ import { loadAtoms } from "../../store/atoms.js";
 import { budgetText, envelope } from "./render.js";
 import {
   contextView, decisionView, episodeView, indexView, knowledgeView, manifestView,
-  queryLogView, queryView, recoveryView, reportView, taskView, topicView,
+  queryLogView, queryView, recoveryView, reportView, taskView, topicView, factsView,
 } from "./modes.js";
 import type { ModeOutput, ReadDeps, ReadRequest, ReadResult } from "./types.js";
 
@@ -71,6 +71,9 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
   if (req.judgment) {
     const dl = deriveDecisions(atoms, { topic: String(req.topic ?? ""), entry: String(req.entry ?? "") });
     return `# Judgment\n\n${renderDecisions(dl)}`;
+  }
+  if (req.facts) {
+    return await factsView(deps, atoms, String(req.topic ?? ""));
   }
   if (req.verifyEvidence) {
     const materials = [...new Set(atoms.flatMap((a) => a.materials))].slice(0, 20);
@@ -135,7 +138,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
-    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true);
+    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true);
   if (lensRequested) {
     const lens = await lensText(depsWithMeta, req, activeAtoms);
     out = lens !== undefined

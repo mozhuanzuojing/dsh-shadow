@@ -40,6 +40,7 @@ const toRequest = (args: Record<string, unknown>): ReadRequest => ({
   experience: args.experience === true,
   judgment: args.judgment === true,
   verifyEvidence: args.verifyEvidence === true,
+  facts: args.facts === true,
 });
 
 const executeRead = async (depsFactory: DepsFactory, args: Record<string, unknown>, exec: any): Promise<string> => {
@@ -72,6 +73,7 @@ export const makeReadTool = (depsFactory: DepsFactory): RegisteredTool => ({
     experience: bool("从记忆派生结构化 Experience。"),
     judgment: bool("从决策记忆派生 Judgment。"),
     verifyEvidence: bool("用 Evidence Gateway 验证材料路径；缺件报 unavailable，不静默当 verified。"),
+    facts: bool("读「项目事实」视图：从用户原话抽的「X 是/=/：<路径>」，逐条带 Evidence 状态（✓verified / ✗not_found / ?unavailable）。"),
   }),
   output: { schema: { type: "string" }, render: renderText },
   execute: async (args, exec) => executeRead(depsFactory, args, exec),

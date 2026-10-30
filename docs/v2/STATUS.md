@@ -99,6 +99,12 @@
 - 测试：新增 `test/unit/fuzzy-recall.test.ts`；`npm run verify` 35/35。
 - 仍不解决：跨工作区（`cwd` 决定 `.shadow`）、agent 不主动调用工具、无字面 2-gram 重叠的同义/翻译。
 
+### 项目事实（facts，2026-10-30 · `adr/0015`）
+- 从用户原话抽「X 是/=/：<路径>」→ **派生事实**（不写 atoms、可重建）；`read_shadow()` 索引末尾列出，`read_shadow(topic,{facts:true})` 精确查并逐条经 Evidence Gate 核验（`✓ verified / ✗ not_found / ? unavailable`）。
+- `read_shadow` 参数 **12 → 13**（新增 `facts` 透镜）；core mode 仍 10 · core schema 2898 字符（<6000）。
+- 测试：`test/unit/facts.test.ts`；`npm run verify` 37/37。
+- 边界：只抽**带路径**的事实（精度取舍）；启发式非 LLM，复杂句式会漏；核验只判路径存在性。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。

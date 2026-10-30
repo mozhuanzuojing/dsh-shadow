@@ -12,11 +12,11 @@
 
 ## 1. v2 核心面
 
-### 1.1 工具与参数（21 + lab 3）
+### 1.1 工具与参数（22 + lab 3）
 
 | 工具 | 参数（逐个） | 数量 | 覆盖 |
 |---|---|---:|---|
-| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` | 12 | 10 core mode + 5 core 透镜 |
+| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` | 13 | 10 core mode + 6 core 透镜 |
 | `recall_shadow` | `query` `limit` | 2 | `mode:"recovery"` 包装 |
 | `shadow_query` | `query` `scope` `limit` | 3 | `mode:"query"` 包装 |
 | `shadow_toolset` | `install` `survey` `category` `need` | 4 | 原 `mode:"toolset"` |
@@ -75,11 +75,11 @@
 
 | # | v1 | v2 | 兼容处理 |
 |---|---|---|---|
-| B1 | 133 参数 | 21 核心参数（+ lab 3） | **净减 112 = 移除 113 + 新增 `entry` 1**；发布说明 MUST 逐个列出并指向 `shadow_lab`/`shadow_toolset`；旧参数不再被接受（不是静默忽略） |
+| B1 | 133 参数 | 22 核心参数（+ lab 3） | **净减 111 = 移除 113 + 新增 `entry` 1 + `facts` 1**；发布说明 MUST 逐个列出并指向 `shadow_lab`/`shadow_toolset`；旧参数不再被接受（不是静默忽略） |
 | B2 | 62 mode 全在 `read_shadow` | 10 core + 1 toolset + 51 lab | `10+1+51=62`；`read_shadow({mode:"<lab>"})` MUST 返回显式重定向到 `shadow_lab`，保留一个版本后再改为未知 mode 失败 |
 | B3 | `read_shadow` 承载研究 mode | 不再承载 | 同上；`index` 归 lab；`toolset` 归 `shadow_toolset` |
 | B4 | `_meta.json` 元数据 | SQLite `hits`/`meta` 表（派生） | v2 **不导入** legacy `_meta.json`；v2 hits/meta 从空开始；`.shadow/atoms` 仍是唯一 source；SQLite 可重建 |
-| B5 | 9 个布尔透镜 + `asOf`/`observer`/`kg` 全在 `read_shadow` | 5 个核心透镜（`soul`/`taste`/`experience`/`judgment`/`verifyEvidence`）+ 7 个移入 lab（`identity`/`context`/`project`/`claim` + `asOf`/`observer`/`kg`） | 7 个参数移出 `read_shadow`，经 `shadow_lab.input` 表达；lab 的 51 mode 计数不变 |
+| B5 | 9 个布尔透镜 + `asOf`/`observer`/`kg` 全在 `read_shadow` | 6 个核心透镜（`soul`/`taste`/`experience`/`judgment`/`verifyEvidence`/`facts`）+ 7 个移入 lab（`identity`/`context`/`project`/`claim` + `asOf`/`observer`/`kg`） | 7 个参数移出 `read_shadow`，经 `shadow_lab.input` 表达；lab 的 51 mode 计数不变 |
 
 ## 4. parity 验收
 

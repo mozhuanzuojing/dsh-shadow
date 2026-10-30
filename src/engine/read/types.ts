@@ -43,6 +43,8 @@ export interface ReadRequest {
   experience?: boolean;
   judgment?: boolean;
   verifyEvidence?: boolean;
+  /** 读「项目事实」视图（从用户原话抽取的可核验 X=路径，带 Evidence 状态）。 */
+  facts?: boolean;
 }
 
 export interface ModeOutput {

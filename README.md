@@ -15,7 +15,7 @@
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
-| `read_shadow` | 12 | 10 个核心 mode + 5 个核心透镜 |
+| `read_shadow` | 13 | 10 个核心 mode + 6 个核心透镜（含 `facts`） |
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `shadow_toolset` | 4 | 真实能力台账：survey/category/need 只读探测；install 需宿主 `allowed-once` 审批 |
@@ -60,6 +60,7 @@ npm install; npm run build; npm pack      # → dsh-shadow-2.0.0.tgz
 - 派生件只在**无参 `read_shadow`** 时物化（`indexes/{materials,affaires,episodes,abstracts}`），无 GC；删除 `indexes/` 可整份重建。
 - lab 与 core **同包**（`src/lab/vendor/`）；ADR-0012 的独立包 `dsh-shadow-lab` 未拆（设计见 [ADR-0013](./docs/adr/0013-lab-package-split.md)）。
 - **旧 v1 存储不做支持**：运行时只读 `.shadow/atoms/`，日期树与 `_meta.json` 不读不导入。
+- **项目事实只抽「带路径」的**：从用户原话抽 `X 是/=/：<路径>`，逐条可经 Evidence Gate 核验；启发式非 LLM，复杂句式会漏（[ADR-0015](./docs/adr/0015-project-facts-evidence.md)）。
 - **宽松召回是字面近似**：严格命中零结果时用 CJK 2-gram / BM25 兜底并标注「宽松匹配（非语义）」；同义改写无字面重叠、翻译、跨工作区仍可能不中（[ADR-0014](./docs/adr/0014-cjk-bigram-fuzzy-recall.md)）。
 
 ## 明确不做
