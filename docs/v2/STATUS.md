@@ -124,7 +124,7 @@
 3. **真实 DSH E2E**：headless / 隔离 `v2web` 已跑通（含 lab、含卸载/恢复回滚）；v2.1.0 的 **toolset 只读探测 + 派生件已真机复测**（2026-10-30，见上）；**仍未真机验**：`shadow_toolset` install 真执行、forget 陈旧类、WSL 远端；日常 `desktop` profile 已写入但**需重启 Electron** 生效。
 4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
 5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
-6. **自动召回 auto-recall**（`adr/0018`，proposal）：spike 已确认宿主 `systemPrompt.context` 每步注入、`context.agent` 可达；建议"缓存式同步注入 + 默认关"，**实现未接线、需真机验证**。
+6. **自动召回 auto-recall**（`adr/0018`）：**实现已接线**（`autoRecall` 默认关；`session/event` 记最后一句 + `turn-stopping` 缓存任务卡 + `systemPrompt.context` 每步注入极小提示）；单测 + `verify` 40/40。**真机 prompt-echo 未完成**（隔离 v2web 里模型卡在工具循环 3.5 分钟，属环境/模型问题，非注入失败）。
 7. **代码检索**（`adr/0019`，proposal）：先做无依赖 BM25 代码索引，再 tree-sitter 符号图、可选 embedding；依赖/预算待定。
 
 ## 关键数字（可重放）
