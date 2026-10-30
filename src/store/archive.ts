@@ -22,6 +22,7 @@ import {
 import { err, ok, type Outcome } from "../contract/outcome.js";
 import type { ParsedAtom } from "../contract/types.js";
 import type { FsPort } from "./fs.js";
+import { loadAtoms, type LoadAtomsResult } from "./atoms.js";
 
 export interface ArchiveDayRecord {
   date: string;
@@ -36,6 +37,8 @@ export interface ArchiveResult {
   /** 已存在且 manifest 命中，未重写。 */
   skipped: string[];
   errors: string[];
+  /** 删除的热文件数（`deleteHot` 时）。 */
+  deleted: number;
 }
 
 export interface ArchiveOptions {
@@ -43,11 +46,23 @@ export interface ArchiveOptions {
   now?: number;
   /** 锁超过这么久没有更新就视为陈旧（默认 10 分钟）。 */
   staleLockMs?: number;
+  /** 归档并登记成功后才删除热文件；默认 false（安全版）。 */
+  deleteHot?: boolean;
+}
+
+interface ManifestDay {
+  count: number;
+  sha256: string;
+  jsonl: string;
+  md: string;
+  archivedAt: string;
+  /** 该日包含的 atom rel；用于删热文件后判断 DB 应该有哪些行。 */
+  rels?: string[];
 }
 
 interface Manifest {
   version: 1;
-  days: Record<string, { count: number; sha256: string; jsonl: string; md: string; archivedAt: string }>;
+  days: Record<string, ManifestDay>;
 }
 
 const norm = (p: string): string => String(p).replace(/\\/g, "/").replace(/\/+$/, "");
@@ -113,6 +128,65 @@ const readManifest = async (fs: FsPort, ws: string): Promise<{ manifest: Manifes
   return { manifest: parseManifest(r.ok ? r.value : undefined), exists: r.ok };
 };
 
+/** 归档目录下已有的日期（按 `<date>.jsonl` 文件名发现；manifest 丢失也能重建）。 */
+export const listArchiveDates = async (fs: FsPort, ws: string): Promise<string[]> => {
+  const r = await fs.listDir(abs(ws, ARCHIVE_DIR));
+  if (!r.ok) return [];
+  return r.value
+    .filter((e) => e.type === "file" && /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(e.name))
+    .map((e) => e.name.slice(0, 10))
+    .sort();
+};
+
+export interface ArchivedIndex {
+  dates: string[];
+  /** 已归档 atom 的 rel 集合（DB 应有这些行；热文件未必存在）。 */
+  rels: Set<string>;
+}
+
+/**
+ * 读归档 manifest/JSONL 的轻量索引：给 `IndexCache` 判断 DB 是否仍覆盖全部记忆。
+ * 坏 JSONL 明确返回 CORRUPT，不静默丢历史。
+ */
+export const archivedIndex = async (fs: FsPort, ws: string): Promise<Outcome<ArchivedIndex>> => {
+  const { manifest } = await readManifest(fs, ws);
+  const dates = await listArchiveDates(fs, ws);
+  const allDates = [...new Set([...Object.keys(manifest.days), ...dates])].sort();
+  const rels = new Set<string>();
+  for (const date of allDates) {
+    const entry = manifest.days[date];
+    if (entry?.rels && entry.rels.length) {
+      for (const rel of entry.rels) rels.add(rel);
+      continue;
+    }
+    const atoms = await readArchivedAtoms(fs, ws, date);
+    if (!atoms.ok) {
+      if (atoms.error.code === "NOT_FOUND" && !entry) continue;
+      return atoms;
+    }
+    for (const a of atoms.value) rels.add(a.rel);
+  }
+  return ok({ dates: allDates, rels });
+};
+
+/**
+ * 从「热 atoms + 全部归档日」重建完整 atom 集（DB 丢失/首次迁移用）。
+ * 这是删热文件后的权威恢复路径；坏归档显式失败，不把历史当空。
+ */
+export const loadAllAtoms = async (fs: FsPort, ws: string): Promise<Outcome<LoadAtomsResult>> => {
+  const hot = await loadAtoms(fs, ws);
+  if (!hot.ok) return hot;
+  const dates = await listArchiveDates(fs, ws);
+  const byRel = new Map<string, ParsedAtom>();
+  for (const a of hot.value.atoms) byRel.set(a.rel, a);
+  for (const date of dates) {
+    const archived = await readArchivedAtoms(fs, ws, date);
+    if (!archived.ok) return archived;
+    for (const a of archived.value) byRel.set(a.rel, a);
+  }
+  return ok({ atoms: [...byRel.values()], errors: [...hot.value.errors] });
+};
+
 const acquireLock = async (
   fs: FsPort,
   ws: string,
@@ -173,10 +247,12 @@ export const archiveDays = async (
   today: string,
   opts: ArchiveOptions = {},
 ): Promise<ArchiveResult> => {
-  const result: ArchiveResult = { archived: [], skipped: [], errors: [] };
+  const result: ArchiveResult = { archived: [], skipped: [], errors: [], deleted: 0 };
   const now = Number.isFinite(opts.now) ? Number(opts.now) : Date.now();
   const staleLockMs = Math.max(1_000, Number(opts.staleLockMs ?? 10 * 60_000));
+  const deleteHot = opts.deleteHot === true;
   const byDate = new Map<string, ParsedAtom[]>();
+  const deletable = new Map<string, ParsedAtom[]>();
   for (const a of atoms) {
     if (!a.date || a.date >= today) continue;
     const list = byDate.get(a.date) ?? [];
@@ -191,7 +267,18 @@ export const archiveDays = async (
   for (const date of dates) {
     const list = byDate.get(date)!;
     if (manifest.days[date] && (await fs.exists(abs(ws, `${ARCHIVE_DIR}/${date}.jsonl`)))) {
+      const entry = manifest.days[date]!;
+      if (!entry.rels?.length) {
+        const atomsInArchive = await readArchivedAtoms(fs, ws, date);
+        if (!atomsInArchive.ok) {
+          result.errors.push(`${date}: 归档已存在但 manifest 缺 rels，且 JSONL 读取失败（${atomsInArchive.error.message}）`);
+          continue;
+        }
+        entry.rels = atomsInArchive.value.map((a) => a.rel);
+        manifestDirty = true;
+      }
       result.skipped.push(date);
+      deletable.set(date, list);
       continue;
     }
     const acquired = await acquireLock(fs, ws, now, staleLockMs);
@@ -258,8 +345,10 @@ export const archiveDays = async (
         jsonl: `${date}.jsonl`,
         md: `${date}.md`,
         archivedAt: new Date(now).toISOString(),
+        rels: records.map((a) => a.rel),
       };
       manifestDirty = true;
+      deletable.set(date, list);
       result.archived.push({ date, count, jsonl: `${ARCHIVE_DIR}/${date}.jsonl`, md: `${ARCHIVE_DIR}/${date}.md`, sha256: hash });
     } finally {
       const lock = abs(ws, ARCHIVE_LOCK);
@@ -268,7 +357,22 @@ export const archiveDays = async (
   }
   if (manifestDirty) {
     const w = await fs.writeText(abs(ws, ARCHIVE_MANIFEST), JSON.stringify(manifest, null, 2) + "\n");
-    if (!w.ok) result.errors.push(`manifest 写入失败（${w.error.message}）`);
+    if (!w.ok) {
+      result.errors.push(`manifest 写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
+      return result;
+    }
+  }
+  if (deleteHot) {
+    for (const [date, records] of deletable) {
+      for (const a of records) {
+        const absRel = abs(ws, a.rel);
+        const del = await fs.unlink(absRel);
+        if (del.ok) result.deleted += 1;
+        else if (del.error.code !== "NOT_FOUND") {
+          result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+        }
+      }
+    }
   }
   return result;
 };

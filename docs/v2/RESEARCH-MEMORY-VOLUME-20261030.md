@@ -168,10 +168,10 @@ flowchart LR
 3. **派生件 GC**（已落地）
    - 清理本轮 plan 不再产出的四类派生卡；每个 `.history/` 保留最近 2 个版本；v1 `projections/` 不在范围（避免误删无 v2 生成器的旧数据）。
    - 验收：`.shadow` 文件数/SQLite 大小可解释；删 `indexes/` 可重建；GC 失败留 Signal。
-4. **按日归档（已落地“安全版”，2026-10-30）**
-   - 无参 `read_shadow` 将 `date < today` 的 atoms 写成 `.shadow/archive/<date>.jsonl`（完整原文）+ `<date>.md`（导航）+ `_index.json`（count/sha256）；回读校验通过才登记；锁 `.shadow/.archive.lock` 互斥；**不删热文件**。
-   - 实测（本机 906 atoms）：784 条历史 → `2026-10-15`（158）+ `2026-10-16`（626）两个 JSONL（合计 1.08 MB）+ 两个 MD（合计 110 KB）；重复运行 → `archived=0 / skipped=2`。
-   - 权衡：文件数会从 906 → 129（仅当日）+ 2 JSONL + 2 MD + manifest，但**磁盘暂时变大**（JSONL 带完整字段，约 atoms 的 1.7 倍；MD 再占一份摘要）。下一步才是“校验稳定后删热文件”，删前需观察/人工确认。
+4. **按日归档（已落地，2026-10-30 起默认删热文件）**
+   - 无参 `read_shadow` 将 `date < today` 的 atoms 写成 `.shadow/archive/<date>.jsonl`（完整原文）+ `<date>.md`（导航）+ `_index.json`（count/sha256/rels）；回读校验通过才登记；锁 `.shadow/.archive.lock` 互斥；校验通过后**删除热文件**。
+   - 实测（本机 906 atoms）：784 条历史 → `2026-10-15`（158）+ `2026-10-16`（626）两个 JSONL（合计 1.08 MB）+ 两个 MD（合计 110 KB）；删除 784 个热文件，`.shadow/atoms` 906→131（仅当日）；`loadAllAtoms` 从热+归档重建 915 条（含会话新增），第二次读走 `source=db`。
+   - 权衡：文件数 906 → 131 + 2 JSONL + 2 MD + manifest；**磁盘暂时变大**（JSONL 带完整字段，约 atoms 的 1.7 倍；MD 再占摘要）。DB 丢失可从 archive 重建；archive 坏件显式失败，不静默丢历史。
 
 ### P1（治理质量）
 

@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.5.0] — 2026-10-30
+
+### 变更
+
+- **按日归档默认删除热文件**：无参 `read_shadow` 归档 `date < today` 的 atoms 后，校验 JSONL（行数/uid/sha256）、登记 manifest（含 `rels`），再删除对应 `.shadow/atoms/` 热文件；`.shadow/atoms/` 预期只剩当日。
+- **冷区重建路径**：新增 `archivedIndex()`（manifest/JSONL 轻量索引）与 `loadAllAtoms()`（热 + 全部归档）；`IndexCache` 的 DB 校验改为“DB names = 热文件 ∪ 归档 rels”，DB 丢失时自动从 archive 重建，坏归档显式失败不静默丢历史。
+- **实测**（本机 784 条历史）：删除 784 个热文件；`.shadow/atoms` 906→131（仅当日）；`loadAllAtoms` 重建 915 条（含会话新增）；第二次 `IndexCache.load` 走 `source=db`。
+- 测试：`archive.test.ts` 增加 `deleteHot` 后热文件删除、`loadAllAtoms`/`archivedIndex` 重建、重复删除不报错。
+
 ## [2.4.0] — 2026-10-30
 
 ### 新增

@@ -6,6 +6,7 @@ import { INDEX_DB } from "../contract/paths.js";
 import { ok, type Outcome } from "../contract/outcome.js";
 import type { ParsedAtom } from "../contract/types.js";
 import { listAtomFiles, loadAtoms, type LoadAtomsResult } from "./atoms.js";
+import { archivedIndex, loadAllAtoms } from "./archive.js";
 import { hashBody, IndexDb } from "./index-db.js";
 import type { FsPort } from "./fs.js";
 
@@ -41,8 +42,14 @@ export class IndexCache {
     try {
       const files = await listAtomFiles(fs, ws);
       if (!files.ok) return files;
+      const archive = await archivedIndex(fs, ws);
+      const archived = archive.ok ? archive.value : { dates: [], rels: new Set<string>() };
+      const expected = new Set([...files.value.map((f) => f.rel), ...archived.rels]);
       const names = index.names();
-      const sameNames = names.size === files.value.length && files.value.every((f) => names.has(f.rel));
+      // 归档过的 atom 没有热文件：DB 的 names 应等于「热文件 ∪ 归档 rel」。
+      const sameNames = archive.ok
+        ? names.size === expected.size && [...expected].every((rel) => names.has(rel))
+        : files.value.every((f) => names.has(f.rel));
       if (sameNames) {
         let statsOk = true;
         if (verify === "full") {
@@ -62,19 +69,24 @@ export class IndexCache {
         }
         if (statsOk) {
           const key = norm(ws);
-          const sig = files.value.map((f) => f.rel).join("\u0000");
+          const sig = [...expected].sort().join("\u0000");
           const cached = this.parsed.get(key);
-          if (cached && cached.sig === sig) {
+          if (archive.ok && cached && cached.sig === sig) {
             return ok({ atoms: cached.atoms, errors: [], source: "db" });
           }
           const atoms = index.allParsed();
-          if (atoms.length === files.value.length) {
-            this.parsed.set(key, { sig, atoms });
-            return ok({ atoms, errors: [], source: "db" });
+          if (atoms.length === (archive.ok ? expected.size : names.size)) {
+            if (archive.ok) this.parsed.set(key, { sig, atoms });
+            return ok({
+              atoms,
+              errors: [],
+              source: "db",
+              ...(archive.ok ? {} : { degraded: `归档索引读取失败：${archive.error.message}` }),
+            });
           }
         }
       }
-      const loaded = await loadAtoms(fs, ws);
+      const loaded = await loadAllAtoms(fs, ws);
       if (!loaded.ok) return loaded;
       const knownStats = index.fileStats();
       const stats = new Map<string, { size: number; mtime: number }>();
@@ -92,7 +104,7 @@ export class IndexCache {
         return ok({ ...loaded.value, source: "fs", degraded: `派生索引写失败：${replaced.error.message}` });
       }
       this.parsed.set(norm(ws), {
-        sig: loaded.value.atoms.map((a) => a.rel).join("\u0000"),
+        sig: loaded.value.atoms.map((a) => a.rel).sort().join("\u0000"),
         atoms: loaded.value.atoms,
       });
       return ok({ ...loaded.value, source: "fs" });

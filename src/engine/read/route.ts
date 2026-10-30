@@ -11,8 +11,7 @@ import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
 import { computeForgetting, renderForgetNotice } from "../../domain/lifecycle.js";
-import { loadAtoms } from "../../store/atoms.js";
-import { archiveDays } from "../../store/archive.js";
+import { archiveDays, loadAllAtoms } from "../../store/archive.js";
 import { budgetText, envelope } from "./render.js";
 import {
   contextView, decisionView, episodeView, indexView, knowledgeView, manifestView,
@@ -94,7 +93,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   const modeRes = normalizeMode(req);
   if (!modeRes.ok) return modeRes;
 
-  const loaded = deps.loadAtoms ? await deps.loadAtoms() : await loadAtoms(deps.fs, deps.ws);
+  const loaded = deps.loadAtoms ? await deps.loadAtoms() : await loadAllAtoms(deps.fs, deps.ws);
   if (!loaded.ok) {
     deps.signals.note(
       "atoms",
@@ -128,7 +127,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   // 冷区日切：只在“无参 index 读”触发；只归档、不删热文件（删除是后续独立步骤）。
   // 只读沙箱没有 SQLite（deps.index 为空），不做写盘。
   if (mode === "index" && deps.index) {
-    const ar = await archiveDays(deps.fs, deps.ws, atoms, deps.clock.today());
+    const ar = await archiveDays(deps.fs, deps.ws, atoms, deps.clock.today(), { deleteHot: true });
     if (ar.errors.length) {
       deps.signals.note(
         "archive",

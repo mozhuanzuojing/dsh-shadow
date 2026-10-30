@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { MemoryFs } from "../../dist/store/fs.js";
-import { archiveDays, readArchivedAtoms } from "../../dist/store/archive.js";
+import { archiveDays, archivedIndex, loadAllAtoms, readArchivedAtoms } from "../../dist/store/archive.js";
 import type { ParsedAtom } from "../../dist/contract/types.js";
 
 const WS = "/ws";
@@ -85,4 +85,31 @@ assert.equal(fixedJsonl.ok, true);
 if (!fixedJsonl.ok) throw new Error("fixed archive missing");
 assert.match(fixedJsonl.value, /old a/);
 
-console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；不删热文件");
+// deleteHot：归档+manifest 校验通过后删热文件；today 保留；可从 archive 重建
+const delFs = new MemoryFs({
+  [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "old a file",
+  [`${WS}/.shadow/atoms/2026-10-29--100001-b--bbbbbb.md`]: "old b file",
+  [`${WS}/.shadow/atoms/2026-10-30--090000-c--cccccc.md`]: "today c file",
+});
+const del = await archiveDays(delFs, WS, [old1, old2, today], "2026-10-30", { now: 1000, deleteHot: true });
+assert.equal(del.errors.length, 0);
+assert.equal(del.deleted, 2);
+assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`), false);
+assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-29--100001-b--bbbbbb.md`), false);
+assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-30--090000-c--cccccc.md`), true, "today 热文件必须保留");
+const rebuilt = await loadAllAtoms(delFs, WS);
+assert.equal(rebuilt.ok, true);
+if (!rebuilt.ok) throw new Error("loadAllAtoms failed");
+assert.equal(rebuilt.value.atoms.length, 3, "热 + 归档必须能重建全部 atoms");
+const idx = await archivedIndex(delFs, WS);
+assert.equal(idx.ok, true);
+if (!idx.ok) throw new Error("archivedIndex failed");
+assert.equal(idx.value.rels.size, 2);
+
+// 第二次 deleteHot：热文件已不存在，不应误报
+const again = await archiveDays(delFs, WS, [old1, old2, today], "2026-10-30", { now: 2000, deleteHot: true });
+assert.equal(again.errors.length, 0);
+assert.equal(again.deleted, 0);
+assert.deepEqual(again.skipped, ["2026-10-29"]);
+
+console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；deleteHot 后热文件删除且可重建；重复删除不报错");
