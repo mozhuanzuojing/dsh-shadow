@@ -27,6 +27,9 @@
 4. **始终启用（无开关）**：向量检索始终参与 `search_code`（provider 只决定“用哪种”）。
 5. 索引仍走 `.shadow/indexes/code/embeddings.json`：AST 语法块、内容 hash 复用、`sourceSig`（stat-only）增量、进程内缓存。
 6. **异步建索引**（参考 Cursor 的异步索引）：神经模型首次/变更后构建在后台进行，`search_code` **先返回 BM25/符号**，向量段标注「索引构建中」；后续查询命中缓存。哈希/HTTP 仍同步（便宜）。
+7. **失败可见 + 退避**：后台构建失败会记录 error，下一次查询直接返回「构建失败：…（Ns 后重试）」，60s 内不重复触发（避免每次查询都下载/解析）。
+8. **降级链按序尝试**：`auto` = HTTP(model) → 本地神经 → 哈希；`local` = 神经 → 哈希；`http` = HTTP → 哈希；`hash` 只哈希（`embedder-chain.ts`，已被单测锁定）。
+9. **模型缓存**放标准目录 `~/.cache/huggingface`（可用 `DSH_SHADOW_HF_CACHE` 覆盖），不再落 `node_modules` 包内。
 
 ## Consequences
 

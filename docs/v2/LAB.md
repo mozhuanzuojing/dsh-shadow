@@ -5,7 +5,7 @@
 
 ## 1. 调用形态
 
-`shadow_lab` 固定 **3 个参数**（仅在 `config.lab.enabled:true` 时注册）：
+`shadow_lab` 固定 **3 个参数**（**无开关，始终注册**；ADR-0023）：
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -119,7 +119,7 @@ npm run build; npm pack
 pnpm add file:<path>/dsh-shadow-2.0.0.tgz
 ```
 
-- `shadow_lab` **默认不注册**；`lab.enabled:true` 才注册（避免 51 mode 挤占默认 schema）。
+- `shadow_lab` **始终注册**（无开关；ADR-0023），与 core 一样常驻工具面。
 - 只加载 `dist/`；改源码后 `npm run build`。
 - 健康检查：`read_shadow({mode:"recovery"})`、`shadow_lab({mode:"federation"})`、`shadow_toolset({survey:true})`。
 - mode 清单：`npm run lab:modes`（51 mode / 31 写型 / 分组）。

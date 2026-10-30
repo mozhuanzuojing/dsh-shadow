@@ -85,6 +85,8 @@ export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: E
 /** 进程内索引缓存：查询时命中即复用，避免每次重读 embeddings.json 与重新 stat 遍历。 */
 const indexCache = new Map<string, { model: string; entries: EmbeddingEntry[]; dims: number; sourceSig: string }>();
 const bgJobs = new Map<string, Promise<void>>();
+const bgErrors = new Map<string, { error: string; at: number }>();
+const BG_RETRY_MS = 60_000;
 const cacheKey = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
 
 export const buildEmbeddingIndex = async (
@@ -211,6 +213,17 @@ export const searchEmbedding = async (
         // 首次/变更后：神经模型建索引很贵 → 后台构建，本次先返回 building（Cursor 式异步索引）。
         if (opts.asyncBuild) {
           const bgKey = `${key}|${embedder.id}`;
+          const lastErr = bgErrors.get(bgKey);
+          if (lastErr && Date.now() - lastErr.at < BG_RETRY_MS) {
+            const wait = Math.ceil((BG_RETRY_MS - (Date.now() - lastErr.at)) / 1000);
+            return {
+              hits: [],
+              model: embedder.id,
+              dims: 0,
+              built: false,
+              error: `向量索引构建失败：${lastErr.error}（${wait}s 后重试）`,
+            };
+          }
           if (!bgJobs.has(bgKey)) {
             const job = (async () => {
               try {
@@ -218,8 +231,10 @@ export const searchEmbedding = async (
                 // 写完索引后（mtime/clock 可能变化）重算签名，保证下一次查询命中缓存
                 const postSig = await computeSourceSig(deps, opts);
                 indexCache.set(key, { model: embedder.id, entries: b.entries, dims: b.dims, sourceSig: postSig });
-              } catch {
-                /* 后台失败：下次查询会再次尝试，不阻塞主结果 */
+                bgErrors.delete(bgKey);
+              } catch (e) {
+                // 失败要可返回给用户，且 60s 内不反复重试（避免每次查询都触发下载/解析）
+                bgErrors.set(bgKey, { error: e instanceof Error ? e.message : String(e), at: Date.now() });
               } finally {
                 bgJobs.delete(bgKey);
               }

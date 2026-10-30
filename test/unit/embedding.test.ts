@@ -86,4 +86,15 @@ const second = await searchEmbedding(d3 as any, "asyncToken", f3, { asyncBuild: 
 assert.ok(!second.building, "后台完成后不应再 building");
 assert.ok(second.hits.length > 0, `后台完成后应能命中：${JSON.stringify(second)}`);
 
-console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 同尺寸改动重建 + 查询时 ignore 过滤 + 异步建索引");
+// 9) 异步构建失败：不能永远 building，必须显式报错（并避免立即重试）
+const fs4 = new MemoryFs({ "/ws4/a.ts": "export const failToken = 1;\n" });
+const d4 = { fs: fs4, ws: "/ws4" };
+const failing = { id: "neural:fail", async embed(): Promise<number[][]> { throw new Error("boom"); } };
+const br1 = await searchEmbedding(d4 as any, "failToken", failing as any, { asyncBuild: true });
+assert.equal(br1.building, true, "首次应 building");
+await new Promise((r) => setTimeout(r, 200));
+const br2 = await searchEmbedding(d4 as any, "failToken", failing as any, { asyncBuild: true });
+assert.ok(!br2.building, "失败后不应再 building");
+assert.ok((br2.error ?? "").includes("构建失败") && (br2.error ?? "").includes("boom"), `应暴露失败原因：${br2.error}`);
+
+console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 同尺寸改动重建 + 查询时 ignore 过滤 + 异步建索引 + 异步失败可见");

@@ -60,6 +60,8 @@ export interface IndexedSearchResult {
   candidates: number;
   returned: number;
   postings: number;
+  /** 供调用方复用 AST 块（符号、向量索引），避免二次解析。 */
+  indexChunks?: IndexChunk[];
 }
 
 const indexPath = (ws: string): string =>
@@ -136,7 +138,7 @@ export const refreshCodeIndex = async (
   let refreshedFiles = 0;
   let truncated = false;
 
-  await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
+  const walked = await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
     const st = await deps.fs.stat(abs);
     if (!st.ok) return;
     const prev = oldFiles[rel];
@@ -171,6 +173,8 @@ export const refreshCodeIndex = async (
     files[rel] = { hash: sha1(read.value), size: st.value.size, mtimeMs: Math.floor(st.value.mtimeMs), chunks: kept };
     if (truncated) return false;
   });
+  // walkCodeFiles 因 maxFiles 提前停止时也要显式披露截断
+  truncated = truncated || walked.truncated;
 
   const root = sha1(
     Object.keys(files)
@@ -253,11 +257,39 @@ export const searchCodeIndexed = async (
   ];
   if (!hits.length) {
     head.push("（未找到匹配代码）", "> 下一步：换更具体的标识符/路径片段；或确认目标不在忽略目录。");
-    return { ...stats, candidates: candidateIdx.length, returned: 0, text: head.join("\n") };
+    return { ...stats, candidates: candidateIdx.length, returned: 0, text: head.join("\n"), indexChunks: chunks };
   }
   for (const h of hits) {
     const c = chunks[candidateIdx[Number(h.id)]!]!;
     head.push(`- \`${c.rel}:${c.start}-${c.end}\` · 得分 ${Math.round(h.score * 100) / 100} · [${c.kind}] ${snippetFor(c.text, terms).replace(/\s+/g, " ")}`);
   }
-  return { ...stats, candidates: candidateIdx.length, returned: hits.length, text: head.join("\n") };
+  return { ...stats, candidates: candidateIdx.length, returned: hits.length, text: head.join("\n"), indexChunks: chunks };
+};
+
+/** 从索引块直接取符号（AST 已存 kind/name），避免再跑一遍 tree-sitter。 */
+export const symbolHitsFromChunks = (
+  chunks: IndexChunk[],
+  query: string,
+  limit = 8,
+): { rel: string; line: number; kind: string; name: string }[] => {
+  const tokens = String(query ?? "")
+    .split(/[^A-Za-z0-9_\u4e00-\u9fff]+/)
+    .filter((t) => (/[\u4e00-\u9fff]/.test(t) ? t.length >= 2 : t.length >= 3))
+    .map((t) => t.toLowerCase());
+  const needles = Array.from(new Set(tokens.concat(String(query ?? "").length >= 3 && !/\s/.test(query) ? [String(query).toLowerCase()] : [])));
+  if (!needles.length) return [];
+  const kinds = new Set(["function", "method", "class", "interface", "type", "enum", "struct", "trait", "impl", "const", "var", "module", "namespace"]);
+  const seen = new Set<string>();
+  const out: { rel: string; line: number; kind: string; name: string }[] = [];
+  for (const c of chunks) {
+    if (!c.name || !kinds.has(c.kind)) continue;
+    const nm = c.name.toLowerCase();
+    if (!needles.some((n) => nm.includes(n))) continue;
+    const key = `${c.rel}#${c.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ rel: c.rel, line: c.start, kind: c.kind, name: c.name });
+    if (out.length >= limit) break;
+  }
+  return out;
 };

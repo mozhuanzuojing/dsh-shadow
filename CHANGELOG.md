@@ -9,6 +9,7 @@
 - **Cursor 式代码索引**（ADR-0021）：`search_code` 使用持久索引 `.shadow/indexes/code/search-index.json`——tree-sitter **语法块**（function/class/interface…，超 1500 字符递归拆）、**增量刷新**（size+mtime 未变不读内容）、**trigram 候选裁剪** + BM25；索引不可写/异常时回退实时扫描。`maxChunks=20000` / `maxBytes=16MB` 兜底。
 - **内置本地向量**（ADR-0022 修订）：参考 Cursor 用**真模型**——默认 `Xenova/multilingual-e5-small`（transformers.js + ONNX，q8，中英混合），首次使用自动下载并缓存；无网络/失败自动回落 512 维特征哈希（标注「子词近似、非语义」）；`provider: auto|local|hash|http`。神经索引**异步后台构建**，首次查询不阻塞 BM25/符号。
 - **去掉功能开关**（ADR-0023）：`lab.enabled` / `toolset.enabled` / `autoRecall.enabled` / `codeSearch.index.enabled` / `codeSearch.embedding.enabled` 全部删除，功能始终启用；旧键只产生未知键 warning，不能关闭功能。
+- **评审修复**：异步向量构建失败改为**可见 + 60s 退避**（不再永远「构建中」）；`auto` 真正按 HTTP→本地神经→哈希逐级降级（`embedder-chain`）；代码索引 `maxFiles` 截断显式披露；符号段复用索引 AST 块（去掉二次解析）；模型缓存移到 `~/.cache/huggingface`。
 - 测试：`test/unit/trigram.test.ts`、`ast-chunk.test.ts`、`code-index.test.ts`（无变化 0 重读 / 改一文件只重读 1 个 / 候选裁剪）、`local-embedder.test.ts`。
 
 ## [2.2.0] — 2026-10-30

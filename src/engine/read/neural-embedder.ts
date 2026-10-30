@@ -8,6 +8,8 @@
  */
 
 import type { Embedder } from "./embedding.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export interface NeuralEmbedderOptions {
   /** HuggingFace 模型 id（transformers.js 兼容的 ONNX 仓库）。 */
@@ -25,6 +27,8 @@ let endpointPicked = false;
 const pickEndpoint = async (mod: any): Promise<void> => {
   if (endpointPicked) return;
   endpointPicked = true;
+  // 模型缓存放标准目录，避免落在 node_modules 依赖包内（重装即丢）
+  mod.env.cacheDir = process.env.DSH_SHADOW_HF_CACHE?.trim() || join(homedir(), ".cache", "huggingface");
   const explicit = process.env.DSH_SHADOW_HF_ENDPOINT?.trim();
   if (explicit) {
     mod.env.remoteHost = explicit.endsWith("/") ? explicit : `${explicit}/`;

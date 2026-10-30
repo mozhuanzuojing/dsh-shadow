@@ -21,7 +21,7 @@ const tool = makeCodeSearchTool(async () =>
 // 1) BM25 + 符号两段都在；.gitignore 生效（secret/ 不出现）
 const out = String(await tool.execute({ query: "createSession", limit: 5 }, undefined));
 assert.ok(out.includes("# 代码检索"), "应有 BM25 段");
-assert.ok(out.includes("## 符号（tree-sitter"), "应有符号段");
+assert.ok(out.includes("## 符号（"), "应有符号段");
 assert.ok(out.includes("src/auth.ts"), "应命中 auth.ts");
 assert.ok(!out.includes("secret/hidden.ts"), "应忽略 .gitignore 的 secret/");
 

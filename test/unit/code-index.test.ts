@@ -32,8 +32,13 @@ try {
 
   // 4) trigram 候选裁剪生效（候选 < 总块数）
   assert.ok(r3.candidates < r3.chunks, `候选应被裁剪：candidates=${r3.candidates} chunks=${r3.chunks}`);
+
+  // 5) maxFiles 截断要显式披露（不能谎报「未截断」）
+  const r5 = await searchCodeIndexed(deps, "createSession", { limit: 3, maxFiles: 1 });
+  assert.equal(r5.truncated, true, "maxFiles=1 应标记截断");
+  assert.ok(r5.text.includes("截断"), `输出应披露截断：${r5.text.slice(0, 200)}`);
 } finally {
   await rm(dir, { recursive: true, force: true });
 }
 
-console.log("✔ code-index：语法块索引 / 无变化 0 重读 / 改一文件只重读 1 个 / trigram 候选裁剪");
+console.log("✔ code-index：语法块索引 / 无变化 0 重读 / 改一文件只重读 1 个 / trigram 候选裁剪 / maxFiles 截断披露");

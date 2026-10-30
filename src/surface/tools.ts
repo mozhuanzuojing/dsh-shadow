@@ -8,12 +8,11 @@ import { runRead } from "../engine/read/route.js";
 import type { ReadDeps, ReadRequest } from "../engine/read/types.js";
 import { runToolset } from "../engine/toolset/run.js";
 import { searchCode } from "../engine/read/code-search.js";
-import { searchCodeIndexed } from "../engine/read/code-index.js";
+import { searchCodeIndexed, symbolHitsFromChunks, type IndexChunk } from "../engine/read/code-index.js";
 import { searchSymbols } from "../engine/read/symbols.js";
 import { loadIgnore } from "../engine/read/ignore.js";
-import { makeHttpEmbedder, searchEmbedding, type Embedder } from "../engine/read/embedding.js";
-import { makeLocalEmbedder } from "../engine/read/local-embedder.js";
-import { makeNeuralEmbedder } from "../engine/read/neural-embedder.js";
+import { searchEmbedding, type Embedder } from "../engine/read/embedding.js";
+import { resolveEmbedderChain } from "../engine/read/embedder-chain.js";
 import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
 import type { ExecLike } from "./workspace.js";
@@ -193,48 +192,57 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       const limit = typeof args.limit === "number" ? args.limit : undefined;
       const ignore = await loadIgnore(d.value.fs, d.value.ws, (d.value.config as any)?.codeSearch);
       const idx = (d.value.config as any)?.codeSearch?.index;
-      let r: { text: string };
+      let r: { text: string; indexChunks?: IndexChunk[] };
       try {
         r = await searchCodeIndexed({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore, maxChunks: idx?.maxChunks, maxBytes: idx?.maxBytes });
       } catch {
         r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
       }
-      // 阶段 2：tree-sitter 符号（定义/入口）。不可用时显式披露，不影响 BM25 结果。
+      // 阶段 2：符号。索引路径直接复用 AST 块（不二次解析）；实时扫描路径才跑 tree-sitter。
       let extra = "";
-      try {
-        const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8, ignore });
-        if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
-        else if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
-        else extra = `\n\n## 符号（tree-sitter）\n（未匹配到符号；已解析 ${s.parsedFiles} 个候选文件）`;
-        if (s.hits.length && s.error) extra += `\n> 符号部分失败（仍有上面的命中）：${s.error}`;
-      } catch (e) {
-        extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
+      if (r.indexChunks) {
+        const sym = symbolHitsFromChunks(r.indexChunks, query, 8);
+        extra = sym.length
+          ? `\n\n## 符号（索引 AST · 定义/入口）\n${sym.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`
+          : `\n\n## 符号（索引 AST）\n（未匹配到符号）`;
+      } else {
+        try {
+          const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8, ignore });
+          if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
+          else if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
+          else extra = `\n\n## 符号（tree-sitter）\n（未匹配到符号；已解析 ${s.parsedFiles} 个候选文件）`;
+          if (s.hits.length && s.error) extra += `\n> 符号部分失败（仍有上面的命中）：${s.error}`;
+        } catch (e) {
+          extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
+        }
       }
-      // 阶段 3：向量检索（始终启用；auto: http(model) → 本地神经 → 哈希回落）。
+      // 阶段 3：向量检索（始终启用；auto: http(model) → 本地神经 → 哈希，逐级尝试）。
       const emb = (d.value.config as any)?.codeSearch?.embedding ?? {};
       try {
-        const provider = String(emb.provider ?? "auto");
-        const hash = makeLocalEmbedder();
-        const neural = makeNeuralEmbedder({ model: emb.neuralModel || undefined });
-        const useHttp = provider === "http" || (provider === "auto" && !!emb.model);
-        const http = useHttp ? makeHttpEmbedder({ baseURL: emb.baseURL, apiKeyEnv: emb.apiKeyEnv, model: emb.model }) : null;
         const kindOf = (id: string): "http" | "neural" | "hash" => (id.startsWith("http:") ? "http" : id.startsWith("neural:") ? "neural" : "hash");
         const labelOf = (id: string): string =>
           kindOf(id) === "http" ? `语义（embedding · ${id.slice(5)}）` : kindOf(id) === "neural" ? `语义（本地神经 · ${id.slice(7)}）` : "向量（本地哈希 · 非语义）";
-        let embedder: Embedder = provider === "hash" ? hash : provider === "local" ? neural : http ?? neural;
-        let se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, embedder, {
-          limit: 8,
-          ignore,
-          maxChunks: emb.maxChunks,
-          asyncBuild: kindOf(embedder.id) === "neural",
-        });
-        let fallbackNote = "";
-        if (se.error && embedder !== hash) {
-          fallbackNote = `${labelOf(embedder.id)} 不可用：${se.error}`;
-          embedder = hash;
-          se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, hash, { limit: 8, ignore, maxChunks: emb.maxChunks });
+        const chain = resolveEmbedderChain(emb);
+        let used: Embedder = chain[0]!;
+        let se: Awaited<ReturnType<typeof searchEmbedding>> | undefined;
+        const notes: string[] = [];
+        for (const cand of chain) {
+          used = cand;
+          se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, cand, {
+            limit: 8,
+            ignore,
+            maxChunks: emb.maxChunks,
+            asyncBuild: kindOf(cand.id) === "neural",
+          });
+          if (se.error) {
+            notes.push(`${labelOf(cand.id)} 不可用：${se.error}`);
+            continue;
+          }
+          break;
         }
-        const label = labelOf(embedder.id);
+        if (!se) throw new Error("embedder 链为空");
+        const label = labelOf(used.id);
+        const fallbackNote = notes.join("；");
         // 哈希向量分数量纲偏低：只展示 >=0.2 的命中，避免低分噪声。
         const shown = se.model.startsWith("local:") ? se.hits.filter((h) => h.score >= 0.2) : se.hits;
         if (se.error) extra += `\n\n## ${label}\n> 向量检索不可用：${se.error}`;
