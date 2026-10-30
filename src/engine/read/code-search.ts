@@ -18,6 +18,8 @@ export interface CodeSearchOptions {
   maxFileBytes?: number;
   maxTotalBytes?: number;
   maxChunkLines?: number;
+  /** 额外忽略谓词（.gitignore + codeSearch.exclude 已在工具层合成为此函数）。 */
+  ignore?: (rel: string, isDir: boolean) => boolean;
 }
 
 export interface CodeSearchResult {
@@ -55,7 +57,7 @@ export const searchCode = async (deps: CodeSearchDeps, query: string, opts: Code
     for (const e of listed.value) {
       const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
       if (e.type === "dir") {
-        if (shouldSkipDir(e.name)) {
+        if (shouldSkipDir(e.name) || opts.ignore?.(rel, true)) {
           stats.skippedDirs += 1;
           continue;
         }
@@ -63,6 +65,7 @@ export const searchCode = async (deps: CodeSearchDeps, query: string, opts: Code
         continue;
       }
       if (e.type !== "file" || !isCodeFile(e.name)) continue;
+      if (opts.ignore?.(rel, false)) continue;
       if (stats.scannedFiles >= maxFiles || stats.scannedBytes >= maxTotalBytes) {
         stats.truncated = true;
         break;

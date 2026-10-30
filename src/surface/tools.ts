@@ -9,6 +9,8 @@ import type { ReadDeps, ReadRequest } from "../engine/read/types.js";
 import { runToolset } from "../engine/toolset/run.js";
 import { searchCode } from "../engine/read/code-search.js";
 import { searchSymbols } from "../engine/read/symbols.js";
+import { loadIgnore } from "../engine/read/ignore.js";
+import { makeHttpEmbedder, searchEmbedding } from "../engine/read/embedding.js";
 import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
 import type { ExecLike } from "./workspace.js";
@@ -186,16 +188,31 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       if (!d.ok) return renderPlain(`> ⚠ shadow 不可用（${d.error.code}）：${d.error.message}`);
       const query = String(args.query ?? "").trim();
       const limit = typeof args.limit === "number" ? args.limit : undefined;
-      const r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit });
+      const ignore = await loadIgnore(d.value.fs, d.value.ws, (d.value.config as any)?.codeSearch);
+      const r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
       // 阶段 2：tree-sitter 符号（定义/入口）。不可用时显式披露，不影响 BM25 结果。
       let extra = "";
       try {
-        const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8 });
+        const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8, ignore });
         if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
         else if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
         else extra = `\n\n## 符号（tree-sitter）\n（未匹配到符号；已解析 ${s.parsedFiles} 个候选文件）`;
       } catch (e) {
         extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
+      }
+      // 阶段 3：embedding 语义检索（默认关；无 provider 时显式不可用，不影响上面结果）。
+      const emb = (d.value.config as any)?.codeSearch?.embedding;
+      if (emb?.enabled) {
+        try {
+          const embedder = makeHttpEmbedder({ baseURL: emb.baseURL, apiKeyEnv: emb.apiKeyEnv, model: emb.model });
+          const se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, embedder, { limit: 8, ignore, maxChunks: emb.maxChunks });
+          if (se.error) extra += `\n\n## 语义（embedding）\n> 语义检索不可用：${se.error}`;
+          else if (se.hits.length)
+            extra += `\n\n## 语义（embedding · ${se.model}）\n${se.hits.map((h) => `- \`${h.rel}:${h.start}-${h.end}\` · 相似度 ${Math.round(h.score * 1000) / 1000} · ${h.snippet}`).join("\n")}`;
+          else extra += `\n\n## 语义（embedding）\n（未匹配；索引${se.built ? "新建" : "复用"}）`;
+        } catch (e) {
+          extra += `\n\n## 语义（embedding）\n> 语义检索失败：${e instanceof Error ? e.message : String(e)}`;
+        }
       }
       return renderPlain(r.text + extra, d.value.signals);
     } catch (e) {

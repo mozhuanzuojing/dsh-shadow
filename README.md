@@ -19,7 +19,7 @@
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `recall_similar` | 2 | 相似过往任务卡（当时请求/决策/结果/教训/来源），按相关+新近+重要性召回 |
-| `search_code` | 2 | 工作区代码只读检索（BM25，返回 `文件:行号` + 片段；跳过依赖/产物目录） |
+| `search_code` | 2 | 工作区代码只读检索：BM25 + tree-sitter 符号（定义/入口）+（可选）embedding 语义；支持 `.gitignore`/`exclude` 过滤 |
 | `shadow_toolset` | 4 | 真实能力台账：survey/category/need 只读探测；install 需宿主 `allowed-once` 审批 |
 | `shadow_lab`（可选） | 3 | 51 个研究 mode；`lab.enabled:true` 时注册，写型需 `write:true` |
 

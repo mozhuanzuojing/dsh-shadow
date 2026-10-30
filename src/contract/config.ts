@@ -19,6 +19,7 @@ export interface NormalizedConfig {
   toolset: Required<NonNullable<ShadowConfig["toolset"]>>;
   lab: Required<NonNullable<ShadowConfig["lab"]>>;
   autoRecall: Required<NonNullable<ShadowConfig["autoRecall"]>>;
+  codeSearch: Required<NonNullable<ShadowConfig["codeSearch"]>>;
   warnings: string[];
 }
 
@@ -36,7 +37,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
   const c = raw ?? {};
   const known = new Set([
     "shadowRoot", "projectRoot", "capture", "recall", "retention", "forget",
-    "compact", "index", "telemetry", "toolset", "lab", "autoRecall",
+    "compact", "index", "telemetry", "toolset", "lab", "autoRecall", "codeSearch",
   ]);
   for (const k of Object.keys(c as Record<string, unknown>)) {
     if (!known.has(k)) warnings.push(`未知配置键：${k}（v2 只认 ${[...known].join(" / ")}）`);
@@ -86,6 +87,19 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
     autoRecall: {
       enabled: c.autoRecall?.enabled === true,
       limit: Math.max(1, Math.min(5, numOr(c.autoRecall?.limit, 2))),
+    },
+    codeSearch: {
+      exclude: Array.isArray(c.codeSearch?.exclude)
+        ? c.codeSearch!.exclude!.filter((x): x is string => typeof x === "string" && !!x.trim())
+        : [],
+      useGitignore: c.codeSearch?.useGitignore !== false,
+      embedding: {
+        enabled: c.codeSearch?.embedding?.enabled === true,
+        baseURL: typeof c.codeSearch?.embedding?.baseURL === "string" && c.codeSearch.embedding.baseURL.trim() ? c.codeSearch.embedding.baseURL.trim() : "http://127.0.0.1:3425/v1",
+        apiKeyEnv: typeof c.codeSearch?.embedding?.apiKeyEnv === "string" && c.codeSearch.embedding.apiKeyEnv.trim() ? c.codeSearch.embedding.apiKeyEnv.trim() : "MAGPIE_GATEWAY_KEY",
+        model: typeof c.codeSearch?.embedding?.model === "string" ? c.codeSearch.embedding.model.trim() : "",
+        maxChunks: Math.max(1, Math.min(50000, numOr(c.codeSearch?.embedding?.maxChunks, 2000))),
+      },
     },
     warnings,
   };

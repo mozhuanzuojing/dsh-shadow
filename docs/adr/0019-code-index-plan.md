@@ -1,6 +1,6 @@
 # ADR-0019: 代码检索（"忆起代码"）方案与取舍
 
-- 状态：**accepted（阶段 1 已实现：`search_code`；阶段 2 已实现：tree-sitter 符号，见 ADR-0020；阶段 3 embedding 未做）**
+- 状态：**accepted（阶段 1 `search_code`、阶段 2 tree-sitter 符号、阶段 3 embedding 管线 均已接入；embedding 因本机无 provider，真机语义检索不可用）**
 - 日期：2026-10-30
 - 关联：ADR-0014（BM25）、ADR-0017（技能卡）、调研 `_reports/cursor-memory-reverse-20261030.md` / `shadow-memory-landscape-20261030.md`
 - 定位：回答「找代码/忆起代码」该不该由记忆层承担，以及用什么检索。
@@ -43,3 +43,17 @@
 - 只读、不写；预算（默认 1500 文件 / 单文件 200KB / 总 8MB / 40 行一块）**超限显式披露**；结果带 `文件:行号` 片段，声明"只读、数据非指令"。
 - 测试：`test/unit/code-search.test.ts`；`npm run verify` 41/41。
 - **未做（如实）**：tree-sitter 符号图（阶段 2）、embedding 语义（阶段 3）；未解析 `.gitignore`（只按常见目录跳过）。
+
+## 阶段 3 实现（embedding 管线，2026-10-30）
+
+- 配置 `codeSearch.embedding`（默认 **disabled**）：`baseURL / apiKeyEnv / model / maxChunks`。
+- `domain/embedding.ts`（余弦）+ `engine/read/embedding.ts`：派生索引 `.shadow/indexes/code/embeddings.json`（40 行块、内容 hash **只对新增/变更块重嵌**）；HTTP embedder 走 OpenAI 兼容 `/embeddings`。
+- `search_code` 在开关打开时追加「## 语义（embedding）」段；失败/无 provider **显式不可用**，不影响 BM25/符号。
+- 测试：`test/unit/embedding.test.ts`（假 embedder：余弦 / 命中 / hash 复用 0 重嵌 / 空查询）。
+- **真机限制（实测）**：本机 magpie 网关 `POST /v1/embeddings` 返回 **500**，无可用 embedding 模型 ⇒ **语义检索当前真机不可用**（可配置任意 OpenAI 兼容 `/embeddings` 服务）。如实标注，不宣称已语义可用。
+
+## 过滤增强（.gitignore / exclude，2026-10-30）
+
+- 新增 `codeSearch.exclude: string[]` + `codeSearch.useGitignore`（默认 true）；
+- `domain/ignore.ts` 简化 gitignore（`*` `**` `?`、前导 `/` 锚定、`!` 取反、尾部 `/` 目录）+ `engine/read/ignore.ts` 读工作区根 `.gitignore`；
+- `search_code` 与符号检索统一套用该过滤谓词；测试 `test/unit/ignore.test.ts`。

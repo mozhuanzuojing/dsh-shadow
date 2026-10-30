@@ -184,4 +184,9 @@ export interface ShadowConfig {
   toolset?: { enabled?: boolean };
   lab?: { enabled?: boolean };
   autoRecall?: { enabled?: boolean; limit?: number };
+  codeSearch?: {
+    exclude?: string[];
+    useGitignore?: boolean;
+    embedding?: { enabled?: boolean; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
+  };
 }

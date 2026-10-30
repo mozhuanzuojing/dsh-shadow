@@ -145,7 +145,7 @@ const absOf = (ws: string, rel: string): string =>
 export const searchSymbols = async (
   deps: { fs: FsPort; ws: string },
   query: string,
-  opts: { limit?: number; maxFiles?: number; maxFileBytes?: number; maxTotalBytes?: number } = {},
+  opts: { limit?: number; maxFiles?: number; maxFileBytes?: number; maxTotalBytes?: number; ignore?: (rel: string, isDir: boolean) => boolean } = {},
 ): Promise<SymbolSearchResult> => {
   const q = String(query ?? "").trim();
   const limit = Math.max(1, Math.min(50, Number(opts.limit ?? 12) || 12));
@@ -186,10 +186,11 @@ export const searchSymbols = async (
     for (const e of listed.value) {
       const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
       if (e.type === "dir") {
-        if (!shouldSkipDir(e.name)) queue.push(rel);
+        if (!shouldSkipDir(e.name) && !opts.ignore?.(rel, true)) queue.push(rel);
         continue;
       }
       if (e.type !== "file" || !isCodeFile(e.name)) continue;
+      if (opts.ignore?.(rel, false)) continue;
       const lang = languageFor(e.name);
       if (!lang) continue;
       if (stats.scannedFiles >= maxFiles) {
