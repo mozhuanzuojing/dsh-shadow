@@ -31,6 +31,7 @@ import type { Episode, ParsedAtom } from "../contract/types.js";
 import { scrubUnsafe } from "../domain/text.js";
 import { deriveEpisodes } from "../domain/views.js";
 import type { FsPort } from "../store/fs.js";
+import { gcDerivedIndexes } from "../store/gc.js";
 import type { SignalStore } from "./signals.js";
 
 // ── 常量与预算 ───────────────────────────────────────────
@@ -529,6 +530,20 @@ export const indexDerivedSection = async (
 ): Promise<string> => {
   try {
     const result = await materializeDerived(deps, atoms, { gapMinutes });
+    // 派生件 GC：只删本轮 plan 不再产出的派生卡 / 旧 history 版本，不碰 atoms。
+    const ws = deps.ws.replace(/[\\/]+$/, "").replace(/\\/g, "/");
+    const expected = new Set(result.plan.files.map((f) => `${ws}/${f.rel}`.replace(/\\/g, "/")));
+    const gc = await gcDerivedIndexes(deps.fs, deps.ws, expected);
+    if (gc.errors.length) {
+      deps.signals.note(
+        "index.gc",
+        "PARTIAL",
+        `派生件 GC 有 ${gc.errors.length} 项失败（首个：${gc.errors[0]}）`,
+        "已删除其余可回收项；失败项下次无参读会重试；atoms 未受影响。",
+      );
+    } else {
+      deps.signals.clear("index.gc");
+    }
     return `\n\n${renderDerivedSection(result.plan)}`;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

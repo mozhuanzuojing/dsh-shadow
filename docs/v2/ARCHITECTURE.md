@@ -152,4 +152,4 @@
 4. `read_shadow` 只读 source；派生写入仅限 `indexes/` 与 SQLite（hits/meta/query_log）。atoms 只能经写侧采集；`shadow_lab` 写型只写各自 `.shadow/<store>/`，**永不写 atoms**——该边界由 lab fs 门面在**写操作处**强制（`WRITE_DENIED`），不只靠字段校验。
 5. 旧日期树/旧 mode 存储不属于 v2 运行时数据面：不读取、不写入、不删除；迁移是显式工具，不是读路径。
 6. 当前态文档不写行号；归档文档不改正文。
-7. 遗忘（Forget≠Delete）只把记忆移出活跃集（索引/召回/Episode/派生物化），**不删文件**；默认配置（`forget.minHits=0`、`maxActive=0`）不启用陈旧类遗忘；披露必须同时给「条数 / 原因 / 未删除」。
+7. 遗忘（Forget≠Delete）只把记忆移出活跃集（索引/召回/Episode/派生物化），**不删文件**；默认 `forget.minHits=0`（陈旧类关闭）、`forget.maxActive=2000`（超出按最旧移出，标 archived）；披露必须同时给「条数 / 原因 / 未删除」。
