@@ -65,13 +65,13 @@ export interface EmbeddingOptions {
   ignore?: (rel: string, isDir: boolean) => boolean;
 }
 
-/** 源文件集合签名（rel+size；size 变化才触发重建——同尺寸内容改动需手动重建，已在文档标注）。 */
+/** 源文件内容签名（逐文件内容 sha1；能检测同尺寸改动，代价是一次读取遍历）。 */
 export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: EmbeddingOptions = {}): Promise<string> => {
   const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
   const parts: string[] = [];
   await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
-    const st = await deps.fs.stat(abs);
-    if (st.ok) parts.push(`${rel}:${st.value.size}`);
+    const read = await deps.fs.readText(abs);
+    if (read.ok) parts.push(`${rel}:${createHash("sha1").update(read.value).digest("hex").slice(0, 16)}`);
   });
   parts.sort();
   return createHash("sha1").update(parts.join("\n")).digest("hex").slice(0, 16);

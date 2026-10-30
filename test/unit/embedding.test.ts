@@ -66,4 +66,12 @@ assert.ok(r2.hits.some((h) => h.rel === "src/extra.ts"), `重建后应能命中�
 const r3 = await searchEmbedding(deps as any, "render button", fake(), { limit: 5, ignore: (rel) => rel === "src/ui.ts" });
 assert.ok(!r3.hits.some((h) => h.rel === "src/ui.ts"), `查询时应过滤被排除文件：${JSON.stringify(r3.hits)}`);
 
-console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 查询时 ignore 过滤");
+// 7) 同尺寸内容改动也应重建（内容签名，而非仅看大小）
+const fs2 = new MemoryFs({ "/ws2/a.ts": "export const alpha = 1;\n" });
+const d2 = { fs: fs2, ws: "/ws2" };
+await buildEmbeddingIndex(d2 as any, fake(), {});
+await fs2.writeText("/ws2/a.ts", "export const alpha = 2;\n"); // 长度不变，内容变了
+const r4 = await searchEmbedding(d2 as any, "alpha", fake(), {});
+assert.equal(r4.built, true, "同尺寸内容改动应触发重建");
+
+console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 同尺寸改动重建 + 查询时 ignore 过滤");

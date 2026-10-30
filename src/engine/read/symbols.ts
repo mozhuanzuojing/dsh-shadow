@@ -35,7 +35,6 @@ const ensureInit = async (): Promise<void> => {
 };
 
 const langCache = new Map<string, any>();
-const parserCache = new Map<string, any>();
 
 const EXT_LANG: Record<string, string> = {
   ts: "typescript", tsx: "tsx", mts: "typescript", cts: "typescript",
@@ -117,28 +116,33 @@ export const extractSymbols = async (rel: string, text: string, lang: string): P
   const P = await getParserClass();
   await ensureInit();
   const L = await loadLanguage(lang);
-  let parser = parserCache.get(lang);
-  if (!parser) {
-    parser = new P();
-    parser.setLanguage(L);
-    parserCache.set(lang, parser);
-  }
-  const tree = parser.parse(text);
-  const hits: SymbolHit[] = [];
-  const walk = (node: any, depth: number): void => {
-    if (!node || depth > 60) return;
-    const t = String(node.type ?? "");
-    if (isSymbolType(t)) {
-      const name = nameOf(node);
-      if (name) hits.push({ rel, kind: kindOf(t), name, line: (node.startPosition?.row ?? 0) + 1 });
-    }
-    for (const c of node.namedChildren ?? []) walk(c, depth + 1);
-  };
-  walk(tree.rootNode, 0);
+  // 每次调用新建 Parser：避免共享实例的并发交叉（Parser.parse 非并发安全）。
+  const parser = new P();
+  parser.setLanguage(L);
+  let hits: SymbolHit[] = [];
   try {
-    tree.delete?.();
-  } catch {
-    /* ignore */
+    const tree = parser.parse(text);
+    const walk = (node: any, depth: number): void => {
+      if (!node || depth > 60) return;
+      const t = String(node.type ?? "");
+      if (isSymbolType(t)) {
+        const name = nameOf(node);
+        if (name) hits.push({ rel, kind: kindOf(t), name, line: (node.startPosition?.row ?? 0) + 1 });
+      }
+      for (const c of node.namedChildren ?? []) walk(c, depth + 1);
+    };
+    walk(tree.rootNode, 0);
+    try {
+      tree.delete?.();
+    } catch {
+      /* ignore */
+    }
+  } finally {
+    try {
+      parser.delete?.();
+    } catch {
+      /* ignore */
+    }
   }
   return hits;
 };
@@ -147,7 +151,10 @@ export interface SymbolSearchResult {
   hits: SymbolHit[];
   scannedFiles: number;
   parsedFiles: number;
+  /** 预算截断（maxFiles）。 */
   truncated: boolean;
+  /** 命中达到上限而提前停止（不是预算截断，单独区分）。 */
+  hitsCapped: boolean;
   error?: string;
 }
 
@@ -164,7 +171,7 @@ export const searchSymbols = async (
   const limit = Math.max(1, Math.min(50, Number(opts.limit ?? 12) || 12));
   const maxFiles = Math.max(1, Math.min(5000, Number(opts.maxFiles ?? 500) || 500));
   const maxFileBytes = Math.max(1024, Number(opts.maxFileBytes ?? 200_000) || 200_000);
-  const empty: SymbolSearchResult = { hits: [], scannedFiles: 0, parsedFiles: 0, truncated: false };
+  const empty: SymbolSearchResult = { hits: [], scannedFiles: 0, parsedFiles: 0, truncated: false, hitsCapped: false };
   if (!q) return empty;
   const tokens = q.split(/[^A-Za-z0-9_\u4e00-\u9fff]+/).filter(Boolean);
   const needles = Array.from(
@@ -178,7 +185,7 @@ export const searchSymbols = async (
   if (!needles.length) return empty;
 
   const hits: SymbolHit[] = [];
-  const stats = { scannedFiles: 0, parsedFiles: 0, truncated: false };
+  const stats = { scannedFiles: 0, parsedFiles: 0, truncated: false, hitsCapped: false };
   let error: string | undefined;
   try {
     await ensureInit();
@@ -206,12 +213,12 @@ export const searchSymbols = async (
       error ??= `解析 ${rel} 失败：${err instanceof Error ? err.message : String(err)}`;
     }
     if (hits.length >= limit * 4) {
-      stats.truncated = true;
+      stats.hitsCapped = true;
       return false;
     }
   });
   stats.scannedFiles = stats.scannedFiles || walked.scanned;
-  stats.truncated = stats.truncated || walked.truncated;
+  stats.truncated = walked.truncated;
   hits.sort((a, b) => a.rel.localeCompare(b.rel) || a.line - b.line);
-  return { hits: hits.slice(0, limit), scannedFiles: stats.scannedFiles, parsedFiles: stats.parsedFiles, truncated: stats.truncated, error };
+  return { hits: hits.slice(0, limit), scannedFiles: stats.scannedFiles, parsedFiles: stats.parsedFiles, truncated: stats.truncated, hitsCapped: stats.hitsCapped, error };
 };
