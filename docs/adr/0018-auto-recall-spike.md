@@ -48,3 +48,4 @@
   - 第 2 轮同会话 `text() injected session=… cards=1 hintChars=140` ⇒ **缓存命中且返回了 140 字符提示**。
   - 证据：`D:\project\local-workbench\_work\v2web\evidence\auto-recall-20261030\auto-recall.debug.log`。
 - 仍待（效果评估，不是注入验证）：hint 是否真的改善模型行为；以及确认 `context.agent.session.id` 与 `session/event` 的 id 同源（探针显示同会话一致）。
+- **时序修正（如实）**：`text()` 每步都被调用，但**一轮首步可能为空/沿用上一条 query**（`lastUser` 在 `session/event` 后才更新）。应描述为「每步尝试注入；一轮首步可能为空，随后稳定」，不是「每步必有」。

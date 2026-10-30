@@ -1,15 +1,17 @@
 /**
  * v2 engine — 代码 embedding 语义检索（派生索引，可重建）。ADR-0019 阶段 3。
  *
- * 设计：
- * - 索引落 `.shadow/indexes/code/embeddings.json`（派生、可重建，不写 atoms）。
- * - 按块（同 code-search 的 40 行切块）计算向量；按内容 hash 复用，只对新增/变更块重新 embed。
- * - Embedder 可注入（测试用假实现）；默认 HTTP（OpenAI 兼容 /embeddings）。**不可用即显式报错**，不静默降级。
+ * - 索引 `.shadow/indexes/code/embeddings.json`（派生、可重建）。
+ * - 40 行块；按内容 hash 复用，只对新增/变更块重新 embed。
+ * - 源文件集合签名（rel+size）变化即触发重建 —— 解决"索引建好后永不刷新"的陈旧问题。
+ * - 查询时对索引条目**再次套用 ignore/exclude**，避免改配置后旧索引泄露被排除文件。
+ * - Embedder 可注入（测试用假实现）；默认 HTTP（OpenAI 兼容 /embeddings）。不可用即返回 error。
  */
 
 import { createHash } from "node:crypto";
-import { chunkCode, isCodeFile, shouldSkipDir } from "../../domain/code-search.js";
+import { chunkCode } from "../../domain/code-search.js";
 import { cosine } from "../../domain/embedding.js";
+import { walkCodeFiles, absOf, snippetOf } from "./walk.js";
 import type { FsPort } from "../../store/fs.js";
 
 export interface Embedder {
@@ -44,16 +46,14 @@ export interface EmbeddingEntry {
   vec: number[];
 }
 
-const absOf = (ws: string, rel: string): string =>
-  `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`.replace(/\/+/g, "/");
 const indexPath = (ws: string): string => `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/.shadow/indexes/code/embeddings.json`;
 const hashOf = (text: string): string => createHash("sha1").update(text).digest("hex").slice(0, 16);
-const snippetOf = (text: string): string => (String(text).split(/\r?\n/).map((s) => s.trim()).find((s) => s) ?? "").slice(0, 140);
 
 interface EmbeddingFile {
-  v: 1;
+  v: 2;
   model: string;
   dims: number;
+  sourceSig: string;
   builtAt: string;
   entries: EmbeddingEntry[];
 }
@@ -65,7 +65,18 @@ export interface EmbeddingOptions {
   ignore?: (rel: string, isDir: boolean) => boolean;
 }
 
-/** 构建/刷新索引（按 hash 复用旧向量）。 */
+/** 源文件集合签名（rel+size；size 变化才触发重建——同尺寸内容改动需手动重建，已在文档标注）。 */
+export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: EmbeddingOptions = {}): Promise<string> => {
+  const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
+  const parts: string[] = [];
+  await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
+    const st = await deps.fs.stat(abs);
+    if (st.ok) parts.push(`${rel}:${st.value.size}`);
+  });
+  parts.sort();
+  return createHash("sha1").update(parts.join("\n")).digest("hex").slice(0, 16);
+};
+
 export const buildEmbeddingIndex = async (
   deps: { fs: FsPort; ws: string },
   embedder: Embedder,
@@ -75,7 +86,6 @@ export const buildEmbeddingIndex = async (
   const maxFileBytes = Math.max(1024, Number(opts.maxFileBytes ?? 200_000) || 200_000);
   const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
 
-  // 旧索引（仅当 model 相同才复用）
   let old = new Map<string, EmbeddingEntry>();
   const prev = await deps.fs.readText(indexPath(deps.ws));
   if (prev.ok) {
@@ -88,39 +98,25 @@ export const buildEmbeddingIndex = async (
   }
 
   const chunks: { key: string; rel: string; start: number; end: number; snippet: string; text: string }[] = [];
-  const queue: string[] = [""];
-  let scanned = 0;
   let truncated = false;
-  while (queue.length && chunks.length < maxChunks) {
-    const dirRel = queue.shift()!;
-    const listed = await deps.fs.listDir(absOf(deps.ws, dirRel));
-    if (!listed.ok) continue;
-    for (const e of listed.value) {
-      const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
-      if (e.type === "dir") {
-        if (!shouldSkipDir(e.name) && !opts.ignore?.(rel, true)) queue.push(rel);
-        continue;
-      }
-      if (e.type !== "file" || !isCodeFile(e.name)) continue;
-      if (opts.ignore?.(rel, false)) continue;
-      if (++scanned > maxFiles) {
+  await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
+    if (chunks.length >= maxChunks) {
+      truncated = true;
+      return false;
+    }
+    const st = await deps.fs.stat(abs);
+    if (!st.ok || st.value.size > maxFileBytes) return;
+    const read = await deps.fs.readText(abs);
+    if (!read.ok) return;
+    for (const c of chunkCode(rel, read.value, 40)) {
+      const h = hashOf(c.text);
+      chunks.push({ key: `${rel}#${c.start}-${c.end}#${h}`, rel, start: c.start, end: c.end, snippet: snippetOf(c.text), text: c.text });
+      if (chunks.length >= maxChunks) {
         truncated = true;
-        break;
-      }
-      const st = await deps.fs.stat(absOf(deps.ws, rel));
-      if (!st.ok || st.value.size > maxFileBytes) continue;
-      const read = await deps.fs.readText(absOf(deps.ws, rel));
-      if (!read.ok) continue;
-      for (const c of chunkCode(rel, read.value, 40)) {
-        const h = hashOf(c.text);
-        chunks.push({ key: `${rel}#${c.start}-${c.end}#${h}`, rel, start: c.start, end: c.end, snippet: snippetOf(c.text), text: c.text });
-        if (chunks.length >= maxChunks) {
-          truncated = true;
-          break;
-        }
+        return false;
       }
     }
-  }
+  });
 
   const entries: EmbeddingEntry[] = [];
   const toEmbed: typeof chunks = [];
@@ -143,7 +139,8 @@ export const buildEmbeddingIndex = async (
   }
   if (!dims) for (const e of entries) if (e.vec?.length) { dims = e.vec.length; break; }
 
-  const file: EmbeddingFile = { v: 1, model: embedder.id, dims, builtAt: new Date().toISOString(), entries };
+  const sourceSig = await computeSourceSig(deps, opts);
+  const file: EmbeddingFile = { v: 2, model: embedder.id, dims, sourceSig, builtAt: new Date().toISOString(), entries };
   await deps.fs.writeText(indexPath(deps.ws), JSON.stringify(file));
   return { entries, embedded: toEmbed.length, reused, dims, truncated };
 };
@@ -177,28 +174,33 @@ export const searchEmbedding = async (
   let built = false;
   try {
     const prev = await deps.fs.readText(indexPath(deps.ws));
-    let ok = false;
+    let usable = false;
     if (prev.ok) {
       try {
         const j = JSON.parse(prev.value) as EmbeddingFile;
         if (j?.model === embedder.id && Array.isArray(j.entries) && j.entries.length) {
-          entries = j.entries;
-          dims = j.dims;
-          ok = true;
+          const sig = await computeSourceSig(deps, opts);
+          if (sig === j.sourceSig) {
+            entries = j.entries;
+            dims = j.dims;
+            usable = true;
+          }
         }
       } catch {
         /* rebuild */
       }
     }
-    if (!ok) {
+    if (!usable) {
       const b = await buildEmbeddingIndex(deps, embedder, opts);
       entries = b.entries;
       dims = b.dims;
       built = true;
     }
-    if (!entries.length) return { hits: [], model: embedder.id, dims, built, error: "索引为空（没有可嵌入的代码）" };
+    // 查询时再套一次 ignore（防止改 exclude 后旧条目泄露被排除文件）
+    const filtered = opts.ignore ? entries.filter((e) => !opts.ignore!(e.rel, false)) : entries;
+    if (!filtered.length) return { hits: [], model: embedder.id, dims, built, error: "索引为空（没有可嵌入的代码）" };
     const qv = (await embedder.embed([q]))[0] ?? [];
-    const scored: EmbeddingHit[] = entries
+    const scored: EmbeddingHit[] = filtered
       .map((e) => ({ rel: e.rel, start: e.start, end: e.end, score: cosine(qv, e.vec), snippet: e.snippet }))
       .filter((h) => h.score > 0)
       .sort((a, b) => b.score - a.score)

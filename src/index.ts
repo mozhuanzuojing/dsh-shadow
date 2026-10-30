@@ -137,7 +137,14 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     capture.onSessionEvent(session, event);
     if (config.autoRecall.enabled && event?.type === "user/message" && session?.id) {
       const t = textOfEvent(event).trim();
-      if (t) lastUserBySession.set(String(session.id), t);
+      if (t) {
+        lastUserBySession.set(String(session.id), t);
+        // 简单上限回收，避免长驻多会话内存无限增长
+        if (lastUserBySession.size > 200) {
+          const oldest = lastUserBySession.keys().next().value;
+          if (oldest && oldest !== String(session.id)) lastUserBySession.delete(oldest);
+        }
+      }
     }
   });
   ctx.on("agent/turn-stopping", async (payload: any) => {
@@ -159,6 +166,10 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
             else {
               const cards = buildLessonCards(loaded.value.atoms);
               cardsBySession.set(String(sess.id), cards);
+              if (cardsBySession.size > 200) {
+                const oldest = cardsBySession.keys().next().value;
+                if (oldest && oldest !== String(sess.id)) cardsBySession.delete(oldest);
+              }
               debugLog(sess?.header?.cwd, `cache-refreshed session=${String(sess.id)} cards=${cards.length}`);
             }
           }

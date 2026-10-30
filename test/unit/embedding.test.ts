@@ -56,4 +56,14 @@ assert.equal(e2.calls, 0, "二次不应调用 embedder");
 const none = await searchEmbedding(deps as any, "", e1, {});
 assert.equal(none.hits.length, 0);
 
-console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询");
+// 5) 源集合变化 → 触发重建（修复"索引建好永不刷新"）
+await deps.fs.writeText("/ws/src/extra.ts", "export const extraToken = 1;\n");
+const r2 = await searchEmbedding(deps as any, "extraToken", fake(), { limit: 5 });
+assert.equal(r2.built, true, "源文件集合变化应触发重建");
+assert.ok(r2.hits.some((h) => h.rel === "src/extra.ts"), `重建后应能命中新文件：${JSON.stringify(r2.hits)}`);
+
+// 6) 查询时再套 ignore（改 exclude 后旧索引不泄露被排除文件）
+const r3 = await searchEmbedding(deps as any, "render button", fake(), { limit: 5, ignore: (rel) => rel === "src/ui.ts" });
+assert.ok(!r3.hits.some((h) => h.rel === "src/ui.ts"), `查询时应过滤被排除文件：${JSON.stringify(r3.hits)}`);
+
+console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 查询时 ignore 过滤");

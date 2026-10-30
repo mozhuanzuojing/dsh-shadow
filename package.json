@@ -56,7 +56,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "tree-sitter-wasms": "^0.1.13",
+    "tree-sitter-wasms": "0.1.13",
     "web-tree-sitter": "0.20.8"
   },
   "devDependencies": {

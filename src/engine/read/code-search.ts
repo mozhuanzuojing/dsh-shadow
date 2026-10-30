@@ -1,10 +1,11 @@
 /**
- * v2 engine — 代码检索 I/O：遍历工作区（跳过点目录/依赖产物）+ 有界读取 + BM25 排序。ADR-0019 阶段 1。
+ * v2 engine — 代码检索 I/O：遍历工作区（统一 walker：跳过点目录/依赖产物 + .gitignore/exclude）+ 有界读取 + BM25 排序。
  *
  * 只读：不写任何东西；代码片段是「数据非指令」。预算（文件数/单文件/总字节）超出即**显式披露截断**，不静默。
  */
 
-import { chunkCode, isCodeFile, rankCodeChunks, shouldSkipDir, type CodeChunk } from "../../domain/code-search.js";
+import { chunkCode, rankCodeChunks, type CodeChunk } from "../../domain/code-search.js";
+import { walkCodeFiles } from "./walk.js";
 import type { FsPort } from "../../store/fs.js";
 
 export interface CodeSearchDeps {
@@ -32,9 +33,6 @@ export interface CodeSearchResult {
   returned: number;
 }
 
-const absOf = (ws: string, rel: string): string =>
-  `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`.replace(/\/+/g, "/");
-
 export const searchCode = async (deps: CodeSearchDeps, query: string, opts: CodeSearchOptions = {}): Promise<CodeSearchResult> => {
   const q = String(query ?? "").trim();
   const limit = Math.max(1, Math.min(30, Number(opts.limit ?? 8) || 8));
@@ -45,40 +43,22 @@ export const searchCode = async (deps: CodeSearchDeps, query: string, opts: Code
 
   const chunks: CodeChunk[] = [];
   const stats = { scannedFiles: 0, scannedBytes: 0, skippedDirs: 0, truncated: false };
-  const queue: string[] = [""];
-  while (queue.length) {
-    if (stats.scannedFiles >= maxFiles || stats.scannedBytes >= maxTotalBytes) {
-      stats.truncated = true;
-      break;
+  let budgetHit = false;
+  const walked = await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
+    if (stats.scannedBytes >= maxTotalBytes) {
+      budgetHit = true;
+      return false;
     }
-    const dirRel = queue.shift()!;
-    const listed = await deps.fs.listDir(absOf(deps.ws, dirRel));
-    if (!listed.ok) continue; // 目录不可读：跳过该目录（结果可能偏少；truncated 之外不谎报）
-    for (const e of listed.value) {
-      const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
-      if (e.type === "dir") {
-        if (shouldSkipDir(e.name) || opts.ignore?.(rel, true)) {
-          stats.skippedDirs += 1;
-          continue;
-        }
-        queue.push(rel);
-        continue;
-      }
-      if (e.type !== "file" || !isCodeFile(e.name)) continue;
-      if (opts.ignore?.(rel, false)) continue;
-      if (stats.scannedFiles >= maxFiles || stats.scannedBytes >= maxTotalBytes) {
-        stats.truncated = true;
-        break;
-      }
-      const st = await deps.fs.stat(absOf(deps.ws, rel));
-      if (!st.ok || st.value.size > maxFileBytes) continue;
-      const read = await deps.fs.readText(absOf(deps.ws, rel));
-      if (!read.ok) continue;
-      stats.scannedFiles += 1;
-      stats.scannedBytes += read.value.length;
-      chunks.push(...chunkCode(rel, read.value, maxChunkLines));
-    }
-  }
+    const st = await deps.fs.stat(abs);
+    if (!st.ok || st.value.size > maxFileBytes) return;
+    const read = await deps.fs.readText(abs);
+    if (!read.ok) return;
+    stats.scannedFiles += 1;
+    stats.scannedBytes += read.value.length;
+    chunks.push(...chunkCode(rel, read.value, maxChunkLines));
+  });
+  stats.skippedDirs = walked.skippedDirs;
+  stats.truncated = walked.truncated || budgetHit;
 
   if (!q) {
     return {

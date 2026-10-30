@@ -194,9 +194,10 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       let extra = "";
       try {
         const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8, ignore });
-        if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
-        else if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
+        if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
+        else if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
         else extra = `\n\n## 符号（tree-sitter）\n（未匹配到符号；已解析 ${s.parsedFiles} 个候选文件）`;
+        if (s.hits.length && s.error) extra += `\n> 符号部分失败（仍有上面的命中）：${s.error}`;
       } catch (e) {
         extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
       }

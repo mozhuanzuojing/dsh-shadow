@@ -1,20 +1,39 @@
 /**
  * v2 engine — tree-sitter 符号抽取（真 AST）。ADR-0019 阶段 2 / ADR-0020。
  *
- * 依赖：`web-tree-sitter`（MIT）+ `tree-sitter-wasms`（Unlicense）提供的预编译 `.wasm`。
- * 失败（依赖缺失 / wasm 不兼容）**显式返回 error**，由调用方以 `unavailable` 披露，绝不静默降级。
+ * 依赖 `web-tree-sitter`（MIT）+ `tree-sitter-wasms`（Unlicense）的预编译 `.wasm`。
+ * **动态加载**：依赖缺失/加载失败 → `searchSymbols` 返回 `error`（优雅降级，不拖垮插件）。
  * 只读：不写任何文件；符号是「代码结构」，不是记忆。
  */
 
-import Parser from "web-tree-sitter";
 import { createRequire } from "node:module";
-import { isCodeFile, shouldSkipDir } from "../../domain/code-search.js";
+import { walkCodeFiles } from "./walk.js";
 import type { FsPort } from "../../store/fs.js";
 
 const req = createRequire(import.meta.url);
-const P: any = Parser as any;
+
+let parserClass: any = null;
+const getParserClass = async (): Promise<any> => {
+  if (parserClass) return parserClass;
+  let mod: any;
+  try {
+    mod = await import("web-tree-sitter");
+  } catch (e) {
+    throw new Error(`tree-sitter 依赖不可用：${e instanceof Error ? e.message : String(e)}`);
+  }
+  const P = mod?.default ?? mod;
+  if (!P || typeof P.init !== "function") throw new Error("tree-sitter 依赖不可用：模块无 init()");
+  parserClass = P;
+  return P;
+};
 
 let initPromise: Promise<void> | null = null;
+const ensureInit = async (): Promise<void> => {
+  const P = await getParserClass();
+  if (!initPromise) initPromise = P.init();
+  await initPromise;
+};
+
 const langCache = new Map<string, any>();
 const parserCache = new Map<string, any>();
 
@@ -34,14 +53,10 @@ export const languageFor = (name: string): string | null => {
   return EXT_LANG[name.slice(i + 1).toLowerCase()] ?? null;
 };
 
-const ensureInit = async (): Promise<void> => {
-  if (!initPromise) initPromise = P.init();
-  await initPromise;
-};
-
 const loadLanguage = async (lang: string): Promise<any> => {
   const cached = langCache.get(lang);
   if (cached) return cached;
+  const P = await getParserClass();
   const wasm = req.resolve(`tree-sitter-wasms/out/tree-sitter-${lang}.wasm`);
   const L = await P.Language.load(wasm);
   langCache.set(lang, L);
@@ -97,8 +112,9 @@ const nameOf = (node: any): string => {
   return "";
 };
 
-/** 解析一段源码，抽取顶层/嵌套的符号（函数/类/接口/type/enum/struct…）。 */
+/** 解析一段源码，抽取符号（函数/类/接口/type/enum/struct…）。 */
 export const extractSymbols = async (rel: string, text: string, lang: string): Promise<SymbolHit[]> => {
+  const P = await getParserClass();
   await ensureInit();
   const L = await loadLanguage(lang);
   let parser = parserCache.get(lang);
@@ -135,26 +151,21 @@ export interface SymbolSearchResult {
   error?: string;
 }
 
-const absOf = (ws: string, rel: string): string =>
-  `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/${rel}`.replace(/\/+/g, "/");
-
 /**
- * 在代码里找符号（定义/入口）：先按文本是否包含查询词做**廉价预筛**，只对命中的代码文件做 tree-sitter 解析。
- * 有界（maxFiles/maxTotalBytes）、只读；依赖/wasm 问题以 `error` 显式返回。
+ * 在代码里找符号（定义/入口）：廉价文本预筛后只对候选文件做 tree-sitter 解析。有界、只读；
+ * 依赖/wasm 问题以 `error` 显式返回（但若同时已有命中，调用方应展示命中 + 部分失败提示）。
  */
 export const searchSymbols = async (
   deps: { fs: FsPort; ws: string },
   query: string,
-  opts: { limit?: number; maxFiles?: number; maxFileBytes?: number; maxTotalBytes?: number; ignore?: (rel: string, isDir: boolean) => boolean } = {},
+  opts: { limit?: number; maxFiles?: number; maxFileBytes?: number; ignore?: (rel: string, isDir: boolean) => boolean } = {},
 ): Promise<SymbolSearchResult> => {
   const q = String(query ?? "").trim();
   const limit = Math.max(1, Math.min(50, Number(opts.limit ?? 12) || 12));
   const maxFiles = Math.max(1, Math.min(5000, Number(opts.maxFiles ?? 500) || 500));
   const maxFileBytes = Math.max(1024, Number(opts.maxFileBytes ?? 200_000) || 200_000);
-  const maxTotalBytes = Math.max(50_000, Number(opts.maxTotalBytes ?? 4_000_000) || 4_000_000);
   const empty: SymbolSearchResult = { hits: [], scannedFiles: 0, parsedFiles: 0, truncated: false };
   if (!q) return empty;
-  // 符号检索的 needle：ASCII 词要求 ≥3 字符（避免 "go" 命中 "gone"），中文 ≥2 字符。
   const tokens = q.split(/[^A-Za-z0-9_\u4e00-\u9fff]+/).filter(Boolean);
   const needles = Array.from(
     new Set(
@@ -168,59 +179,39 @@ export const searchSymbols = async (
 
   const hits: SymbolHit[] = [];
   const stats = { scannedFiles: 0, parsedFiles: 0, truncated: false };
-  const queue: string[] = [""];
   let error: string | undefined;
   try {
     await ensureInit();
   } catch (e) {
-    return { ...empty, error: `tree-sitter 初始化失败：${e instanceof Error ? e.message : String(e)}` };
+    return { ...empty, error: e instanceof Error ? e.message : String(e) };
   }
-  while (queue.length) {
-    if (stats.scannedFiles >= maxFiles) {
+  const walked = await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
+    const lang = languageFor(rel.slice(rel.lastIndexOf("/") + 1));
+    if (!lang) return;
+    const st = await deps.fs.stat(abs);
+    if (!st.ok || st.value.size > maxFileBytes) return;
+    const read = await deps.fs.readText(abs);
+    if (!read.ok) return;
+    stats.scannedFiles += 1;
+    const lower = read.value.toLowerCase();
+    if (!needles.some((n) => lower.includes(n))) return;
+    stats.parsedFiles += 1;
+    try {
+      const syms = await extractSymbols(rel, read.value, lang);
+      for (const s of syms) {
+        const nm = s.name.toLowerCase();
+        if (needles.some((n) => nm.includes(n))) hits.push(s);
+      }
+    } catch (err) {
+      error ??= `解析 ${rel} 失败：${err instanceof Error ? err.message : String(err)}`;
+    }
+    if (hits.length >= limit * 4) {
       stats.truncated = true;
-      break;
+      return false;
     }
-    const dirRel = queue.shift()!;
-    const listed = await deps.fs.listDir(absOf(deps.ws, dirRel));
-    if (!listed.ok) continue;
-    for (const e of listed.value) {
-      const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
-      if (e.type === "dir") {
-        if (!shouldSkipDir(e.name) && !opts.ignore?.(rel, true)) queue.push(rel);
-        continue;
-      }
-      if (e.type !== "file" || !isCodeFile(e.name)) continue;
-      if (opts.ignore?.(rel, false)) continue;
-      const lang = languageFor(e.name);
-      if (!lang) continue;
-      if (stats.scannedFiles >= maxFiles) {
-        stats.truncated = true;
-        break;
-      }
-      const st = await deps.fs.stat(absOf(deps.ws, rel));
-      if (!st.ok || st.value.size > maxFileBytes) continue;
-      const read = await deps.fs.readText(absOf(deps.ws, rel));
-      if (!read.ok) continue;
-      stats.scannedFiles += 1;
-      const lower = read.value.toLowerCase();
-      if (!needles.some((n) => lower.includes(n))) continue; // 廉价预筛：只解析可能命中的文件
-      stats.parsedFiles += 1;
-      try {
-        const syms = await extractSymbols(rel, read.value, lang);
-        for (const s of syms) {
-          const nm = s.name.toLowerCase();
-          if (needles.some((n) => nm.includes(n))) hits.push(s);
-          if (hits.length >= limit * 4) break;
-        }
-      } catch (err) {
-        error ??= `解析 ${rel} 失败：${err instanceof Error ? err.message : String(err)}`;
-      }
-      if (hits.length >= limit * 4) {
-        stats.truncated = true;
-        break;
-      }
-    }
-  }
+  });
+  stats.scannedFiles = stats.scannedFiles || walked.scanned;
+  stats.truncated = stats.truncated || walked.truncated;
   hits.sort((a, b) => a.rel.localeCompare(b.rel) || a.line - b.line);
   return { hits: hits.slice(0, limit), scannedFiles: stats.scannedFiles, parsedFiles: stats.parsedFiles, truncated: stats.truncated, error };
 };
