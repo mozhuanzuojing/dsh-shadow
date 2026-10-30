@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "dsh-shadow v2 — 给 agent 记「为什么」的投影记忆：atoms 是唯一权威，派生索引可重建，降级可见，研究面在可选 lab。",
   "type": "module",
   "main": "./dist/index.js",

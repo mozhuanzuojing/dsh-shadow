@@ -2,6 +2,40 @@
 
 本文件覆盖每个发版；历史在 git tag（ADR-0012）。迁移步骤见 [docs/v2/MIGRATION.md](./docs/v2/MIGRATION.md)，当前实现状态见 [docs/v2/STATUS.md](./docs/v2/STATUS.md)。
 
+## [2.2.0] — 2026-10-30
+
+记忆与代码检索版：相似任务召回、项目事实、技能卡物化、自动召回，以及 `search_code`（BM25 + tree-sitter 符号 + 可选 embedding）。
+
+### 新增
+
+- **`search_code(query, limit)`**：工作区代码只读检索（core 工具 5→6）。
+  - BM25（标识符/路径片段 + 中文 2-gram），返回 `文件:行号` + 命中行片段；预算 1500 文件 / 单文件 200KB / 总 8MB，超限显式披露。
+  - `.gitignore` 感知（简化实现：`*` `**` `?`、锚定、取反、目录）+ `codeSearch.exclude`；`useGitignore` 默认开。
+  - **tree-sitter 符号**（`web-tree-sitter@0.20.8` + `tree-sitter-wasms@0.1.13`）：抽 function/method/class/interface/type/enum/struct/trait/impl/const（带行号），并入 `search_code` 的「符号（定义/入口）」段；依赖缺失/加载失败显式 `不可用`，不影响 BM25。
+  - **embedding 语义管线**（`codeSearch.embedding`，默认关）：`.shadow/indexes/code/embeddings.json` 派生索引、内容 hash 复用、`sourceSig`（stat-only：rel+size+mtime）变化重建、进程内缓存；无 provider 时显式 `不可用`。
+- **`recall_similar(query, limit)` 与相似任务召回**：任务卡（请求/决策/结果/教训/来源）按相关+新近+重要性召回；`read_shadow` 增加 `facts` 透镜与 `similar` 分支。
+- **技能卡物化**：任务卡 → 可审 `indexes/skills/<slug>/SKILL.md`（幂等、有界、只读投影）。
+- **`facts` 视图**：从用户原话抽取「X 是/=/：<路径>」项目事实，带证据校验状态。
+- **auto-recall（默认关）**：`autoRecall.enabled` 开启后每步在 runtime context 注入极小「可能相关任务」提示（数据非指令、带技能指针、硬预算）；`turn-stopping` 缓存任务卡、`session/event` 记录最后 query；文件探针真机验证通过。
+
+### 行为变化（升级注意）
+
+- **新增运行时依赖**：`web-tree-sitter@0.20.8`（MIT）+ `tree-sitter-wasms@0.1.13`（Unlicense，解包约 52MB）；已提交 `package-lock.json` 与 `THIRD_PARTY_NOTICES.md`。**版本被 wasm ABI 钉死**，升级需同步重建语法。
+- `search_code` 默认跳过 `.git`/`node_modules`/`dist`/`asar`/`third_party` 等目录，并尊重工作区根 `.gitignore`；`codeSearch.exclude` 可追加。
+- `autoRecall` 与 `codeSearch.embedding` 均**默认关**；embedding 真机依赖 OpenAI 兼容 `/embeddings`（本机 magpie 网关返回 500，语义检索不可用，已如实披露）。
+
+### 验证
+
+- `npm run verify`：**46/46** 测试（新增 code-search / symbols / ignore / embedding / embedder-http / search-code-tool / auto-recall 等）；audit-layers 198 文件；docs-check ADR 20。
+- 真机/验收：两真实仓库 6 条查询验收（含 exclude 复验）、embedding 不可用路径、auto-recall 文件探针真机确认；性能实测热查询 **0 次内容读取**（`_reports/embedding-perf-20261030.md`）。
+
+### 已知限制（2.2.0）
+
+- embedding 真机 provider 缺失（网关 `/v1/embeddings` 500）；语义检索未在真机可用。
+- `sourceSig` 用 rel+size+mtime：同尺寸且 mtime 被保留的编辑不会触发重建（罕见）。
+- 符号抽取对极常见词（如 `tree`）可能轻度误命中；`obj` 仍按构建目录跳过。
+- 每次 embedding 查询仍有 stat 遍历（336 文件 ≈16ms，无内容读取）。
+
 ## [2.1.0] — 2026-10-28
 
 工程缺口收口版：影子工具集从占位变成真实台账，遗忘契约落地，派生件开始物化，lab 输入契约按 mode 拆开并加固写边界。
