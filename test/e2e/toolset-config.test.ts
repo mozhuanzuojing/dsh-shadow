@@ -34,7 +34,7 @@ const makeCtx = (): { ctx: any; tools: Map<string, any> } => {
 
 const ws = mkdtempSync(join(tmpdir(), "dsh-shadow-config-"));
 try {
-  // ② 默认：shadow_toolset 注册（4 工具）
+  // ② 默认：shadow_toolset 注册（5 工具）
   const a = makeCtx();
   const cleanupA = apply(a.ctx, { shadowRoot: ws });
   try {
@@ -50,7 +50,7 @@ try {
   try {
     assert.ok(!b.tools.has("shadow_toolset"), "toolset.enabled:false 不得注册 shadow_toolset");
     assert.ok(b.tools.has("read_shadow"), "其余 core 工具不受影响");
-    assert.equal(b.tools.size, 3, `应只剩 3 个 core 工具，实际 ${[...b.tools.keys()].join(",")}`);
+    assert.equal(b.tools.size, 4, `应只剩 4 个 core 工具，实际 ${[...b.tools.keys()].join(",")}`);
   } finally {
     cleanupB();
   }
@@ -58,4 +58,4 @@ try {
   rmSync(ws, { recursive: true, force: true });
 }
 
-console.log("✔ e2e config：toolset.enabled:false 不注册台账（其余 3 工具仍在）· forget/toolset 不再报未接线 warning");
+console.log("✔ e2e config：toolset.enabled:false 不注册台账（其余 4 工具仍在）· forget/toolset 不再报未接线 warning");

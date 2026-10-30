@@ -9,6 +9,7 @@ import type { ParsedAtom } from "../../contract/types.js";
 import { evidencePathsOf, isConcreteLocator, isPathLike, tokenize } from "../../domain/text.js";
 import { searchTerms } from "../../domain/bm25.js";
 import { extractFacts, factsMatching, renderFactsList } from "../../domain/facts.js";
+import { buildLessonCards, rankLessonCards, renderSimilar } from "../../domain/lessons.js";
 import {
   deriveContextRefs,
   deriveDecisions,
@@ -307,6 +308,25 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
 
 const statusWord = (s: string): string =>
   s === "validated" ? "✓ verified" : s === "stale" ? "✗ not_found（已失效/证据缺失）" : "? unavailable（无法验证）";
+
+/**
+ * 相似过往任务视图：把「历史做过的事」压成任务卡（请求/决策/结果/教训/来源），
+ * 按 relevance+recency+importance 召回 top-k。派生、可重建、数据非指令。
+ */
+export const similarView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): Promise<ModeOutput> => {
+  const query = String(req.topic ?? "").trim();
+  const limit = deps.limit ?? Math.max(1, Math.min(10, Number(req.limit ?? 3) || 3));
+  const cards = buildLessonCards(atoms);
+  const ranked = rankLessonCards(cards, query, deps.clock.today(), limit);
+  const body = renderSimilar(query, ranked);
+  return {
+    body,
+    matched: cards.length,
+    returned: ranked.length,
+    dropped: Math.max(0, cards.length - ranked.length),
+    examples: ranked.map((r) => r.card.key),
+  };
+};
 
 /**
  * 事实视图（lens `facts:true`）：从用户原话抽「X 是/=/：<路径>」的可核验事实，

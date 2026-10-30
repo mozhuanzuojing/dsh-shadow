@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（15 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（16 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -19,6 +19,7 @@
 | [0013](./0013-lab-package-split.md) | 拆分 dsh-shadow-lab 独立包（设计，未执行） | proposal |
 | [0014](./0014-cjk-bigram-fuzzy-recall.md) | 中文查询的宽松兜底召回（CJK 2-gram / BM25） | accepted |
 | [0015](./0015-project-facts-evidence.md) | 项目事实（facts）：从用户原话抽可核验的 X=路径 | accepted |
+| [0016](./0016-similar-task-recall.md) | 相似过往任务召回（任务卡+经验，新增 recall_similar） | accepted |
 
 ## 状态枚举
 

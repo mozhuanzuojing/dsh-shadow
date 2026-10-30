@@ -45,6 +45,8 @@ export interface ReadRequest {
   verifyEvidence?: boolean;
   /** 读「项目事实」视图（从用户原话抽取的可核验 X=路径，带 Evidence 状态）。 */
   facts?: boolean;
+  /** 读「相似过往任务」视图（历史任务卡 + 经验，按相关性+新近+重要性召回）。 */
+  similar?: boolean;
 }
 
 export interface ModeOutput {

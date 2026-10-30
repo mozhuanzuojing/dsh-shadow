@@ -105,6 +105,12 @@
 - 测试：`test/unit/facts.test.ts`；`npm run verify` 37/37。
 - 边界：只抽**带路径**的事实（精度取舍）；启发式非 LLM，复杂句式会漏；核验只判路径存在性。
 
+### 相似过往任务召回（2026-10-30 · `adr/0016`）
+- 新增派生「任务卡」（请求/决策/结果/教训/来源）+ 核心工具 `recall_similar(query, limit)`；按 `relevance(BM25 中文2gram) + recency + importance` 召回相似任务。
+- 纯派生、不改 atoms；core 工具 **4 → 5**，core mode 仍 10；不改变 atom 级严格排序（parity 0.890）。
+- 测试：`test/unit/similar.test.ts`；`npm run verify` **38/38**。
+- 边界：`lessons` 是启发式（非 LLM）；相似=BM25/2-gram，语义近义/翻译仍可能不中；仍需 agent 主动调用（自动召回待真机 spike）。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。

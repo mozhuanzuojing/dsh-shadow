@@ -15,7 +15,7 @@ import { loadAtoms } from "../../store/atoms.js";
 import { budgetText, envelope } from "./render.js";
 import {
   contextView, decisionView, episodeView, indexView, knowledgeView, manifestView,
-  queryLogView, queryView, recoveryView, reportView, taskView, topicView, factsView,
+  queryLogView, queryView, recoveryView, reportView, taskView, topicView, factsView, similarView,
 } from "./modes.js";
 import type { ModeOutput, ReadDeps, ReadRequest, ReadResult } from "./types.js";
 
@@ -139,7 +139,9 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
     && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true);
-  if (lensRequested) {
+  if (req.similar) {
+    out = await similarView(depsWithMeta, activeAtoms, req);
+  } else if (lensRequested) {
     const lens = await lensText(depsWithMeta, req, activeAtoms);
     out = lens !== undefined
       ? { body: lens, matched: activeAtoms.length, returned: activeAtoms.length, dropped: 0, examples: [] }
