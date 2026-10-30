@@ -92,6 +92,13 @@
 - 证据：`D:\project\local-workbench\_work\v2web\evidence\v2.1.0-retest-20261030\`（截图 + atoms/indexes/audit + README）。
 - desktop profile：已写入 dependency/bundle + node_modules junction，**待重启 Electron 生效**；CLI 对 desktop 报「managed exclusively by the Electron application」，故组合性改用等价 `v2web` profile 在 CLI `0.2.1-rc.5` 上验证（dump-config exit 0、含 `- id: dsh-shadow`）。
 
+### 行为增强（2026-10-30）— 中文宽松兜底召回
+- 根因：`tokenize` 不分中文、`scoreMemory` 用字面子串 ⇒ 「后端入口在哪」对原文「后端工程入口是…」严格 `score=0`、返回未找到。
+- 修法（`adr/0014`）：CJK **2-gram / BM25 兜底**，**只在严格匹配整体零结果时启用**；输出显式标注「宽松匹配（字形近似，非语义）」；严格命中路径与排序一字不改，parity 19 条 avg Jaccard 仍 **0.890**。
+- 实测（`_work/shadow-fuzzy-demo.ts` 驱动编译产物）：`后端工程入口`=严格命中；`后端入口在哪` / `后端服务入口` / `找一下后端服务的入口`=宽松命中；`完全不存在主题zzz`=未找到。
+- 测试：新增 `test/unit/fuzzy-recall.test.ts`；`npm run verify` 35/35。
+- 仍不解决：跨工作区（`cwd` 决定 `.shadow`）、agent 不主动调用工具、无字面 2-gram 重叠的同义/翻译。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。

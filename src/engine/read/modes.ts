@@ -7,6 +7,7 @@
 import { INDEX_MD } from "../../contract/paths.js";
 import type { ParsedAtom } from "../../contract/types.js";
 import { evidencePathsOf, isConcreteLocator, isPathLike, tokenize } from "../../domain/text.js";
+import { searchTerms } from "../../domain/bm25.js";
 import {
   deriveContextRefs,
   deriveDecisions,
@@ -22,7 +23,7 @@ import {
 } from "../../domain/views.js";
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
-import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels } from "./recall.js";
+import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels, bm25Fallback } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
 const errText = (what: string, e: string): ModeOutput => ({
@@ -164,16 +165,22 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   // 证据冲突核验有 I/O：只对基础分前 200 名做，避免 8k 语料 × 12 路径的 stat 风暴。
   const topRels = new Set(base.slice(0, 200).map((s) => s.atom.rel));
   const conflicts = await conflictRels(deps, atoms.filter((a) => topRels.has(a.rel)));
-  const scored = scoreAtoms(atoms, tokens, {
+  let scored = scoreAtoms(atoms, tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
     conflictRels: conflicts,
     supersededRels: supersededRels(atoms),
   });
+  // 宽松兜底：严格匹配整体零结果时才用 BM25（中文 2-gram + 拉丁词）生成并排序候选（不改变既有命中）。
+  let loose = false;
+  if (!scored.length) {
+    scored = bm25Fallback(atoms, topic, { meta: deps.meta ?? new Map() });
+    loose = scored.length > 0;
+  }
   const maxChars = deps.maxChars ?? Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
   const limit = deps.limit ?? Math.max(1, Math.min(30, Number(req.limit ?? deps.config.recall.limit) || deps.config.recall.limit));
-  const result = selectWithinBudget(scored, tokens, maxChars, limit);
+  const result = selectWithinBudget(scored, loose ? searchTerms(topic) : tokens, maxChars, limit);
   if (!result.matched) {
     return {
       body: `（未找到相关记忆：${topic}）\n> 下一步：① 换更短/同义的词再查；② \`read_shadow()\` 无参看索引；③ 跨类型用 \`shadow_query\`。`,
@@ -186,8 +193,9 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   const staleCount = scored.filter((s) => s.stale).length;
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
   bump(deps, result.rels, at);
+  const fuzzyNote = loose ? "> 宽松匹配（BM25 · 中文 2-gram，非语义；严格无结果时兜底，引用前先核对原文）\n\n" : "";
   return {
-    body: renderTopicRecall(topic, result, staleCount),
+    body: fuzzyNote + renderTopicRecall(topic, result, staleCount),
     matched: result.matched,
     returned: result.returned,
     dropped: result.dropped,
@@ -264,11 +272,16 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
   const topic = String(req.topic ?? "").trim();
   const tokens = tokenize(topic);
   if (!tokens.length) return { body: "（查询为空）", matched: 0, returned: 0, dropped: 0, examples: [] };
-  const scored = scoreAtoms(atoms, tokens, {
+  let scored = scoreAtoms(atoms, tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
   });
+  let loose = false;
+  if (!scored.length) {
+    scored = bm25Fallback(atoms, topic, { meta: deps.meta ?? new Map() });
+    loose = scored.length > 0;
+  }
   const scope = Array.isArray(req.scope) ? new Set(req.scope) : undefined;
   const items = scored
     .map((s) => {
@@ -281,6 +294,7 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
     return { body: `（无匹配 ShadowNode：${topic}）\n> 下一步：换更短的词，或放宽 scope。`, matched: 0, returned: 0, dropped: 0, examples: [] };
   }
   const lines = [`# Shadow Query · ${topic}`, "> Node 是派生投影，不是事实源；每条带 evidence 指针。", ""];
+  if (loose) lines.push("> 宽松匹配（BM25 · 中文 2-gram，非语义；严格无结果时兜底，引用前先核对原文）", "");
   for (const { s, type } of items) {
     lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${s.atom.rel}`);
   }

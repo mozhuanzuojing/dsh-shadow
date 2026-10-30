@@ -5,7 +5,8 @@
 import type { NormalizedConfig } from "../../contract/config.js";
 import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { ageDays } from "../../contract/time.js";
-import { deprioritizeFactor, scoreMemory, snippetFor, tierFor } from "../../domain/rank.js";
+import { bm25Rank } from "../../domain/bm25.js";
+import { deprioritizeFactor, fuzzyHit, fuzzyOverlap, scoreMemory, snippetFor, tierFor } from "../../domain/rank.js";
 import { renderAtomEntry } from "./render.js";
 
 export interface ScoredAtom {
@@ -35,6 +36,12 @@ export interface ScoreOpts {
   conflictRels?: Set<string>;
   /** 同入口被更新记忆取代的 rel；v1 ×0.7。 */
   supersededRels?: Set<string>;
+  /**
+   * 宽松兜底：仅当某 atom 的严格分 = 0 时，用 CJK 2-gram 覆盖再判一次。
+   * 只在调用方已确认「严格匹配整体零结果」时才置 true（见 modes.ts），
+   * 因此不改变任何已有命中的排序（parity 安全）。
+   */
+  fuzzy?: boolean;
 }
 
 export const scoreAtoms = (atoms: ParsedAtom[], tokens: string[], opts: ScoreOpts): ScoredAtom[] => {
@@ -44,6 +51,11 @@ export const scoreAtoms = (atoms: ParsedAtom[], tokens: string[], opts: ScoreOpt
     const meta = opts.meta.get(atom.rel);
     if (meta && meta.status !== "active" && !meta.pinned) continue;
     let score = scoreMemory(atom.body, atom.rel, atom.entry, tokens, opts.todayStr);
+    if (!score && opts.fuzzy) {
+      const q = tokens.join(" ");
+      const hay = `${atom.body} ${atom.entry} ${atom.rel}`;
+      if (fuzzyHit(q, hay)) score = 1 + fuzzyOverlap(q, hay) * 0.5; // 弱证据：>0 但低于任何严格命中
+    }
     if (!score) continue;
     const age = ageDays(atom.date, new Date(`${opts.todayStr}T00:00:00`));
     let stale = age >= opts.config.retention.staleDays;
@@ -140,4 +152,28 @@ export const renderTopicRecall = (topic: string, result: BudgetResult, staleCoun
   const body = result.text || "（无匹配）";
   const stale = staleCount > 0 ? `\n\n> 其中 ${staleCount} 条可能过时/需验证：较早或低热度；引用前先核对证据。` : "";
   return `${head}${body}${stale}`;
+};
+
+/**
+ * BM25 宽松兜底：仅在严格匹配整体零结果时用于**候选生成与排序**（中文 2-gram + 拉丁词）。
+ * 不改写任何既有严格命中排序 ⇒ parity 安全。返回按 BM25 分降序的 ScoredAtom。
+ */
+export const bm25Fallback = (
+  atoms: ParsedAtom[],
+  query: string,
+  opts: { meta: Map<string, AtomMeta>; minMatched?: number },
+): ScoredAtom[] => {
+  const docs = atoms.map((a) => ({ id: a.rel, text: `${a.body} ${a.entry} ${a.rel}` }));
+  const minMatched = Math.max(2, opts.minMatched ?? 2);
+  const ranked = bm25Rank(query, docs).filter((r) => r.matched >= minMatched);
+  const byRel = new Map(atoms.map((a) => [a.rel, a] as const));
+  const out: ScoredAtom[] = [];
+  for (const r of ranked) {
+    const atom = byRel.get(r.id);
+    if (!atom) continue;
+    const meta = opts.meta.get(atom.rel);
+    if (meta && meta.status !== "active" && !meta.pinned) continue;
+    out.push({ atom, score: r.score, tier: tierFor(atom.body), deprioritized: false, stale: false, hits: meta?.hits ?? 0 });
+  }
+  return out;
 };

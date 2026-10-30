@@ -140,6 +140,7 @@
 5. **`_meta.json` 不迁移**：v2 hits/status 从空开始；若做历史命中 parity，fixture 直接注入 meta 映射，不依赖运行时导入。
 6. **重定向文案**：v1 无 lab 工具，v2 的「已移至 `shadow_lab`」提示是新文案，不参与 v1 逐字比对。
 7. **合成 oracle 的 topic 排序偏差（已实测）**：19 条 topic 查询在 `fixtures/oracle-v1` 上平均 Jaccard **0.890**（阈值 0.85）；`q02`（limit=1，v1 取到不同 top1）、`q07`（shadow 主题，v2 entry/预算归一化后排序变化）、`q10`（决策，v2 不再压平/截断）是已知偏差。只登记、不掩盖；后续若修排序须重录并说明。
+8. **中文宽松兜底召回（ADR-0014）**：严格匹配整体零结果时，用 CJK 2-gram / BM25 兜底并显式标注「宽松匹配（非语义）」。只影响原本就零结果的查询，19 条既有命中排序不变（avg Jaccard 0.890）；真正无关查询仍保持「未找到」。
 
 ## 5. 51 个 lab mode 与 `shadow_lab`
 

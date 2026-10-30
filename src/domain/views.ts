@@ -14,6 +14,7 @@ import type {
 } from "../contract/types.js";
 import { atOf, fmtTime } from "../contract/time.js";
 import { scrubUnsafe, scrubUnsafeDoc } from "./text.js";
+import { fuzzyOverlap } from "./rank.js";
 
 const D = (s: unknown, n = 60): string => scrubUnsafe(String(s ?? "")).slice(0, n);
 const uniq = (arr: string[]): string[] => Array.from(new Set(arr.filter(Boolean)));
@@ -349,15 +350,19 @@ export const rankTasks = (tasks: TaskView[], query: string): TaskView[] => {
     ...q.split(/([a-zA-Z0-9]+|[^a-zA-Z0-9]+)/i).map((s) => s.trim()).filter((s) => s && /[a-zA-Z0-9\u4e00-\u9fff]/.test(s)),
   ]);
   if (!chunks.length) return [...tasks];
-  return tasks
-    .map((t) => {
-      const hay = [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.decisions.map((d) => d.reason), ...t.outcomes, ...t.evidence].join(" ").toLowerCase();
-      let score = 0;
-      for (const tok of chunks) if (hay.includes(tok)) score += 1;
-      return { t, score };
-    })
-    .sort((a, b) => b.score - a.score)
-    .map((x) => x.t);
+  const hayOf = (t: TaskView): string =>
+    [t.title, t.objective, t.trigger, ...t.constraints, ...t.decisions.map((d) => d.text), ...t.decisions.map((d) => d.reason), ...t.outcomes, ...t.evidence]
+      .join(" ")
+      .toLowerCase();
+  const exact = tasks.map((t) => {
+    const hay = hayOf(t);
+    let score = 0;
+    for (const tok of chunks) if (hay.includes(tok)) score += 1;
+    return { t, score };
+  });
+  if (exact.some((x) => x.score > 0)) return exact.sort((a, b) => b.score - a.score).map((x) => x.t);
+  // 宽松兜底：仅在「所有任务严格分都为 0」时启用 CJK 2-gram 近似（不改变既有排序）。
+  return tasks.map((t) => ({ t, score: fuzzyOverlap(q, hayOf(t)) })).sort((a, b) => b.score - a.score).map((x) => x.t);
 };
 
 const tokenizeLoose = (s: string): string[] =>
