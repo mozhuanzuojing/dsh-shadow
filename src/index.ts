@@ -100,10 +100,13 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   let capture: Capture;
   // 写路径的日切触发：每次成功写 atom 后最多 60s 扫一次归档，避免每回合全量读。
   let lastArchiveSweep = 0;
+  let archiveInFlight = false;
   const archiveAfterFlush = (ws: string): void => {
+    if (archiveInFlight) return;
     const now = Date.now();
     if (now - lastArchiveSweep < 60_000) return;
     lastArchiveSweep = now;
+    archiveInFlight = true;
     void (async () => {
       try {
         const all = await loadAllAtoms(baseFs, ws);
@@ -118,13 +121,16 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
           }
         }
         const r = await archiveDays(baseFs, ws, all.value.atoms, systemClock.today(), { deleteHot: true, pinned });
-        if (r.errors.length) {
+        const onlyLockBusy = r.errors.length > 0 && r.errors.every((e) => e.includes("锁被占用"));
+        if (r.errors.length && !onlyLockBusy) {
           signals.note("archive", "PARTIAL", `写路径归档失败：${r.errors[0]}`, "热文件未删除；下次读/写会重试。");
-        } else {
+        } else if (!r.errors.length) {
           signals.clear("archive");
         }
       } catch (e) {
         signals.note("archive", "THROW", e instanceof Error ? e.message : String(e), "写路径归档异常；不影响已写入 atom。");
+      } finally {
+        archiveInFlight = false;
       }
     })();
   };

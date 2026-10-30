@@ -6,6 +6,14 @@
 
 （无）
 
+## [2.7.1] — 2026-10-31
+
+### 修复（重启后真机发现）
+
+- **`shadow_query` 证据路径**：输出使用 `archiveRel`（`.shadow/archive/<date>.jsonl#<rel>`）而不是已删除的热文件路径；新增 `test/unit/query-handle.test.ts`。
+- **写路径归档 single-flight**：capture `afterFlush` 增加 `archiveInFlight` 互斥；锁被占用（并发读/写归档）不再误报 capability degraded，只跳过本轮，下次重试。
+- 真机验证：`read_shadow`/`shadow_query` 返回 `archive` 锁占用 Signal（v2.7.0）；本版修复后需重启复验。
+
 ## [2.7.0] — 2026-10-31
 
 ### 新增（review P1）

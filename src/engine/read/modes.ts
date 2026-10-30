@@ -299,7 +299,8 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
   const lines = [`# Shadow Query · ${topic}`, "> Node 是派生投影，不是事实源；每条带 evidence 指针。", ""];
   if (loose) lines.push("> 宽松匹配（BM25 · 中文 2-gram，非语义；严格无结果时兜底，引用前先核对原文）", "");
   for (const { s, type } of items) {
-    lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${s.atom.rel}`);
+    const handle = s.atom.archiveRel ?? s.atom.rel;
+    lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${handle}`);
   }
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
   bump(deps, items.map((x) => x.s.atom.rel), at);
