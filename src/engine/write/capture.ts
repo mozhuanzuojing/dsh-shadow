@@ -28,6 +28,8 @@ export interface CaptureDeps {
   clock: Clock;
   signals: SignalStore;
   resolveWs: (agentId: string | undefined) => string | null;
+  /** 成功写 atom 后的非阻塞钩子（用于跨日归档）；必须自己吞掉异步错误。 */
+  afterFlush?: (ws: string) => void;
   getAgentById?: (id: string | undefined) => any;
   getInitiator?: () => any;
 }
@@ -225,6 +227,11 @@ export class Capture {
       this.deps.signals.clear("capture.pending");
       this.deps.signals.clear("capture.scope");
       this.deps.signals.clear("capture.consent");
+      try {
+        this.deps.afterFlush?.(ws);
+      } catch (e) {
+        this.note("capture.afterFlush", "THROW", e instanceof Error ? e.message : String(e), "atom 已写入；跨日归档未触发，下次读/写再试。");
+      }
       return ok({ written: 1, audit: 0, retained: this.pending.get(id)?.length ?? 0, rel: w.value.rel });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

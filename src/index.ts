@@ -20,6 +20,7 @@ import { makeLabTools } from "./lab/tool.js";
 import { buildLessonCards, type LessonCard } from "./domain/lessons.js";
 import { buildAutoRecallHint } from "./domain/auto-recall.js";
 import { loadAtoms } from "./store/atoms.js";
+import { archiveDays, loadAllAtoms } from "./store/archive.js";
 import { dateOf } from "./contract/time.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
@@ -97,6 +98,36 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   const isReadOnly = (policy: any): boolean => policy?.mode === "read-only" || policy?.mode === "readonly";
 
   let capture: Capture;
+  // 写路径的日切触发：每次成功写 atom 后最多 60s 扫一次归档，避免每回合全量读。
+  let lastArchiveSweep = 0;
+  const archiveAfterFlush = (ws: string): void => {
+    const now = Date.now();
+    if (now - lastArchiveSweep < 60_000) return;
+    lastArchiveSweep = now;
+    void (async () => {
+      try {
+        const all = await loadAllAtoms(baseFs, ws);
+        if (!all.ok) return;
+        const pinned = new Set<string>();
+        const db = await indexCache.get(baseFs, ws);
+        if (db.ok) {
+          try {
+            for (const [rel, meta] of db.value.metaMap()) if (meta.pinned) pinned.add(rel);
+          } catch {
+            /* meta 读失败：不删（pinned 未知） */
+          }
+        }
+        const r = await archiveDays(baseFs, ws, all.value.atoms, systemClock.today(), { deleteHot: true, pinned });
+        if (r.errors.length) {
+          signals.note("archive", "PARTIAL", `写路径归档失败：${r.errors[0]}`, "热文件未删除；下次读/写会重试。");
+        } else {
+          signals.clear("archive");
+        }
+      } catch (e) {
+        signals.note("archive", "THROW", e instanceof Error ? e.message : String(e), "写路径归档异常；不影响已写入 atom。");
+      }
+    })();
+  };
   const resolveWsFor = (id: string | undefined): string | null => {
     const cwd = id ? capture?.cwdByAgent.get(id) ?? capture?.cwdBySession.get(id) : undefined;
     const r = resolveWorkspace({ agent: { id, session: { header: { cwd } } } }, config);
@@ -114,6 +145,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     clock: systemClock,
     signals,
     resolveWs: resolveWsFor,
+    afterFlush: archiveAfterFlush,
     getAgentById: (id) => {
       try {
         return ctx.get("agents")?.get(id);

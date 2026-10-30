@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.7.0] — 2026-10-31
+
+### 新增（review P1）
+
+- **`.trash` 保留期**：删热文件改为移入 `.shadow/.trash/<date>/`，默认保留 7 天；每次归档清理过期目录（`purged` 计数）。`trash:false` 可回退直接 unlink。
+- **写路径触发归档**：capture 成功写 atom 后触发 `afterFlush`（60s 节流），不再只依赖无参 `read_shadow`。
+- **decision/episode 路径句柄**：`EpisodeDecision/EpisodeAction/DecisionEntry/TaskView.decisions` 带 `archiveRel`；渲染优先显示归档句柄。
+- 真实 2026-10-31 日切：137 条 10-30 atoms 归档 + 移入 `.trash/2026-10-30`；`.shadow/atoms` 只剩当日 1 条；`loadAllAtoms` 922、IndexCache 第二次 `source=db`。
+
 ## [2.6.0] — 2026-10-30
 
 ### 修复（review P0）

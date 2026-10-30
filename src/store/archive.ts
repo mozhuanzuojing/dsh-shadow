@@ -18,6 +18,7 @@ import {
   ARCHIVE_DIR,
   ARCHIVE_LOCK,
   ARCHIVE_MANIFEST,
+  TRASH_DIR,
 } from "../contract/paths.js";
 import { err, ok, type Outcome } from "../contract/outcome.js";
 import type { ParsedAtom } from "../contract/types.js";
@@ -37,8 +38,10 @@ export interface ArchiveResult {
   /** 已存在且 manifest 命中，未重写。 */
   skipped: string[];
   errors: string[];
-  /** 删除的热文件数（`deleteHot` 时）。 */
+  /** 移出 atoms 的热文件数（默认进 `.trash`）。 */
   deleted: number;
+  /** 从 `.trash` 清理的过期文件数。 */
+  purged: number;
 }
 
 export interface ArchiveOptions {
@@ -50,6 +53,10 @@ export interface ArchiveOptions {
   deleteHot?: boolean;
   /** 被 pin 的 atom rel：可以归档，但**不删热文件**。 */
   pinned?: Set<string>;
+  /** 删热文件前移入 `.shadow/.trash/`；false 则直接 unlink（默认 true）。 */
+  trash?: boolean;
+  /** `.trash/` 保留天数；默认 7。 */
+  keepTrashDays?: number;
 }
 
 interface ManifestDay {
@@ -305,6 +312,44 @@ const digest = (date: string, atoms: ParsedAtom[]): string => {
   return lines.join("\n") + "\n";
 };
 
+const cutoffDate = (today: string, days: number): string => {
+  const d = new Date(`${today}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return today;
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** 清理 `.trash/` 中超过保留期的日期目录（只删文件，不递归；目录可为空）。 */
+const purgeTrash = async (
+  fs: FsPort,
+  ws: string,
+  today: string,
+  keepDays: number,
+): Promise<{ purged: number; errors: string[] }> => {
+  const out = { purged: 0, errors: [] as string[] };
+  const root = abs(ws, TRASH_DIR);
+  const listed = await fs.listDir(root);
+  if (!listed.ok) return out;
+  const cutoff = cutoffDate(today, keepDays);
+  for (const entry of listed.value) {
+    if (entry.type !== "dir" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.name)) continue;
+    if (entry.name >= cutoff) continue;
+    const dir = `${root}/${entry.name}`;
+    const files = await fs.listDir(dir);
+    if (!files.ok) {
+      if (files.error.code !== "NOT_FOUND") out.errors.push(`${TRASH_DIR}/${entry.name}: ${files.error.message}`);
+      continue;
+    }
+    for (const f of files.value) {
+      if (f.type !== "file") continue;
+      const del = await fs.unlink(`${dir}/${f.name}`);
+      if (del.ok) out.purged += 1;
+      else if (del.error.code !== "NOT_FOUND") out.errors.push(`${TRASH_DIR}/${entry.name}/${f.name}: ${del.error.message}`);
+    }
+  }
+  return out;
+};
+
 /**
  * 归档 `date < today` 的全部 atom 日。
  * @param fs FsPort
@@ -320,10 +365,12 @@ export const archiveDays = async (
   today: string,
   opts: ArchiveOptions = {},
 ): Promise<ArchiveResult> => {
-  const result: ArchiveResult = { archived: [], skipped: [], errors: [], deleted: 0 };
+  const result: ArchiveResult = { archived: [], skipped: [], errors: [], deleted: 0, purged: 0 };
   const now = Number.isFinite(opts.now) ? Number(opts.now) : Date.now();
   const staleLockMs = Math.max(1_000, Number(opts.staleLockMs ?? 10 * 60_000));
   const deleteHot = opts.deleteHot === true;
+  const trash = opts.trash !== false;
+  const keepTrashDays = Math.max(0, Math.floor(opts.keepTrashDays ?? 7));
   const pinned = opts.pinned ?? new Set<string>();
   const byDate = new Map<string, ParsedAtom[]>();
   for (const a of atoms) {
@@ -465,13 +512,29 @@ export const archiveDays = async (
     if (deleteHot) {
       for (const records of deletions.values()) {
         for (const a of records) {
-          const del = await fs.unlink(abs(ws, a.rel));
-          if (del.ok) result.deleted += 1;
-          else if (del.error.code !== "NOT_FOUND") {
-            result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+          const src = abs(ws, a.rel);
+          if (trash) {
+            // 归档已验证；先把热文件移进 .trash（可恢复），再由保留期清理。
+            const dest = abs(ws, `${TRASH_DIR}/${a.date}/${a.rel.split("/").pop() ?? a.name}`);
+            const mv = await fs.rename(src, dest);
+            if (mv.ok) result.deleted += 1;
+            else if (mv.error.code !== "NOT_FOUND") {
+              result.errors.push(`${a.rel}: 热文件移入 .trash 失败（${mv.error.message}）`);
+            }
+          } else {
+            const del = await fs.unlink(src);
+            if (del.ok) result.deleted += 1;
+            else if (del.error.code !== "NOT_FOUND") {
+              result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+            }
           }
         }
       }
+    }
+    if (trash) {
+      const cleaned = await purgeTrash(fs, ws, today, keepTrashDays);
+      result.purged += cleaned.purged;
+      result.errors.push(...cleaned.errors);
     }
     return result;
   } finally {

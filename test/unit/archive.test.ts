@@ -63,6 +63,7 @@ assert.equal(loaded.ok, true);
 if (!loaded.ok) throw new Error("read archive failed");
 assert.equal(loaded.value.length, 2);
 assert.equal(loaded.value[0]!.body, "old a");
+assert.match(loaded.value[0]!.archiveRel ?? "", /^\.shadow\/archive\/2026-10-29\.jsonl#/, "归档 atom 必须带 archiveRel 句柄");
 
 // 幂等：manifest 命中后不重写
 const second = await archiveDays(fs, WS, [old1, old2, today], "2026-10-30", { now: 2000 });
@@ -97,6 +98,18 @@ assert.equal(del.deleted, 2);
 assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`), false);
 assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-29--100001-b--bbbbbb.md`), false);
 assert.equal(await delFs.exists(`${WS}/.shadow/atoms/2026-10-30--090000-c--cccccc.md`), true, "today 热文件必须保留");
+assert.equal(await delFs.exists(`${WS}/.shadow/.trash/2026-10-29/2026-10-29--100000-a--aaaaaa.md`), true, "删热文件先进 .trash");
+
+// .trash 保留期：过期日期目录被清理
+const trashFs = new MemoryFs({
+  [`${WS}/.shadow/.trash/2026-10-01/old.md`]: "old trash",
+  [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "a",
+});
+const trashRun = await archiveDays(trashFs, WS, [old1], "2026-10-30", { now: 1000, deleteHot: true, keepTrashDays: 7 });
+assert.equal(trashRun.errors.length, 0);
+assert.equal(trashRun.purged, 1, "超过 7 天的 .trash 应清理");
+assert.equal(await trashFs.exists(`${WS}/.shadow/.trash/2026-10-01/old.md`), false);
+assert.equal(await trashFs.exists(`${WS}/.shadow/.trash/2026-10-29/2026-10-29--100000-a--aaaaaa.md`), true, "未过期的 trash 保留");
 const rebuilt = await loadAllAtoms(delFs, WS);
 assert.equal(rebuilt.ok, true);
 if (!rebuilt.ok) throw new Error("loadAllAtoms failed");

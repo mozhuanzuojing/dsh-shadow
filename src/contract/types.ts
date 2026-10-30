@@ -64,12 +64,16 @@ export interface AtomMeta {
 export interface EpisodeDecision {
   text: string;
   rel: string;
+  /** 冷区句柄（若该 atom 已归档）。 */
+  archiveRel?: string;
   at: string;
 }
 
 export interface EpisodeAction {
   text: string;
   rel: string;
+  /** 冷区句柄（若该 atom 已归档）。 */
+  archiveRel?: string;
   at: string;
 }
 
@@ -95,6 +99,8 @@ export interface DecisionEntry {
   reason: string;
   source: string;
   rel: string;
+  /** 冷区句柄（若该 atom 已归档）。 */
+  archiveRel?: string;
   at: string;
 }
 
@@ -113,7 +119,7 @@ export interface TaskView {
   statusNote?: string;
   startedAt?: string;
   endedAt?: string;
-  decisions: { text: string; source: string; reason: string; rel: string; at: string }[];
+  decisions: { text: string; source: string; reason: string; rel: string; archiveRel?: string; at: string }[];
   outcomes: string[];
   evidence: string[];
   memoryRefs: string[];

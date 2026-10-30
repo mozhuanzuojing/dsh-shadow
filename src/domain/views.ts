@@ -45,8 +45,8 @@ export const deriveEpisodes = (parsed: ParsedAtom[], gapMinutes = 60): Episode[]
       memoryCount: 1,
       memoryRefs: [p.rel],
       entries: p.entry ? [p.entry] : [],
-      decisions: p.decisions.map((d) => ({ text: d, rel: p.rel, at })),
-      actions: p.actions.map((a) => ({ text: a, rel: p.rel, at })),
+      decisions: p.decisions.map((d) => ({ text: d, rel: p.rel, archiveRel: p.archiveRel, at })),
+      actions: p.actions.map((a) => ({ text: a, rel: p.rel, archiveRel: p.archiveRel, at })),
       materials: [...p.materials],
       key: `${p.project}|${p.agent}`,
       lastAt: epochMin(p.date, p.time),
@@ -63,8 +63,8 @@ export const deriveEpisodes = (parsed: ParsedAtom[], gapMinutes = 60): Episode[]
       e.objective = p.goal;
       e.title = p.goal;
     }
-    for (const d of p.decisions) if (!e.decisions.some((x) => x.text === d)) e.decisions.push({ text: d, rel: p.rel, at });
-    for (const a of p.actions) if (!e.actions.some((x) => x.text === a)) e.actions.push({ text: a, rel: p.rel, at });
+    for (const d of p.decisions) if (!e.decisions.some((x) => x.text === d)) e.decisions.push({ text: d, rel: p.rel, archiveRel: p.archiveRel, at });
+    for (const a of p.actions) if (!e.actions.some((x) => x.text === a)) e.actions.push({ text: a, rel: p.rel, archiveRel: p.archiveRel, at });
     for (const m of p.materials) if (!e.materials.includes(m)) e.materials.push(m);
     e.lastAt = epochMin(p.date, p.time);
   };
@@ -134,6 +134,7 @@ export const deriveDecisions = (
         reason: ev.reason ?? "",
         source: ev.source ?? "",
         rel: p.rel,
+        archiveRel: p.archiveRel,
         at,
       });
       count++;
@@ -157,7 +158,7 @@ export const renderDecisions = (dl: DecisionLineage): string => {
     for (const d of dl.byEntry[entry]!) {
       const reason = d.reason ? `因：${D(d.reason)}` : "因：未明确";
       const src = d.source ? `〔${d.source}〕` : "";
-      parts.push(`- ${d.at.slice(5)} ${src}${D(d.text)}  ·  ${reason}  ·  ${d.rel.split("/").slice(-2).join("/")}`);
+      parts.push(`- ${d.at.slice(5)} ${src}${D(d.text)}  ·  ${reason}  ·  ${(d.archiveRel ?? d.rel).split("/").slice(-2).join("/")}`);
     }
     parts.push("");
   }

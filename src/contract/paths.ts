@@ -20,6 +20,8 @@ export const AUDIT_DIR = `${SHADOW_DIR}/audit`;
 export const ARCHIVE_DIR = `${SHADOW_DIR}/archive`;
 export const ARCHIVE_MANIFEST = `${ARCHIVE_DIR}/_index.json`;
 export const ARCHIVE_LOCK = `${SHADOW_DIR}/.archive.lock`;
+/** 删热文件前的回收站；按日期保留 N 天后清理。 */
+export const TRASH_DIR = `${SHADOW_DIR}/.trash`;
 export const SOUL_DIR = `${SHADOW_DIR}/soul`;
 export const SOUL_FILE = `${SOUL_DIR}/soul.json`;
 export const TASTE_FILE = `${SHADOW_DIR}/taste/taste.json`;

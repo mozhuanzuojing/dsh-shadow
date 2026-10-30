@@ -7,7 +7,7 @@
 
 ## 0. 结论
 
-> **修复状态（v2.6.0）**：P0-1/2/3/5/6/7 已修复并有测试；P0-4 路径映射做了 `archiveRel`（`atomDisplay`/DB enrich），但 decision/episode 的部分展示仍可能显示旧 `rel`，标注为**部分修复**。P1 的 `.trash`/写路径触发仍未做。
+> **修复状态（v2.6.0 / v2.7.0）**：P0-1/2/3/5/6/7 已修复并有测试；P0-4 路径映射已做 `archiveRel`（`atomDisplay`、decision/episode、DB enrich；`memoryRefs` 仍逻辑 rel）。P1 的 `.trash` 保留期、写路径触发、decision/episode 句柄已落地；真实多进程/断电故障注入与语义 compaction/候选预筛仍未做。
 
 1. 有 **3 个可复现的数据安全缺陷**（P0）：
    - 跳过已归档日期时，会删除**未进入 archive 的迟到 atom**；
