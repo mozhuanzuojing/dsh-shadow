@@ -12,6 +12,7 @@ import { searchCodeIndexed } from "../engine/read/code-index.js";
 import { searchSymbols } from "../engine/read/symbols.js";
 import { loadIgnore } from "../engine/read/ignore.js";
 import { makeHttpEmbedder, searchEmbedding } from "../engine/read/embedding.js";
+import { makeLocalEmbedder } from "../engine/read/local-embedder.js";
 import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
 import type { ExecLike } from "./workspace.js";
@@ -212,18 +213,33 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       } catch (e) {
         extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
       }
-      // 阶段 3：embedding 语义检索（默认关；无 provider 时显式不可用，不影响上面结果）。
+      // 阶段 3：向量检索（默认内置本地 embedder；provider:auto 时优先 http，失败回落本地）。
       const emb = (d.value.config as any)?.codeSearch?.embedding;
       if (emb?.enabled) {
         try {
-          const embedder = makeHttpEmbedder({ baseURL: emb.baseURL, apiKeyEnv: emb.apiKeyEnv, model: emb.model });
-          const se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, embedder, { limit: 8, ignore, maxChunks: emb.maxChunks });
-          if (se.error) extra += `\n\n## 语义（embedding）\n> 语义检索不可用：${se.error}`;
-          else if (se.hits.length)
-            extra += `\n\n## 语义（embedding · ${se.model}）\n${se.hits.map((h) => `- \`${h.rel}:${h.start}-${h.end}\` · 相似度 ${Math.round(h.score * 1000) / 1000} · ${h.snippet}`).join("\n")}`;
-          else extra += `\n\n## 语义（embedding）\n（未匹配；索引${se.built ? "新建" : "复用"}）`;
+          const provider = String(emb.provider ?? "auto");
+          const useHttp = provider === "http" || (provider === "auto" && !!emb.model);
+          const httpEmbedder = useHttp ? makeHttpEmbedder({ baseURL: emb.baseURL, apiKeyEnv: emb.apiKeyEnv, model: emb.model }) : null;
+          const localEmbedder = makeLocalEmbedder();
+          let se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, httpEmbedder ?? localEmbedder, { limit: 8, ignore, maxChunks: emb.maxChunks });
+          let fellBack = false;
+          let httpError = "";
+          if (se.error && httpEmbedder && provider === "auto") {
+            httpError = se.error;
+            fellBack = true;
+            se = await searchEmbedding({ fs: d.value.fs, ws: d.value.ws }, query, localEmbedder, { limit: 8, ignore, maxChunks: emb.maxChunks });
+          }
+          const label = httpEmbedder && !fellBack ? `语义（embedding · ${se.model}）` : fellBack ? "向量（本地回退 · 子词近似，非语义）" : "向量（本地子词 · 非语义）";
+          // 本地哈希向量分数量纲偏低：只展示 >=0.2 的命中，避免低分噪声。
+          const shown = se.model.startsWith("local:") ? se.hits.filter((h) => h.score >= 0.2) : se.hits;
+          if (se.error) extra += `\n\n## ${label}\n> 向量检索不可用：${se.error}`;
+          else if (shown.length) {
+            extra += `\n\n## ${label}\n`;
+            if (fellBack) extra += `> HTTP embedding 不可用（${httpError}），已用内置本地向量。\n`;
+            extra += `${shown.map((h) => `- \`${h.rel}:${h.start}-${h.end}\` · 相似度 ${Math.round(h.score * 1000) / 1000} · ${h.snippet}`).join("\n")}`;
+          } else extra += `\n\n## ${label}\n（未匹配；索引${se.built ? "新建" : "复用"}）`;
         } catch (e) {
-          extra += `\n\n## 语义（embedding）\n> 语义检索失败：${e instanceof Error ? e.message : String(e)}`;
+          extra += `\n\n## 向量检索\n> 失败：${e instanceof Error ? e.message : String(e)}`;
         }
       }
       return renderPlain(r.text + extra, d.value.signals);

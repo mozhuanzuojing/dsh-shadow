@@ -131,7 +131,7 @@
 4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
 5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 6. **自动召回 auto-recall**（`adr/0018`）：**已实现 + 真机已验证**（`autoRecall` 默认关；文件探针显示 `text()` 每步被调用、turn-stopping 后 `cache-refreshed cards=1`、下一轮 `text() injected … hintChars=140`）。
-7. **代码检索**（`adr/0019`/`adr/0020`/`adr/0021`）：**阶段 1** `search_code`、**阶段 2** tree-sitter 符号、**阶段 3** embedding 管线均已接入；**Cursor 式索引**（语法块 + 增量刷新 + trigram 候选 + BM25，默认启用、可删重建）已实现。**embedding 真机不可用**（本机网关 `/v1/embeddings` 返回 500），默认关、无 provider 显式披露。
+7. **代码检索**（`adr/0019`/`0020`/`0021`/`0022`）：**阶段 1** `search_code`、**阶段 2** tree-sitter 符号、**阶段 3** 向量检索均已接入；**Cursor 式索引**（语法块 + 增量刷新 + trigram 候选 + BM25，默认启用、可删重建）与**内置本地向量**（provider:auto/local，无 provider 也能用；本地向量为子词近似、非语义）已实现。HTTP embedding 仍不可用（网关 500），配置 `provider:"http"` 才走外部。
 
 ## 关键数字（可重放）
 

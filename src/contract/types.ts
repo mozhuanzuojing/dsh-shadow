@@ -188,6 +188,6 @@ export interface ShadowConfig {
     exclude?: string[];
     useGitignore?: boolean;
     index?: { enabled?: boolean; maxChunks?: number; maxBytes?: number };
-    embedding?: { enabled?: boolean; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
+    embedding?: { enabled?: boolean; provider?: "auto" | "local" | "http"; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
   };
 }

@@ -9,8 +9,9 @@
  */
 
 import { createHash } from "node:crypto";
-import { chunkCode } from "../../domain/code-search.js";
 import { cosine } from "../../domain/embedding.js";
+import { astChunks } from "./ast-chunk.js";
+import { languageFor } from "./symbols.js";
 import { walkCodeFiles, absOf, snippetOf } from "./walk.js";
 import type { FsPort } from "../../store/fs.js";
 
@@ -112,7 +113,7 @@ export const buildEmbeddingIndex = async (
     if (!st.ok || st.value.size > maxFileBytes) return;
     const read = await deps.fs.readText(abs);
     if (!read.ok) return;
-    for (const c of chunkCode(rel, read.value, 40)) {
+    for (const c of await astChunks(rel, read.value, languageFor(rel.slice(rel.lastIndexOf("/") + 1)), 1500)) {
       const h = hashOf(c.text);
       chunks.push({ key: `${rel}#${c.start}-${c.end}#${h}`, rel, start: c.start, end: c.end, snippet: snippetOf(c.text), text: c.text });
       if (chunks.length >= maxChunks) {
