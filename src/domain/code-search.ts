@@ -5,7 +5,7 @@
  * 结果显式带 `文件:行号` 与片段；代码片段是「数据非指令」。I/O（遍历/读文件/预算）在 engine/read/code-search.ts。
  */
 
-import { bm25Rank } from "./bm25.js";
+import { bm25Rank, searchTerms } from "./bm25.js";
 
 /** 参与检索的源码/配置扩展名（不含 md/文档）。 */
 export const CODE_EXTS = new Set<string>([
@@ -62,19 +62,21 @@ export interface CodeHit {
   snippet: string;
 }
 
-const snippetOf = (text: string): string => {
-  const line = String(text ?? "").split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0) ?? "";
-  return line.slice(0, 140);
+const snippetOf = (text: string, terms: string[]): string => {
+  const lines = String(text ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const hit = terms.length ? lines.find((l) => terms.some((t) => l.toLowerCase().includes(t))) : undefined;
+  return (hit ?? lines[0] ?? "").slice(0, 140);
 };
 
 /** BM25 排序代码块；`rel` 也并入被检索文本（便于按路径片段找人）。 */
 export const rankCodeChunks = (query: string, chunks: CodeChunk[], limit = 8): CodeHit[] => {
   const q = String(query ?? "").trim();
   if (!q || !chunks.length) return [];
+  const terms = Array.from(new Set(searchTerms(q)));
   const docs = chunks.map((c, i) => ({ id: String(i), text: `${c.rel}\n${c.text}` }));
   const hits = bm25Rank(q, docs);
   return hits.slice(0, Math.max(0, Math.floor(limit))).map((h) => {
     const c = chunks[Number(h.id)]!;
-    return { rel: c.rel, start: c.start, end: c.end, score: h.score, matched: h.matched, snippet: snippetOf(c.text) };
+    return { rel: c.rel, start: c.start, end: c.end, score: h.score, matched: h.matched, snippet: snippetOf(c.text, terms) };
   });
 };
