@@ -28,9 +28,6 @@ export const numOr = (value: unknown, fallback: number): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-/** v1 的默认全开判据：undefined = 开，只有显式 false 才关。 */
-export const onByDefault = (value: unknown): boolean => value !== false;
-
 export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[] = []): NormalizedConfig => {
   const c = raw ?? {};
   const known = new Set([

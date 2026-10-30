@@ -192,7 +192,7 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       const limit = typeof args.limit === "number" ? args.limit : undefined;
       const ignore = await loadIgnore(d.value.fs, d.value.ws, (d.value.config as any)?.codeSearch);
       const idx = (d.value.config as any)?.codeSearch?.index;
-      let r: { text: string; indexChunks?: IndexChunk[] };
+      let r: { text: string; indexChunks?: IndexChunk[]; root?: string };
       try {
         r = await searchCodeIndexed({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore, maxChunks: idx?.maxChunks, maxBytes: idx?.maxBytes });
       } catch {
@@ -233,6 +233,8 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
             ignore,
             maxChunks: emb.maxChunks,
             asyncBuild: kindOf(cand.id) === "neural",
+            chunks: r.indexChunks,
+            sourceSig: r.root,
           });
           if (se.error) {
             notes.push(`${labelOf(cand.id)} 不可用：${se.error}`);

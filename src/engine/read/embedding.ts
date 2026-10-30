@@ -1,18 +1,16 @@
 /**
- * v2 engine — 代码 embedding 语义检索（派生索引，可重建）。ADR-0019 阶段 3。
+ * v2 engine — 代码 embedding 语义检索（派生索引，可重建）。ADR-0019/0021/0022。
  *
- * - 索引 `.shadow/indexes/code/embeddings.json`（派生、可重建）。
- * - 40 行块；按内容 hash 复用，只对新增/变更块重新 embed。
- * - 源文件集合签名（rel+size）变化即触发重建 —— 解决"索引建好后永不刷新"的陈旧问题。
- * - 查询时对索引条目**再次套用 ignore/exclude**，避免改配置后旧索引泄露被排除文件。
- * - Embedder 可注入（测试用假实现）；默认 HTTP（OpenAI 兼容 /embeddings）。不可用即返回 error。
+ * 与代码索引**共用 AST 块**：向量索引直接复用 `code-index` 的 chunks 与根签名，
+ * 不再二次 walk/解析/存储全文（避免冗余与口径漂移）。
+ * - 索引 `.shadow/indexes/code/embeddings.json`：只存 id/位置/片段/向量，不存全文。
+ * - `sourceSig` = 代码索引 root（内容 hash 聚合），内容变才重建。
+ * - 异步构建（Cursor 式）：首次/变更后后台建，查询先返回 building；失败可见 + 60s 退避。
  */
 
-import { createHash } from "node:crypto";
 import { cosine } from "../../domain/embedding.js";
-import { astChunks } from "./ast-chunk.js";
-import { languageFor } from "./symbols.js";
-import { walkCodeFiles, absOf, snippetOf } from "./walk.js";
+import { refreshCodeIndex, type IndexChunk } from "./code-index.js";
+import { snippetOf } from "./walk.js";
 import type { FsPort } from "../../store/fs.js";
 
 export interface Embedder {
@@ -43,6 +41,7 @@ export const makeHttpEmbedder = (cfg: { baseURL: string; apiKeyEnv: string; mode
 });
 
 export interface EmbeddingEntry {
+  /** = 代码索引 chunk.id（rel#start-end#hash）。 */
   key: string;
   rel: string;
   start: number;
@@ -52,7 +51,7 @@ export interface EmbeddingEntry {
 }
 
 const indexPath = (ws: string): string => `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/.shadow/indexes/code/embeddings.json`;
-const hashOf = (text: string): string => createHash("sha1").update(text).digest("hex").slice(0, 16);
+const cacheKey = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
 
 interface EmbeddingFile {
   v: 2;
@@ -65,40 +64,41 @@ interface EmbeddingFile {
 
 export interface EmbeddingOptions {
   maxChunks?: number;
-  maxFileBytes?: number;
+  maxBytes?: number;
   maxFiles?: number;
   ignore?: (rel: string, isDir: boolean) => boolean;
+  /** 复用代码索引已解析的块（工具层传入，避免二次 walk/解析）。 */
+  chunks?: IndexChunk[];
+  /** 与 chunks 配套的代码索引根签名。 */
+  sourceSig?: string;
 }
 
-/** 源签名（**只 stat，不读内容**）：rel+size+mtime。用于廉价判断索引是否过期。 */
-export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: EmbeddingOptions = {}): Promise<string> => {
-  const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
-  const parts: string[] = [];
-  await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
-    const st = await deps.fs.stat(abs);
-    if (st.ok) parts.push(`${rel}:${st.value.size}:${Math.floor(st.value.mtimeMs)}`);
+const getChunks = async (
+  deps: { fs: FsPort; ws: string },
+  opts: EmbeddingOptions,
+): Promise<{ chunks: IndexChunk[]; root: string }> => {
+  if (opts.chunks && opts.sourceSig) return { chunks: opts.chunks, root: opts.sourceSig };
+  const r = await refreshCodeIndex(deps, {
+    maxChunks: opts.maxChunks,
+    maxBytes: opts.maxBytes,
+    maxFiles: opts.maxFiles,
+    ignore: opts.ignore,
   });
-  parts.sort();
-  return createHash("sha1").update(parts.join("\n")).digest("hex").slice(0, 16);
+  return { chunks: r.chunks, root: r.file.root };
 };
-
-/** 进程内索引缓存：查询时命中即复用，避免每次重读 embeddings.json 与重新 stat 遍历。 */
-const indexCache = new Map<string, { model: string; entries: EmbeddingEntry[]; dims: number; sourceSig: string }>();
-const bgJobs = new Map<string, Promise<void>>();
-const bgErrors = new Map<string, { error: string; at: number }>();
-const BG_RETRY_MS = 60_000;
-const cacheKey = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
 
 export const buildEmbeddingIndex = async (
   deps: { fs: FsPort; ws: string },
   embedder: Embedder,
   opts: EmbeddingOptions = {},
 ): Promise<{ entries: EmbeddingEntry[]; embedded: number; reused: number; dims: number; truncated: boolean }> => {
+  const { chunks, root } = await getChunks(deps, opts);
   const maxChunks = Math.max(1, Math.min(50000, Number(opts.maxChunks ?? 2000) || 2000));
-  const maxFileBytes = Math.max(1024, Number(opts.maxFileBytes ?? 200_000) || 200_000);
-  const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
+  const selected = chunks.slice(0, maxChunks);
+  const truncated = chunks.length > selected.length;
 
-  let old = new Map<string, EmbeddingEntry>();
+  // 旧索引（仅当 model 相同才复用）
+  const old = new Map<string, EmbeddingEntry>();
   const prev = await deps.fs.readText(indexPath(deps.ws));
   if (prev.ok) {
     try {
@@ -109,32 +109,11 @@ export const buildEmbeddingIndex = async (
     }
   }
 
-  const chunks: { key: string; rel: string; start: number; end: number; snippet: string; text: string }[] = [];
-  let truncated = false;
-  await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
-    if (chunks.length >= maxChunks) {
-      truncated = true;
-      return false;
-    }
-    const st = await deps.fs.stat(abs);
-    if (!st.ok || st.value.size > maxFileBytes) return;
-    const read = await deps.fs.readText(abs);
-    if (!read.ok) return;
-    for (const c of await astChunks(rel, read.value, languageFor(rel.slice(rel.lastIndexOf("/") + 1)), 1500)) {
-      const h = hashOf(c.text);
-      chunks.push({ key: `${rel}#${c.start}-${c.end}#${h}`, rel, start: c.start, end: c.end, snippet: snippetOf(c.text), text: c.text });
-      if (chunks.length >= maxChunks) {
-        truncated = true;
-        return false;
-      }
-    }
-  });
-
   const entries: EmbeddingEntry[] = [];
-  const toEmbed: typeof chunks = [];
+  const toEmbed: IndexChunk[] = [];
   let reused = 0;
-  for (const c of chunks) {
-    const o = old.get(c.key);
+  for (const c of selected) {
+    const o = old.get(c.id);
     if (o) {
       entries.push(o);
       reused += 1;
@@ -147,12 +126,13 @@ export const buildEmbeddingIndex = async (
     const batch = toEmbed.slice(i, i + 64);
     const vecs = await embedder.embed(batch.map((c) => `${embedder.docPrefix ?? ""}${c.text}`));
     if (!dims && vecs[0]) dims = vecs[0].length;
-    batch.forEach((c, k) => entries.push({ key: c.key, rel: c.rel, start: c.start, end: c.end, snippet: c.snippet, vec: vecs[k]! }));
+    batch.forEach((c, k) =>
+      entries.push({ key: c.id, rel: c.rel, start: c.start, end: c.end, snippet: snippetOf(c.text), vec: vecs[k]! }),
+    );
   }
   if (!dims) for (const e of entries) if (e.vec?.length) { dims = e.vec.length; break; }
 
-  const sourceSig = await computeSourceSig(deps, opts);
-  const file: EmbeddingFile = { v: 2, model: embedder.id, dims, sourceSig, builtAt: new Date().toISOString(), entries };
+  const file: EmbeddingFile = { v: 2, model: embedder.id, dims, sourceSig: root, builtAt: new Date().toISOString(), entries };
   await deps.fs.writeText(indexPath(deps.ws), JSON.stringify(file));
   return { entries, embedded: toEmbed.length, reused, dims, truncated };
 };
@@ -174,6 +154,11 @@ export interface EmbeddingSearchResult {
   error?: string;
 }
 
+const indexCache = new Map<string, { model: string; entries: EmbeddingEntry[]; dims: number; sourceSig: string }>();
+const bgJobs = new Map<string, Promise<void>>();
+const bgErrors = new Map<string, { error: string; at: number }>();
+const BG_RETRY_MS = 60_000;
+
 export const searchEmbedding = async (
   deps: { fs: FsPort; ws: string },
   query: string,
@@ -188,10 +173,9 @@ export const searchEmbedding = async (
   let dims = 0;
   let built = false;
   try {
-    // 只做 stat 遍历（不读内容）；命中内存索引则连索引文件都不读。
-    const sig = await computeSourceSig(deps, opts);
+    const { chunks, root } = await getChunks(deps, opts);
     const cached = indexCache.get(key);
-    if (cached && cached.model === embedder.id && cached.sourceSig === sig) {
+    if (cached && cached.model === embedder.id && cached.sourceSig === root) {
       entries = cached.entries;
       dims = cached.dims;
     } else {
@@ -200,7 +184,7 @@ export const searchEmbedding = async (
       if (prev.ok) {
         try {
           const j = JSON.parse(prev.value) as EmbeddingFile;
-          if (j?.model === embedder.id && Array.isArray(j.entries) && j.entries.length && j.sourceSig === sig) {
+          if (j?.model === embedder.id && Array.isArray(j.entries) && j.entries.length && j.sourceSig === root) {
             entries = j.entries;
             dims = j.dims;
             usable = true;
@@ -216,24 +200,15 @@ export const searchEmbedding = async (
           const lastErr = bgErrors.get(bgKey);
           if (lastErr && Date.now() - lastErr.at < BG_RETRY_MS) {
             const wait = Math.ceil((BG_RETRY_MS - (Date.now() - lastErr.at)) / 1000);
-            return {
-              hits: [],
-              model: embedder.id,
-              dims: 0,
-              built: false,
-              error: `向量索引构建失败：${lastErr.error}（${wait}s 后重试）`,
-            };
+            return { hits: [], model: embedder.id, dims: 0, built: false, error: `向量索引构建失败：${lastErr.error}（${wait}s 后重试）` };
           }
           if (!bgJobs.has(bgKey)) {
             const job = (async () => {
               try {
-                const b = await buildEmbeddingIndex(deps, embedder, opts);
-                // 写完索引后（mtime/clock 可能变化）重算签名，保证下一次查询命中缓存
-                const postSig = await computeSourceSig(deps, opts);
-                indexCache.set(key, { model: embedder.id, entries: b.entries, dims: b.dims, sourceSig: postSig });
+                const b = await buildEmbeddingIndex(deps, embedder, { ...opts, chunks, sourceSig: root });
+                indexCache.set(key, { model: embedder.id, entries: b.entries, dims: b.dims, sourceSig: root });
                 bgErrors.delete(bgKey);
               } catch (e) {
-                // 失败要可返回给用户，且 60s 内不反复重试（避免每次查询都触发下载/解析）
                 bgErrors.set(bgKey, { error: e instanceof Error ? e.message : String(e), at: Date.now() });
               } finally {
                 bgJobs.delete(bgKey);
@@ -243,14 +218,12 @@ export const searchEmbedding = async (
           }
           return { hits: [], model: embedder.id, dims: 0, built: false, building: true };
         }
-        const b = await buildEmbeddingIndex(deps, embedder, opts);
+        const b = await buildEmbeddingIndex(deps, embedder, { ...opts, chunks, sourceSig: root });
         entries = b.entries;
         dims = b.dims;
         built = true;
       }
-      // 写入索引会改变 mtime（内存 fs 的 clock 语义），缓存用写完后的签名
-      const postSig = built ? await computeSourceSig(deps, opts) : sig;
-      indexCache.set(key, { model: embedder.id, entries, dims, sourceSig: postSig });
+      if (!cached || built) indexCache.set(key, { model: embedder.id, entries, dims, sourceSig: root });
     }
     // 查询时再套一次 ignore（防止改 exclude 后旧条目泄露被排除文件）
     const filtered = opts.ignore ? entries.filter((e) => !opts.ignore!(e.rel, false)) : entries;

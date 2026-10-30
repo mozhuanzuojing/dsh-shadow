@@ -62,6 +62,8 @@ export interface IndexedSearchResult {
   postings: number;
   /** 供调用方复用 AST 块（符号、向量索引），避免二次解析。 */
   indexChunks?: IndexChunk[];
+  /** 代码索引根签名（供向量索引复用，避免二次 stat 遍历）。 */
+  root?: string;
 }
 
 const indexPath = (ws: string): string =>
@@ -257,13 +259,13 @@ export const searchCodeIndexed = async (
   ];
   if (!hits.length) {
     head.push("（未找到匹配代码）", "> 下一步：换更具体的标识符/路径片段；或确认目标不在忽略目录。");
-    return { ...stats, candidates: candidateIdx.length, returned: 0, text: head.join("\n"), indexChunks: chunks };
+    return { ...stats, candidates: candidateIdx.length, returned: 0, text: head.join("\n"), indexChunks: chunks, root: file.root };
   }
   for (const h of hits) {
     const c = chunks[candidateIdx[Number(h.id)]!]!;
     head.push(`- \`${c.rel}:${c.start}-${c.end}\` · 得分 ${Math.round(h.score * 100) / 100} · [${c.kind}] ${snippetFor(c.text, terms).replace(/\s+/g, " ")}`);
   }
-  return { ...stats, candidates: candidateIdx.length, returned: hits.length, text: head.join("\n"), indexChunks: chunks };
+  return { ...stats, candidates: candidateIdx.length, returned: hits.length, text: head.join("\n"), indexChunks: chunks, root: file.root };
 };
 
 /** 从索引块直接取符号（AST 已存 kind/name），避免再跑一遍 tree-sitter。 */

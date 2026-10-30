@@ -10,6 +10,7 @@
 - **内置本地向量**（ADR-0022 修订）：参考 Cursor 用**真模型**——默认 `Xenova/multilingual-e5-small`（transformers.js + ONNX，q8，中英混合），首次使用自动下载并缓存；无网络/失败自动回落 512 维特征哈希（标注「子词近似、非语义」）；`provider: auto|local|hash|http`。神经索引**异步后台构建**，首次查询不阻塞 BM25/符号。
 - **去掉功能开关**（ADR-0023）：`lab.enabled` / `toolset.enabled` / `autoRecall.enabled` / `codeSearch.index.enabled` / `codeSearch.embedding.enabled` 全部删除，功能始终启用；旧键只产生未知键 warning，不能关闭功能。
 - **评审修复**：异步向量构建失败改为**可见 + 60s 退避**（不再永远「构建中」）；`auto` 真正按 HTTP→本地神经→哈希逐级降级（`embedder-chain`）；代码索引 `maxFiles` 截断显式披露；符号段复用索引 AST 块（去掉二次解析）；模型缓存移到 `~/.cache/huggingface`。
+- **P2 去冗余**：向量索引复用代码索引的 AST 块与 root（去掉二次 walk/解析，embeddings.json 不再存全文）；移除未用的 `onByDefault`；ADR 注明「候选集内 BM25」口径。
 - 测试：`test/unit/trigram.test.ts`、`ast-chunk.test.ts`、`code-index.test.ts`（无变化 0 重读 / 改一文件只重读 1 个 / 候选裁剪）、`local-embedder.test.ts`。
 
 ## [2.2.0] — 2026-10-30
