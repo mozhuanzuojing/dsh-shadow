@@ -13,7 +13,7 @@ import type { FsPort } from "../../store/fs.js";
 const req = createRequire(import.meta.url);
 
 let parserClass: any = null;
-const getParserClass = async (): Promise<any> => {
+export const getParserClass = async (): Promise<any> => {
   if (parserClass) return parserClass;
   let mod: any;
   try {
@@ -28,7 +28,7 @@ const getParserClass = async (): Promise<any> => {
 };
 
 let initPromise: Promise<void> | null = null;
-const ensureInit = async (): Promise<void> => {
+export const ensureInit = async (): Promise<void> => {
   const P = await getParserClass();
   if (!initPromise) initPromise = P.init();
   await initPromise;
@@ -52,7 +52,7 @@ export const languageFor = (name: string): string | null => {
   return EXT_LANG[name.slice(i + 1).toLowerCase()] ?? null;
 };
 
-const loadLanguage = async (lang: string): Promise<any> => {
+export const loadLanguage = async (lang: string): Promise<any> => {
   const cached = langCache.get(lang);
   if (cached) return cached;
   const P = await getParserClass();
