@@ -84,11 +84,19 @@
 - 验证：`npm run verify` 34/34 测试 · audit-layers 184 文件 · docs-check 绿；v2.1.0 发版（见 CHANGELOG）。
 - **未做**：拆 `dsh-shadow-lab` 独立包（core 移除 lab 属 breaking；设计与迁移步骤见 ADR-0013，未执行）。
 
+### 真机复测（2026-10-30，当前 v2.1.0 构建 `d37e9d2`）
+- 隔离 Web host（`.dsh-v2web` / profile `v2web` / DSH `0.2.1-rc.5` / magpie）真实模型 2 轮：
+  `shadow_toolset({need:[...]})` 能力预检三项均「未检出」，与本机 PATH 实际缺失一致（**非误报**）；
+  `shadow_toolset()` 无参只探 2 个 provider，并标注「台账 = v1 快照、非本机实测」；
+  无参 `read_shadow()` 派生件物化成功（材料卡 0 · 纪要 1 · Episode 1 · Abstract 3），只写 `indexes/` 不写 atoms；atoms/audit/index.sqlite 均落盘。
+- 证据：`D:\project\local-workbench\_work\v2web\evidence\v2.1.0-retest-20261030\`（截图 + atoms/indexes/audit + README）。
+- desktop profile：已写入 dependency/bundle + node_modules junction，**待重启 Electron 生效**；CLI 对 desktop 报「managed exclusively by the Electron application」，故组合性改用等价 `v2web` profile 在 CLI `0.2.1-rc.5` 上验证（dump-config exit 0、含 `- id: dsh-shadow`）。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。
 2. **perf 门**：`corpus-bench` 目前是手动工具，未进 `verify`；需 1k/8k 预算断言（派生件物化让无参读多了 ≤68 次 I/O，未做基准）。
-3. **真实 DSH E2E**：headless profile 与隔离 `v2web` Web profile 已跑通（含 lab、含卸载/恢复回滚）；v2.1.0 新能力（toolset 真机探测、派生件、forget）只在单测/e2e 层验证，真机 Web 复测未做；WSL 远端与日常 `desktop` profile 的安装/切换未做。
+3. **真实 DSH E2E**：headless / 隔离 `v2web` 已跑通（含 lab、含卸载/恢复回滚）；v2.1.0 的 **toolset 只读探测 + 派生件已真机复测**（2026-10-30，见上）；**仍未真机验**：`shadow_toolset` install 真执行、forget 陈旧类、WSL 远端；日常 `desktop` profile 已写入但**需重启 Electron** 生效。
 4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
 5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 
