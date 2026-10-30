@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（17 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（19 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -21,6 +21,8 @@
 | [0015](./0015-project-facts-evidence.md) | 项目事实（facts）：从用户原话抽可核验的 X=路径 | accepted |
 | [0016](./0016-similar-task-recall.md) | 相似过往任务召回（任务卡+经验，新增 recall_similar） | accepted |
 | [0017](./0017-task-to-skill-export.md) | 任务卡 → 可审 SKILL.md（技能卡物化） | accepted |
+| [0018](./0018-auto-recall-spike.md) | 自动召回（auto-recall）spike 结论与设计 | proposal |
+| [0019](./0019-code-index-plan.md) | 代码检索（忆起代码）方案与取舍 | proposal |
 
 ## 状态枚举
 
