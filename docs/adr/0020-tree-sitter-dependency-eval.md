@@ -1,6 +1,6 @@
 # ADR-0020: tree-sitter 依赖评估与「阶段 2」建议
 
-- 状态：**proposal（依赖评估；未引入任何依赖、未改代码）**
+- 状态：**accepted（用户决定引入 tree-sitter；核心已加依赖并实现符号抽取）**
 - 日期：2026-10-30
 - 关联：ADR-0019（代码检索方案）、ADR-0013（lab 拆包先例）；证据来自 npm registry 元数据 + 本机检查
 - 定位：回答「阶段 2 的符号图要不要引入 tree-sitter、怎么引入最合适」。
@@ -52,3 +52,13 @@
 - `tree-sitter-typescript@0.23.2`（MIT，unpacked 38,844,097B）：<https://registry.npmjs.org/tree-sitter-typescript/latest>
 - tree-sitter 本体（MIT）：<https://github.com/tree-sitter/tree-sitter>
 - 本机检查：`tree-sitter` CLI 不在 PATH；DSH 侧仅见 `dsh-util-code-language`（语言识别，非解析器）。
+
+## 实现（用户决定引入；2026-10-30）
+
+- **决定变更**：用户明确要求「引入 tree-sitter」，覆盖上面"核心不引依赖"的建议。已在核心加入运行时依赖：
+  - `web-tree-sitter` **0.20.8**（MIT）——**必须钉 0.20.x**：实测 `0.27.1` 加载 `tree-sitter-wasms` 的旧 dylink wasm 会抛 `getDylinkMetadata` 错；0.20.8 与 `tree-sitter-wasms@0.1.13` 兼容。
+  - `tree-sitter-wasms` **^0.1.13**（Unlicense，37 个语言 wasm，总计 ≈51.8MB 安装体积）。
+- 实现 `src/engine/read/symbols.ts`：`extractSymbols`（AST 抽 function/method/class/interface/type/enum/struct/trait/impl/const，带行号）+ `searchSymbols`（廉价文本预筛后只解析候选文件；有界；依赖/wasm 失败**显式返回 error**）。
+- 接入 `search_code`：BM25 结果后追加「## 符号（tree-sitter · 定义/入口）」段；不可用时显式写「符号检索不可用：…」，不静默。
+- 测试：`test/unit/symbols.test.ts`（抽 函数/类/interface/const + 预筛 + 跳过 node_modules）；`npm run verify` 通过。
+- **代价（如实）**：核心包从零依赖变成 +2 依赖、安装体积增加约 52MB；`web-tree-sitter` 版本被 wasm ABI 钉死在 0.20.x，升级需同步重建语法 wasm。

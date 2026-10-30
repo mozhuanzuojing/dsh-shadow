@@ -8,6 +8,7 @@ import { runRead } from "../engine/read/route.js";
 import type { ReadDeps, ReadRequest } from "../engine/read/types.js";
 import { runToolset } from "../engine/toolset/run.js";
 import { searchCode } from "../engine/read/code-search.js";
+import { searchSymbols } from "../engine/read/symbols.js";
 import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
 import type { ExecLike } from "./workspace.js";
@@ -183,10 +184,20 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
     try {
       const d = await depsFactory(exec as ExecLike | undefined);
       if (!d.ok) return renderPlain(`> ⚠ shadow 不可用（${d.error.code}）：${d.error.message}`);
-      const r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, String(args.query ?? "").trim(), {
-        limit: typeof args.limit === "number" ? args.limit : undefined,
-      });
-      return renderPlain(r.text, d.value.signals);
+      const query = String(args.query ?? "").trim();
+      const limit = typeof args.limit === "number" ? args.limit : undefined;
+      const r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit });
+      // 阶段 2：tree-sitter 符号（定义/入口）。不可用时显式披露，不影响 BM25 结果。
+      let extra = "";
+      try {
+        const s = await searchSymbols({ fs: d.value.fs, ws: d.value.ws }, query, { limit: 8 });
+        if (s.error) extra = `\n\n## 符号（tree-sitter）\n> 符号检索不可用：${s.error}`;
+        else if (s.hits.length) extra = `\n\n## 符号（tree-sitter · 定义/入口）\n${s.hits.map((h) => `- \`${h.rel}:${h.line}\` · ${h.kind} \`${h.name}\``).join("\n")}`;
+        else extra = `\n\n## 符号（tree-sitter）\n（未匹配到符号；已解析 ${s.parsedFiles} 个候选文件）`;
+      } catch (e) {
+        extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
+      }
+      return renderPlain(r.text + extra, d.value.signals);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       return renderPlain(`> ⚠ search_code 内部错误：${message}\n> 这是失败，不是「没有匹配」；请保留此消息。`);

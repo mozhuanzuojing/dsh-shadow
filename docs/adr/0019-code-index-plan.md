@@ -1,6 +1,6 @@
 # ADR-0019: 代码检索（"忆起代码"）方案与取舍
 
-- 状态：**accepted（阶段 1 已实现：`search_code`；阶段 2/3 未做）**
+- 状态：**accepted（阶段 1 已实现：`search_code`；阶段 2 已实现：tree-sitter 符号，见 ADR-0020；阶段 3 embedding 未做）**
 - 日期：2026-10-30
 - 关联：ADR-0014（BM25）、ADR-0017（技能卡）、调研 `_reports/cursor-memory-reverse-20261030.md` / `shadow-memory-landscape-20261030.md`
 - 定位：回答「找代码/忆起代码」该不该由记忆层承担，以及用什么检索。

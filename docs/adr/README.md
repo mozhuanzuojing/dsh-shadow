@@ -23,7 +23,7 @@
 | [0017](./0017-task-to-skill-export.md) | 任务卡 → 可审 SKILL.md（技能卡物化） | accepted |
 | [0018](./0018-auto-recall-spike.md) | 自动召回（auto-recall）spike 结论与设计 | proposal |
 | [0019](./0019-code-index-plan.md) | 代码检索（忆起代码）方案与取舍（阶段1 已实现） | accepted |
-| [0020](./0020-tree-sitter-dependency-eval.md) | tree-sitter 依赖评估与阶段 2 建议 | proposal |
+| [0020](./0020-tree-sitter-dependency-eval.md) | tree-sitter 依赖评估与阶段 2 建议（已引入实现） | accepted |
 
 ## 状态枚举
 
