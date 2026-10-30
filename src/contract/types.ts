@@ -43,6 +43,8 @@ export interface ParsedAtom {
   thinkLines: string[];
   /** 原文（用于打分 / 片段 / 重建）。 */
   body: string;
+  /** 冷区归档中的稳定句柄（`.shadow/archive/<date>.jsonl#<rel>`）；热文件存在时缺省。 */
+  archiveRel?: string;
   kind: AtomKind;
 }
 

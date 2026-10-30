@@ -6,6 +6,22 @@
 
 （无）
 
+## [2.6.0] — 2026-10-30
+
+### 修复（review P0）
+
+- **删除前逐条 hash 校验**：旧 archive 的 rel+uid 集合不再被信任；比较 `digestAtom`（规范化 JSON，忽略 `archiveRel`）。迟到 atom/同 uid 内容变化会**先补写 archive**，校验通过后才删热文件；内容变化以当前热版本为准。
+- **热文件优先**：`loadAllAtoms` 先 archive 后 hot 覆盖；`IndexCache` 校验 DB 归档行与 manifest `recordHashes` 一致，不一致回退重建。
+- **坏归档部分可用**：`loadAllAtoms` 收集坏档为 `errors` 返回热+好归档；`IndexCache` 在部分失败时不 replaceAll（避免丢历史），route 显示 partial Signal。
+- **锁/manifest 原子性**：全局 run lock（owner token，只释放自己的）；manifest 先写 `.tmp` 再 `rename`；删除在 manifest 原子替换成功后才发生。
+- **pinned 不删**：`archiveDays` 接收 pinned rel 集合；pinned 可归档但不删热文件。
+- **路径句柄**：归档 atom 带 `archiveRel`（`.shadow/archive/<date>.jsonl#<rel>`）；`atomDisplay` 优先显示 archiveRel；DB 路径从 `archivedIndex.byRel` enrich。
+- 测试新增：迟到 atom、内容变化、热优先、pinned、坏归档部分可用；复现脚本对应 3 个缺陷均通过。
+
+### 已知边界
+
+- decision/episode 的部分路径展示仍未全部切换到 archiveRel；无 `.trash` 保留期；锁/断电未做真实多进程故障注入。
+
 ## [2.5.0] — 2026-10-30
 
 ### 变更

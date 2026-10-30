@@ -43,7 +43,7 @@ export const budgetText = (text: string, maxChars: number): string => {
 };
 
 export const atomDisplay = (atom: ParsedAtom): string =>
-  `[${atom.rel}] ${atom.entry || "(无入口)"}`;
+  `[${atom.archiveRel ?? atom.rel}] ${atom.entry || "(无入口)"}`;
 
 export const renderAtomEntry = (atom: ParsedAtom, score: number, tokens: string[], snippet: string): string => {
   const tier = tierFor(atom.body);

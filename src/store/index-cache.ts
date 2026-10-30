@@ -6,7 +6,7 @@ import { INDEX_DB } from "../contract/paths.js";
 import { ok, type Outcome } from "../contract/outcome.js";
 import type { ParsedAtom } from "../contract/types.js";
 import { listAtomFiles, loadAtoms, type LoadAtomsResult } from "./atoms.js";
-import { archivedIndex, loadAllAtoms } from "./archive.js";
+import { archivedIndex, digestAtom, loadAllAtoms } from "./archive.js";
 import { hashBody, IndexDb } from "./index-db.js";
 import type { FsPort } from "./fs.js";
 
@@ -69,14 +69,29 @@ export class IndexCache {
         }
         if (statsOk) {
           const key = norm(ws);
-          const sig = [...expected].sort().join("\u0000");
+          const sig = [...expected]
+            .sort()
+            .map((rel) => `${rel}:${archive.ok ? (archive.value.recordHashes.get(rel) ?? "") : ""}`)
+            .join("\u0000");
           const cached = this.parsed.get(key);
           if (archive.ok && cached && cached.sig === sig) {
             return ok({ atoms: cached.atoms, errors: [], source: "db" });
           }
           const atoms = index.allParsed();
-          if (atoms.length === (archive.ok ? expected.size : names.size)) {
-            if (archive.ok) this.parsed.set(key, { sig, atoms });
+          const staleArchived =
+            archive.ok &&
+            atoms.some((a) => {
+              const expectedHash = archive.value.recordHashes.get(a.rel);
+              return expectedHash !== undefined && expectedHash !== digestAtom(a);
+            });
+          if (!staleArchived && atoms.length === (archive.ok ? expected.size : names.size)) {
+            if (archive.ok) {
+              for (const a of atoms) {
+                const handle = archive.value.byRel.get(a.rel);
+                if (handle) a.archiveRel = handle;
+              }
+              this.parsed.set(key, { sig, atoms });
+            }
             return ok({
               atoms,
               errors: [],
@@ -88,6 +103,13 @@ export class IndexCache {
       }
       const loaded = await loadAllAtoms(fs, ws);
       if (!loaded.ok) return loaded;
+      if (loaded.value.errors.length) {
+        return ok({
+          ...loaded.value,
+          source: "fs",
+          degraded: `部分归档/热文件读取失败（${loaded.value.errors.length} 项）；不重建派生索引，避免丢历史`,
+        });
+      }
       const knownStats = index.fileStats();
       const stats = new Map<string, { size: number; mtime: number }>();
       for (const a of loaded.value.atoms) {

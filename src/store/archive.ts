@@ -12,7 +12,7 @@
  *  5. 幂等：manifest 已有且 JSONL 存在就直接跳过；manifest 缺失但 JSONL 合法则补登记。
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   ARCHIVE_DIR,
@@ -48,6 +48,8 @@ export interface ArchiveOptions {
   staleLockMs?: number;
   /** 归档并登记成功后才删除热文件；默认 false（安全版）。 */
   deleteHot?: boolean;
+  /** 被 pin 的 atom rel：可以归档，但**不删热文件**。 */
+  pinned?: Set<string>;
 }
 
 interface ManifestDay {
@@ -58,6 +60,8 @@ interface ManifestDay {
   archivedAt: string;
   /** 该日包含的 atom rel；用于删热文件后判断 DB 应该有哪些行。 */
   rels?: string[];
+  /** rel → 逐条内容摘要；删除热文件前用它验证“archive 就是当前内容”。 */
+  recordHashes?: Record<string, string>;
 }
 
 interface Manifest {
@@ -117,10 +121,37 @@ export const readArchivedAtoms = async (
   const text = await fs.readText(abs(ws, rel));
   if (!text.ok) return text;
   try {
-    return ok(parseJsonl(text.value));
+    const atoms = parseJsonl(text.value);
+    for (const a of atoms) a.archiveRel = `${rel}#${a.rel}`;
+    return ok(atoms);
   } catch (e) {
     return err("CORRUPT", `归档 JSONL 解析失败：${date}（${e instanceof Error ? e.message : String(e)}）`, { rel });
   }
+};
+
+/** 规范化 JSON（键排序），用于逐条内容摘要；避免属性顺序造成假差异。 */
+const canon = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canon);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = canon((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
+};
+
+/** 逐条内容摘要（不含 archiveRel，避免句柄自身进入摘要）。 */
+export const digestAtom = (atom: ParsedAtom): string => {
+  const { archiveRel: _handle, ...rest } = atom;
+  return sha256(JSON.stringify(canon(rest)));
+};
+
+/** 写入 JSONL 时去掉运行期句柄字段。 */
+const recordForArchive = (atom: ParsedAtom): ParsedAtom => {
+  const { archiveRel: _handle, ...rest } = atom;
+  return rest as ParsedAtom;
 };
 
 const readManifest = async (fs: FsPort, ws: string): Promise<{ manifest: Manifest; exists: boolean }> => {
@@ -142,6 +173,10 @@ export interface ArchivedIndex {
   dates: string[];
   /** 已归档 atom 的 rel 集合（DB 应有这些行；热文件未必存在）。 */
   rels: Set<string>;
+  /** rel → 冷区句柄（`.shadow/archive/<date>.jsonl#<rel>`）。 */
+  byRel: Map<string, string>;
+  /** rel → 逐条内容摘要；用于判断 DB 中的归档行是否已陈旧。 */
+  recordHashes: Map<string, string>;
 }
 
 /**
@@ -153,10 +188,24 @@ export const archivedIndex = async (fs: FsPort, ws: string): Promise<Outcome<Arc
   const dates = await listArchiveDates(fs, ws);
   const allDates = [...new Set([...Object.keys(manifest.days), ...dates])].sort();
   const rels = new Set<string>();
+  const byRel = new Map<string, string>();
+  const recordHashes = new Map<string, string>();
   for (const date of allDates) {
     const entry = manifest.days[date];
+    const handle = `${ARCHIVE_DIR}/${date}.jsonl`;
     if (entry?.rels && entry.rels.length) {
-      for (const rel of entry.rels) rels.add(rel);
+      let hashes = entry.recordHashes;
+      if (!hashes) {
+        const atoms = await readArchivedAtoms(fs, ws, date);
+        if (!atoms.ok) return atoms;
+        hashes = Object.fromEntries(atoms.value.map((a) => [a.rel, digestAtom(a)]));
+      }
+      for (const rel of entry.rels) {
+        rels.add(rel);
+        byRel.set(rel, `${handle}#${rel}`);
+        const h = hashes[rel];
+        if (h) recordHashes.set(rel, h);
+      }
       continue;
     }
     const atoms = await readArchivedAtoms(fs, ws, date);
@@ -164,27 +213,37 @@ export const archivedIndex = async (fs: FsPort, ws: string): Promise<Outcome<Arc
       if (atoms.error.code === "NOT_FOUND" && !entry) continue;
       return atoms;
     }
-    for (const a of atoms.value) rels.add(a.rel);
+    for (const a of atoms.value) {
+      rels.add(a.rel);
+      byRel.set(a.rel, a.archiveRel ?? `${handle}#${a.rel}`);
+      recordHashes.set(a.rel, digestAtom(a));
+    }
   }
-  return ok({ dates: allDates, rels });
+  return ok({ dates: allDates, rels, byRel, recordHashes });
 };
 
 /**
  * 从「热 atoms + 全部归档日」重建完整 atom 集（DB 丢失/首次迁移用）。
- * 这是删热文件后的权威恢复路径；坏归档显式失败，不把历史当空。
+ * 热文件优先；坏归档收集为 errors 继续（部分可用），不把历史当空、也不单坏件拖垮全部。
+ * 这是删热文件后的权威恢复路径。
  */
 export const loadAllAtoms = async (fs: FsPort, ws: string): Promise<Outcome<LoadAtomsResult>> => {
   const hot = await loadAtoms(fs, ws);
   if (!hot.ok) return hot;
   const dates = await listArchiveDates(fs, ws);
   const byRel = new Map<string, ParsedAtom>();
-  for (const a of hot.value.atoms) byRel.set(a.rel, a);
+  const errors = [...hot.value.errors];
   for (const date of dates) {
     const archived = await readArchivedAtoms(fs, ws, date);
-    if (!archived.ok) return archived;
+    if (!archived.ok) {
+      errors.push({ rel: `${ARCHIVE_DIR}/${date}.jsonl`, code: archived.error.code, message: archived.error.message });
+      continue;
+    }
     for (const a of archived.value) byRel.set(a.rel, a);
   }
-  return ok({ atoms: [...byRel.values()], errors: [...hot.value.errors] });
+  // 热文件最后写入 ⇒ 同 rel 时热文件优先（避免 archive 覆盖刚更新/迟到的热版本）。
+  for (const a of hot.value.atoms) byRel.set(a.rel, a);
+  return ok({ atoms: [...byRel.values()], errors });
 };
 
 const acquireLock = async (
@@ -192,6 +251,7 @@ const acquireLock = async (
   ws: string,
   now: number,
   staleLockMs: number,
+  token: string,
 ): Promise<boolean> => {
   const lock = abs(ws, ARCHIVE_LOCK);
   if (await fs.exists(lock)) {
@@ -211,8 +271,21 @@ const acquireLock = async (
     }
     if (at > 0 && now - at < staleLockMs) return false;
   }
-  const written = await fs.writeText(lock, JSON.stringify({ pid: process.pid, at: now }));
+  const written = await fs.writeText(lock, JSON.stringify({ pid: process.pid, at: now, token }));
   return written.ok;
+};
+
+/** 只释放自己持有的锁：token 不匹配就不删。 */
+const releaseLock = async (fs: FsPort, ws: string, token: string): Promise<void> => {
+  const lock = abs(ws, ARCHIVE_LOCK);
+  const content = await fs.readText(lock);
+  if (!content.ok) return;
+  try {
+    const parsed = JSON.parse(content.value) as { token?: unknown };
+    if (parsed.token === token) await fs.unlink(lock);
+  } catch {
+    /* 坏锁不猜；留给陈旧锁超时 */
+  }
 };
 
 const digest = (date: string, atoms: ParsedAtom[]): string => {
@@ -251,8 +324,8 @@ export const archiveDays = async (
   const now = Number.isFinite(opts.now) ? Number(opts.now) : Date.now();
   const staleLockMs = Math.max(1_000, Number(opts.staleLockMs ?? 10 * 60_000));
   const deleteHot = opts.deleteHot === true;
+  const pinned = opts.pinned ?? new Set<string>();
   const byDate = new Map<string, ParsedAtom[]>();
-  const deletable = new Map<string, ParsedAtom[]>();
   for (const a of atoms) {
     if (!a.date || a.date >= today) continue;
     const list = byDate.get(a.date) ?? [];
@@ -261,118 +334,147 @@ export const archiveDays = async (
   }
   if (!byDate.size) return result;
 
-  const { manifest, exists } = await readManifest(fs, ws);
-  let manifestDirty = !exists;
-  const dates = [...byDate.keys()].sort();
-  for (const date of dates) {
-    const list = byDate.get(date)!;
-    if (manifest.days[date] && (await fs.exists(abs(ws, `${ARCHIVE_DIR}/${date}.jsonl`)))) {
-      const entry = manifest.days[date]!;
-      if (!entry.rels?.length) {
-        const atomsInArchive = await readArchivedAtoms(fs, ws, date);
-        if (!atomsInArchive.ok) {
-          result.errors.push(`${date}: 归档已存在但 manifest 缺 rels，且 JSONL 读取失败（${atomsInArchive.error.message}）`);
-          continue;
-        }
-        entry.rels = atomsInArchive.value.map((a) => a.rel);
-        manifestDirty = true;
-      }
-      result.skipped.push(date);
-      deletable.set(date, list);
-      continue;
-    }
-    const acquired = await acquireLock(fs, ws, now, staleLockMs);
-    if (!acquired) {
-      result.errors.push(`归档锁被占用（${date}）；下次无参读再试`);
-      break;
-    }
-    try {
-      const jsonlAbs = abs(ws, `${ARCHIVE_DIR}/${date}.jsonl`);
+  const token = randomUUID();
+  const acquired = await acquireLock(fs, ws, now, staleLockMs, token);
+  if (!acquired) {
+    result.errors.push("归档锁被占用；下次无参读再试");
+    return result;
+  }
+  try {
+    const { manifest, exists } = await readManifest(fs, ws);
+    let manifestDirty = !exists;
+    const deletions = new Map<string, ParsedAtom[]>();
+
+    for (const date of [...byDate.keys()].sort()) {
+      const current = byDate.get(date)!;
+      const jsonlRel = `${ARCHIVE_DIR}/${date}.jsonl`;
+      const jsonlAbs = abs(ws, jsonlRel);
       const mdAbs = abs(ws, `${ARCHIVE_DIR}/${date}.md`);
-      const records = list.slice().sort((a, b) => `${a.date} ${a.time} ${a.rel}`.localeCompare(`${b.date} ${b.time} ${b.rel}`));
-      const expected = records.map((a) => uidOf(a)).sort().join("\n");
-      const existing = await fs.readText(jsonlAbs);
-      let jsonl = "";
-      let count = 0;
-      let hash = "";
-      if (existing.ok) {
+      const existingText = await fs.readText(jsonlAbs);
+      const existingJsonl = existingText.ok ? existingText.value : undefined;
+
+      let archivedAtoms: ParsedAtom[] = [];
+      if (existingJsonl !== undefined) {
         try {
-          const parsed = parseJsonl(existing.value);
-          const same = parsed.length === records.length && parsed.map(uidOf).sort().join("\n") === expected;
-          if (same) {
-            jsonl = existing.value;
-            count = parsed.length;
-            hash = sha256(existing.value);
-          }
+          archivedAtoms = parseJsonl(existingJsonl);
         } catch {
-          /* 坏件：下面重写 */
+          archivedAtoms = [];
         }
       }
-      if (!jsonl) {
-        jsonl = records.map((a) => JSON.stringify(a)).join("\n") + "\n";
-        const w = await fs.writeText(jsonlAbs, jsonl);
-        if (!w.ok) {
-          result.errors.push(`${date}: JSONL 写入失败（${w.error.message}）`);
-          continue;
-        }
-        const back = await fs.readText(jsonlAbs);
-        if (!back.ok) {
-          result.errors.push(`${date}: JSONL 回读失败（${back.error.message}）`);
-          continue;
-        }
-        try {
-          const parsed = parseJsonl(back.value);
-          if (parsed.length !== records.length || parsed.map(uidOf).sort().join("\n") !== expected) {
-            result.errors.push(`${date}: JSONL 校验失败（行数/uid 不一致）`);
-            continue;
-          }
-          count = parsed.length;
-          hash = sha256(back.value);
-        } catch (e) {
-          result.errors.push(`${date}: JSONL 校验异常（${e instanceof Error ? e.message : String(e)}）`);
-          continue;
-        }
+      const archiveMap = new Map(archivedAtoms.map((a) => [a.rel, a]));
+      const archiveHashes = new Map(archivedAtoms.map((a) => [a.rel, digestAtom(a)]));
+      const currentHashes = new Map(current.map((a) => [a.rel, digestAtom(a)]));
+
+      // 只有「当前每个热 atom 在 archive 中且逐条 hash 相同」才允许跳过并删热文件。
+      const same =
+        existingJsonl !== undefined &&
+        current.every((a) => {
+          const old = archiveMap.get(a.rel);
+          return old !== undefined && archiveHashes.get(a.rel) === currentHashes.get(a.rel);
+        });
+
+      if (same) {
+        const rels = [...archiveMap.keys()];
+        manifest.days[date] = {
+          count: archivedAtoms.length,
+          sha256: sha256(existingJsonl!),
+          jsonl: `${date}.jsonl`,
+          md: `${date}.md`,
+          archivedAt: manifest.days[date]?.archivedAt ?? new Date(now).toISOString(),
+          rels,
+          recordHashes: Object.fromEntries(archiveHashes),
+        };
+        manifestDirty = true;
+        result.skipped.push(date);
+        if (deleteHot) deletions.set(date, current.filter((a) => !pinned.has(a.rel)));
+        continue;
+      }
+
+      // 内容变化/新热 atom：以当前热版本为准，和已有归档做 union（保留已归档但热区已不在的旧 rel）。
+      const merged = new Map(archiveMap);
+      for (const a of current) merged.set(a.rel, a);
+      const records = [...merged.values()].sort((a, b) =>
+        `${a.date} ${a.time} ${a.rel}`.localeCompare(`${b.date} ${b.time} ${b.rel}`),
+      );
+      const jsonl = records.map((a) => JSON.stringify(recordForArchive(a))).join("\n") + "\n";
+      const w = await fs.writeText(jsonlAbs, jsonl);
+      if (!w.ok) {
+        result.errors.push(`${date}: JSONL 写入失败（${w.error.message}）`);
+        continue;
+      }
+      const back = await fs.readText(jsonlAbs);
+      if (!back.ok) {
+        result.errors.push(`${date}: JSONL 回读失败（${back.error.message}）`);
+        continue;
+      }
+      let parsed: ParsedAtom[];
+      try {
+        parsed = parseJsonl(back.value);
+      } catch (e) {
+        result.errors.push(`${date}: JSONL 校验异常（${e instanceof Error ? e.message : String(e)}）`);
+        continue;
+      }
+      const expected = new Map(records.map((a) => [a.rel, digestAtom(a)]));
+      const verified =
+        parsed.length === records.length && parsed.every((a) => expected.get(a.rel) === digestAtom(a));
+      if (!verified) {
+        result.errors.push(`${date}: JSONL 校验失败（行数/逐条 hash 不一致）`);
+        continue;
       }
       const md = digest(date, records);
       const mdExisting = await fs.readText(mdAbs);
       if (!mdExisting.ok || mdExisting.value !== md) {
-        const w = await fs.writeText(mdAbs, md);
-        if (!w.ok) result.errors.push(`${date}: 摘要写入失败（${w.error.message}）`);
+        const mw = await fs.writeText(mdAbs, md);
+        if (!mw.ok) result.errors.push(`${date}: 摘要写入失败（${mw.error.message}）`);
       }
       manifest.days[date] = {
-        count,
-        sha256: hash,
+        count: records.length,
+        sha256: sha256(back.value),
         jsonl: `${date}.jsonl`,
         md: `${date}.md`,
         archivedAt: new Date(now).toISOString(),
         rels: records.map((a) => a.rel),
+        recordHashes: Object.fromEntries(records.map((a) => [a.rel, digestAtom(a)])),
       };
       manifestDirty = true;
-      deletable.set(date, list);
-      result.archived.push({ date, count, jsonl: `${ARCHIVE_DIR}/${date}.jsonl`, md: `${ARCHIVE_DIR}/${date}.md`, sha256: hash });
-    } finally {
-      const lock = abs(ws, ARCHIVE_LOCK);
-      if (await fs.exists(lock)) await fs.unlink(lock);
+      result.archived.push({
+        date,
+        count: records.length,
+        jsonl: `${ARCHIVE_DIR}/${date}.jsonl`,
+        md: `${ARCHIVE_DIR}/${date}.md`,
+        sha256: sha256(back.value),
+      });
+      if (deleteHot) deletions.set(date, current.filter((a) => !pinned.has(a.rel)));
     }
-  }
-  if (manifestDirty) {
-    const w = await fs.writeText(abs(ws, ARCHIVE_MANIFEST), JSON.stringify(manifest, null, 2) + "\n");
-    if (!w.ok) {
-      result.errors.push(`manifest 写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
-      return result;
+
+    if (manifestDirty) {
+      const manifestAbs = abs(ws, ARCHIVE_MANIFEST);
+      const tmp = `${manifestAbs}.tmp`;
+      const w = await fs.writeText(tmp, JSON.stringify(manifest, null, 2) + "\n");
+      if (!w.ok) {
+        result.errors.push(`manifest 临时写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
+        return result;
+      }
+      const r = await fs.rename(tmp, manifestAbs);
+      if (!r.ok) {
+        result.errors.push(`manifest 原子替换失败（${r.error.message}）；为保证可恢复，本次不删除热文件`);
+        return result;
+      }
     }
-  }
-  if (deleteHot) {
-    for (const [date, records] of deletable) {
-      for (const a of records) {
-        const absRel = abs(ws, a.rel);
-        const del = await fs.unlink(absRel);
-        if (del.ok) result.deleted += 1;
-        else if (del.error.code !== "NOT_FOUND") {
-          result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+
+    if (deleteHot) {
+      for (const records of deletions.values()) {
+        for (const a of records) {
+          const del = await fs.unlink(abs(ws, a.rel));
+          if (del.ok) result.deleted += 1;
+          else if (del.error.code !== "NOT_FOUND") {
+            result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+          }
         }
       }
     }
+    return result;
+  } finally {
+    await releaseLock(fs, ws, token);
   }
-  return result;
 };

@@ -112,4 +112,63 @@ assert.equal(again.errors.length, 0);
 assert.equal(again.deleted, 0);
 assert.deepEqual(again.skipped, ["2026-10-29"]);
 
-console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；deleteHot 后热文件删除且可重建；重复删除不报错");
+// 迟到 atom：archive 只有 A，同日新增 B；必须把 B 也归档后再删，不能只删不进档
+const lateFs = new MemoryFs({
+  [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "a",
+});
+await archiveDays(lateFs, WS, [old1], "2026-10-30", { now: 1000, deleteHot: true });
+const late = atom("2026-10-29", "100001", ".shadow/atoms/2026-10-29--100001-b--bbbbbb.md", "late b", "bbbbbb");
+const lateRun = await archiveDays(lateFs, WS, [old1, late], "2026-10-30", { now: 2000, deleteHot: true });
+assert.equal(lateRun.errors.length, 0);
+const lateArchive = await readArchivedAtoms(lateFs, WS, "2026-10-29");
+assert.equal(lateArchive.ok, true);
+if (!lateArchive.ok) throw new Error("late archive missing");
+assert.equal(lateArchive.value.length, 2, "迟到 atom 必须先进入 archive");
+assert.ok(lateArchive.value.some((a) => a.rel === late.rel));
+
+// 同 rel/uid 内容变化：archive 必须改写成新内容后再删热文件
+const changeFs = new MemoryFs({ [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "old" });
+await archiveDays(changeFs, WS, [old1], "2026-10-30", { now: 1000, deleteHot: true });
+const changed = { ...old1, body: "changed body" };
+const changeRun = await archiveDays(changeFs, WS, [changed], "2026-10-30", { now: 2000, deleteHot: true });
+assert.equal(changeRun.errors.length, 0);
+const changedArchive = await readArchivedAtoms(changeFs, WS, "2026-10-29");
+assert.equal(changedArchive.ok, true);
+if (!changedArchive.ok) throw new Error("changed archive missing");
+assert.equal(changedArchive.value[0]!.body, "changed body", "archive 必须写新内容，不能删新热文件留旧 archive");
+
+// 热/归档同 rel：重建时热文件优先
+const precedenceFs = new MemoryFs({ [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "hot-new" });
+await archiveDays(precedenceFs, WS, [old1], "2026-10-30", { now: 1000 });
+const rebuiltPriority = await loadAllAtoms(precedenceFs, WS);
+assert.equal(rebuiltPriority.ok, true);
+if (!rebuiltPriority.ok) throw new Error("loadAllAtoms failed");
+const hotAtom = rebuiltPriority.value.atoms.find((a) => a.rel === old1.rel);
+assert.equal(hotAtom?.body, "hot-new", "热文件必须优先于 archive");
+
+// pinned：可以归档，但不删热文件
+const pinFs = new MemoryFs({
+  [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "a",
+  [`${WS}/.shadow/atoms/2026-10-29--100001-b--bbbbbb.md`]: "b",
+});
+const pinRun = await archiveDays(pinFs, WS, [old1, old2], "2026-10-30", {
+  now: 1000,
+  deleteHot: true,
+  pinned: new Set([old1.rel]),
+});
+assert.equal(pinRun.errors.length, 0);
+assert.equal(await pinFs.exists(`${WS}/${old1.rel}`), true, "pinned 热文件不能删");
+assert.equal(await pinFs.exists(`${WS}/${old2.rel}`), false, "非 pinned 热文件应删");
+
+// 坏归档：部分可用，不能阻断全部 atoms
+const badArchiveFs = new MemoryFs({
+  [`${WS}/.shadow/atoms/2026-10-30--090000-c--cccccc.md`]: "today",
+  [`${WS}/.shadow/archive/2026-10-29.jsonl`]: "broken\n",
+});
+const partial = await loadAllAtoms(badArchiveFs, WS);
+assert.equal(partial.ok, true, "坏归档应返回部分结果");
+if (!partial.ok) throw new Error("partial load failed");
+assert.equal(partial.value.atoms.length, 1, "热文件仍可读");
+assert.equal(partial.value.errors.length, 1, "坏归档必须可见");
+
+console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；deleteHot 后热文件删除且可重建；重复删除不报错；迟到/内容变化/pinned/坏归档部分可用");
