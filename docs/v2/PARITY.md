@@ -12,12 +12,13 @@
 
 ## 1. v2 核心面
 
-### 1.1 工具与参数（24 + lab 3）
+### 1.1 工具与参数（26 + lab 3）
 
 | 工具 | 参数（逐个） | 数量 | 覆盖 |
 |---|---|---:|---|
 | `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` | 13 | 10 core mode + 6 core 透镜 |
 | `recall_similar` | `query` `limit` | 2 | 相似过往任务卡（派生经验，ADR-0016） |
+| `search_code` | `query` `limit` | 2 | 工作区代码检索（BM25，ADR-0019 阶段 1） |
 | `recall_shadow` | `query` `limit` | 2 | `mode:"recovery"` 包装 |
 | `shadow_query` | `query` `scope` `limit` | 3 | `mode:"query"` 包装 |
 | `shadow_toolset` | `install` `survey` `category` `need` | 4 | 原 `mode:"toolset"` |
@@ -76,7 +77,7 @@
 
 | # | v1 | v2 | 兼容处理 |
 |---|---|---|---|
-| B1 | 133 参数 | 24 核心参数（+ lab 3） | **净减 109 = 移除 113 + 新增 `entry` 1 + `facts` 1 + `recall_similar` 2**；发布说明 MUST 逐个列出并指向 `shadow_lab`/`shadow_toolset`；旧参数不再被接受（不是静默忽略） |
+| B1 | 133 参数 | 26 核心参数（+ lab 3） | **净减 107 = 移除 113 + 新增 `entry` 1 + `facts` 1 + `recall_similar` 2 + `search_code` 2**；发布说明 MUST 逐个列出并指向 `shadow_lab`/`shadow_toolset`；旧参数不再被接受（不是静默忽略） |
 | B2 | 62 mode 全在 `read_shadow` | 10 core + 1 toolset + 51 lab | `10+1+51=62`；`read_shadow({mode:"<lab>"})` MUST 返回显式重定向到 `shadow_lab`，保留一个版本后再改为未知 mode 失败 |
 | B3 | `read_shadow` 承载研究 mode | 不再承载 | 同上；`index` 归 lab；`toolset` 归 `shadow_toolset` |
 | B4 | `_meta.json` 元数据 | SQLite `hits`/`meta` 表（派生） | v2 **不导入** legacy `_meta.json`；v2 hits/meta 从空开始；`.shadow/atoms` 仍是唯一 source；SQLite 可重建 |

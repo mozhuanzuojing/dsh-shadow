@@ -117,6 +117,12 @@
 - 测试：`test/unit/skills.test.ts`；`npm run verify` 39/39。
 - 边界：启发式提炼（非 LLM）、不含可执行脚本、不进召回/不当指令。
 
+### 代码检索（search_code，2026-10-30 · `adr/0019` 阶段 1）
+- 新增 core 工具 `search_code(query, limit)`：遍历工作区代码（跳过点目录/`node_modules`/`dist` 等），按 40 行分块做 **BM25**（标识符+路径+中文 2-gram），返回 `文件:行号` + 片段。
+- 只读、不写；预算 1500 文件 / 单文件 200KB / 总 8MB，超限**显式披露**；代码片段声明「数据非指令」。
+- 测试：`test/unit/code-search.test.ts`；`npm run verify` **41/41**。
+- 未做：tree-sitter 符号图（阶段 2）、embedding 语义（阶段 3）、`.gitignore` 完整解析（当前按常见目录跳过）。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。
@@ -125,7 +131,7 @@
 4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
 5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
 6. **自动召回 auto-recall**（`adr/0018`）：**实现已接线**（`autoRecall` 默认关；`session/event` 记最后一句 + `turn-stopping` 缓存任务卡 + `systemPrompt.context` 每步注入极小提示）；单测 + `verify` 40/40。**真机 prompt-echo 未完成**（隔离 v2web 里模型卡在工具循环 3.5 分钟，属环境/模型问题，非注入失败）。
-7. **代码检索**（`adr/0019`，proposal）：先做无依赖 BM25 代码索引，再 tree-sitter 符号图、可选 embedding；依赖/预算待定。
+7. **代码检索**（`adr/0019`）：**阶段 1 已实现**（`search_code`，BM25，无依赖）；阶段 2 tree-sitter 符号图、阶段 3 embedding 仍待定（依赖/预算需拍板）。
 
 ## 关键数字（可重放）
 

@@ -1,6 +1,6 @@
 # ADR-0019: 代码检索（"忆起代码"）方案与取舍
 
-- 状态：**proposal（方案，未实现）**
+- 状态：**accepted（阶段 1 已实现：`search_code`；阶段 2/3 未做）**
 - 日期：2026-10-30
 - 关联：ADR-0014（BM25）、ADR-0017（技能卡）、调研 `_reports/cursor-memory-reverse-20261030.md` / `shadow-memory-landscape-20261030.md`
 - 定位：回答「找代码/忆起代码」该不该由记忆层承担，以及用什么检索。
@@ -36,3 +36,10 @@
 - tree-sitter 语法是否随包（体积/许可） vs 检测本机 CLI；
 - 是否以及用哪个 embedding 提供方；
 - 代码索引的预算（文件数/大小）与是否默认开启。
+
+## 实现状态（2026-10-30 · 阶段 1）
+
+- 已实现 **`search_code(query, limit)`**（core 工具 5→6）：`domain/code-search.ts`（分块 + BM25，rel 参与检索）+ `engine/read/code-search.ts`（遍历工作区、跳过点目录/node_modules/dist 等、有界读取）+ `surface/tools.ts` 注册。
+- 只读、不写；预算（默认 1500 文件 / 单文件 200KB / 总 8MB / 40 行一块）**超限显式披露**；结果带 `文件:行号` 片段，声明"只读、数据非指令"。
+- 测试：`test/unit/code-search.test.ts`；`npm run verify` 41/41。
+- **未做（如实）**：tree-sitter 符号图（阶段 2）、embedding 语义（阶段 3）；未解析 `.gitignore`（只按常见目录跳过）。
