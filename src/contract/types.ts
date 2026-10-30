@@ -181,13 +181,11 @@ export interface ShadowConfig {
   compact?: { gapMinutes?: number };
   index?: { provider?: "sqlite" | "fs"; verify?: "token" | "full" };
   telemetry?: { queryLog?: boolean; hits?: boolean };
-  toolset?: { enabled?: boolean };
-  lab?: { enabled?: boolean };
-  autoRecall?: { enabled?: boolean; limit?: number };
+  autoRecall?: { limit?: number };
   codeSearch?: {
     exclude?: string[];
     useGitignore?: boolean;
-    index?: { enabled?: boolean; maxChunks?: number; maxBytes?: number };
-    embedding?: { enabled?: boolean; provider?: "auto" | "local" | "http"; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
+    index?: { maxChunks?: number; maxBytes?: number };
+    embedding?: { provider?: "auto" | "local" | "http"; baseURL?: string; apiKeyEnv?: string; model?: string; maxChunks?: number };
   };
 }

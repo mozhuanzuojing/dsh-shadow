@@ -135,7 +135,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   ctx.on("goal/changed", (payload: any) => capture.onGoalChanged(payload));
   ctx.on("session/event", (session: any, event: any) => {
     capture.onSessionEvent(session, event);
-    if (config.autoRecall.enabled && event?.type === "user/message" && session?.id) {
+    if (event?.type === "user/message" && session?.id) {
       const t = textOfEvent(event).trim();
       if (t) {
         lastUserBySession.set(String(session.id), t);
@@ -154,8 +154,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     // 无 agent.id 的事件落在 __unknown__ 桶：turn-stopping 也要给它一次落盘机会。
     const u = await capture.flush(undefined);
     // 自动召回缓存刷新（ADR-0018）：每轮结束把任务卡算好放进内存，供下一步 systemPrompt.context 同步读取。
-    if (config.autoRecall.enabled) {
-      try {
+    try {
         const sess = ag?.session;
         if (sess?.id) {
           const d = await depsFactory({ agent: ag } as any);
@@ -179,7 +178,6 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       } catch (e) {
         debugLog(ag?.session?.header?.cwd, `cache-refresh error ${e instanceof Error ? e.message : String(e)}`);
       }
-    }
     return r.ok ? u : r;
   });
   ctx.on("session/flush", () => capture.flushAll());
@@ -255,13 +253,9 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     const service = toolsCtx.get("tools");
     if (!service) return;
     for (const tool of makeCoreTools(depsFactory, toolsetDepsFactory)) {
-      // toolset.enabled:false ⇒ 不注册台账（显式关闭；默认 true）。
-      if (tool.name === "shadow_toolset" && !config.toolset.enabled) continue;
       service.register(tool);
     }
-    if (config.lab.enabled) {
-      for (const tool of makeLabTools(depsFactory)) service.register(tool);
-    }
+    for (const tool of makeLabTools(depsFactory)) service.register(tool);
   });
 
   ctx.inject(["systemPrompt"], (promptCtx: CtxLike) => {
@@ -281,7 +275,6 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       order: 130,
       text: (context: any) => {
         try {
-          if (!config.autoRecall.enabled) return "";
           const sess = context?.agent?.session;
           const sid = sess?.id;
           if (!sid) return "";

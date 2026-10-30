@@ -6,8 +6,9 @@
 
 ### 新增
 
-- **Cursor 式代码索引**（ADR-0021）：`search_code` 默认改用持久索引 `.shadow/indexes/code/search-index.json`——tree-sitter **语法块**（function/class/interface…，超 1500 字符递归拆）、**增量刷新**（size+mtime 未变不读内容）、**trigram 候选裁剪** + BM25；索引不可写/异常时回退实时扫描。新增 `codeSearch.index` 配置（默认启用，`maxChunks=20000` / `maxBytes=16MB`）。
-- **内置本地向量**（ADR-0022）：无 embedding provider 也可向量检索——`provider:auto`（默认）有 model 走 HTTP、否则用内置 512 维特征哈希 embedder（词+相邻词+字符 3-gram+中文 2-gram，L2 归一）；HTTP 失败自动回落本地。内置向量明确标注「子词近似、非语义」。`codeSearch.embedding.enabled` 默认 true。
+- **Cursor 式代码索引**（ADR-0021）：`search_code` 使用持久索引 `.shadow/indexes/code/search-index.json`——tree-sitter **语法块**（function/class/interface…，超 1500 字符递归拆）、**增量刷新**（size+mtime 未变不读内容）、**trigram 候选裁剪** + BM25；索引不可写/异常时回退实时扫描。`maxChunks=20000` / `maxBytes=16MB` 兜底。
+- **内置本地向量**（ADR-0022）：无 embedding provider 也可向量检索——`provider:auto`（默认）有 model 走 HTTP、否则用内置 512 维特征哈希 embedder（词+相邻词+字符 3-gram+中文 2-gram，L2 归一）；HTTP 失败自动回落本地。内置向量明确标注「子词近似、非语义」。
+- **去掉功能开关**（ADR-0023）：`lab.enabled` / `toolset.enabled` / `autoRecall.enabled` / `codeSearch.index.enabled` / `codeSearch.embedding.enabled` 全部删除，功能始终启用；旧键只产生未知键 warning，不能关闭功能。
 - 测试：`test/unit/trigram.test.ts`、`ast-chunk.test.ts`、`code-index.test.ts`（无变化 0 重读 / 改一文件只重读 1 个 / 候选裁剪）、`local-embedder.test.ts`。
 
 ## [2.2.0] — 2026-10-30

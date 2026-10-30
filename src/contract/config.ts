@@ -16,8 +16,6 @@ export interface NormalizedConfig {
   compact: Required<NonNullable<ShadowConfig["compact"]>>;
   index: Required<NonNullable<ShadowConfig["index"]>>;
   telemetry: Required<NonNullable<ShadowConfig["telemetry"]>>;
-  toolset: Required<NonNullable<ShadowConfig["toolset"]>>;
-  lab: Required<NonNullable<ShadowConfig["lab"]>>;
   autoRecall: Required<NonNullable<ShadowConfig["autoRecall"]>>;
   codeSearch: Required<NonNullable<ShadowConfig["codeSearch"]>>;
   warnings: string[];
@@ -37,7 +35,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
   const c = raw ?? {};
   const known = new Set([
     "shadowRoot", "projectRoot", "capture", "recall", "retention", "forget",
-    "compact", "index", "telemetry", "toolset", "lab", "autoRecall", "codeSearch",
+    "compact", "index", "telemetry", "autoRecall", "codeSearch",
   ]);
   for (const k of Object.keys(c as Record<string, unknown>)) {
     if (!known.has(k)) warnings.push(`未知配置键：${k}（v2 只认 ${[...known].join(" / ")}）`);
@@ -82,10 +80,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
       queryLog: c.telemetry?.queryLog !== false,
       hits: c.telemetry?.hits !== false,
     },
-    toolset: { enabled: c.toolset?.enabled !== false },
-    lab: { enabled: c.lab?.enabled === true },
     autoRecall: {
-      enabled: c.autoRecall?.enabled === true,
       limit: Math.max(1, Math.min(5, numOr(c.autoRecall?.limit, 2))),
     },
     codeSearch: {
@@ -94,12 +89,10 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
         : [],
       useGitignore: c.codeSearch?.useGitignore !== false,
       index: {
-        enabled: c.codeSearch?.index?.enabled !== false,
         maxChunks: Math.max(1, Math.min(200000, numOr(c.codeSearch?.index?.maxChunks, 20000))),
         maxBytes: Math.max(100_000, Math.min(200_000_000, numOr(c.codeSearch?.index?.maxBytes, 16_000_000))),
       },
       embedding: {
-        enabled: c.codeSearch?.embedding?.enabled !== false,
         provider: c.codeSearch?.embedding?.provider === "local" ? "local" : c.codeSearch?.embedding?.provider === "http" ? "http" : "auto",
         baseURL: typeof c.codeSearch?.embedding?.baseURL === "string" && c.codeSearch.embedding.baseURL.trim() ? c.codeSearch.embedding.baseURL.trim() : "http://127.0.0.1:3425/v1",
         apiKeyEnv: typeof c.codeSearch?.embedding?.apiKeyEnv === "string" && c.codeSearch.embedding.apiKeyEnv.trim() ? c.codeSearch.embedding.apiKeyEnv.trim() : "MAGPIE_GATEWAY_KEY",

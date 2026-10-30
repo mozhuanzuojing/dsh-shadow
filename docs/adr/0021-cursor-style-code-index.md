@@ -22,7 +22,7 @@
    - 刷新时 `size/mtime` 未变则**不读内容**直接复用（Merkle「只同步变化分支」的本地等价）；
    - 索引根 = 文件 hash 的排序聚合（root），供变更判断/披露。
 3. **trigram 候选裁剪**：内存建 trigram → chunk 倒排（从块文本构建，不额外落盘）；查询按「词内 trigram 全含（AND）、多词取并（OR）」缩候选，再 BM25 排序（Cursor「先 trigram 查候选、再精确匹配」）。
-4. **默认启用**：`codeSearch.index.enabled` 默认 true（用户要求“不怕重”）；`maxChunks=20000`、`maxBytes=16MB` 兜底，超限显式披露；索引异常/不可写时**回退**到实时 `search_code`（不静默失败，头部会显示索引/实时）。
+4. **始终启用（无开关）**：`maxChunks=20000`、`maxBytes=16MB` 兜底，超限显式披露；索引异常/不可写时**回退**到实时 `search_code`（不静默失败，头部会显示索引/实时）。
 5. **本地化**：索引只存本机 `.shadow/indexes`（gitignore），不上传、不做团队共享；Merkle/simhash 的跨机复用不做（本地无多机场景）。
 
 ## Consequences

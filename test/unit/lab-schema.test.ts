@@ -17,7 +17,7 @@ import { WS } from "../helpers.ts";
 const makeDeps = () => ({
   fs: new MemoryFs(),
   ws: WS,
-  config: normalizeConfig({ lab: { enabled: true } }),
+  config: normalizeConfig({}),
   signals: new SignalStore(),
   agent: { id: "lab-schema-test" },
 });

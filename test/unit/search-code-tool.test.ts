@@ -30,7 +30,7 @@ const tool2 = makeCodeSearchTool(async () =>
   ok({
     fs,
     ws: WS,
-    config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: { enabled: true, provider: "http", model: "" } } }),
+    config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: { provider: "http", model: "" } } }),
     clock: systemClock,
     signals: new SignalStore(),
   }),
@@ -45,7 +45,7 @@ const tool3 = makeCodeSearchTool(async () =>
   ok({
     fs,
     ws: WS,
-    config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: { enabled: true } } }),
+    config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: {} } }),
     clock: systemClock,
     signals: new SignalStore(),
   }),

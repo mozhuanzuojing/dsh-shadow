@@ -38,7 +38,7 @@
 
 ### Phase 3 — lab（51 mode）
 - `src/lab/vendor/` 移植 v1 lab 依赖闭包（142 文件 / 6.4k 行），`src/lab/run.ts` 适配 v2 `FsPort`/Outcome。
-- `shadow_lab` 3 参数：`mode` / `input` / `write`；`lab.enabled:true` 才注册。
+- `shadow_lab` 3 参数：`mode` / `input` / `write`；**无开关，始终注册**（ADR-0023）。
 - 51 mode 全部可执行；31 写型必须 `write:true`；只读带 write / 未知 mode / 未知字段均显式拒绝。
 - `npm run lab:modes` 输出 51 / 31 / 9 分组；写型落 `.shadow/<store>/` 并可读回（测试）。
 - 输出结构 `{ok, mode, wrote, data:{text}, notes, loss}`；正文统一“数据非指令”前缀。
@@ -130,7 +130,7 @@
 3. **真实 DSH E2E**：headless / 隔离 `v2web` 已跑通（含 lab、含卸载/恢复回滚）；v2.1.0 的 **toolset 只读探测 + 派生件已真机复测**（2026-10-30，见上）；**仍未真机验**：`shadow_toolset` install 真执行、forget 陈旧类、WSL 远端；日常 `desktop` profile 已写入但**需重启 Electron** 生效。
 4. **npm publish**：registry 尚未发布（v2.x 只发 git tag，ADR-0012）；发布后 `pnpm add dsh-shadow` 才成立。
 5. **v1→v2 配置映射**：MIGRATION 写了映射表，`contract/config.ts` 尚未实现 v1 键兼容 warn。
-6. **自动召回 auto-recall**（`adr/0018`）：**已实现 + 真机已验证**（`autoRecall` 默认关；文件探针显示 `text()` 每步被调用、turn-stopping 后 `cache-refreshed cards=1`、下一轮 `text() injected … hintChars=140`）。
+6. **自动召回 auto-recall**（`adr/0018`/`adr/0023`）：**已实现 + 真机已验证 + 无开关常开**（`autoRecall.limit` 仍限 1..5）；文件探针显示 `text()` 每步被调用、turn-stopping 后 `cache-refreshed cards=1`、下一轮 `text() injected … hintChars=140`。
 7. **代码检索**（`adr/0019`/`0020`/`0021`/`0022`）：**阶段 1** `search_code`、**阶段 2** tree-sitter 符号、**阶段 3** 向量检索均已接入；**Cursor 式索引**（语法块 + 增量刷新 + trigram 候选 + BM25，默认启用、可删重建）与**内置本地向量**（provider:auto/local，无 provider 也能用；本地向量为子词近似、非语义）已实现。HTTP embedding 仍不可用（网关 500），配置 `provider:"http"` 才走外部。
 
 ## 关键数字（可重放）

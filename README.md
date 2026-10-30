@@ -21,7 +21,7 @@
 | `recall_similar` | 2 | 相似过往任务卡（当时请求/决策/结果/教训/来源），按相关+新近+重要性召回 |
 | `search_code` | 2 | 工作区代码只读检索：持久索引（语法块 + 增量 + trigram 候选）+ BM25 + tree-sitter 符号 + 向量（默认内置本地 embedder，可选 HTTP）；支持 `.gitignore`/`exclude` |
 | `shadow_toolset` | 4 | 真实能力台账：survey/category/need 只读探测；install 需宿主 `allowed-once` 审批 |
-| `shadow_lab`（可选） | 3 | 51 个研究 mode；`lab.enabled:true` 时注册，写型需 `write:true` |
+| `shadow_lab` | 3 | 51 个研究 mode；**无开关，始终注册**；写型需 `write:true` |
 
 核心 mode：`recovery` · `query` · `episode` · `decision` · `task` · `context` · `knowledge` · `query-log` · `shadow-report` · `shadow-manifest`。
 
@@ -40,7 +40,7 @@ npm run verify
 git checkout v2.0.0
 npm install; npm run build; npm pack      # → dsh-shadow-2.0.0.tgz
 # 在 DSH profile 目录：pnpm add file:<path>/dsh-shadow-2.0.0.tgz
-# profile 的 dsh.profile.bundles 加 "dsh-shadow"；要 lab 再在 cordis.patch.yml 开 lab.enabled
+# profile 的 dsh.profile.bundles 加 "dsh-shadow"；无功能开关，lab 也始终注册
 ```
 
 新克隆后 `npm run verify` 是自包含的（不要求工作区有 `.shadow`）；需要真实语料的 benchmark 走 `npm run verify:corpus`。

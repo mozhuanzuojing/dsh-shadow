@@ -46,9 +46,9 @@
 
 ## 阶段 3 实现（embedding 管线，2026-10-30）
 
-- 配置 `codeSearch.embedding`（默认 **disabled**）：`baseURL / apiKeyEnv / model / maxChunks`。
-- `domain/embedding.ts`（余弦）+ `engine/read/embedding.ts`：派生索引 `.shadow/indexes/code/embeddings.json`（40 行块、内容 hash **只对新增/变更块重嵌**）；HTTP embedder 走 OpenAI 兼容 `/embeddings`。
-- `search_code` 在开关打开时追加「## 语义（embedding）」段；失败/无 provider **显式不可用**，不影响 BM25/符号。
+- 配置 `codeSearch.embedding`（**无开关，始终启用**；`provider: auto|local|http`）：`baseURL / apiKeyEnv / model / maxChunks`。
+- `domain/embedding.ts`（余弦）+ `engine/read/embedding.ts`：派生索引 `.shadow/indexes/code/embeddings.json`（语法块、内容 hash **只对新增/变更块重嵌**）；HTTP embedder 走 OpenAI 兼容 `/embeddings`。
+- `search_code` 始终追加「## 向量/语义」段；失败/无 provider 用内置本地向量，不影响 BM25/符号。
 - 测试：`test/unit/embedding.test.ts`（假 embedder：余弦 / 命中 / hash 复用 0 重嵌 / 空查询）。
 - **真机限制（实测）**：本机 magpie 网关 `POST /v1/embeddings` 返回 **500**，无可用 embedding 模型 ⇒ **语义检索当前真机不可用**（可配置任意 OpenAI 兼容 `/embeddings` 服务）。如实标注，不宣称已语义可用。
 - **评审修复（P0/P1）**：① 索引写入 `sourceSig`（rel+size+mtime，**只 stat 不读内容**）；源签名变化才重建，查询热路径 **0 次内容读取**（进程内缓存索引条目）；② 查询时对条目**再次套 ignore/exclude**，修「改配置后旧索引泄露被排除文件」；③ 符号段 `error` 不再吞掉已成功的 `hits`；④ `web-tree-sitter` 改**动态导入**（缺失即返回 error，不拖垮插件）；⑤ 抽公共 `walkCodeFiles/absOf/snippetOf` 去三份重复；⑥ 依赖**钉死版本 + 提交 `package-lock.json` + `THIRD_PARTY_NOTICES.md`**。

@@ -25,12 +25,12 @@ const ctx: any = {
   inject: (_deps: string[], cb: Function) => cb({ get: (k: string) => services[k] }),
 };
 
-const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" }, lab: { enabled: true } });
+const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" } });
 try {
   assert.ok(tools.has("read_shadow"), "read_shadow 应注册");
   assert.ok(tools.has("recall_shadow"), "recall_shadow 应注册");
   assert.ok(tools.has("shadow_query"), "shadow_query 应注册");
-  assert.ok(tools.has("shadow_lab"), "lab.enabled 时 shadow_lab 应注册");
+  assert.ok(tools.has("shadow_lab"), "lab 无开关，shadow_lab 应始终注册");
 
   await handlers.get("session/event")!(
     { id: "s1", header: { cwd: ws } },

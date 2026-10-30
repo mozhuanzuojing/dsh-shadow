@@ -17,7 +17,7 @@
    - `local`：强制内置；
    - `http`：OpenAI 兼容 `/embeddings`（需配置 `model`）；
    - `auto`（默认）：有 `model` 走 http，否则走 local；http 失败时**自动回落 local** 并在输出注明。
-3. **默认启用**：`codeSearch.embedding.enabled` 默认 true（配合内置 embedder 即开即用）。
+3. **始终启用（无开关）**：向量检索始终参与 `search_code`（provider 只决定用本地还是 HTTP）。
 4. **诚实标注**：内置向量明确写「**子词近似、非语义**」；http 成功才写「语义（embedding）」。不把哈希向量冒充语义模型。
 5. 索引仍走 `.shadow/indexes/code/embeddings.json`：块内容 hash 复用、`sourceSig`（stat-only）增量、进程内缓存；本地/HTTP 的 model id 不同，切换会自动重建。
 

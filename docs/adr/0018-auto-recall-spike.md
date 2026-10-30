@@ -40,9 +40,9 @@
 
 ## 实现状态（2026-10-30）
 
-- 已实现：`contract.autoRecall { enabled:false, limit:2 }`（默认关、limit 钳 1..5）；`domain/auto-recall.ts` 纯函数提示；`index.ts` 在 `session/event(user/message)` 记最后一句、在 `agent/turn-stopping` 异步刷新 `LessonCard` 缓存、并注册 `systemPrompt.context({name:"dsh-shadow:auto-recall", order:130, text:(ctx)=>…})`（同步读缓存、异常返回空）。
+- 已实现：`contract.autoRecall { limit:2 }`（**无开关，始终启用**；limit 钳 1..5，见 ADR-0023）；`domain/auto-recall.ts` 纯函数提示；`index.ts` 在 `session/event(user/message)` 记最后一句、在 `agent/turn-stopping` 异步刷新 `LessonCard` 缓存、并注册 `systemPrompt.context({name:"dsh-shadow:auto-recall", order:130, text:(ctx)=>…})`（同步读缓存、异常返回空）。
 - 单测：`test/unit/auto-recall.test.ts`；`npm run verify` **41/41**；commit `0aa7f69`。
-- **真机验证（已通过）**：隔离 `v2web`（已开 `autoRecall.enabled`）+ `DSH_SHADOW_AUTORECALL_DEBUG=1` 的**文件探针**（写 `.shadow/indexes/auto-recall.debug.log`，避开模型转述的不确定性）：
+- **真机验证（已通过）**：隔离 `v2web`（`DSH_SHADOW_AUTORECALL_DEBUG=1`）的**文件探针**（写 `.shadow/indexes/auto-recall.debug.log`，避开模型转述的不确定性）：
   - `text()` 在**每步**被调用（同一会话多次）；
   - 第 1 轮前 `cards=0`（跳过）→ turn-stopping 后 `cache-refreshed session=… cards=1`；
   - 第 2 轮同会话 `text() injected session=… cards=1 hintChars=140` ⇒ **缓存命中且返回了 140 字符提示**。

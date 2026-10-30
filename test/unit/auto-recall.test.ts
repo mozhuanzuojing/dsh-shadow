@@ -35,12 +35,10 @@ assert.equal(buildAutoRecallHint(cards, "", "2026-09-06", 2), "", "空查询应�
 assert.equal(buildAutoRecallHint(cards, "完全不存在zzz", "2026-09-06", 2), "", "无关查询应返回空");
 assert.equal(buildAutoRecallHint([], "JWT", "2026-09-06", 2), "", "空缓存应返回空");
 
-// 3) 配置：默认关；显式开 + limit 钳制 1..5
+// 3) 配置：无开关，只有 limit 钳制 1..5
 const c = normalizeConfig({});
-assert.equal(c.autoRecall.enabled, false, "autoRecall 默认关");
 assert.equal(c.autoRecall.limit, 2);
-const c2 = normalizeConfig({ autoRecall: { enabled: true, limit: 9 } });
-assert.equal(c2.autoRecall.enabled, true);
+const c2 = normalizeConfig({ autoRecall: { limit: 9 } });
 assert.equal(c2.autoRecall.limit, 5, "limit 应钳到 5");
 
-console.log("✔ auto-recall：提示构建(带技能指针/无关不注入/空返回) + 配置默认关/limit钳制");
+console.log("✔ auto-recall：提示构建(带技能指针/无关不注入/空返回) + 配置 limit 钳制");

@@ -193,13 +193,9 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       const ignore = await loadIgnore(d.value.fs, d.value.ws, (d.value.config as any)?.codeSearch);
       const idx = (d.value.config as any)?.codeSearch?.index;
       let r: { text: string };
-      if (idx?.enabled !== false) {
-        try {
-          r = await searchCodeIndexed({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore, maxChunks: idx?.maxChunks, maxBytes: idx?.maxBytes });
-        } catch {
-          r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
-        }
-      } else {
+      try {
+        r = await searchCodeIndexed({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore, maxChunks: idx?.maxChunks, maxBytes: idx?.maxBytes });
+      } catch {
         r = await searchCode({ fs: d.value.fs, ws: d.value.ws }, query, { limit, ignore });
       }
       // 阶段 2：tree-sitter 符号（定义/入口）。不可用时显式披露，不影响 BM25 结果。
@@ -213,10 +209,9 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
       } catch (e) {
         extra = `\n\n## 符号（tree-sitter）\n> 符号检索失败：${e instanceof Error ? e.message : String(e)}`;
       }
-      // 阶段 3：向量检索（默认内置本地 embedder；provider:auto 时优先 http，失败回落本地）。
-      const emb = (d.value.config as any)?.codeSearch?.embedding;
-      if (emb?.enabled) {
-        try {
+      // 阶段 3：向量检索（始终启用；provider:auto 时优先 http，失败回落内置本地）。
+      const emb = (d.value.config as any)?.codeSearch?.embedding ?? {};
+      try {
           const provider = String(emb.provider ?? "auto");
           const useHttp = provider === "http" || (provider === "auto" && !!emb.model);
           const httpEmbedder = useHttp ? makeHttpEmbedder({ baseURL: emb.baseURL, apiKeyEnv: emb.apiKeyEnv, model: emb.model }) : null;
@@ -241,7 +236,6 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
         } catch (e) {
           extra += `\n\n## 向量检索\n> 失败：${e instanceof Error ? e.message : String(e)}`;
         }
-      }
       return renderPlain(r.text + extra, d.value.signals);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

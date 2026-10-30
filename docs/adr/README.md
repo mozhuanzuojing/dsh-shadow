@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（22 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（23 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -21,11 +21,12 @@
 | [0015](./0015-project-facts-evidence.md) | 项目事实（facts）：从用户原话抽可核验的 X=路径 | accepted |
 | [0016](./0016-similar-task-recall.md) | 相似过往任务召回（任务卡+经验，新增 recall_similar） | accepted |
 | [0017](./0017-task-to-skill-export.md) | 任务卡 → 可审 SKILL.md（技能卡物化） | accepted |
-| [0018](./0018-auto-recall-spike.md) | 自动召回（auto-recall）spike 结论与设计 | proposal |
+| [0018](./0018-auto-recall-spike.md) | 自动召回（auto-recall）spike 结论与设计（已实现、无开关） | accepted |
 | [0019](./0019-code-index-plan.md) | 代码检索（忆起代码）方案与取舍（阶段1 已实现） | accepted |
 | [0020](./0020-tree-sitter-dependency-eval.md) | tree-sitter 依赖评估与阶段 2 建议（已引入实现） | accepted |
 | [0021](./0021-cursor-style-code-index.md) | Cursor 式代码索引：语法块 + 增量 + trigram 候选 + BM25 | accepted |
 | [0022](./0022-builtin-local-embedder.md) | 内置本地向量（无 provider 也能向量检索） | accepted |
+| [0023](./0023-remove-feature-switches.md) | 去掉功能开关——所有功能始终启用 | accepted |
 
 ## 状态枚举
 
