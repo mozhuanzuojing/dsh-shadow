@@ -9,6 +9,7 @@
  */
 
 import type { ParsedAtom } from "../contract/types.js";
+import { createHash } from "node:crypto";
 import { bm25Rank } from "./bm25.js";
 
 export interface LessonCard {
@@ -74,6 +75,18 @@ export interface RankedCard {
   matched: number;
 }
 
+/** 任务卡 → 技能卡目录名（可读前缀 + key 短哈希；确定性）。供 skills 物化与 recall_similar 指针共用。 */
+const shortHash = (s: string): string => createHash("sha256").update(String(s), "utf8").digest("hex").slice(0, 8);
+const safeSlug = (s: string, max = 40): string =>
+  String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .slice(0, max) || "task";
+export const skillSlug = (card: LessonCard): string => `${safeSlug(card.title, 32)}-${shortHash(card.key)}`;
+
 /**
  * 相似任务排序：`relevance(BM25 中文2gram) + recency + importance` 复合分。
  * 有 query 时要求至少命中 1 个检索 term（避免"随便返回最近任务"）；query 为空=浏览（按 新近+重要性）。
@@ -113,6 +126,7 @@ export const renderSimilar = (query: string, ranked: RankedCard[]): string => {
     if (card.lessons.length) seg.push(`- 教训：${card.lessons.slice(0, 4).join("；")}`);
     if (card.evidence.length) seg.push(`- 证据/材料：${card.evidence.slice(0, 5).join("、")}`);
     seg.push(`- 来源：${card.memoryRefs.slice(0, 5).join("、")} · 匹配 ${matched} 项 · 综合分 ${Math.round(score * 100) / 100}`);
+    seg.push(`- 技能：indexes/skills/${skillSlug(card)}/SKILL.md`);
     return seg.join("\n");
   });
   return `${head}\n${blocks.join("\n\n")}`;

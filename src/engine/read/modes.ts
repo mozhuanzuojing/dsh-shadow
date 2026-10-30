@@ -25,6 +25,7 @@ import {
 } from "../../domain/views.js";
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
+import { materializeSkills, renderSkillsSection } from "../skills-out.js";
 import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels, bm25Fallback } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
@@ -121,7 +122,7 @@ export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Mo
     atoms,
     deps.config.compact.gapMinutes,
   );
-  const built = buildIndexText(deps, atoms) + derived + renderFactsList(extractFacts(atoms));
+  const built = buildIndexText(deps, atoms) + derived + renderFactsList(extractFacts(atoms)) + renderSkillsSection(await materializeSkills({ fs: deps.fs, ws: deps.ws, signals: deps.signals }, atoms));
   const existing = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
   if (!existing.ok || existing.value !== built) {
     const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);

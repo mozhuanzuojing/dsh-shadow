@@ -111,6 +111,12 @@
 - 测试：`test/unit/similar.test.ts`；`npm run verify` **38/38**。
 - 边界：`lessons` 是启发式（非 LLM）；相似=BM25/2-gram，语义近义/翻译仍可能不中；仍需 agent 主动调用（自动召回待真机 spike）。
 
+### 任务卡 → 可审 SKILL.md（2026-10-30 · `adr/0017`）
+- 每张任务卡确定性生成 `SKILL.md`（frontmatter name/description + 何时用/步骤/结果/教训/证据/来源），物化到 `.shadow/indexes/skills/<slug>/SKILL.md`（幂等、有界 24、失败留 Signal 不阻塞读）。
+- 无参索引列「技能」段；`recall_similar` 每张卡带「技能：indexes/skills/…/SKILL.md」指针；可复制到项目 `.agents/skills/` 复用。
+- 测试：`test/unit/skills.test.ts`；`npm run verify` 39/39。
+- 边界：启发式提炼（非 LLM）、不含可执行脚本、不进召回/不当指令。
+
 ## 未完成（按优先级）
 
 1. **拆 `dsh-shadow-lab` 独立包**：ADR-0013 已给边界与迁移方案；未执行——core 移除 lab 是 breaking，需先定版本（建议 3.0.0）。
