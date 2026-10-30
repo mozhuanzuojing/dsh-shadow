@@ -93,10 +93,14 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
         maxBytes: Math.max(100_000, Math.min(200_000_000, numOr(c.codeSearch?.index?.maxBytes, 16_000_000))),
       },
       embedding: {
-        provider: c.codeSearch?.embedding?.provider === "local" ? "local" : c.codeSearch?.embedding?.provider === "http" ? "http" : "auto",
+        provider:
+          c.codeSearch?.embedding?.provider === "local" || c.codeSearch?.embedding?.provider === "http" || c.codeSearch?.embedding?.provider === "hash"
+            ? c.codeSearch.embedding.provider
+            : "auto",
         baseURL: typeof c.codeSearch?.embedding?.baseURL === "string" && c.codeSearch.embedding.baseURL.trim() ? c.codeSearch.embedding.baseURL.trim() : "http://127.0.0.1:3425/v1",
         apiKeyEnv: typeof c.codeSearch?.embedding?.apiKeyEnv === "string" && c.codeSearch.embedding.apiKeyEnv.trim() ? c.codeSearch.embedding.apiKeyEnv.trim() : "MAGPIE_GATEWAY_KEY",
         model: typeof c.codeSearch?.embedding?.model === "string" ? c.codeSearch.embedding.model.trim() : "",
+        neuralModel: typeof c.codeSearch?.embedding?.neuralModel === "string" ? c.codeSearch.embedding.neuralModel.trim() : "",
         maxChunks: Math.max(1, Math.min(50000, numOr(c.codeSearch?.embedding?.maxChunks, 2000))),
       },
     },

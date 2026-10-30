@@ -17,6 +17,10 @@ import type { FsPort } from "../../store/fs.js";
 
 export interface Embedder {
   id: string;
+  /** 查询侧前缀（如 e5 的 "query: "）。 */
+  queryPrefix?: string;
+  /** 文档/代码块侧前缀（如 e5 的 "passage: "）。 */
+  docPrefix?: string;
   embed(texts: string[]): Promise<number[][]>;
 }
 
@@ -80,6 +84,7 @@ export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: E
 
 /** 进程内索引缓存：查询时命中即复用，避免每次重读 embeddings.json 与重新 stat 遍历。 */
 const indexCache = new Map<string, { model: string; entries: EmbeddingEntry[]; dims: number; sourceSig: string }>();
+const bgJobs = new Map<string, Promise<void>>();
 const cacheKey = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
 
 export const buildEmbeddingIndex = async (
@@ -138,7 +143,7 @@ export const buildEmbeddingIndex = async (
   let dims = 0;
   for (let i = 0; i < toEmbed.length; i += 64) {
     const batch = toEmbed.slice(i, i + 64);
-    const vecs = await embedder.embed(batch.map((c) => c.text));
+    const vecs = await embedder.embed(batch.map((c) => `${embedder.docPrefix ?? ""}${c.text}`));
     if (!dims && vecs[0]) dims = vecs[0].length;
     batch.forEach((c, k) => entries.push({ key: c.key, rel: c.rel, start: c.start, end: c.end, snippet: c.snippet, vec: vecs[k]! }));
   }
@@ -161,6 +166,8 @@ export interface EmbeddingSearchResult {
   hits: EmbeddingHit[];
   model: string;
   dims: number;
+  /** 首次/变更后索引为空：已启动后台构建，本次先不返回向量结果。 */
+  building?: boolean;
   built: boolean;
   error?: string;
 }
@@ -169,7 +176,7 @@ export const searchEmbedding = async (
   deps: { fs: FsPort; ws: string },
   query: string,
   embedder: Embedder,
-  opts: EmbeddingOptions & { limit?: number } = {},
+  opts: EmbeddingOptions & { limit?: number; asyncBuild?: boolean } = {},
 ): Promise<EmbeddingSearchResult> => {
   const q = String(query ?? "").trim();
   const limit = Math.max(1, Math.min(30, Number(opts.limit ?? 8) || 8));
@@ -201,6 +208,26 @@ export const searchEmbedding = async (
         }
       }
       if (!usable) {
+        // 首次/变更后：神经模型建索引很贵 → 后台构建，本次先返回 building（Cursor 式异步索引）。
+        if (opts.asyncBuild) {
+          const bgKey = `${key}|${embedder.id}`;
+          if (!bgJobs.has(bgKey)) {
+            const job = (async () => {
+              try {
+                const b = await buildEmbeddingIndex(deps, embedder, opts);
+                // 写完索引后（mtime/clock 可能变化）重算签名，保证下一次查询命中缓存
+                const postSig = await computeSourceSig(deps, opts);
+                indexCache.set(key, { model: embedder.id, entries: b.entries, dims: b.dims, sourceSig: postSig });
+              } catch {
+                /* 后台失败：下次查询会再次尝试，不阻塞主结果 */
+              } finally {
+                bgJobs.delete(bgKey);
+              }
+            })();
+            bgJobs.set(bgKey, job);
+          }
+          return { hits: [], model: embedder.id, dims: 0, built: false, building: true };
+        }
         const b = await buildEmbeddingIndex(deps, embedder, opts);
         entries = b.entries;
         dims = b.dims;
@@ -213,7 +240,7 @@ export const searchEmbedding = async (
     // 查询时再套一次 ignore（防止改 exclude 后旧条目泄露被排除文件）
     const filtered = opts.ignore ? entries.filter((e) => !opts.ignore!(e.rel, false)) : entries;
     if (!filtered.length) return { hits: [], model: embedder.id, dims, built, error: "索引为空（没有可嵌入的代码）" };
-    const qv = (await embedder.embed([q]))[0] ?? [];
+    const qv = (await embedder.embed([`${embedder.queryPrefix ?? ""}${q}`]))[0] ?? [];
     const scored: EmbeddingHit[] = filtered
       .map((e) => ({ rel: e.rel, start: e.start, end: e.end, score: cosine(qv, e.vec), snippet: e.snippet }))
       .filter((h) => h.score > 0)

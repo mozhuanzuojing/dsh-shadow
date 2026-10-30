@@ -15,7 +15,7 @@ const seed = {
 const fs = new MemoryFs(seed);
 const WS = "/ws";
 const tool = makeCodeSearchTool(async () =>
-  ok({ fs, ws: WS, config: normalizeConfig({ shadowRoot: WS }), clock: systemClock, signals: new SignalStore() }),
+  ok({ fs, ws: WS, config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: { provider: "hash" } } }), clock: systemClock, signals: new SignalStore() }),
 ) as any;
 
 // 1) BM25 + 符号两段都在；.gitignore 生效（secret/ 不出现）
@@ -25,7 +25,7 @@ assert.ok(out.includes("## 符号（tree-sitter"), "应有符号段");
 assert.ok(out.includes("src/auth.ts"), "应命中 auth.ts");
 assert.ok(!out.includes("secret/hidden.ts"), "应忽略 .gitignore 的 secret/");
 
-// 2) provider:http 但无 model → 显式不可用（不吞 BM25）
+// 2) provider:http 但无 model → 回落哈希（不吞 BM25）
 const tool2 = makeCodeSearchTool(async () =>
   ok({
     fs,
@@ -36,22 +36,8 @@ const tool2 = makeCodeSearchTool(async () =>
   }),
 ) as any;
 const out2 = String(await tool2.execute({ query: "createSession", limit: 5 }, undefined));
-assert.ok(out2.includes("## 语义（embedding"), "应有语义段");
-assert.ok(out2.includes("不可用"), "无 model 应显式不可用");
-assert.ok(out2.includes("src/auth.ts"), "embedding 不可用不应吞掉 BM25 结果");
+assert.ok(out2.includes("回落原因"), "HTTP 不可用应注明回落原因");
+assert.ok(out2.includes("本地哈希"), "应回落到本地哈希向量");
+assert.ok(out2.includes("src/auth.ts"), "回落不应吞掉 BM25 结果");
 
-// 3) provider:auto + 无 model → 使用内置本地向量（无需 provider）
-const tool3 = makeCodeSearchTool(async () =>
-  ok({
-    fs,
-    ws: WS,
-    config: normalizeConfig({ shadowRoot: WS, codeSearch: { embedding: {} } }),
-    clock: systemClock,
-    signals: new SignalStore(),
-  }),
-) as any;
-const out3 = String(await tool3.execute({ query: "createSession", limit: 5 }, undefined));
-assert.ok(out3.includes("向量（本地子词"), `应使用内置向量：${out3.slice(-400)}`);
-assert.ok(out3.includes("src/auth.ts"), "内置向量不应吞掉 BM25 结果");
-
-console.log("✔ search_code 工具层：BM25+符号两段 / .gitignore 生效 / http 无 model 显式不可用 / auto 走内置本地向量");
+console.log("✔ search_code 工具层：BM25+符号两段 / .gitignore 生效 / http 不可用回落哈希且不吞结果");

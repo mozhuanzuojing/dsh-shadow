@@ -74,4 +74,16 @@ await fs2.writeText("/ws2/a.ts", "export const alpha = 2;\n"); // 长度不变�
 const r4 = await searchEmbedding(d2 as any, "alpha", fake(), {});
 assert.equal(r4.built, true, "同尺寸内容改动应触发重建");
 
-console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 同尺寸改动重建 + 查询时 ignore 过滤");
+// 8) 异步建索引：首次返回 building，后台完成后可命中
+const fs3 = new MemoryFs({ "/ws3/a.ts": "export const asyncToken = 1;\n" });
+const d3 = { fs: fs3, ws: "/ws3" };
+const f3 = fake();
+const first = await searchEmbedding(d3 as any, "asyncToken", f3, { asyncBuild: true });
+assert.equal(first.building, true, "首次应返回 building");
+assert.equal(first.hits.length, 0);
+await new Promise((r) => setTimeout(r, 200));
+const second = await searchEmbedding(d3 as any, "asyncToken", f3, { asyncBuild: true });
+assert.ok(!second.building, "后台完成后不应再 building");
+assert.ok(second.hits.length > 0, `后台完成后应能命中：${JSON.stringify(second)}`);
+
+console.log("✔ embedding：cosine + 语义检索命中 + hash 复用(0 重嵌) + 空查询 + 源变化重建 + 同尺寸改动重建 + 查询时 ignore 过滤 + 异步建索引");
