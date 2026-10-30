@@ -65,17 +65,21 @@ export interface EmbeddingOptions {
   ignore?: (rel: string, isDir: boolean) => boolean;
 }
 
-/** 源文件内容签名（逐文件内容 sha1；能检测同尺寸改动，代价是一次读取遍历）。 */
+/** 源签名（**只 stat，不读内容**）：rel+size+mtime。用于廉价判断索引是否过期。 */
 export const computeSourceSig = async (deps: { fs: FsPort; ws: string }, opts: EmbeddingOptions = {}): Promise<string> => {
   const maxFiles = Math.max(1, Math.min(20000, Number(opts.maxFiles ?? 1500) || 1500));
   const parts: string[] = [];
   await walkCodeFiles(deps, { ignore: opts.ignore, maxFiles }, async (rel, abs) => {
-    const read = await deps.fs.readText(abs);
-    if (read.ok) parts.push(`${rel}:${createHash("sha1").update(read.value).digest("hex").slice(0, 16)}`);
+    const st = await deps.fs.stat(abs);
+    if (st.ok) parts.push(`${rel}:${st.value.size}:${Math.floor(st.value.mtimeMs)}`);
   });
   parts.sort();
   return createHash("sha1").update(parts.join("\n")).digest("hex").slice(0, 16);
 };
+
+/** 进程内索引缓存：查询时命中即复用，避免每次重读 embeddings.json 与重新 stat 遍历。 */
+const indexCache = new Map<string, { model: string; entries: EmbeddingEntry[]; dims: number; sourceSig: string }>();
+const cacheKey = (ws: string): string => String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
 
 export const buildEmbeddingIndex = async (
   deps: { fs: FsPort; ws: string },
@@ -169,32 +173,41 @@ export const searchEmbedding = async (
   const q = String(query ?? "").trim();
   const limit = Math.max(1, Math.min(30, Number(opts.limit ?? 8) || 8));
   if (!q) return { hits: [], model: embedder.id, dims: 0, built: false };
+  const key = cacheKey(deps.ws);
   let entries: EmbeddingEntry[] = [];
   let dims = 0;
   let built = false;
   try {
-    const prev = await deps.fs.readText(indexPath(deps.ws));
-    let usable = false;
-    if (prev.ok) {
-      try {
-        const j = JSON.parse(prev.value) as EmbeddingFile;
-        if (j?.model === embedder.id && Array.isArray(j.entries) && j.entries.length) {
-          const sig = await computeSourceSig(deps, opts);
-          if (sig === j.sourceSig) {
+    // 只做 stat 遍历（不读内容）；命中内存索引则连索引文件都不读。
+    const sig = await computeSourceSig(deps, opts);
+    const cached = indexCache.get(key);
+    if (cached && cached.model === embedder.id && cached.sourceSig === sig) {
+      entries = cached.entries;
+      dims = cached.dims;
+    } else {
+      let usable = false;
+      const prev = await deps.fs.readText(indexPath(deps.ws));
+      if (prev.ok) {
+        try {
+          const j = JSON.parse(prev.value) as EmbeddingFile;
+          if (j?.model === embedder.id && Array.isArray(j.entries) && j.entries.length && j.sourceSig === sig) {
             entries = j.entries;
             dims = j.dims;
             usable = true;
           }
+        } catch {
+          /* rebuild */
         }
-      } catch {
-        /* rebuild */
       }
-    }
-    if (!usable) {
-      const b = await buildEmbeddingIndex(deps, embedder, opts);
-      entries = b.entries;
-      dims = b.dims;
-      built = true;
+      if (!usable) {
+        const b = await buildEmbeddingIndex(deps, embedder, opts);
+        entries = b.entries;
+        dims = b.dims;
+        built = true;
+      }
+      // 写入索引会改变 mtime（内存 fs 的 clock 语义），缓存用写完后的签名
+      const postSig = built ? await computeSourceSig(deps, opts) : sig;
+      indexCache.set(key, { model: embedder.id, entries, dims, sourceSig: postSig });
     }
     // 查询时再套一次 ignore（防止改 exclude 后旧条目泄露被排除文件）
     const filtered = opts.ignore ? entries.filter((e) => !opts.ignore!(e.rel, false)) : entries;
