@@ -315,15 +315,16 @@ const statusWord = (s: string): string =>
  */
 export const similarView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest): Promise<ModeOutput> => {
   const query = String(req.topic ?? "").trim();
-  const limit = deps.limit ?? Math.max(1, Math.min(10, Number(req.limit ?? 3) || 3));
+  const limit = Math.max(1, Math.min(10, Number(req.limit ?? 3) || 3));
   const cards = buildLessonCards(atoms);
   const ranked = rankLessonCards(cards, query, deps.clock.today(), limit);
   const body = renderSimilar(query, ranked);
+  // matched/returned 用「实际返回的相似卡片数」，不把全语料卡片数当命中（否则信封会谎报"未返回"）。
   return {
     body,
-    matched: cards.length,
+    matched: ranked.length,
     returned: ranked.length,
-    dropped: Math.max(0, cards.length - ranked.length),
+    dropped: 0,
     examples: ranked.map((r) => r.card.key),
   };
 };
