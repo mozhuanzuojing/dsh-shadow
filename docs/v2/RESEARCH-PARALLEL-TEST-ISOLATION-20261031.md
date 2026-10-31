@@ -127,6 +127,16 @@ Jest `--findRelatedTests`、Bazel/Turborepo 的输入哈希都指向“只跑受
 
 慢文件：`e2e/migrate` 585ms、`unit/embedding` 582ms、`e2e/plugin` 464ms、`unit/search-code-tool` 285ms、`e2e/toolset-config` 279ms。
 
+### 4.4 真实文件系统 + 真实 SQLite 多进程压测（2026-10-31）
+
+除 mock/内存测试外，另做了一次真实 API 压测（临时脚本，未入仓）：
+
+- **独立 workspace**：8 个 worker 并发，每个写入 100 个真实 atom（共 800），再执行 `archiveDays(deleteHot:true)` + `loadAllAtoms` + `IndexDb`/`IndexCache(full)`；每个 worker 都校验 atom 数、archive 句柄、SQLite 索引行数；结果 **8/8 全通过**，耗时 628ms。
+- **共享 workspace**：8 个 worker 并发向同一真实 workspace 写 25 个 atom（共 200），用 `writeAtom` 的唯一命名；最终 `loadAtoms` 读到 **200 条、200 个唯一文件**，无覆盖/丢失，耗时 311ms。
+- 总墙钟 **0.97s**；临时 workspace 已清理。
+
+> 这证明当前“一文件一进程 + 独立 TMP、真实 FS/SQLite”在 8 路并发下没有暴露文件覆盖或索引串扰；但不等于跨机器/断电/长时间运行已验证。
+
 ## 5. 差异：我们 vs 竞品
 
 | 能力 | 竞品 | 我们当前 | 影响 |
