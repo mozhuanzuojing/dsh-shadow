@@ -6,6 +6,16 @@
 
 （无）
 
+## [2.8.0] — 2026-10-31
+
+### 新增（测试基础设施 P0）
+
+- **并行隔离测试运行器**：`tools/test.ts` 改为异步 worker pool，仍保持“一文件一 node 子进程”（进程级隔离）；默认 `concurrency=min(8, availableParallelism())`。
+- 新增 `--concurrency`、`--timeout`（默认 60s，超时杀进程树并返回 124）、`--fail-fast`、`--heavy`（embedding/migrate/plugin 重测试信号量）、`--root`、`--timings`。
+- 每文件 stdout/stderr 缓冲后统一打印，避免 `inherit` 并发交错；耗时写入 `.test-timings.json`（gitignore）。
+- 每个 worker 独立 `TMP/TEMP/TMPDIR` 临时根并清理，避免临时文件互相污染。
+- 实测：56 个测试文件全量串行 **11.4s** → 8 路并发 **3.2s**（含 runner 自测 2s；不含自测的 55 文件约 **9.5s → 1.5s**）；`unit/test-runner.test.ts` 覆盖并发、失败非零、超时杀进程、耗时文件。
+
 ## [2.7.1] — 2026-10-31
 
 ### 修复（重启后真机发现）

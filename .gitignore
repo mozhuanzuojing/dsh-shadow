@@ -12,6 +12,7 @@ packages/*/dist/
 # ── 本机草稿 / 临时 ───────────────────────────────────────
 _tmp/
 _research/
+.test-timings.json
 __pycache__/
 *.pyc
 
