@@ -38,4 +38,35 @@ import { HostFs } from "../../dist/store/host-fs.js";
   assert.equal(fs.atomicRename, false);
 }
 
-console.log("✔ host-fs：未就绪 UNAVAILABLE、stat=undefined→NOT_FOUND、惰性就绪、无 rename");
+// 4) 宿主无 rename：退化为 copy→回读校验→unlink，不声称原子但必须可用
+{
+  const files = new Map<string, string>();
+  const raw = {
+    resolve: async (p: string) => ({ displayPath: p }),
+    readText: async (t: any) => {
+      const p = t.displayPath;
+      if (!files.has(p)) throw new Error(`ENOENT: ${p}`);
+      return files.get(p)!;
+    },
+    writeText: async (t: any, text: string) => {
+      files.set(t.displayPath, text);
+      return { size: text.length };
+    },
+    unlink: async (t: any) => {
+      if (!files.delete(t.displayPath)) throw new Error(`ENOENT: ${t.displayPath}`);
+    },
+    listDir: async () => [],
+  };
+  const fs = new HostFs(raw);
+  files.set("/a", "hello");
+  const r = await fs.rename("/a", "/b");
+  assert.equal(r.ok, true);
+  assert.equal(files.has("/a"), false, "源必须删除");
+  assert.equal(files.get("/b"), "hello", "目标内容必须回读一致");
+  assert.equal(fs.atomicRename, false, "fallback 不能把 rename 宣称为原子");
+  const missing = await fs.rename("/missing", "/c");
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.error.code, "NOT_FOUND");
+}
+
+console.log("✔ host-fs：未就绪 UNAVAILABLE、stat=undefined→NOT_FOUND、惰性就绪、无 rename 时 copy+verify+unlink");

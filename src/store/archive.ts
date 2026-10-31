@@ -515,7 +515,13 @@ export const archiveDays = async (
           const src = abs(ws, a.rel);
           if (trash) {
             // 归档已验证；先把热文件移进 .trash（可恢复），再由保留期清理。
-            const dest = abs(ws, `${TRASH_DIR}/${a.date}/${a.rel.split("/").pop() ?? a.name}`);
+            const destDir = `${TRASH_DIR}/${a.date}`;
+            const mk = await fs.mkdirp(abs(ws, destDir));
+            if (!mk.ok) {
+              result.errors.push(`${a.rel}: .trash 目录创建失败（${mk.error.message}）`);
+              continue;
+            }
+            const dest = abs(ws, `${destDir}/${a.rel.split("/").pop() ?? a.name}`);
             const mv = await fs.rename(src, dest);
             if (mv.ok) result.deleted += 1;
             else if (mv.error.code !== "NOT_FOUND") {

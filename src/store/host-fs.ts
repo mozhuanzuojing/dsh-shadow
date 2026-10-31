@@ -5,6 +5,7 @@
  * 测试/CLI 可包 `realFs`（同时兼容返回 Outcome 的实现）。
  */
 
+import { dirname } from "node:path";
 import { err, ok, type Outcome } from "../contract/outcome.js";
 import type { FsEntry, FsPort, FsStat } from "./fs.js";
 
@@ -163,7 +164,29 @@ export class HostFs implements FsPort {
   }
 
   async rename(from: string, to: string): Promise<Outcome<void>> {
-    if (typeof this.raw.rename !== "function") return err("UNAVAILABLE", `宿主 fs 不支持 rename：${from} → ${to}`);
+    // 宿主 fs 可能只暴露 read/write/unlink，没有 rename。此时退化为 copy→verify→unlink：
+    // 不声称原子（atomicRename 仍为 false），但保证“目标写成功且回读一致”后才删源。
+    if (typeof this.raw.rename !== "function") {
+      const parent = dirname(to);
+      if (parent && parent !== to) {
+        const mk = await this.mkdirp(parent);
+        if (!mk.ok) return mk;
+      }
+      const src = await this.readText(from);
+      if (!src.ok) return src;
+      const written = await this.writeText(to, src.value);
+      if (!written.ok) return written;
+      const back = await this.readText(to);
+      if (!back.ok) return back;
+      if (back.value !== src.value) {
+        return err("IO", `宿主 fs rename 回读不一致：${from} → ${to}`, { path: to }, true);
+      }
+      const del = await this.unlink(from);
+      if (!del.ok) {
+        return err("IO", `宿主 fs rename 已复制但删除源失败：${from}（${del.error.message}）`, { path: from }, true);
+      }
+      return ok(undefined);
+    }
     try {
       const a = await this.target(from);
       const b = await this.target(to);

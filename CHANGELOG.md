@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.8.1] — 2026-10-31
+
+### 修复（真实 HostFs 兼容）
+
+- **宿主 fs 无 rename 时归档失败**：`HostFs.rename` 不再直接返回 `UNAVAILABLE`，退化为 `read → write → 回读校验 → unlink`；`atomicRename` 仍为 `false`（不把 best-effort 宣称成原子）。
+- **`.trash` 目录创建**：删除热文件前显式 `mkdirp(.trash/<date>)`，避免宿主 fs 不自动建父目录时移动失败。
+- 实测（真实 node:fs 包 HostFs、无 rename）：5 条 atom → archive 1 日、manifest 写入、5 个文件进 `.trash`、`loadAllAtoms` 仍 5 条、0 errors。
+- 新增 `host-fs` fallback 单测；`npm run verify` **56/56**。
+
 ## [2.8.0] — 2026-10-31
 
 ### 新增（测试基础设施 P0）
