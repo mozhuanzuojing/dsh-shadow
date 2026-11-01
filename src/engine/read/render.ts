@@ -45,9 +45,16 @@ export const budgetText = (text: string, maxChars: number): string => {
 export const atomDisplay = (atom: ParsedAtom): string =>
   `[${atom.archiveRel ?? atom.rel}] ${atom.entry || "(无入口)"}`;
 
-export const renderAtomEntry = (atom: ParsedAtom, score: number, tokens: string[], snippet: string): string => {
+export const renderAtomEntry = (
+  atom: ParsedAtom,
+  score: number,
+  tokens: string[],
+  snippet: string,
+  supersededBy?: string,
+): string => {
   const tier = tierFor(atom.body);
-  const head = `- ${atomDisplay(atom)} · 相关度 ${score} · ${tier}`;
+  const replaced = supersededBy ? ` · ⚠被取代→${supersededBy}` : "";
+  const head = `- ${atomDisplay(atom)} · 相关度 ${score} · ${tier}${replaced}`;
   const sum = atom.summary ? `\n  > 摘要：${atom.summary.slice(0, 120)}` : "";
   const snip = snippet ? `\n  > 命中：${snippet}` : "";
   const skeleton = tier === "L2" && !snippet ? `\n  > 正文：${atom.body.split("\n").filter((l) => l.trim() && !/^[#>]/.test(l)).slice(0, 2).join(" / ").slice(0, 160)}` : "";

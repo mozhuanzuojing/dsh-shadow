@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
 >
-> 状态：**v2.9.0 已发布（2026-11-01）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
+> 状态：**v2.10.0 已发布（2026-11-01）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
@@ -19,6 +19,7 @@
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `recall_similar` | 2 | 相似过往任务卡（当时请求/决策/结果/教训/来源），按相关+新近+重要性召回 |
+| `shadow_adjudicate` | 3 | 用户裁决：correct 追加纠正、withdraw 撤回纠正、restore 从 archive/trash 恢复；旧记录不删除 |
 | `search_code` | 2 | 工作区代码只读检索：持久索引（语法块 + 增量 + trigram 候选）+ BM25 + tree-sitter 符号 + 向量（默认本地 e5-small 神经模型，失败回落哈希，可选 HTTP）；支持 `.gitignore`/`exclude` |
 | `shadow_toolset` | 4 | 真实能力台账：survey/category/need 只读探测；install 需宿主 `allowed-once` 审批 |
 | `shadow_lab` | 3 | 51 个研究 mode；**无开关，始终注册**；写型需 `write:true` |
@@ -60,7 +61,7 @@ node tools/test.ts --heavy=1            # 重测试（embedding/migrate/plugin�
 ## 文档
 
 - [架构](./docs/v2/ARCHITECTURE.md)
-- [记忆契约](./docs/v2/CONTRACT.md)
+- [记忆契约](./docs/v2/CONTRACT.md) · [C6 基线](./docs/v2/CONTRACT-BASELINE-2026-11-01.md)
 - [工程约定](./docs/v2/CONVENTIONS.md)
 - [v1 → v2 迁移](./docs/v2/MIGRATION.md)
 - [研究面 lab](./docs/v2/LAB.md)
@@ -68,7 +69,7 @@ node tools/test.ts --heavy=1            # 重测试（embedding/migrate/plugin�
 - [当前实现状态](./docs/v2/STATUS.md) · [变更记录](./CHANGELOG.md) · [发版策略 ADR](./docs/adr/0012-release-and-versioning.md)
 - v1 归档：[docs/v1/](./docs/v1/)
 
-## 已知限制（v2.9.0）
+## 已知限制（v2.10.0）
 
 - `shadow_toolset` 的 install **真机执行路径未验证**（测试用假 runner）；台账版本是 v1 2026-09 快照，不是本机实测；探测失败只说「未检出」（PATH 是宿主启动快照）。
 - `forget` 的陈旧类遗忘仍默认关闭（`minHits=0`）；**`maxActive` 默认 2000**（超出按最旧移出活跃集，标 `archived`，文件不删）。要改上限/启用陈旧遗忘需显式配置。Forget≠Delete：只移出活跃集，文件不删。

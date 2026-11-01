@@ -6,6 +6,16 @@
 
 （无）
 
+## [2.10.0] — 2026-11-01
+
+### 新增（CONTRACT C4/C5/C6）
+
+- **C4 冲突可见**：`supersededBy` 现在返回「旧 Rel → 新 Rel」；topic/query 渲染显示 `⚠被取代→<newRel>`；显式纠正优先于按 entry 推断；旧项仍保留、只降权。
+- **C5 用户裁决入口**：新增核心工具 `shadow_adjudicate`（`correct` / `withdraw` / `restore`）；纠正/撤回只追加 Source Atom（`> 纠正：` / `> 撤回：`），旧 Atom 不删除；`restore` 从 archive/trash 复制回热区。
+- **C6 机械基线**：新增 `tools/contract-eval.ts` 与 [C6 基线报告](./docs/v2/CONTRACT-BASELINE-2026-11-01.md)：30 Atom（按 entry 分层，排除 `entry=shadow` 元数据）→ Top-8 命中 24/30、证据句柄 30/30、五要素完整度 2.10/5、编造理由 0。
+- 工具数 7 → 8（新增 `shadow_adjudicate`）；`test/e2e/toolset-config` 同步。
+- 单测新增 `test/unit/adjudicate.test.ts`（纠正/撤回/恢复/可见标注）。
+
 ## [2.9.0] — 2026-11-01
 
 ### 新增（记忆契约）

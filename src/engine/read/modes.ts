@@ -26,7 +26,7 @@ import {
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
 import { materializeSkills, renderSkillsSection } from "../skills-out.js";
-import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededRels, bm25Fallback } from "./recall.js";
+import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededBy, bm25Fallback } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
 const errText = (what: string, e: string): ModeOutput => ({
@@ -173,7 +173,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
     conflictRels: conflicts,
-    supersededRels: supersededRels(atoms),
+    supersededBy: supersededBy(atoms),
   });
   // 宽松兜底：严格匹配整体零结果时才用 BM25（中文 2-gram + 拉丁词）生成并排序候选（不改变既有命中）。
   let loose = false;
@@ -298,9 +298,11 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
   }
   const lines = [`# Shadow Query · ${topic}`, "> Node 是派生投影，不是事实源；每条带 evidence 指针。", ""];
   if (loose) lines.push("> 宽松匹配（BM25 · 中文 2-gram，非语义；严格无结果时兜底，引用前先核对原文）", "");
+  const replaced = supersededBy(atoms);
   for (const { s, type } of items) {
     const handle = s.atom.archiveRel ?? s.atom.rel;
-    lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${handle}`);
+    const newer = replaced.get(s.atom.rel);
+    lines.push(`- [${type}] ${s.atom.entry || s.atom.slug} · 相关度 ${Math.round(s.score)} · 证据：${handle}${newer ? ` · ⚠被取代→${newer}` : ""}`);
   }
   const at = `${deps.clock.today()}T${deps.clock.stamp()}`;
   bump(deps, items.map((x) => x.s.atom.rel), at);

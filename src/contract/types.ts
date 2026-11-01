@@ -45,6 +45,10 @@ export interface ParsedAtom {
   body: string;
   /** 冷区归档中的稳定句柄（`.shadow/archive/<date>.jsonl#<rel>`）；热文件存在时缺省。 */
   archiveRel?: string;
+  /** 用户显式纠正：被纠正的 Atom rel（来自 `> 纠正：`）。 */
+  corrects?: string;
+  /** 用户撤回某条纠正记录：被撤回的 correction Atom rel（来自 `> 撤回：`）。 */
+  withdraws?: string;
   kind: AtomKind;
 }
 

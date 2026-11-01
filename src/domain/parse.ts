@@ -48,6 +48,8 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
   const agent = fieldOf(body, "Agent");
   const goal = fieldOf(body, "目标");
   const summary = (body.match(/^> 摘要：(.+)$/m) ?? [])[1]?.trim() ?? "";
+  const corrects = fieldOf(body, "纠正") || undefined;
+  const withdraws = fieldOf(body, "撤回") || undefined;
   const axes = parseAxes(body);
 
   const materials = fieldOf(body, "背景/材料")
@@ -135,6 +137,8 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
     actions: uniq(actions),
     thinkLines: uniq(thinkLines),
     body,
+    ...(corrects ? { corrects } : {}),
+    ...(withdraws ? { withdraws } : {}),
     kind,
   };
 };

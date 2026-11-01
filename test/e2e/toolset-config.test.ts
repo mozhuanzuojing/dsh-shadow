@@ -41,7 +41,7 @@ try {
     for (const name of ["read_shadow", "recall_shadow", "shadow_query", "recall_similar", "search_code", "shadow_toolset", "shadow_lab"]) {
       assert.ok(a.tools.has(name), `应始终注册 ${name}`);
     }
-    assert.equal(a.tools.size, 7, `应为 7 个工具，实际 ${[...a.tools.keys()].join(",")}`);
+    assert.equal(a.tools.size, 8, `应为 8 个工具，实际 ${[...a.tools.keys()].join(",")}`);
   } finally {
     cleanupA();
   }
@@ -52,7 +52,7 @@ try {
   try {
     assert.ok(b.tools.has("shadow_toolset"), "旧 toolset.enabled:false 不应再关闭台账");
     assert.ok(b.tools.has("shadow_lab"), "旧 lab.enabled:false 不应再关闭 lab");
-    assert.equal(b.tools.size, 7);
+    assert.equal(b.tools.size, 8);
   } finally {
     cleanupB();
   }
@@ -60,4 +60,4 @@ try {
   rmSync(ws, { recursive: true, force: true });
 }
 
-console.log("✔ e2e config：功能全启用（7 工具）· 旧 enabled 开关只告警、不能关闭功能");
+console.log("✔ e2e config：功能全启用（8 工具）· 旧 enabled 开关只告警、不能关闭功能");

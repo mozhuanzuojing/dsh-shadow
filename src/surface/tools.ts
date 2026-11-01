@@ -15,6 +15,7 @@ import { searchEmbedding, type Embedder } from "../engine/read/embedding.js";
 import { resolveEmbedderChain } from "../engine/read/embedder-chain.js";
 import type { ToolsetDeps } from "../engine/toolset/types.js";
 import { renderPlain, renderReadOutcome } from "./format.js";
+import { correctAtom, withdrawCorrection, restoreAtom } from "../engine/write/adjudicate.js";
 import type { ExecLike } from "./workspace.js";
 
 export type DepsFactory = (exec: ExecLike | undefined) => Promise<Outcome<ReadDeps>>;
@@ -265,11 +266,46 @@ export const makeCodeSearchTool = (depsFactory: DepsFactory): RegisteredTool => 
   },
 });
 
+export const makeAdjudicateTool = (depsFactory: DepsFactory): RegisteredTool => ({
+  name: "shadow_adjudicate",
+  description:
+    "用户裁决：correct=追加纠正记录（不改写/删除旧 Atom）；withdraw=撤回一条纠正（纠正记录保留但不再生效）；restore=把 archive/trash 中的 Atom 恢复到热区。" +
+    "这是用户权限，不是 recall 自动判断；写入源 Atom，可追溯。",
+  parameters: params({
+    action: str("correct | withdraw | restore。"),
+    target: str("Atom rel（.shadow/atoms/...）；withdraw 时是 correction Atom rel。"),
+    note: str("用户理由/说明；可不填。"),
+  }),
+  output: { schema: { type: "string" }, render: renderText },
+  execute: async (args, exec) => {
+    try {
+      const d = await depsFactory(exec as ExecLike | undefined);
+      if (!d.ok) return renderPlain(`> ⚠ shadow 不可用（${d.error.code}）：${d.error.message}`);
+      const action = String(args.action ?? "").trim();
+      const target = String(args.target ?? "").trim();
+      const note = String(args.note ?? "").trim();
+      if (!target) return renderPlain("> ⚠ shadow_adjudicate 需要 target（Atom rel）。");
+      let r;
+      if (action === "correct") r = await correctAtom(d.value.fs, d.value.ws, d.value.clock, target, note);
+      else if (action === "withdraw") r = await withdrawCorrection(d.value.fs, d.value.ws, d.value.clock, target, note);
+      else if (action === "restore") r = await restoreAtom(d.value.fs, d.value.ws, target);
+      else return renderPlain(`> ⚠ 未知 action：${action}（可用 correct | withdraw | restore）`);
+      if (!r.ok) return renderPlain(`> ⚠ shadow_adjudicate 失败（${r.error.code}）：${r.error.message}`, d.value.signals);
+      const wrote = r.value.action === "restore" ? `已恢复：${r.value.rel}` : `新记录：${r.value.rel}`;
+      return renderPlain(`## 用户裁决 · ${r.value.action}\n- 目标：${r.value.target}\n- ${wrote}\n- 旧记录未删除；可用 recall/read 核对。`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return renderPlain(`> ⚠ shadow_adjudicate 内部错误：${message}\n> 这是失败，不是「没有记录」；请检查 .shadow/ 与权限。`);
+    }
+  },
+});
+
 export const makeCoreTools = (depsFactory: DepsFactory, toolsetFactory?: ToolsetDepsFactory): RegisteredTool[] => [
   makeReadTool(depsFactory),
   makeRecallTool(depsFactory),
   makeQueryTool(depsFactory),
   makeSimilarTool(depsFactory),
+  makeAdjudicateTool(depsFactory),
   makeCodeSearchTool(depsFactory),
   makeToolsetTool(toolsetFactory),
 ];
