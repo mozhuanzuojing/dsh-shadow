@@ -15,7 +15,7 @@ import { loadAllAtoms } from "../../store/archive.js";
 import { writeAtom, type WriteAtomResult } from "../../store/atoms.js";
 import type { FsPort } from "../../store/fs.js";
 
-export type AdjudicationAction = "correct" | "withdraw" | "restore";
+export type AdjudicationAction = "correct" | "withdraw" | "restore" | "pin" | "unpin" | "retain";
 
 export interface AdjudicationResult {
   action: AdjudicationAction;
@@ -30,7 +30,9 @@ const normalizeRel = (raw: string): string => {
   return (hash >= 0 ? s.slice(hash + 1) : s).replace(/\\/g, "/");
 };
 
-const bodyText = (ws: string, date: string, time: string, field: "纠正" | "撤回", target: string, note: string): string => {
+type UserField = "纠正" | "撤回" | "置顶" | "取消置顶" | "保留多值";
+
+const bodyText = (ws: string, date: string, time: string, field: UserField, target: string, note: string, seq: number): string => {
   const hhmmss = `${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}`;
   return [
     "# shadow/adjudication",
@@ -39,6 +41,7 @@ const bodyText = (ws: string, date: string, time: string, field: "纠正" | "撤
     `> 坐标：locus(${ws}) · when(${date} ${hhmmss}) · soul(default) · role(default) · intent(adjudication)`,
     `> 摘要：${field} ${target}`,
     `> ${field}：${target}`,
+    `> 裁决序号：${seq}`,
     `> 决策：〔user〕${note}`,
     "",
     `- [${hhmmss}] [shadow/adjudication] 用户：${note}`,
@@ -46,16 +49,21 @@ const bodyText = (ws: string, date: string, time: string, field: "纠正" | "撤
   ].join("\n");
 };
 
+let adjudicationSeq = 0;
+
 const writeAdjudicationAtom = async (
   fs: FsPort,
   ws: string,
   clock: Clock,
-  field: "纠正" | "撤回",
+  field: UserField,
   target: string,
   note: string,
 ): Promise<Outcome<WriteAtomResult>> => {
   const date = clock.today();
   const time = clock.stamp().replace(/:/g, "");
+  const seq = ++adjudicationSeq;
+  const fallback =
+    field === "纠正" ? "用户纠正" : field === "撤回" ? "用户撤回" : field === "置顶" ? "用户置顶" : field === "取消置顶" ? "用户取消置顶" : "用户保留多值";
   return writeAtom(
     fs,
     ws,
@@ -63,7 +71,7 @@ const writeAdjudicationAtom = async (
       entry: "shadow/adjudication",
       date,
       time,
-      text: bodyText(ws, date, time, field, normalizeRel(target), scrubUnsafe(note).trim() || (field === "纠正" ? "用户纠正" : "用户撤回")),
+      text: bodyText(ws, date, time, field, normalizeRel(target), scrubUnsafe(note).trim() || fallback, seq),
     },
     clock,
   );
@@ -89,6 +97,54 @@ export const correctAtom = async (
   const w = await writeAdjudicationAtom(fs, ws, clock, "纠正", target, note);
   if (!w.ok) return w;
   return ok({ action: "correct", target, rel: w.value.rel, note });
+};
+
+/** 用户置顶：写 Source 记录，read 时由 `pinnedBySource` 叠加到 meta。 */
+export const pinAtom = async (
+  fs: FsPort,
+  ws: string,
+  clock: Clock,
+  targetRaw: string,
+  note = "",
+): Promise<Outcome<AdjudicationResult>> => {
+  const target = normalizeRel(targetRaw);
+  if (!target.startsWith(".shadow/atoms/")) return err("INVALID", `置顶目标必须是 .shadow/atoms/...：${target}`);
+  if (!(await targetExists(fs, ws, target))) return err("NOT_FOUND", `置顶目标不存在：${target}`);
+  const w = await writeAdjudicationAtom(fs, ws, clock, "置顶", target, note);
+  if (!w.ok) return w;
+  return ok({ action: "pin", target, rel: w.value.rel, note });
+};
+
+/** 用户取消置顶：写 Source 记录；最新记录生效。 */
+export const unpinAtom = async (
+  fs: FsPort,
+  ws: string,
+  clock: Clock,
+  targetRaw: string,
+  note = "",
+): Promise<Outcome<AdjudicationResult>> => {
+  const target = normalizeRel(targetRaw);
+  if (!target.startsWith(".shadow/atoms/")) return err("INVALID", `取消置顶目标必须是 .shadow/atoms/...：${target}`);
+  if (!(await targetExists(fs, ws, target))) return err("NOT_FOUND", `取消置顶目标不存在：${target}`);
+  const w = await writeAdjudicationAtom(fs, ws, clock, "取消置顶", target, note);
+  if (!w.ok) return w;
+  return ok({ action: "unpin", target, rel: w.value.rel, note });
+};
+
+/** 用户显式保留多值：写 Source 记录；抑制“同入口新版本自动取代”。 */
+export const retainAtom = async (
+  fs: FsPort,
+  ws: string,
+  clock: Clock,
+  targetRaw: string,
+  note = "",
+): Promise<Outcome<AdjudicationResult>> => {
+  const target = normalizeRel(targetRaw);
+  if (!target.startsWith(".shadow/atoms/")) return err("INVALID", `保留多值目标必须是 .shadow/atoms/...：${target}`);
+  if (!(await targetExists(fs, ws, target))) return err("NOT_FOUND", `保留多值目标不存在：${target}`);
+  const w = await writeAdjudicationAtom(fs, ws, clock, "保留多值", target, note);
+  if (!w.ok) return w;
+  return ok({ action: "retain", target, rel: w.value.rel, note });
 };
 
 /** 用户撤回一条纠正：追加 withdraw Atom；旧 target 重新出现在正常排序中。 */

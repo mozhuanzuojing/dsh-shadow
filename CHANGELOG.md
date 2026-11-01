@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.11.0] — 2026-11-01
+
+### 新增（CONTRACT C4/C5/C6 收口）
+
+- **C5 扩展**：`shadow_adjudicate` 增加 `pin` / `unpin` / `retain`；置顶/保留多值都是 Source 记录（`> 置顶：` / `> 取消置顶：` / `> 保留多值：`），读侧 `pinStateBySource` 叠加到 meta，`retain` 抑制自动取代；同秒动作用 `> 裁决序号：` 保证顺序。
+- **C6 错误注入**：`test/unit/contract-errors.test.ts` 覆盖假理由/错路径/旧版本/无证据/伪造历史，5/5 通过；旧版本可纠正、撤回。
+- **C6 读者盲测 pilot**：新增 `tools/contract-blind.ts`；10 例真实 Atom 由独立 fresh-context 读者作答、独立判卷，均分 **5.6/8（70%）**，reasonFabricated=0、confabulation=0；材料/工具序列漏召回为主要缺口。报告：[CONTRACT-BLIND-2026-11-01.md](./docs/v2/CONTRACT-BLIND-2026-11-01.md)。
+- 契约状态更新：C4/C5 已落地；C6 机械基线+错误注入+10 例盲测 pilot 已建立，**全量 30 例/人工复核仍未做**。
+
 ## [2.10.0] — 2026-11-01
 
 ### 新增（CONTRACT C4/C5/C6）

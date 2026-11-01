@@ -91,25 +91,54 @@ export const scoreAtoms = (atoms: ParsedAtom[], tokens: string[], opts: ScoreOpt
 
 /** 同入口按时间取最新；旧的标记 superseded。显式 `> 纠正：` 优先于按入口推断。 */
 export const supersededBy = (atoms: ParsedAtom[]): Map<string, string> => {
-  const withdrawn = new Set(atoms.map((a) => a.withdraws).filter((x): x is string => Boolean(x)));
+  const ordered = atoms
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.adjudicationSeq ?? 0) - (b.adjudicationSeq ?? 0) ||
+        `${a.date} ${a.time} ${a.rel}`.localeCompare(`${b.date} ${b.time} ${b.rel}`),
+    );
+  const withdrawn = new Set(ordered.map((a) => a.withdraws).filter((x): x is string => Boolean(x)));
+  const retained = new Set(ordered.map((a) => a.retains).filter((x): x is string => Boolean(x)));
   const map = new Map<string, string>();
-  // 显式纠正：用户/工具写的 correction Atom；被撤回的 correction 不再生效。
-  for (const a of atoms) {
-    if (a.corrects && !withdrawn.has(a.rel)) map.set(a.corrects, a.rel);
+  // 显式纠正：用户/工具写的 correction Atom；被撤回或明确保留多值时不再标取代。
+  for (const a of ordered) {
+    if (a.corrects && !withdrawn.has(a.rel) && !retained.has(a.corrects)) map.set(a.corrects, a.rel);
   }
   const newest = new Map<string, { rel: string; at: string }>();
-  for (const a of atoms) {
+  for (const a of ordered) {
     const at = `${a.date} ${a.time}`;
     const cur = newest.get(a.entry);
     if (!cur || at > cur.at) newest.set(a.entry, { rel: a.rel, at });
   }
-  for (const a of atoms) {
+  for (const a of ordered) {
     const at = `${a.date} ${a.time}`;
     const n = newest.get(a.entry);
-    if (n && n.rel !== a.rel && at < n.at && !map.has(a.rel)) map.set(a.rel, n.rel);
+    if (n && n.rel !== a.rel && at < n.at && !retained.has(a.rel) && !map.has(a.rel)) map.set(a.rel, n.rel);
   }
   return map;
 };
+
+/** 从 Source 记录（`> 置顶：` / `> 取消置顶：`）派生最终 pin 状态；最新记录生效。 */
+export const pinStateBySource = (atoms: ParsedAtom[]): Map<string, boolean> => {
+  const events = atoms
+    .filter((a) => a.pins || a.unpins)
+    .sort(
+      (a, b) =>
+        (a.adjudicationSeq ?? 0) - (b.adjudicationSeq ?? 0) ||
+        `${a.date} ${a.time} ${a.rel}`.localeCompare(`${b.date} ${b.time} ${b.rel}`),
+    );
+  const state = new Map<string, boolean>();
+  for (const a of events) {
+    if (a.pins) state.set(a.pins, true);
+    if (a.unpins) state.set(a.unpins, false);
+  }
+  return state;
+};
+
+/** 只取最终为 pinned 的 rel；保留给调用方做集合判断。 */
+export const pinnedBySource = (atoms: ParsedAtom[]): Set<string> =>
+  new Set([...pinStateBySource(atoms).entries()].filter(([, pinned]) => pinned).map(([rel]) => rel));
 
 /** 兼容旧调用：只取被取代的 rel 集合。 */
 export const supersededRels = (atoms: ParsedAtom[]): Set<string> => new Set(supersededBy(atoms).keys());

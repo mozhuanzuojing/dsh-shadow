@@ -49,6 +49,14 @@ export interface ParsedAtom {
   corrects?: string;
   /** 用户撤回某条纠正记录：被撤回的 correction Atom rel（来自 `> 撤回：`）。 */
   withdraws?: string;
+  /** 用户置顶：目标 Atom rel（来自 `> 置顶：`）；源记录，可重建。 */
+  pins?: string;
+  /** 用户取消置顶：目标 Atom rel（来自 `> 取消置顶：`）。 */
+  unpins?: string;
+  /** 用户选择保留多值：目标 Atom rel（来自 `> 保留多值：`）；抑制自动取代标注。 */
+  retains?: string;
+  /** 同一进程内裁决记录的单调序号；用于同秒 pin/unpin 的先后。 */
+  adjudicationSeq?: number;
   kind: AtomKind;
 }
 

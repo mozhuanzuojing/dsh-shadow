@@ -11,6 +11,7 @@ import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
 import { computeForgetting, renderForgetNotice } from "../../domain/lifecycle.js";
+import { pinStateBySource } from "./recall.js";
 import { archiveDays, loadAllAtoms } from "../../store/archive.js";
 import { budgetText, envelope } from "./render.js";
 import {
@@ -43,14 +44,33 @@ const normalizeMode = (req: ReadRequest): Outcome<string> => {
 };
 
 const metaOf = (deps: ReadDeps, atoms: ParsedAtom[]): Map<string, AtomMeta> => {
-  if (deps.meta) return deps.meta;
-  if (!deps.index) return new Map();
-  try {
-    return deps.index.metaMap();
-  } catch (e) {
-    deps.signals.note("index.meta", "META_READ", `派生 meta 读取失败（${e instanceof Error ? e.message : String(e)}）`, "本次 hits/lifecycle 按空处理；atoms 仍可读。");
-    return new Map();
+  let base: Map<string, AtomMeta>;
+  if (deps.meta) base = deps.meta;
+  else if (!deps.index) base = new Map();
+  else {
+    try {
+      base = deps.index.metaMap();
+    } catch (e) {
+      deps.signals.note("index.meta", "META_READ", `派生 meta 读取失败（${e instanceof Error ? e.message : String(e)}）`, "本次 hits/lifecycle 按空处理；atoms 仍可读。");
+      base = new Map();
+    }
   }
+  // 置顶是用户 Source 记录（> 置顶：/ > 取消置顶：），不是派生 meta；读时叠加。
+  const pins = pinStateBySource(atoms);
+  if (!pins.size) return base;
+  const out = new Map(base);
+  for (const [rel, pinned] of pins) {
+    const cur = out.get(rel);
+    out.set(rel, {
+      rel,
+      hits: cur?.hits ?? 0,
+      status: cur?.status ?? "active",
+      firstAt: cur?.firstAt,
+      lastAt: cur?.lastAt,
+      pinned,
+    });
+  }
+  return out;
 };
 
 const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): Promise<string | undefined> => {

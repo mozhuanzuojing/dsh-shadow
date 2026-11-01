@@ -1,6 +1,6 @@
 # dsh-shadow v2 · Memory Contract
 
-> 状态：**v2.10.0 契约（C4/C5 已落地，C6 机械基线已建立）** · 日期：2026-11-01
+> 状态：**v2.11.0 契约（C4/C5 已落地，C6 错误注入+盲测 pilot 已建立）** · 日期：2026-11-01
 > 目的：把 v1 的「可核查记忆」边界翻译成 v2 可执行、可验收的条款；**契约优先于实现**。
 > 来源：v1 `README.md`「它明确不做」、`CONTEXT.md`「完整线索」、`adr/0020`、`adr/0031`、`adr/0043`、`adr/0061`；v2 `ARCHITECTURE.md`。
 > 这份文档不新增能力；它定义**什么叫没坏**、**什么叫仍然有用**。
@@ -192,10 +192,10 @@
 
 **v2 落点**
 
-- `shadow_adjudicate`（`src/surface/tools.ts`）：`correct / withdraw / restore`；写 `src/engine/write/adjudicate.ts`。
-- 纠正/撤回只追加 Source Atom（`> 纠正：` / `> 撤回：`）；旧 Atom 不改写、不删除。
+- `shadow_adjudicate`（`src/surface/tools.ts`）：`correct / withdraw / restore / pin / unpin / retain`；写 `src/engine/write/adjudicate.ts`。
+- 纠正/撤回/置顶/保留多值只追加 Source Atom（`> 纠正：` / `> 撤回：` / `> 置顶：` / `> 保留多值：`）；旧 Atom 不改写、不删除。
+- `pinStateBySource` 在读侧把用户置顶记录叠加到 meta；`retain` 抑制自动取代。
 - `Forget ≠ Delete` + `.trash` 7 天 + archive JSONL；`restore` 从 archive/trash 复制回热区。
-- `pinned` 保护（仍无写入口，需补）。
 
 **验收**
 
@@ -204,8 +204,8 @@
 3. 从 `.trash`/archive 恢复：原 `rel`/`archiveRel` 可重新解析，内容 hash 不变。
 4. 保留期未到不得物理删除；清理后仍有 archive 副本或清理记录。
 
-**当前状态**：**已提供入口（v2.10.0）**。`shadow_adjudicate` 支持 correct/withdraw/restore；单测覆盖“纠正追加、撤回生效消失、从 archive 恢复”。  
-仍缺：多值冲突的显式标记（目前靠“不纠正”默认保留）、`pinned` 写入口、逐条证据链视图。
+**当前状态**：**已提供入口（v2.11.0）**。`shadow_adjudicate` 支持 correct/withdraw/restore/pin/unpin/retain；单测覆盖纠错、撤回、置顶/取消、保留多值、从 archive 恢复。  
+仍缺：逐条证据链视图、多值冲突的可视化分组（目前靠“不纠正/retain”保留双方）。
 
 ---
 
@@ -242,10 +242,10 @@
 - **门槛**：先测基线，再棘轮；**任何“编造理由/伪造历史”一经发现即失败**；证据句柄解析率必须 100%；完整线索分数不得低于上一基线。
 - **记录**：日期、commit、样本 ID、分数、失败项、裁决/撤回记录；附在验收报告，不写进 Atom。
 
-**当前状态**：**机械基线已建立（v2.10.0，2026-11-01）**。  
-- 报告：[CONTRACT-BASELINE-2026-11-01.md](./CONTRACT-BASELINE-2026-11-01.md)
-- 30 个 Atom（按 entry 分层，排除 `entry=shadow` 元数据）：Top-8 命中 **24/30**、证据句柄解析 **30/30**、五要素完整度 **2.10/5**、编造理由 **0**。
-- 仍未做：读者盲测 0/1/2 语义评分、5 类错误注入（假理由/错路径/旧版本/无证据/伪造历史）；机械基线不等于成功。
+**当前状态**：**机械基线 + 错误注入 + 盲测 pilot 已完成（v2.11.0）**。  
+- 机械基线：[CONTRACT-BASELINE-2026-11-01.md](./CONTRACT-BASELINE-2026-11-01.md)
+- 错误注入 5/5 通过；读者盲测 10 例 pilot 均分 **5.6/8（70%）**，无编造理由/伪造历史： [CONTRACT-BLIND-2026-11-01.md](./CONTRACT-BLIND-2026-11-01.md)
+- 仍未做：全量 30 例读者盲测、人工读者复核、把该门槛纳入发布前门；pilot 只证明流程可运行。
 
 ---
 
@@ -303,6 +303,6 @@
 
 ## 7. 实施顺序（不改本契约）
 
-1. **先补可观测缺口**：✅ 冲突可见（`supersededBy` 标注）、✅ 用户裁决/撤回入口（`shadow_adjudicate`）；⬜ `pinned` 写入口。
-2. **再补验收**：✅ 机械基线（30 Atom）已建立；⬜ 读者盲测 0/1/2、⬜ 5 类错误注入、⬜ 纳入发布前门。
+1. **先补可观测缺口**：✅ 冲突可见（`supersededBy` 标注）、✅ 用户裁决/撤回/置顶/保留多值入口（`shadow_adjudicate`）；✅ `pinned` Source 记录。
+2. **再补验收**：✅ 机械基线（30 Atom）、✅ 5 类错误注入、✅ 读者盲测 10 例 pilot；⬜ 全量 30 例读者盲测、⬜ 人工复核、⬜ 纳入发布前门。
 3. **最后才做性能/归档优化**：归档、trash、并行测试属于载体优化，不能替代契约验收。

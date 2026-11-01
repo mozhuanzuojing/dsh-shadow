@@ -4,8 +4,8 @@ import { fixedClock } from "../../dist/contract/time.js";
 import { MemoryFs } from "../../dist/store/fs.js";
 import { writeAtom, loadAtoms } from "../../dist/store/atoms.js";
 import { archiveDays, loadAllAtoms } from "../../dist/store/archive.js";
-import { correctAtom, withdrawCorrection, restoreAtom } from "../../dist/engine/write/adjudicate.js";
-import { supersededBy } from "../../dist/engine/read/recall.js";
+import { correctAtom, withdrawCorrection, restoreAtom, pinAtom, unpinAtom, retainAtom } from "../../dist/engine/write/adjudicate.js";
+import { supersededBy, pinnedBySource } from "../../dist/engine/read/recall.js";
 import { renderAtomEntry } from "../../dist/engine/read/render.js";
 import { queryView } from "../../dist/engine/read/modes.js";
 
@@ -54,6 +54,27 @@ const all2 = await loadAllAtoms(fs, WS);
 if (!all2.ok) throw new Error(all2.error.message);
 const map2 = supersededBy(all2.value.atoms);
 assert.equal(map2.get(old.value.rel), undefined, "撤回后纠正不再生效");
+
+// 置顶/取消置顶/保留多值：都是 Source 记录，读时叠加。
+const pinned = await pinAtom(fs, WS, clock, old.value.rel, "置顶");
+if (!pinned.ok) throw new Error(pinned.error.message);
+let allPins = await loadAllAtoms(fs, WS);
+if (!allPins.ok) throw new Error(allPins.error.message);
+assert.equal(pinnedBySource(allPins.value.atoms).has(old.value.rel), true, "置顶 Source 记录必须生效");
+
+const unpinned = await unpinAtom(fs, WS, clock, old.value.rel, "取消置顶");
+if (!unpinned.ok) throw new Error(unpinned.error.message);
+allPins = await loadAllAtoms(fs, WS);
+if (!allPins.ok) throw new Error(allPins.error.message);
+assert.equal(pinnedBySource(allPins.value.atoms).has(old.value.rel), false, "取消置顶必须覆盖旧置顶");
+
+const retained = await retainAtom(fs, WS, clock, old.value.rel, "两条都有价值");
+if (!retained.ok) throw new Error(retained.error.message);
+const corr2 = await correctAtom(fs, WS, clock, old.value.rel, "再次纠正");
+if (!corr2.ok) throw new Error(corr2.error.message);
+const allRetained = await loadAllAtoms(fs, WS);
+if (!allRetained.ok) throw new Error(allRetained.error.message);
+assert.equal(supersededBy(allRetained.value.atoms).get(old.value.rel), undefined, "显式保留多值应抑制自动/纠正取代标注");
 
 // 归档后从 archive 恢复；旧 Atom 的 body 必须原样回来。
 const ar = await archiveDays(fs, WS, all2.value.atoms.filter((a) => a.date === "2026-10-29"), "2026-10-31", { deleteHot: true });

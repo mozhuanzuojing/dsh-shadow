@@ -50,6 +50,11 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
   const summary = (body.match(/^> 摘要：(.+)$/m) ?? [])[1]?.trim() ?? "";
   const corrects = fieldOf(body, "纠正") || undefined;
   const withdraws = fieldOf(body, "撤回") || undefined;
+  const pins = fieldOf(body, "置顶") || undefined;
+  const unpins = fieldOf(body, "取消置顶") || undefined;
+  const retains = fieldOf(body, "保留多值") || undefined;
+  const seqRaw = fieldOf(body, "裁决序号");
+  const adjudicationSeq = seqRaw && Number.isFinite(Number(seqRaw)) ? Number(seqRaw) : undefined;
   const axes = parseAxes(body);
 
   const materials = fieldOf(body, "背景/材料")
@@ -139,6 +144,10 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
     body,
     ...(corrects ? { corrects } : {}),
     ...(withdraws ? { withdraws } : {}),
+    ...(pins ? { pins } : {}),
+    ...(unpins ? { unpins } : {}),
+    ...(retains ? { retains } : {}),
+    ...(adjudicationSeq !== undefined ? { adjudicationSeq } : {}),
     kind,
   };
 };
