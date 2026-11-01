@@ -106,14 +106,21 @@ export const supersededBy = (atoms: ParsedAtom[]): Map<string, string> => {
     if (a.corrects && !withdrawn.has(a.rel) && !retained.has(a.corrects)) map.set(a.corrects, a.rel);
   }
   const newest = new Map<string, { rel: string; at: string }>();
+  // 只把「同入口 + 同目标」视为同一任务的新版本；goal 为空时不自动推断（宁可保留多值）。
+  // 真实语料的 entry 常是工作区名（如 local-workbench），按 entry 单独推断会把所有历史误标为被最新会话取代。
+  const taskKey = (a: ParsedAtom): string => (a.goal.trim() ? `${a.entry}\u0000${a.goal.trim()}` : "");
   for (const a of ordered) {
+    const key = taskKey(a);
+    if (!key) continue;
     const at = `${a.date} ${a.time}`;
-    const cur = newest.get(a.entry);
-    if (!cur || at > cur.at) newest.set(a.entry, { rel: a.rel, at });
+    const cur = newest.get(key);
+    if (!cur || at > cur.at) newest.set(key, { rel: a.rel, at });
   }
   for (const a of ordered) {
+    const key = taskKey(a);
+    if (!key) continue;
     const at = `${a.date} ${a.time}`;
-    const n = newest.get(a.entry);
+    const n = newest.get(key);
     if (n && n.rel !== a.rel && at < n.at && !retained.has(a.rel) && !map.has(a.rel)) map.set(a.rel, n.rel);
   }
   return map;

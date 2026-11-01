@@ -60,8 +60,8 @@ const staleView = queryView(deps, [wrongPath.atom], { topic: "错误路径", lim
 assert.match(staleView.body, /可能过时|stale|证据/, "输出必须提示证据问题");
 
 // 3) 旧版本：同 entry 新 Atom 必须让旧项可见地指向新项；纠正/撤回可定位。
-const oldV = await write("src/version.ts", "2026-10-29", "100002", "v00001", "> 摘要：old version\n\n- [10:00:00] [src/version.ts] 决定 old\n");
-const newV = await write("src/version.ts", "2026-10-30", "100003", "v00002", "> 摘要：new version\n\n- [10:00:00] [src/version.ts] 决定 new\n");
+const oldV = await write("src/version.ts", "2026-10-29", "100002", "v00001", "> 目标：版本升级\n> 摘要：old version\n\n- [10:00:00] [src/version.ts] 决定 old\n");
+const newV = await write("src/version.ts", "2026-10-30", "100003", "v00002", "> 目标：版本升级\n> 摘要：new version\n\n- [10:00:00] [src/version.ts] 决定 new\n");
 const map = supersededBy([oldV.atom, newV.atom]);
 assert.equal(map.get(oldV.atom.rel), newV.atom.rel, "旧版本必须指向新版本");
 assert.match(renderAtomEntry(oldV.atom, 1, [], "old", map.get(oldV.atom.rel)), /⚠被取代→/, "旧版本必须标注");

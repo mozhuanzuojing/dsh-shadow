@@ -1,6 +1,6 @@
 # dsh-shadow v2 · Memory Contract
 
-> 状态：**v2.11.0 契约（C4/C5 已落地，C6 错误注入+盲测 pilot 已建立）** · 日期：2026-11-01
+> 状态：**v2.11.1 契约（C4/C5 已落地，C6 错误注入+盲测 pilot 已建立）** · 日期：2026-11-01
 > 目的：把 v1 的「可核查记忆」边界翻译成 v2 可执行、可验收的条款；**契约优先于实现**。
 > 来源：v1 `README.md`「它明确不做」、`CONTEXT.md`「完整线索」、`adr/0020`、`adr/0031`、`adr/0043`、`adr/0061`；v2 `ARCHITECTURE.md`。
 > 这份文档不新增能力；它定义**什么叫没坏**、**什么叫仍然有用**。
@@ -156,7 +156,7 @@
 
 **v2 落点**
 
-- `supersededBy`（`src/engine/read/recall.ts`）：同 `entry` 取最新，旧项 ×0.7；显式 `> 纠正：` 优先；渲染显示 `⚠被取代→<newRel>`。**只降权+标注，不判错**。
+- `supersededBy`（`src/engine/read/recall.ts`）：**同 entry + 同 goal** 取最新，旧项 ×0.7；`goal` 为空时只认显式 `> 纠正：`（避免把工作区级 entry 的所有历史误标）。渲染显示 `⚠被取代→<newRel>`。**只降权+标注，不判错**。
 - `conflictRels`（`src/engine/read/modes.ts`）：材料路径失效 → `stale`；**只证明证据缺失**。
 - `lifecycle`：`archived / superseded / compacted / stale / cap` 状态来自显式 meta 或确定性规则。
 - `facts`：`✓ verified / ✗ not_found / ? unavailable` 是证据状态，不是真假判决。
