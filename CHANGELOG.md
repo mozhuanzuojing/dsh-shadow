@@ -6,6 +6,16 @@
 
 （无）
 
+## [2.9.0] — 2026-11-01
+
+### 新增（记忆契约）
+
+- 新增 [`docs/v2/CONTRACT.md`](./docs/v2/CONTRACT.md)：把 v1 的 Atom/Projection/Evidence/Mutation、Recall Continuity、Epistemic Boundary 翻译成 v2 可验收条款（C1–C6）。
+- 明确四条底线：源/投影分离、无 evidence 不返回、Recall≠Observation/Forget≠Delete/无 lineage 不 confabulate、不替用户裁决。
+- 增加“成功标准”验收协议：30 任务抽样、5 类错误样本、证据句柄解析率、纠正/撤回；明确 **56/56 只是工程门，不是记忆验收**。
+- 记录当前缺口：冲突可见性（superseded 只降权不标注）、用户纠正/撤回入口缺失、pinned 无写入口、抽样验收入口缺失。
+- `docs-check` 把 `CONTRACT.md` 纳入必需文档与 30KB 预算。
+
 ## [2.8.1] — 2026-10-31
 
 ### 修复（真实 HostFs 兼容）
