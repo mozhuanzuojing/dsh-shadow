@@ -51,6 +51,10 @@ export class HostFs implements FsPort {
     return typeof this.rawOrNull()?.rename === "function";
   }
 
+  get canUnlink(): boolean {
+    return typeof this.rawOrNull()?.unlink === "function";
+  }
+
   /** 同一底层 fs，换 session 策略（同一会话/agent 的写围栏）。 */
   withPolicy(policy: any, cwd?: string): HostFs {
     return new HostFs(this.rawSource, policy, cwd ?? this.cwd);

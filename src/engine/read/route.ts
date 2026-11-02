@@ -157,6 +157,8 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
         `按日归档有 ${ar.errors.length} 项失败（首个：${ar.errors[0]}）`,
         "失败项的热文件未删除；下次无参读会重试；已成功归档的日期不受影响。",
       );
+    } else if (ar.warnings.length) {
+      deps.signals.note("archive", "HOST_LIMITED", ar.warnings[0]!, "归档副本已写入；热文件保留，属宿主能力限制。");
     } else {
       deps.signals.clear("archive");
     }

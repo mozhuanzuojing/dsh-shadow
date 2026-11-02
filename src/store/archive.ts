@@ -38,6 +38,8 @@ export interface ArchiveResult {
   /** 已存在且 manifest 命中，未重写。 */
   skipped: string[];
   errors: string[];
+  /** 能力/环境限制（不是失败）：例如宿主 fs 无 unlink，热文件只能保留。 */
+  warnings: string[];
   /** 移出 atoms 的热文件数（默认进 `.trash`）。 */
   deleted: number;
   /** 从 `.trash` 清理的过期文件数。 */
@@ -365,7 +367,7 @@ export const archiveDays = async (
   today: string,
   opts: ArchiveOptions = {},
 ): Promise<ArchiveResult> => {
-  const result: ArchiveResult = { archived: [], skipped: [], errors: [], deleted: 0, purged: 0 };
+  const result: ArchiveResult = { archived: [], skipped: [], errors: [], warnings: [], deleted: 0, purged: 0 };
   const now = Number.isFinite(opts.now) ? Number(opts.now) : Date.now();
   const staleLockMs = Math.max(1_000, Number(opts.staleLockMs ?? 10 * 60_000));
   const deleteHot = opts.deleteHot === true;
@@ -496,48 +498,67 @@ export const archiveDays = async (
 
     if (manifestDirty) {
       const manifestAbs = abs(ws, ARCHIVE_MANIFEST);
-      const tmp = `${manifestAbs}.tmp`;
-      const w = await fs.writeText(tmp, JSON.stringify(manifest, null, 2) + "\n");
-      if (!w.ok) {
-        result.errors.push(`manifest 临时写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
-        return result;
-      }
-      const r = await fs.rename(tmp, manifestAbs);
-      if (!r.ok) {
-        result.errors.push(`manifest 原子替换失败（${r.error.message}）；为保证可恢复，本次不删除热文件`);
-        return result;
+      const text = JSON.stringify(manifest, null, 2) + "\n";
+      if (fs.canUnlink === false) {
+        // 宿主没有 unlink/rename：直接写 manifest 并回读校验；不制造一个永远删不掉的 tmp。
+        const w = await fs.writeText(manifestAbs, text);
+        if (!w.ok) {
+          result.errors.push(`manifest 写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
+          return result;
+        }
+        const back = await fs.readText(manifestAbs);
+        if (!back.ok || back.value !== text) {
+          result.errors.push("manifest 回读校验失败；为保证可恢复，本次不删除热文件");
+          return result;
+        }
+      } else {
+        const tmp = `${manifestAbs}.tmp`;
+        const w = await fs.writeText(tmp, text);
+        if (!w.ok) {
+          result.errors.push(`manifest 临时写入失败（${w.error.message}）；为保证可恢复，本次不删除热文件`);
+          return result;
+        }
+        const r = await fs.rename(tmp, manifestAbs);
+        if (!r.ok) {
+          result.errors.push(`manifest 原子替换失败（${r.error.message}）；为保证可恢复，本次不删除热文件`);
+          return result;
+        }
       }
     }
 
     if (deleteHot) {
-      for (const records of deletions.values()) {
-        for (const a of records) {
-          const src = abs(ws, a.rel);
-          if (trash) {
-            // 归档已验证；先把热文件移进 .trash（可恢复），再由保留期清理。
-            const destDir = `${TRASH_DIR}/${a.date}`;
-            const mk = await fs.mkdirp(abs(ws, destDir));
-            if (!mk.ok) {
-              result.errors.push(`${a.rel}: .trash 目录创建失败（${mk.error.message}）`);
-              continue;
-            }
-            const dest = abs(ws, `${destDir}/${a.rel.split("/").pop() ?? a.name}`);
-            const mv = await fs.rename(src, dest);
-            if (mv.ok) result.deleted += 1;
-            else if (mv.error.code !== "NOT_FOUND") {
-              result.errors.push(`${a.rel}: 热文件移入 .trash 失败（${mv.error.message}）`);
-            }
-          } else {
-            const del = await fs.unlink(src);
-            if (del.ok) result.deleted += 1;
-            else if (del.error.code !== "NOT_FOUND") {
-              result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+      if (fs.canUnlink === false) {
+        result.warnings.push("宿主 fs 不支持 unlink：归档副本已写，热文件保留（物理删除需宿主提供 unlink）");
+      } else {
+        for (const records of deletions.values()) {
+          for (const a of records) {
+            const src = abs(ws, a.rel);
+            if (trash) {
+              // 归档已验证；先把热文件移进 .trash（可恢复），再由保留期清理。
+              const destDir = `${TRASH_DIR}/${a.date}`;
+              const mk = await fs.mkdirp(abs(ws, destDir));
+              if (!mk.ok) {
+                result.errors.push(`${a.rel}: .trash 目录创建失败（${mk.error.message}）`);
+                continue;
+              }
+              const dest = abs(ws, `${destDir}/${a.rel.split("/").pop() ?? a.name}`);
+              const mv = await fs.rename(src, dest);
+              if (mv.ok) result.deleted += 1;
+              else if (mv.error.code !== "NOT_FOUND") {
+                result.errors.push(`${a.rel}: 热文件移入 .trash 失败（${mv.error.message}）`);
+              }
+            } else {
+              const del = await fs.unlink(src);
+              if (del.ok) result.deleted += 1;
+              else if (del.error.code !== "NOT_FOUND") {
+                result.errors.push(`${a.rel}: 热文件删除失败（${del.error.message}）`);
+              }
             }
           }
         }
       }
     }
-    if (trash) {
+    if (trash && fs.canUnlink !== false) {
       const cleaned = await purgeTrash(fs, ws, today, keepTrashDays);
       result.purged += cleaned.purged;
       result.errors.push(...cleaned.errors);

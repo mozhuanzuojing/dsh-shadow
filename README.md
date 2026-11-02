@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
 >
-> 状态：**v2.11.1 已发布（2026-11-01）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
+> 状态：**v2.11.2 已发布（2026-11-02）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
@@ -69,13 +69,14 @@ node tools/test.ts --heavy=1            # 重测试（embedding/migrate/plugin�
 - [当前实现状态](./docs/v2/STATUS.md) · [变更记录](./CHANGELOG.md) · [发版策略 ADR](./docs/adr/0012-release-and-versioning.md)
 - v1 归档：[docs/v1/](./docs/v1/)
 
-## 已知限制（v2.11.1）
+## 已知限制（v2.11.2）
 
 - `shadow_toolset` 的 install **真机执行路径未验证**（测试用假 runner）；台账版本是 v1 2026-09 快照，不是本机实测；探测失败只说「未检出」（PATH 是宿主启动快照）。
 - `forget` 的陈旧类遗忘仍默认关闭（`minHits=0`）；**`maxActive` 默认 2000**（超出按最旧移出活跃集，标 `archived`，文件不删）。要改上限/启用陈旧遗忘需显式配置。Forget≠Delete：只移出活跃集，文件不删。
 - 派生件只在**无参 `read_shadow`** 时物化（`indexes/{materials,affaires,episodes,abstracts}`）；每次物化会 **GC 孤儿派生卡 + 每个 `.history/` 只留最近 2 个版本**（v1 遗留的 `projections/` 不在 GC 范围）；删除 `indexes/` 可整份重建。
 - **按日归档**：无参 `read_shadow` **及 capture 成功写入后（60s 节流）** 把 `date < today` 的 atoms 写成 `.shadow/archive/<date>.jsonl`（完整原文）+ `<date>.md`（导航）+ `_index.json`（count/sha256/rels/逐条 recordHashes）；逐条 hash 校验通过后才移动热文件到 `.shadow/.trash/<date>/`（保留 7 天，过期清理）；pinned 不删；迟到/内容变化会先补写 archive；坏归档返回部分 atoms + Signal。
   - **仍存在**：真实多进程/断电故障注入未做；`read_shadow` 的 `rel` 是逻辑身份，归档 atom 另带 `archiveRel`；decision/episode 的路径展示已用 archiveRel，但 `memoryRefs` 仍是逻辑 rel；语义 compaction（合并/摘要）与候选预筛（性能）尚未做。
+  - **宿主能力限制（真实 DSH fs）**：`dsh-fs-local` 只暴露 read/write，没有 unlink/rename。此宿主上归档副本/manifest 会写入，但**热文件无法物理删除**（只会保留并给出 `HOST_LIMITED` Signal）；GC 跳过，不会刷失败。物理删除需要宿主提供 unlink；这不是数据丢失。
 - lab 与 core **同包**（`src/lab/vendor/`）；ADR-0012 的独立包 `dsh-shadow-lab` 未拆（设计见 [ADR-0013](./docs/adr/0013-lab-package-split.md)）。
 - **旧 v1 存储不做支持**：运行时只读 `.shadow/atoms/`，日期树与 `_meta.json` 不读不导入。
 - **项目事实只抽「带路径」的**：从用户原话抽 `X 是/=/：<路径>`，逐条可经 Evidence Gate 核验；启发式非 LLM，复杂句式会漏（[ADR-0015](./docs/adr/0015-project-facts-evidence.md)）。

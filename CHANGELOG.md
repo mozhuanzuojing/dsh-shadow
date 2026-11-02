@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.11.2] — 2026-11-02
+
+### 修复
+
+- **宿主无 unlink 时不再报“假失败”**：`FsPort` 增加 `canUnlink`；真实 DSH `dsh-fs-local` 只读/写，没有 unlink/rename。`archiveDays` 改为直接写 manifest 并回读校验、保留热文件 + `warnings`；route 显示 `HOST_LIMITED`，不再报 manifest 失败或反复删不掉。
+- **GC 能力感知**：`gcDerivedIndexes` 在 `canUnlink=false` 时直接跳过，不再产生大量“宿主 fs 不支持 unlink”降级错误。
+- 新增 `MemoryFs({canUnlink:false})` 归档测试：归档副本可写、热文件保留、0 error、1 warning。
+- **真实验收发现**：重启后真实无参读暴露宿主 fs 无 unlink，导致归档/GC 报错；本次为根因修复，物理删除仍受宿主能力限制。
+
 ## [2.11.1] — 2026-11-01
 
 ### 修复

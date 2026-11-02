@@ -42,6 +42,9 @@ export const gcDerivedIndexes = async (
 ): Promise<GcResult> => {
   const keepHistory = Math.max(0, Math.floor(opts.keepHistory ?? 2));
   const result: GcResult = { deleted: 0, keepHistory, errors: [] };
+  // 宿主没有 unlink（DSH fs 只暴露 read/write）时，GC 不可能删除任何派生件；
+  // 明确跳过，不把“删不掉”刷成大量降级错误。
+  if (fs.canUnlink === false) return result;
   const root = `${norm(ws)}/${INDEXES_DIR}`;
   const listed = await fs.listDir(root);
   if (!listed.ok) {

@@ -24,6 +24,8 @@ export interface FsStat {
 export interface FsPort {
   /** false = 宿主没有原子 rename（如 DSH fs 只暴露 writeText）；writeAtom 直接写目标并依赖 exists 守卫。 */
   atomicRename?: boolean;
+  /** false = 宿主没有 unlink；archive/GC 必须保留热文件，不得假装删除。 */
+  canUnlink?: boolean;
   resolve(p: string): Promise<{ displayPath: string }>;
   readText(p: string): Promise<Outcome<string>>;
   writeText(p: string, text: string): Promise<Outcome<FsStat>>;
@@ -53,6 +55,8 @@ const mapError = (e: unknown, p: string): Outcome<never> => {
 };
 
 export const realFs: FsPort = {
+  atomicRename: true,
+  canUnlink: true,
   async resolve(p) {
     return { displayPath: path.resolve(String(p)) };
   },
@@ -141,10 +145,13 @@ export const realFs: FsPort = {
 
 /** 测试用内存 fs：目录隐式存在；写版本单调递增；与 realFs 语义一致。 */
 export class MemoryFs implements FsPort {
+  readonly atomicRename = true;
+  readonly canUnlink: boolean;
   private files = new Map<string, string>();
   private clock = 0;
 
-  constructor(seed: Record<string, string> = {}) {
+  constructor(seed: Record<string, string> = {}, opts: { canUnlink?: boolean } = {}) {
+    this.canUnlink = opts.canUnlink !== false;
     for (const [k, v] of Object.entries(seed)) this.files.set(this.norm(k), v);
   }
 

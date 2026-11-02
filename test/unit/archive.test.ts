@@ -184,4 +184,16 @@ if (!partial.ok) throw new Error("partial load failed");
 assert.equal(partial.value.atoms.length, 1, "热文件仍可读");
 assert.equal(partial.value.errors.length, 1, "坏归档必须可见");
 
-console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；deleteHot 后热文件删除且可重建；重复删除不报错；迟到/内容变化/pinned/坏归档部分可用");
+// 宿主无 unlink：归档副本可写，但热文件必须保留；不能报成“删除成功”
+const noUnlinkFs = new MemoryFs(
+  { [`${WS}/.shadow/atoms/2026-10-29--100000-a--aaaaaa.md`]: "a" },
+  { canUnlink: false },
+);
+const noUnlinkRun = await archiveDays(noUnlinkFs, WS, [old1], "2026-10-30", { now: 1000, deleteHot: true });
+assert.equal(noUnlinkRun.errors.length, 0, "无 unlink 是能力限制，不是失败");
+assert.equal(noUnlinkRun.warnings.length, 1, "必须显式警告热文件被保留");
+assert.equal(noUnlinkRun.deleted, 0);
+assert.equal(await noUnlinkFs.exists(`${WS}/${old1.rel}`), true, "无 unlink 时不得假装删除");
+assert.equal(await noUnlinkFs.exists(`${WS}/.shadow/archive/2026-10-29.jsonl`), true, "归档副本仍应写入");
+
+console.log("✔ archive：按日 JSONL+MD+manifest；幂等；锁占用可见；坏 JSONL 重写；today 不归档；deleteHot 后热文件删除且可重建；重复删除不报错；迟到/内容变化/pinned/坏归档部分可用；无 unlink 时保留热文件");
