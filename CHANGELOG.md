@@ -6,6 +6,15 @@
 
 （无）
 
+## [2.12.0] — 2026-11-02
+
+### 新增（独立维护 CLI）
+
+- 新增 [`tools/archive-maintenance.ts`](./tools/archive-maintenance.ts)：在插件沙箱之外显式清理“已归档但仍留在热区”的 Atom。
+- 默认 dry-run；`--apply` 才移动；只处理 archive 存在同 rel 且逐条 hash 一致的 Atom；pinned/conflict/not-archived 跳过；移入 `.shadow/.trash/<date>/`，archive 副本保留；`--purge-trash` 清理过期 trash。
+- 使用 `node:fs` 是显式用户操作，不改变插件的 fs/sandbox 边界。
+- 测试：3 条归档热文件 dry-run→apply 移走 3 条；修改热文件后 conflict=1、apply 不移动。
+
 ## [2.11.2] — 2026-11-02
 
 ### 修复

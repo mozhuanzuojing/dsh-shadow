@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
 >
-> 状态：**v2.11.2 已发布（2026-11-02）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
+> 状态：**v2.12.0 已发布（2026-11-02）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
@@ -58,6 +58,23 @@ node tools/test.ts --heavy=1            # 重测试（embedding/migrate/plugin�
 
 耗时写入 `.test-timings.json`（已 gitignore），`--root`/`--timings` 可覆盖，便于 CI 分片与本地均衡。
 
+## 维护 CLI（显式运行，不由插件自动调用）
+
+真实 DSH 的 `dsh-fs-local` 只暴露 read/write，没有 `unlink/rename`；插件不能绕过沙箱删除文件。需要物理清理时，由用户显式运行维护 CLI（**默认 dry-run**）：
+
+```powershell
+# 1) 先看哪些热文件已归档且逐条 hash 一致
+node tools/archive-maintenance.ts --ws="D:/project/local-workbench"
+
+# 2) 确认后移入 .shadow/.trash/<date>/（不直接 rm）
+node tools/archive-maintenance.ts --ws="D:/project/local-workbench" --apply
+
+# 3) 可选：清理超过 7 天的 trash
+node tools/archive-maintenance.ts --ws="D:/project/local-workbench" --apply --purge-trash
+```
+
+安全规则：只处理 archive 已有同 rel 且 **逐条 hash 相同** 的热文件；pinned、conflict（hot 与 archive 不一致）、not-archived 一律跳过；`--apply` 只移动不删除，archive 副本保留。
+
 ## 文档
 
 - [架构](./docs/v2/ARCHITECTURE.md)
@@ -69,7 +86,7 @@ node tools/test.ts --heavy=1            # 重测试（embedding/migrate/plugin�
 - [当前实现状态](./docs/v2/STATUS.md) · [变更记录](./CHANGELOG.md) · [发版策略 ADR](./docs/adr/0012-release-and-versioning.md)
 - v1 归档：[docs/v1/](./docs/v1/)
 
-## 已知限制（v2.11.2）
+## 已知限制（v2.12.0）
 
 - `shadow_toolset` 的 install **真机执行路径未验证**（测试用假 runner）；台账版本是 v1 2026-09 快照，不是本机实测；探测失败只说「未检出」（PATH 是宿主启动快照）。
 - `forget` 的陈旧类遗忘仍默认关闭（`minHits=0`）；**`maxActive` 默认 2000**（超出按最旧移出活跃集，标 `archived`，文件不删）。要改上限/启用陈旧遗忘需显式配置。Forget≠Delete：只移出活跃集，文件不删。
