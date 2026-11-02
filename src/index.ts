@@ -21,6 +21,7 @@ import { buildLessonCards, type LessonCard } from "./domain/lessons.js";
 import { buildAutoRecallHint } from "./domain/auto-recall.js";
 import { loadAtoms } from "./store/atoms.js";
 import { archiveDays, loadAllAtoms } from "./store/archive.js";
+import { pinStateBySource } from "./engine/read/recall.js";
 import { dateOf } from "./contract/time.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
@@ -110,8 +111,9 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     void (async () => {
       try {
         const all = await loadAllAtoms(baseFs, ws);
-        if (!all.ok) return;
+        if (!all.ok || all.value.errors.length) return;
         const pinned = new Set<string>();
+        for (const [rel, isPinned] of pinStateBySource(all.value.atoms)) if (isPinned) pinned.add(rel);
         const db = await indexCache.get(baseFs, ws);
         if (db.ok) {
           try {

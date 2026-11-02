@@ -6,6 +6,16 @@
 
 （无）
 
+## [2.12.1] — 2026-11-02
+
+### 修复（review 发现）
+
+- **维护 CLI：manifest 不可信**。原实现只看 `recordHashes`；若 archive JSONL 被删/坏，CLI 仍会把热文件移走（最后一个副本风险）。现在实际读取每个归档 JSONL，建立 rel→digest，并要求 manifest/archive/hot 三方一致；缺失即 conflict，不移动。
+- **维护 CLI：trash 清理前验证 archive**。`--purge-trash` 现在只删除 archive 中仍有同 rel 且 hash 一致的旧 trash；孤儿/不一致 trash 保留并计数 `purgeSkipped`。
+- **维护 CLI：移动前二次校验 + 路径校验**。plan 后热文件被改会跳过；非法 rel（非 `.shadow/atoms/` 或含 `..`）不处理。
+- **写路径 pinned 漏洞**：`archiveAfterFlush` 只读 DB meta，忽略 Source 置顶记录；现在合并 `pinStateBySource`，pinned 不再被写路径归档移走；`loadAllAtoms` 有错误时直接跳过归档。
+- 实测：archive JSONL 删除 fixture → `conflicts=1`、移动 0；孤儿 trash → `purgeSkipped=1`、保留；正常 3 条 fixture 仍可 apply。
+
 ## [2.12.0] — 2026-11-02
 
 ### 新增（独立维护 CLI）
