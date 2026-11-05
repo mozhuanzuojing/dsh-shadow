@@ -97,6 +97,19 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     }
   };
   const isReadOnly = (policy: any): boolean => policy?.mode === "read-only" || policy?.mode === "readonly";
+  /** agent id → 宿主 session（capture 的 sessionByAgent 未命中时的兜底）。 */
+  const agentSessionOf = (id: string): any => {
+    try {
+      return ctx.get("agents")?.get(id)?.session;
+    } catch {
+      return undefined;
+    }
+  };
+  /** 无 session 时的写策略：以本次写入的工作区为 workspace-write 根（只收紧不放宽）。 */
+  const workspaceWritePolicy = (id: string | undefined): any => {
+    const ws = resolveWsFor(id);
+    return ws ? { mode: "workspace-write" as const, workspaceRoot: ws } : undefined;
+  };
 
   let capture: Capture;
   // 写路径的日切触发：每次成功写 atom 后最多 60s 扫一次归档，避免每回合全量读。
@@ -146,8 +159,13 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
   capture = new Capture({
     fs: baseFs,
     fsFor: (id: string | undefined): FsPort => {
-      const session = id ? capture?.sessionByAgent.get(id) : undefined;
-      return baseFs.withPolicy(policyFor(session), session?.header?.cwd);
+      // 会话可能缺失（事件未归属到 agent、或 session 尚未见过）：此时 `policyFor(undefined)`
+      // 会落到部署默认策略（workspace-write + 部署根，本机是 DSH profile 目录），工作区写入
+      // 会被宿主 fs 沙箱判 `file access denied under workspace-write mode`。
+      // 缺失时改用**本次写入的工作区**当 workspace-write 根：只收紧不放宽，不冒充 danger-full-access。
+      const session = id ? capture?.sessionByAgent.get(id) ?? agentSessionOf(id) : undefined;
+      const policy = session ? policyFor(session) : workspaceWritePolicy(id);
+      return baseFs.withPolicy(policy, session?.header?.cwd);
     },
     config,
     clock: systemClock,

@@ -6,6 +6,23 @@
 
 （无）
 
+## [2.12.2] — 2026-11-06
+
+### 修复（实机回归 · DSH 0.2.2-rc.1）
+
+- **写入策略根错误导致 audit 流永久 pending**。`Capture.fsFor(id)` 只在 `capture.sessionByAgent`
+  里找 session；事件未归属到已知 session 时 `policyFor(undefined)` 会让宿主
+  `sandboxPolicy.resolve()` 回退到部署默认策略（`workspace-write` + 部署根，本机为 DSH profile
+  目录），于是工作区里的 `.shadow/audit/*.jsonl` 被宿主 fs 沙箱判
+  `cannot write "…": file access denied under workspace-write mode`，纯动作批永远留在 pending，
+  可见降级信号 `capture.audit`。
+  现在：session 缺失时先兜底用 agent 的 session；仍缺失则以**本次写入的工作区**作为
+  `workspace-write` 根（只收紧不放宽，不冒充 `danger-full-access`；`read-only` 仍照旧拒绝）。
+- 回归测试 `test/failure/capture-policy.test.ts`：用模仿宿主沙箱语义的假 fs（未传策略 → 部署根）
+  复现旧行为；修复前该用例断言失败（audit 文件不落盘），修复后通过。
+- 实测（本机 DSH 0.2.2-rc.1）：重载后 `shadow` 降级信号消失，`.shadow/audit/<date>.jsonl`
+  持续增长（含 `调用 <tool>` 记录），atoms 同步写入。
+
 ## [2.12.1] — 2026-11-02
 
 ### 修复（review 发现）
