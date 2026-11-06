@@ -6,6 +6,19 @@
 
 （无）
 
+## [2.12.3] — 2026-11-06
+
+### 新增（npm registry 发布准备）
+
+- `package.json` 补 `repository` / `homepage` / `bugs`（registry 包页可追溯源码与 issue），并加
+  `publishConfig: { access: "public", registry: "https://registry.npmjs.org/" }`——避免本机默认
+  registry（npmmirror 只读镜像）误发。
+- 新增 `.github/workflows/publish.yml`：推 `v*` tag 触发 `npm ci → verify → release → npm publish`，
+  用 **Trusted Publishing（GitHub OIDC，`id-token: write`）**，无需长期 token、无需维护者手动 2FA；
+  公共仓库 + 公共包时自动生成 provenance。
+- 首次 npm 发布仍需在 npmjs 账号侧完成 2FA 恢复并在包设置里把 Trusted Publisher 指向
+  `mozhuanzuojing/dsh-shadow` + `publish.yml`；在此之前分发走 GitHub Release tarball。
+
 ## [2.12.2] — 2026-11-06
 
 ### 修复（实机回归 · DSH 0.2.2-rc.1）

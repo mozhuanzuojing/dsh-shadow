@@ -1,7 +1,19 @@
 {
   "name": "dsh-shadow",
-  "version": "2.12.2",
+  "version": "2.12.3",
   "description": "dsh-shadow v2 — 给 agent 记「为什么」的投影记忆：atoms 是唯一权威，派生索引可重建，降级可见，研究面在可选 lab。",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mozhuanzuojing/dsh-shadow.git"
+  },
+  "homepage": "https://github.com/mozhuanzuojing/dsh-shadow#readme",
+  "bugs": {
+    "url": "https://github.com/mozhuanzuojing/dsh-shadow/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
