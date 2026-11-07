@@ -6,6 +6,21 @@
 
 （无）
 
+## [2.12.4] — 2026-11-07
+
+### 修复（WSL/UNC 工作区卡死宿主）
+
+- **`recall_shadow` / 任何 shadow 读在 WSL（`\\wsl.localhost\…` 经 9P）工作区上会让整个 DSH 卡死**。
+  根因：`depsFactory` 无条件打开派生 SQLite 索引，`IndexDb.open` 用同步的 `node:sqlite`
+  （`DatabaseSync`）在 UNC/9P 上执行 `journal_mode=WAL` + 建表；9P 不支持 SQLite 需要的字节范围锁，
+  每个 DDL 语句 busy-wait 到超时再 `database is locked`，实测单次打开 ~9s。同步 SQLite 在这 ~9s 内
+  占满宿主 Node 事件循环，所有会话 / Web UI / WSL 桥接都无法响应（表现为应用卡死，用户只能强杀，
+  本轮工具被记为 interrupted）。`agent/turn-stopping`、`archiveAfterFlush` 也会各自触发一次。
+- 修复：新增 `surface/workspace.ts` 的 `isRemoteWorkspace()`（UNC / 网络共享 / win32 上的 POSIX 路径）；
+  `depsFactory` 与 `archiveAfterFlush` 命中远端工作区时**跳过派生 SQLite 索引**，直接从 atoms 读取，
+  并留可见 `index/REMOTE_FS` Signal（派生索引可重建，atoms 是权威；只是 hits/query-log/生命周期不生效）。
+- 测试：`test/unit/workspace.test.ts` 覆盖 UNC/WSL/网络路径判为远端、本地盘符与 Linux 本地路径不误判。
+
 ## [2.12.3] — 2026-11-06
 
 ### 新增（npm registry 发布准备）

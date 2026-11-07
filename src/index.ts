@@ -24,7 +24,7 @@ import { archiveDays, loadAllAtoms } from "./store/archive.js";
 import { pinStateBySource } from "./engine/read/recall.js";
 import { dateOf } from "./contract/time.js";
 import { appendFileSync, mkdirSync } from "node:fs";
-import { resolveWorkspace, type ExecLike } from "./surface/workspace.js";
+import { resolveWorkspace, isRemoteWorkspace, type ExecLike } from "./surface/workspace.js";
 
 export const name = "dsh-shadow";
 export const inject: string[] = [];
@@ -127,12 +127,15 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
         if (!all.ok || all.value.errors.length) return;
         const pinned = new Set<string>();
         for (const [rel, isPinned] of pinStateBySource(all.value.atoms)) if (isPinned) pinned.add(rel);
-        const db = await indexCache.get(baseFs, ws);
-        if (db.ok) {
-          try {
-            for (const [rel, meta] of db.value.metaMap()) if (meta.pinned) pinned.add(rel);
-          } catch {
-            /* meta 读失败：不删（pinned 未知） */
+        // 派生索引只用来取 pinned；远端/UNC 工作区跳过（SQLite 无法加锁且会同步阻塞事件循环）。
+        if (!isRemoteWorkspace(ws)) {
+          const db = await indexCache.get(baseFs, ws);
+          if (db.ok) {
+            try {
+              for (const [rel, meta] of db.value.metaMap()) if (meta.pinned) pinned.add(rel);
+            } catch {
+              /* meta 读失败：不删（pinned 未知） */
+            }
           }
         }
         const r = await archiveDays(baseFs, ws, all.value.atoms, systemClock.today(), { deleteHot: true, pinned });
@@ -253,6 +256,15 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
     let index: ReadDeps["index"];
     if (readOnly) {
       signals.note("index", "READ_ONLY", "会话为只读沙箱", "本次不打开/不写 SQLite；从 atoms 直接读，hits/query-log 不生效。");
+    } else if (isRemoteWorkspace(resolved.ws)) {
+      // WSL(\\wsl.localhost 经 9P)/SMB 网络共享上 SQLite 无法加锁：DatabaseSync 会同步阻塞
+      // 事件循环数秒并失败（整个宿主「卡死」）。派生索引可重建，直接读 atoms 是正确降级。
+      signals.note(
+        "index",
+        "REMOTE_FS",
+        `工作区在非本地文件系统上（${resolved.ws}），派生 SQLite 索引无法可靠加锁`,
+        "本次不打开/不写 SQLite（避免同步阻塞导致宿主卡死）；从 atoms 直接读取，排名仍可用，hits/query-log/生命周期不生效。",
+      );
     } else {
       const opened = await indexCache.get(fsPort, resolved.ws);
       if (opened.ok) {

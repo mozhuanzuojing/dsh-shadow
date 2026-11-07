@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
 >
-> 状态：**v2.12.3 已发布（2026-11-06）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
+> 状态：**v2.12.4 已发布（2026-11-07）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
