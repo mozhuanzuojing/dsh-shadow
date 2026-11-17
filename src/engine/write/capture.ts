@@ -322,10 +322,12 @@ export class Capture {
       const pts = parseLine(r.value).points;
       if (!pts.length) continue;
       const last = pts[pts.length - 1]!;
-      const lastIso = `${h.startAt.slice(0, 10)}T${last.at}`;
+      const wm = /when\((\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})\)/.exec(last.body ?? "");
+      const lastIso = wm ? `${wm[1]}T${wm[2]}:${wm[3]}:${wm[4]}` : `${h.startAt.slice(0, 10)}T${last.at}`;
       if (!shouldExtend(lastIso, nowIso, gap)) continue;
       if (!best || lastIso > best.lastAt) {
-        best = { rel: `.shadow/lines/${f.name}`, lineId: h.lineId, lastAt: lastIso, seq: pts.length, header: { lineId: h.lineId, session, entry, startAt: h.startAt } };
+        const maxSeq = pts.reduce((m, p) => Math.max(m, p.seq), 0);
+        best = { rel: `.shadow/lines/${f.name}`, lineId: h.lineId, lastAt: lastIso, seq: maxSeq, header: { lineId: h.lineId, session, entry, startAt: h.startAt } };
       }
     }
     return best;

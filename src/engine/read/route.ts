@@ -155,7 +155,9 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   // 只读沙箱没有 SQLite（deps.index 为空），不做写盘。pinned 不删。
   if (mode === "index" && deps.index) {
     const pinned = new Set([...meta.values()].filter((m) => m.pinned).map((m) => m.rel));
-    const ar = await archiveDays(deps.fs, deps.ws, atoms, deps.clock.today(), { deleteHot: true, pinned });
+    // 只把「真 atom 文件」交给按日归档；线点（rel 含 /lines/ 或 #seq）不归档为 atom，避免污染冷区 JSONL 与 #seq 死链 rename。
+    const atomOnly = atoms.filter((a) => !a.rel.includes("/lines/") && !a.rel.includes("#"));
+    const ar = await archiveDays(deps.fs, deps.ws, atomOnly, deps.clock.today(), { deleteHot: true, pinned });
     if (ar.errors.length) {
       deps.signals.note(
         "archive",

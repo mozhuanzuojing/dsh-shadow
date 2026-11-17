@@ -38,5 +38,6 @@ assert.ok(arch.ok && arch.value.map((e) => e.name).join(",") === "old.md", "old 
 const rec = await loadAtomsFromLines(fs, WS);
 assert.equal(rec.atoms.length, 2, `归档后仍应读回 2 点（冷可读），实际 ${rec.atoms.length}`);
 assert.equal(rec.errors.length, 0);
+assert.ok(rec.atoms.some((a) => a.rel.includes("/archive/lines/")), "归档点句柄应重写为 archive/lines 路径（防死链）");
 
 console.log("✔ archive-lines：冷线移入 archive/lines · 热目录缩小 · 归档后仍可读（冷但可读）");

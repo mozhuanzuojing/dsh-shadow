@@ -55,6 +55,11 @@ for (const a of rec.atoms) {
 const u = unionByRel([rec.atoms[0]!], rec.atoms);
 assert.equal(u.length, rec.atoms.length, "并集按 rel 去重");
 
+// 正文去重：atom 模式下「派生线点」body 与某 atom 相同 → 应被丢弃，防同记忆双计
+const dupPt = { ...atoms[0]!, rel: ".shadow/lines/derived.md#1" };
+const u2 = unionByRel([dupPt], atoms);
+assert.equal(u2.length, atoms.length, "与 atom 同 body 的派生线点应去重（防双计）");
+
 console.log("✔ lines-materialize：点→线物化（一文件多点）· Σ线内点守恒 · 点带 rel 句柄 · 回读可解析 · 幂等");
 
 // 同名覆盖防护：同 session/entry/日、但间隔 > gap → 必须切成不同线文件（不得同名）

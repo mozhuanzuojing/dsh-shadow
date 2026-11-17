@@ -12,7 +12,7 @@ import type { ParsedAtom } from "../contract/types.js";
 import type { FsPort } from "../store/fs.js";
 import type { SignalStore } from "./signals.js";
 import { parseAtom } from "../domain/parse.js";
-import { appendPoint, lineIdFor, parseLine, renderLineHeader, selectColdLines, shouldExtend, type LinePoint } from "../domain/lines.js";
+import { appendPoint, lineIdFor, parseLine, parseLineHeader, renderLineHeader, selectColdLines, shouldExtend, type LinePoint } from "../domain/lines.js";
 
 export interface BuiltLine {
   rel: string;
@@ -160,7 +160,13 @@ export const loadAtomsFromLines = async (
 export const unionByRel = (fromLines: ParsedAtom[], fromAtoms: ParsedAtom[]): ParsedAtom[] => {
   const m = new Map<string, ParsedAtom>();
   for (const a of fromAtoms) m.set(a.rel, a); // atoms 优先（rel 唯一）
-  for (const a of fromLines) if (!m.has(a.rel)) m.set(a.rel, a);
+  // 去掉「body 与某 atom 完全相同」的线点（atom 模式下派生线的副本）→ 防同记忆双计；
+  // 只影响 atom↔派生线重叠，不会误删两条独立线点（不同回合 body 带不同 when 时间戳）。
+  const atomBodies = new Set(fromAtoms.map((a) => a.body));
+  for (const a of fromLines) {
+    if (atomBodies.has(a.body)) continue;
+    if (!m.has(a.rel)) m.set(a.rel, a);
+  }
   return [...m.values()];
 };
 
@@ -228,7 +234,22 @@ export const archiveColdLines = async (
     if (mk.ok) {
       for (const name of candidates) {
         const r = await fs.rename(`${base}/.shadow/lines/${name}`, `${arch}/${name}`);
-        if (r.ok) moved += 1;
+        if (!r.ok) continue;
+        moved += 1;
+        // 归档后把点句柄从 `.shadow/lines/` 重写为 `.shadow/archive/lines/`，防死链（C2）。
+        const cur = await fs.readText(`${arch}/${name}`);
+        if (cur.ok) {
+          const h = parseLineHeader(cur.value);
+          const pts = parseLine(cur.value).points;
+          if (h) {
+            let out = renderLineHeader(h);
+            for (const p of pts) {
+              const nr = p.rel.startsWith(".shadow/lines/") ? `.shadow/archive/lines/${name}#${p.seq}` : p.rel;
+              out = appendPoint(out, h, { ...p, rel: nr });
+            }
+            await fs.writeText(`${arch}/${name}`, out);
+          }
+        }
       }
     }
   }
@@ -247,7 +268,9 @@ export const lineSignature = async (fs: FsPort, ws: string): Promise<string> => 
     for (const f of ls.value) {
       if (!f.name.endsWith(".md")) continue;
       const st = await fs.stat(`${base}/${sub}/${f.name}`);
-      parts.push(`${sub}|${f.name}:${st.ok ? st.value.size : "?"}`);
+      // 用 version(size:mtime) 签名；stat 不可用则给唯一随机 → 强制缓存 miss 重解析（宁可慢，绝不"新点看不到"）。
+      const ver = st.ok ? st.value.version ?? `${st.value.size}:${st.value.mtimeMs}` : `?${Date.now()}-${Math.random()}`;
+      parts.push(`${sub}|${f.name}:${ver}`);
     }
   }
   return parts.sort().join(";");

@@ -62,8 +62,11 @@ export const parseLine = (text: string): { points: LinePoint[] } => {
   return { points };
 };
 
-/** 下一个点的 seq。 */
-export const nextSeq = (text: string | null): number => (text ? parseLine(text).points.length + 1 : 1);
+/** 下一个点的 seq（用已有最大点号+1，而非点数；坏行/缺号时也不复用 #seq）。 */
+export const nextSeq = (text: string | null): number => {
+  if (!text) return 1;
+  return parseLine(text).points.reduce((m, p) => Math.max(m, p.seq), 0) + 1;
+};
 
 /** 解析线头（session/entry/startAt/lineId），供「重启后续接」按坐标匹配磁盘上的线。 */
 export const parseLineHeader = (text: string): LineHeader | undefined => {
@@ -73,12 +76,15 @@ export const parseLineHeader = (text: string): LineHeader | undefined => {
   return { lineId: idm?.[1] ?? "", session: m[1]!, entry: m[2]!, startAt: m[3]! };
 };
 
-/** 线的「最后点时刻」(ISO)；无点/无头 → undefined。用于按龄归档/遗忘。 */
+/** 线的「最后点时刻」(ISO)；优先取末点正文 when() 的真实日期（跨午夜不偏），回退线头日期+末点时刻。 */
 export const lineLastAt = (text: string): string | undefined => {
   const h = parseLineHeader(text);
   const pts = parseLine(text).points;
   if (!h || !pts.length) return undefined;
-  return `${h.startAt.slice(0, 10)}T${pts[pts.length - 1]!.at}`;
+  const last = pts[pts.length - 1]!;
+  const wm = /when\((\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})\)/.exec(last.body ?? "");
+  if (wm) return `${wm[1]}T${wm[2]}:${wm[3]}:${wm[4]}`;
+  return `${h.startAt.slice(0, 10)}T${last.at}`;
 };
 
 /** 选出「最后点早于 cutoff」的冷线（按文件名）。cutoff 为 ISO 时间。 */

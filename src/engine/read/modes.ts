@@ -26,7 +26,6 @@ import {
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
 import { materializeSkills, renderSkillsSection } from "../skills-out.js";
-import { materializeLines } from "../lines.js";
 import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededBy, bm25Fallback } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
@@ -157,14 +156,8 @@ export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Mo
     deps.config.compact.gapMinutes,
   );
   const built = buildIndexText(deps, atoms) + derived + renderFactsList(extractFacts(atoms)) + renderSkillsSection(await materializeSkills({ fs: deps.fs, ws: deps.ws, signals: deps.signals }, atoms));
-  // ADR-0026 Phase B：line 模式下「线」已是源（capture 直接写线），不能再从 atoms 重物化（会重复/错乱）；仅 atom 模式物化。
-  if (deps.config.capture.unit === "atom") {
-    try {
-      await materializeLines(deps.fs, deps.ws, atoms, deps.signals, deps.config.compact.gapMinutes);
-    } catch (e) {
-      deps.signals.note("lines", "THROW", e instanceof Error ? e.message : String(e), "线容器物化失败；atoms 不受影响，下次读重试。");
-    }
-  }
+  // 读路径不写源（C1/C3）：不再在只读 indexView 里物化线。线由 capture(unit=line) 或 tools/migrate 产生；
+  // atom 模式下 dim:line 直接对 atoms 分组（无需落线文件）。
   const existing = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
   if (!existing.ok || existing.value !== built) {
     const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);
