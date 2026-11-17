@@ -7,7 +7,7 @@ import { MemoryFs } from "../../dist/store/fs.js";
 import { WS } from "../helpers.ts";
 
 const fs = new MemoryFs();
-const config = normalizeConfig({ shadowRoot: WS });
+const config = normalizeConfig({ shadowRoot: WS, capture: { unit: "atom" } });
 const clock = fixedClock("2026-09-06T12:00:00");
 const signals = new SignalStore();
 const a = new Capture({ fs, config, clock, signals, resolveWs: () => WS });

@@ -5,6 +5,22 @@
 
 ## 已完成
 
+### Phase B（ADR-0024 路 B）· 投影核 slice 1（2026-11-17）
+- 新增 `src/engine/project/`（`types` / `lens` / `distortion` / `project`）：点（`ParsedAtom`）→ Observer lens 取景（取景键 = **入口 entry**）→ 组装「面」（Episode 视图）→ 显式盲区 / 整全边界声明。纯函数、无 I/O、无时钟、无随机。
+- **未接线**：默认读路径 `engine/read/route.ts` 一字未改，行为与 v2.12.4 一致；本刀只立核。
+- 单测 `test/unit/project.test.ts`（默认全看 / lens 取景 / 视野外披露 / 零命中盲区 / 整全边界）。
+- 验证：`npm run verify` → 61/61 测试 · audit-layers 211 files · docs-check ok。
+- **slice 2**：`project()` 的「面」从单一 Episode 扩成多侧面（Episode / Task / Decision / 材料）；新增 `test/unit/project-c7.test.ts`，把 C7（纳入 / 排除 / 盲区披露、零命中不编造、证据句柄齐全）落成**可重放验收夹具**。
+- **slice 3**：新增 `engine/project/run.ts`（`runProject`）——接线前的完整 seam：读 `soul.json` → lens（缺件 / 坏件**可见降级**为默认视角，绝不静默当作有灵魂）→ 投影；单测 `test/unit/project-run.test.ts` 覆盖「无 soul / 好 soul / 坏 soul」三态。接线时 `route` 只需调用它。
+- **slice 4（已接线）**：`project` 透镜回核心（ADR-0024 accepted）：`read_shadow({project:true, topic})` → `runProject` → 面 + 盲区；`schema.test` 参数 13→14、`read.test` 加 `project` 端到端；README / PARITY（B5 等）/ MIGRATION 口径同步。
+- **slice 5（Phase C · 坐标落地）**：写侧 `axes.soul` 不再恒 `default`——`capture` 从 `soul.json` 的 `identity` 填实（按 ws 缓存）；缺件回落 `default`（不算降级、不留信号），坏件/读失败回落 `default` 且留可见 `capture.soul` 信号（不静默吞错）。单测 `test/unit/capture-axes.test.ts` 覆盖三态。`role` 轴仍 `default`（暂无稳定来源，保留位）。
+- **slice 6（ADR-0025 落地）**：`read_shadow` 无参 / 主题读**默认首段给「面」+「下钻：检索点」**；`raw:true` 为纯检索逃生口；面为 ≤800 字附加概览、不侵蚀检索预算。`read.test` 覆盖默认给面与 raw 逃生口；`parity(topic)` 0.883 不漂移。
+- **slice 7（ADR-0026 维读出口）**：`read_shadow({dim})` 按维读——`line`(1维) / `face`(2维·会话轴) / `consciousness`(n维，含盲区)；升维视图 `domain/dimensions.ts` 接上读出口；参数 14→15、schema/read 测试同步。线容器 `engine/lines.ts` 把 `.shadow/lines/` 物化接入无参读（点回到线，A 锚 atoms 保留）。
+- **slice 8（任务面）**：`deriveFaces(atoms,"task")` 对线做**确定性词法聚类**成「按这件事」的面（无 LLM）；`read_shadow({dim:"task"})` 可读任务面。真实语料：57 线 → **13 任务面**（vs 会话 16 / 日 6），多点面 12/13、守恒 ✅。写 `.shadow/soul/soul.json`（身份/价值观/边界/Observer lens），capture 的 `soul` 坐标与 `dim:consciousness` 视角随之上线。
+- **slice 9（写侧按线落盘）**：新增 `capture.unit`（默认 **line**）——同一 `session + 入口 + 连续段`把每回合的点**追加到一条线文件**（`.shadow/lines/`），**不再一回合一个 atom**；atom 仍可用 `capture.unit:"atom"` 兼容（e2e/failure 的 atom 机制用例显式设之）。单测 `capture-line`（两回合→1 线装 2 点、不写 atom、可从线重建）。读 = atoms ∪ lines。**需重启宿主后，新对话才真正按线落盘。**
+- **slice 10（线源收口）**：①**跨重启续线**——`parseLineHeader` + capture 在磁盘 `.shadow/lines` 找同 `session|entry` 且末点距 now ≤ gap 的最近线续写（重启不再把一段对话切成多条线，单测覆盖）；②**索引/文案转线源**——无参索引说明改为「点落在线」，近期列表改列 `a.rel` 句柄（atom 与 line#seq 统一）；③`unionByRel` 按正文去重（旧 materialize 派生线点不与 atom 双计）；④`materializeLines` 仅 `unit=atom` 跑；⑤line 点重建从正文 `when()` 补回 date/time。
+- **slice 11（线级归档/遗忘/保留 + 提速）**：①**归档（冷但仍可读）** `archiveColdLines` + `tools/archive-lines.ts`；`loadLines` 读 hot `.shadow/lines` + `.shadow/archive/lines`；②**遗忘** `forgetColdLines` + `tools/forget-lines.ts`（冷线移出读路径入 `.trash`，可回退）；③**自动遗忘默认关**：`forget.auto`（默认 false）+ 写路径 afterFlush 按 `forget.staleDays` 执行；④**线解析缓存** `loadAtomsFromLinesCached`（按文件集 size 签名复用，index 读路径用它，避免全量重解析）。单测 `lines-archive` / `lines-forget` / `lines-cache`。**需重启后 ②③ 的自动/缓存才在插件内生效。**
+
 ### Phase 0 — 冻结与规格
 - `legacy/v1` 分支 + tag `legacy-v1` 冻在 e755b32；v1 文档/ADR 归档到 `docs/v1/`。
 - v1 oracle：`fixtures/oracle-v1/`（52 合成语料 + 20 查询 × 10 mode = 200 输出，可重放；v1 pin/sha 记录在 manifest）。

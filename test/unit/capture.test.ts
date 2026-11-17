@@ -13,7 +13,7 @@ const make = (fs: MemoryFs, cfg: any = {}) => {
   const signals = new SignalStore();
   const capture = new Capture({
     fs,
-    config: normalizeConfig({ shadowRoot: WS, ...cfg }),
+    config: normalizeConfig({ shadowRoot: WS, ...cfg, capture: { unit: "atom", ...(cfg.capture ?? {}) } }),
     clock,
     signals,
     resolveWs: () => WS,
@@ -51,7 +51,7 @@ assert.ok(text.value.includes("> 项目：ws"));
 const seen: string[] = [];
 const capture2 = new Capture({
   fs: new MemoryFs(),
-  config: normalizeConfig({ shadowRoot: WS }),
+  config: normalizeConfig({ shadowRoot: WS, capture: { unit: "atom" } }),
   clock,
   signals: new SignalStore(),
   resolveWs: () => WS,

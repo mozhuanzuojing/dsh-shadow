@@ -26,6 +26,7 @@ import {
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
 import { materializeSkills, renderSkillsSection } from "../skills-out.js";
+import { materializeLines } from "../lines.js";
 import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededBy, bm25Fallback } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
@@ -63,29 +64,45 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
   }
   const lines: string[] = [];
   lines.push("# shadow 目录说明与索引", "");
-  lines.push("`.shadow/` 是投影空间根（atoms / roles / affaires / indexes）——每条记忆都是 `atoms/` 下的一个文件。");
+  lines.push("`.shadow/` 是投影空间根（lines / atoms / roles / affaires / indexes）——每个**点**是一份记忆；点落在线 `.shadow/lines/`（一点带 #seq 句柄；line 模式下不再写热 atom）。");
   lines.push("默认入口：`read_shadow()` 无参读本索引；带 `topic`/`entry` 穿透到具体记忆文件。");
   lines.push("", `工作区：\`${deps.ws}\``, "");
   lines.push("## 今日摘要");
   const todayAtoms = atoms.filter((a) => a.date === today);
   lines.push(todayAtoms.length ? `今日 ${todayAtoms.length} 条记忆${todayTopics.size ? `，主题：${[...todayTopics].slice(0, 10).join("、")}` : ""}。` : "（今日暂无）");
   const omitted: string[] = [];
-  lines.push("", "## 近期记忆（按日期）");
-  const allDates = [...byDate.keys()].sort().reverse();
-  const dates = allDates.slice(0, 20);
-  if (allDates.length > dates.length) omitted.push(`日期 ${allDates.length - dates.length} 个`);
-  if (!dates.length) lines.push("（暂无）");
-  let dayOmitted = 0;
-  let dayTotal = 0;
-  for (const d of dates) {
-    lines.push(`- ${d}`);
-    const all = (byDate.get(d) ?? []).sort((x, y) => x.name.localeCompare(y.name));
-    dayTotal += all.length;
-    const shown = all.slice(0, 40);
-    dayOmitted += all.length - shown.length;
-    for (const a of shown) lines.push(`  - \`${a.name}\``);
+  lines.push("", "## 近期点（按日期 · 句柄）");
+  const renderByDate = (list: ParsedAtom[], cap: number, into: string[]): number => {
+    const byD = new Map<string, ParsedAtom[]>();
+    for (const a of list) {
+      const arr = byD.get(a.date) ?? [];
+      arr.push(a);
+      byD.set(a.date, arr);
+    }
+    let omittedN = 0;
+    for (const d of [...byD.keys()].sort().reverse()) {
+      const all = (byD.get(d) ?? []).sort((x, y) => x.rel.localeCompare(y.rel));
+      if (!all.length) continue;
+      into.push(`- ${d}`);
+      const shown = all.slice(0, cap);
+      omittedN += all.length - shown.length;
+      for (const a of shown) into.push(`  - \`${a.rel}\``);
+    }
+    return omittedN;
+  };
+  const linePts = atoms.filter((a) => a.rel.includes("/.shadow/lines/"));
+  const atomFiles = atoms.filter((a) => !a.rel.includes("/.shadow/lines/"));
+  const primary = linePts.length ? linePts : atomFiles; // line 模式：线点优先
+  if (!primary.length) lines.push("（暂无）");
+  else {
+    const o = renderByDate(primary, 40, lines);
+    if (o > 0) omitted.push(`近期点 ${o} 条`);
   }
-  if (dayOmitted > 0) omitted.push(`单日记忆 ${dayOmitted} 条（共 ${dayTotal}）`);
+  if (linePts.length && atomFiles.length) {
+    lines.push("", `## 历史 atom（line 模式不再新增，共 ${atomFiles.length}，可迁移进线）`);
+    const o2 = renderByDate(atomFiles, 12, lines);
+    if (o2 > 0) omitted.push(`历史 atom ${o2} 条`);
+  }
   lines.push("", "## 主题索引（入口/主题 → 记忆文件）");
   const allTopics = [...topics.keys()].sort();
   const topicKeys = allTopics.slice(0, 40);
@@ -97,7 +114,7 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
   const sorted = allSorted.slice(-60);
   if (allSorted.length > sorted.length) omitted.push(`轨迹 ${allSorted.length - sorted.length} 条`);
   if (!sorted.length) lines.push("（暂无）");
-  for (const a of sorted) lines.push(`- ${a.date} ${a.time} \`${a.name}\``);
+  for (const a of sorted) lines.push(`- ${a.date} ${a.time} \`${a.rel}\``);
   const eps = deriveEpisodes(atoms, deps.config.compact.gapMinutes);
   lines.push("", "## 任务回溯（Episodes）", "");
   if (!eps.length) lines.push("（暂无连续任务片段，当前仅原子记忆）");
@@ -123,6 +140,14 @@ export const indexView = async (deps: ReadDeps, atoms: ParsedAtom[]): Promise<Mo
     deps.config.compact.gapMinutes,
   );
   const built = buildIndexText(deps, atoms) + derived + renderFactsList(extractFacts(atoms)) + renderSkillsSection(await materializeSkills({ fs: deps.fs, ws: deps.ws, signals: deps.signals }, atoms));
+  // ADR-0026 Phase B：line 模式下「线」已是源（capture 直接写线），不能再从 atoms 重物化（会重复/错乱）；仅 atom 模式物化。
+  if (deps.config.capture.unit === "atom") {
+    try {
+      await materializeLines(deps.fs, deps.ws, atoms, deps.signals, deps.config.compact.gapMinutes);
+    } catch (e) {
+      deps.signals.note("lines", "THROW", e instanceof Error ? e.message : String(e), "线容器物化失败；atoms 不受影响，下次读重试。");
+    }
+  }
   const existing = await deps.fs.readText(`${deps.ws}/${INDEX_MD}`);
   if (!existing.ok || existing.value !== built) {
     const w = await deps.fs.writeText(`${deps.ws}/${INDEX_MD}`, built);

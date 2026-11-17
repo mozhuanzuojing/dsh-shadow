@@ -15,7 +15,7 @@
 
 | v1 | v2 | 说明 |
 |---|---|---|
-| `read_shadow`（62 mode / 133 参数） | `read_shadow`（10 mode / 12 参数） | 日常读取与恢复 |
+| `read_shadow`（62 mode / 133 参数） | `read_shadow`（10 mode / 15 参数） | 日常读取与恢复 |
 | 同上 | `shadow_lab`（51 mode / 3 参数） | 研究、边界、写型能力 |
 | 同上（`mode:"toolset"`） | `shadow_toolset`（4 参数） | 独立核心工具 |
 | `recall_shadow`（query/limit） | `recall_shadow` | `mode:"recovery"` 包装，不变 |
@@ -24,14 +24,14 @@
 
 ## 3. 参数映射
 
-**`read_shadow` 12 参数**：`topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence`。5 核心透镜 = soul/taste/experience/judgment/verifyEvidence；`asOf`/`observer`/`kg` + `identity`/`context`/`project`/`claim` 移入 `shadow_lab.input`。
+**`read_shadow` 15 参数**：`topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim`。核心透镜 = soul/taste/experience/judgment/verifyEvidence/facts/project；`dim` 为升降维读（line/face/consciousness）；`asOf`/`observer`/`kg` + `identity`/`context`/`claim` 移入 `shadow_lab.input`（`project` 经 ADR-0024 回核心）。
 
 | v1 | v2 | 处置 |
 |---|---|---|
 | `topic` / `limit` / `max_tokens` / `debug` / `raw` | 同名 | 保留 |
 | `soul` / `taste` / `experience` / `judgment` / `verifyEvidence` | 同名 | 保留（5 个核心读透镜） |
 | `entry` | 正式声明 | v1 承诺但未声明；v2 在 episode/decision/task/recovery 一致生效 |
-| `identity` / `context` / `project` / `claim` + `asOf` / `observer` / `kg` | `shadow_lab.input` | 移出 `read_shadow`；显式 `PARAM_MOVED`，不静默忽略 |
+| `identity` / `context` / `claim` + `asOf` / `observer` / `kg` | `shadow_lab.input` | 移出 `read_shadow`；显式 `PARAM_MOVED`，不静默忽略（`project` 经 ADR-0024 回核心，不在此列） |
 | 其余 mode 专属参数（from/to/at/…） | `shadow_lab.input.<同名>` | descriptor 校验；未知字段 `INVALID_INPUT` |
 
 **`shadow_toolset`**：`install` `survey` `category` `need`。`install` 是外部副作用，需显式请求与宿主审批。

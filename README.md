@@ -1,13 +1,14 @@
 # dsh-shadow v2
 
-> **给 agent 记「为什么」的投影记忆。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`），派生索引可重建；换会话能按主题捞回，并告诉你它是否还作数。
+> **给 agent 记「为什么」的投影记忆——Observer 是中心，文件是投影面。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`，证据）；真正的产品是「面」：把若干点还原成这件事，并诚实标出看不到的整全（盲区）。换会话能按主题捞回，并告诉你它是否还作数。
 >
 > 状态：**v2.12.4 已发布（2026-11-07）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
 
 ## 它做什么
 
 - **采集**：每个回合压成一条 atom（背景/材料 + 用户提示/决策 + 动作 + 概况 + 摘要）。
-- **召回**：`recall_shadow(query)` 返回任务恢复包；`read_shadow(topic)` 分层穿透；`shadow_query` 跨类型查。
+- **默认读先给「面」**：`read_shadow()` / `read_shadow(topic)` 首段是投影「面」（Observer 视角取景 → 组装 Episode/Task/Decision/材料 + 盲区），随后是「下钻：检索点」；`raw:true` 取纯检索。
+- **召回 / 查询**：`recall_shadow(query)` 任务恢复包；`shadow_query` 跨类型查；`read_shadow({project:true, topic})` 给完整面（默认面是 ≤800 字概览）。
 - **可核查**：每条记忆带路径句柄与证据指针；派生件可整份重建；坏件 ≠ 空件。
 - **降级可见**：读/写/索引失败有 `Signal`，恢复后清除；未知 mode 显式失败。
 
@@ -15,7 +16,7 @@
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
-| `read_shadow` | 13 | 10 个核心 mode + 6 个核心透镜（含 `facts`） |
+| `read_shadow` | 15 | 10 个核心 mode + 7 个核心透镜（含 `facts`、`project`）+ 维读 `dim`（line/face/task/consciousness） |
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `recall_similar` | 2 | 相似过往任务卡（当时请求/决策/结果/教训/来源），按相关+新近+重要性召回 |

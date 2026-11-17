@@ -16,7 +16,7 @@
 
 | 工具 | 参数（逐个） | 数量 | 覆盖 |
 |---|---|---:|---|
-| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` | 13 | 10 core mode + 6 core 透镜 |
+| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim` | 15 | 10 core mode + 7 core 透镜 + dim 维读 |
 | `recall_similar` | `query` `limit` | 2 | 相似过往任务卡（派生经验，ADR-0016） |
 | `search_code` | `query` `limit` | 2 | 工作区代码检索（BM25，ADR-0019 阶段 1） |
 | `recall_shadow` | `query` `limit` | 2 | `mode:"recovery"` 包装 |
@@ -26,7 +26,7 @@
 
 - **MUST**：`read_shadow.mode` 的 enum 恰为 10 个：`recovery query episode decision task context knowledge query-log shadow-report shadow-manifest`。
 - **MUST NOT**：`read_shadow` 再接受任何研究性 mode；命中时返回**显式重定向**（见 §3.2），不得静默落回主题召回。
-- **5 个核心读透镜**（非 mode）：`soul` / `taste` / `experience` / `judgment` / `verifyEvidence`；`identity` / `context` / `project` / `claim` 4 个透镜与 `asOf` / `observer` / `kg` 3 个读参数**移入 lab**，经 `shadow_lab.input` 表达，不在 `read_shadow`。
+- **核心读透镜**（非 mode）：`soul` / `taste` / `experience` / `judgment` / `verifyEvidence` / `facts` / `project`（共 7；`project` 经 ADR-0024 回核心，见 §3.2 B5）；`identity` / `context` / `claim` 3 个透镜与 `asOf` / `observer` / `kg` 3 个读参数**仍移入 lab**，经 `shadow_lab.input` 表达。
 - `entry` 在 v1 是文档已承诺但未声明的参数（`index.ts:182`；`query/reads.ts:118`）；v2 必须正式声明并让 `episode/decision/task/recovery` 一致生效。
 
 ### 1.2 10 个 core mode
@@ -81,7 +81,7 @@
 | B2 | 62 mode 全在 `read_shadow` | 10 core + 1 toolset + 51 lab | `10+1+51=62`；`read_shadow({mode:"<lab>"})` MUST 返回显式重定向到 `shadow_lab`，保留一个版本后再改为未知 mode 失败 |
 | B3 | `read_shadow` 承载研究 mode | 不再承载 | 同上；`index` 归 lab；`toolset` 归 `shadow_toolset` |
 | B4 | `_meta.json` 元数据 | SQLite `hits`/`meta` 表（派生） | v2 **不导入** legacy `_meta.json`；v2 hits/meta 从空开始；`.shadow/atoms` 仍是唯一 source；SQLite 可重建 |
-| B5 | 9 个布尔透镜 + `asOf`/`observer`/`kg` 全在 `read_shadow` | 6 个核心透镜（`soul`/`taste`/`experience`/`judgment`/`verifyEvidence`/`facts`）+ 7 个移入 lab（`identity`/`context`/`project`/`claim` + `asOf`/`observer`/`kg`） | 7 个参数移出 `read_shadow`，经 `shadow_lab.input` 表达；lab 的 51 mode 计数不变 |
+| B5 | 9 个布尔透镜 + `asOf`/`observer`/`kg` 全在 `read_shadow` | 7 个核心透镜（`soul`/`taste`/`experience`/`judgment`/`verifyEvidence`/`facts`/`project`）+ 6 个移入 lab（`identity`/`context`/`claim` + `asOf`/`observer`/`kg`） | **`project` 经 ADR-0024 回核心（投影视图）**；其余 6 个参数移出 `read_shadow`，经 `shadow_lab.input` 表达；lab 的 51 mode 计数不变 |
 
 ## 4. parity 验收
 

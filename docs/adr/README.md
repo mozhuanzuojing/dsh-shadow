@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（23 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（28 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -27,6 +27,11 @@
 | [0021](./0021-cursor-style-code-index.md) | Cursor 式代码索引：语法块 + 增量 + trigram 候选 + BM25 | accepted |
 | [0022](./0022-builtin-local-embedder.md) | 内置本地向量（无 provider 也能向量检索） | accepted |
 | [0023](./0023-remove-feature-switches.md) | 去掉功能开关——所有功能始终启用 | accepted |
+| [0024](./0024-observer-projection-core.md) | Observer 为中心的投影核心（路 B）：从「检索点」到「整全→面→点」 | accepted |
+| [0025](./0025-projection-as-default.md) | 投影提为默认：无参/主题读以「面」为第一入口，检索点下钻 | accepted |
+| [0026](./0026-point-line-face-consciousness.md) | 点→线→面→观察意识：升降维双锚记忆（A+B） | accepted |
+| [0027](./0027-task-axis-optional-default.md) | 任务面提为「可选默认轴」（`face.axis`，默认仍会话） | proposal |
+| [0028](./0028-scope-dimension.md) | scope 轴升维：会话 → 工作区 → 用户态（多层根 + scope 坐标） | proposal |
 
 ## 状态枚举
 

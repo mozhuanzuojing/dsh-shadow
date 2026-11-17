@@ -34,7 +34,7 @@ const clock = fixedClock("2026-09-06T12:00:00");
 {
   const fs = new MemoryFs();
   const signals = new SignalStore();
-  const capture = new Capture({ fs, config: normalizeConfig({ shadowRoot: WS }), clock, signals, resolveWs: () => WS });
+  const capture = new Capture({ fs, config: normalizeConfig({ shadowRoot: WS, capture: { unit: "atom" } }), clock, signals, resolveWs: () => WS });
   capture.onSessionEvent({ id: "s1", header: { cwd: WS } }, { type: "user/message", data: { content: [{ type: "text", text: "请改 alpha 入口，因为可回滚" }] } });
   capture.onGoalChanged({ agent: { id: "s1" }, change: { goal: { objective: "完成 alpha 改造" } } });
   capture.onFsObserved({ displayPath: `${WS}/src/alpha.ts` }, {}, { agent: { id: "s1" } });

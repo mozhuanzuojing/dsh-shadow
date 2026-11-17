@@ -188,6 +188,8 @@ export interface ShadowConfig {
     echo?: "audit" | "memory";
     consent?: boolean;
     summary?: "auto" | "off" | "deterministic";
+    /** 落盘单位：atom=一回合一个文件（旧）；line=同一段对话追加到一条线文件（默认，ADR-0026）。 */
+    unit?: "atom" | "line";
   };
   recall?: {
     budget?: number;
@@ -197,7 +199,7 @@ export interface ShadowConfig {
     lossDisclosure?: boolean;
   };
   retention?: { halfLifeDays?: number; staleDays?: number };
-  forget?: { staleDays?: number; minHits?: number; maxActive?: number };
+  forget?: { staleDays?: number; minHits?: number; maxActive?: number; auto?: boolean };
   compact?: { gapMinutes?: number };
   index?: { provider?: "sqlite" | "fs"; verify?: "token" | "full" };
   telemetry?: { queryLog?: boolean; hits?: boolean };

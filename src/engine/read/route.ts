@@ -9,6 +9,8 @@ import { CORE_MODES, isCoreMode, isLabMode, nearestModes } from "../../contract/
 import { SOUL_FILE, TASTE_FILE } from "../../contract/paths.js";
 import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
+import { runProject } from "../project/run.js";
+import { dimensionView } from "./dimension.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
 import { computeForgetting, renderForgetNotice } from "../../domain/lifecycle.js";
 import { pinStateBySource } from "./recall.js";
@@ -95,6 +97,10 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
   if (req.facts) {
     return await factsView(deps, atoms, String(req.topic ?? ""));
   }
+  if (req.project) {
+    const { projection, soulNote } = await runProject({ fs: deps.fs, ws: deps.ws }, { topic: String(req.topic ?? "") }, atoms);
+    return `${projection.face}\n\n> 视角来源：${soulNote}`;
+  }
   if (req.verifyEvidence) {
     const materials = [...new Set(atoms.flatMap((a) => a.materials))].slice(0, 20);
     if (!materials.length) return "# Evidence\n\n（没有可验证的材料路径）";
@@ -176,8 +182,10 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
-    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true);
-  if (req.similar) {
+    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true || req.project === true);
+  if (req.dim) {
+    out = await dimensionView(depsWithMeta, activeAtoms, String(req.dim));
+  } else if (req.similar) {
     out = await similarView(depsWithMeta, activeAtoms, req);
   } else if (lensRequested) {
     const lens = await lensText(depsWithMeta, req, activeAtoms);
@@ -198,12 +206,26 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
   else if (mode === "shadow-manifest") out = await manifestView(depsWithMeta, activeAtoms, forgetting);
   else out = await topicView(depsWithMeta, activeAtoms, req);
 
+  // ADR-0025：默认读（无参索引 / 主题召回）首段给「面」，检索点退为「下钻」；raw:true 为逃生口取纯检索。
+  let lead = "";
+  if (!req.raw && !req.dim && !lensRequested && !req.similar && out.matched > 0 && (mode === "index" || mode === "recall")) {
+    const topicForFace = mode === "recall" ? String(req.topic ?? "") : "";
+    const { projection } = await runProject({ fs: deps.fs, ws: deps.ws }, { topic: topicForFace }, activeAtoms);
+    const capped =
+      projection.face.length > 800
+        ? `${projection.face.slice(0, 800)}\n> （面概览已截断到 800 字；完整投影用 read_shadow({project:true, topic})）`
+        : projection.face;
+    lead = `${capped}\n\n---\n\n## 下钻：检索点\n`;
+  }
+
   const debug = req.debug
     ? `\n\n> debug：mode=${mode} · 原子 ${activeAtoms.length}（遗忘 ${forgetting.total}）· tokens ${tokenize(String(req.topic ?? "")).length} · 命中 ${out.matched} · 返回 ${out.returned} · 丢弃 ${out.dropped}`
     : "";
   const forgetNotice = renderForgetNotice(forgetting);
-  const merged = forgetNotice ? `${out.body}\n\n${forgetNotice}` : out.body;
-  const body = budgetText(merged + debug, maxChars);
+  // 检索正文按原预算截断（与 ADR-0025 前逐字一致）；「面概览」作为附加前置，不侵蚀下钻检索预算。
+  const retrievalBase = forgetNotice ? `${out.body}\n\n${forgetNotice}` : out.body;
+  const retrievalBody = budgetText(retrievalBase + debug, maxChars);
+  const body = lead ? `${lead}${retrievalBody}` : retrievalBody;
   const text = envelope({
     body,
     signals: deps.signals.render(),

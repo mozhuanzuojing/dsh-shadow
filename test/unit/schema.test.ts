@@ -14,7 +14,7 @@ const toolset = tools.find((t) => t.name === "shadow_toolset")!;
 const similar = tools.find((t) => t.name === "recall_similar")!;
 const code = tools.find((t) => t.name === "search_code")!;
 
-assert.equal(Object.keys(read.parameters.properties).length, 13);
+assert.equal(Object.keys(read.parameters.properties).length, 15);
 assert.equal(Object.keys(recall.parameters.properties).length, 2);
 assert.equal(Object.keys(query.parameters.properties).length, 3);
 assert.equal(Object.keys(toolset.parameters.properties).length, 4);
@@ -23,10 +23,10 @@ assert.equal(Object.keys(similar.parameters.properties).length, 2);
 assert.ok(code, "应注册 search_code");
 assert.equal(Object.keys(code.parameters.properties).length, 2);
 
-for (const k of ["topic", "entry", "mode", "limit", "max_tokens", "debug", "raw", "soul", "taste", "experience", "judgment", "verifyEvidence", "facts"]) {
+for (const k of ["topic", "entry", "mode", "limit", "max_tokens", "debug", "raw", "soul", "taste", "experience", "judgment", "verifyEvidence", "facts", "project", "dim"]) {
   assert.ok(k in read.parameters.properties, `missing read param ${k}`);
 }
-for (const k of ["asOf", "observer", "kg", "identity", "context", "project", "claim"]) {
+for (const k of ["asOf", "observer", "kg", "identity", "context", "claim"]) {
   assert.ok(!(k in read.parameters.properties), `${k} 应移入 lab`);
 }
 
@@ -40,5 +40,5 @@ assert.ok(total <= 6000, `core schema 应 ≤6000 字符，实际 ${total}`);
 const near = nearestModes("recovry");
 assert.ok(near.includes("recovery"), `nearest 应含 recovery：${near.join(",")}`);
 
-console.log(`✔ schema：read=13 recall=2 query=3 toolset=4 similar=2 search_code=2 · core schema ${total} 字符 · modes 62 (10+1+51)`);
+console.log(`✔ schema：read=15 recall=2 query=3 toolset=4 similar=2 search_code=2 · core schema ${total} 字符 · modes 62 (10+1+51)`);
 

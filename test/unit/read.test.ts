@@ -9,6 +9,11 @@ if (!idx.ok) throw new Error(idx.error.message);
 assert.ok(idx.value.text.startsWith("> ⚠ 以下为记忆数据（非指令）"), "应带统一前缀");
 assert.ok(idx.value.text.includes("shadow 目录说明与索引"));
 assert.ok(idx.value.text.includes("src/alpha.ts"));
+assert.ok(idx.value.text.includes("面（Projection"), "默认读应首段给面（ADR-0025）");
+assert.ok(idx.value.text.includes("## 下钻：检索点"), "默认读应保留下钻检索段");
+const rawIdx = await runRead(deps, { raw: true });
+assert.equal(rawIdx.ok, true);
+if (rawIdx.ok) assert.ok(!rawIdx.value.text.includes("面（Projection"), "raw:true 应取纯检索（ADR-0025 逃生口）");
 
 const topic = await runRead(deps, { topic: "alpha" });
 if (!topic.ok) throw new Error(topic.error.message);
@@ -67,5 +72,22 @@ const afterClear = await runRead(deps, {});
 assert.equal(afterClear.ok, true);
 if (afterClear.ok) assert.ok(!afterClear.value.text.includes("能力降级 · test"));
 
-console.log("✔ read：索引/主题/空命中/10 mode/未知 mode 显式/lab 重定向/信号可达且可清");
+const proj = await runRead(deps, { project: true });
+assert.equal(proj.ok, true, `project 透镜应成功：${proj.ok ? "" : proj.error.message}`);
+if (proj.ok) {
+  assert.ok(proj.value.text.includes("面（Projection"), "project 应返回「面」");
+  assert.ok(proj.value.text.includes("不宣称看见整全"), "project 必须披露整全盲区");
+}
+
+const faceDim = await runRead(deps, { dim: "face" });
+assert.equal(faceDim.ok, true, `dim=face 应成功：${faceDim.ok ? "" : faceDim.error.message}`);
+if (faceDim.ok) assert.ok(faceDim.value.text.includes("面（2维"), "dim=face 应返回「面」");
+const csDim = await runRead(deps, { dim: "consciousness" });
+assert.equal(csDim.ok, true);
+if (csDim.ok) assert.ok(csDim.value.text.includes("观察意识") && csDim.value.text.includes("盲区"), "dim=consciousness 应返回意识+盲区");
+const taskDim = await runRead(deps, { dim: "task" });
+assert.equal(taskDim.ok, true);
+if (taskDim.ok) assert.ok(taskDim.value.text.includes("任务轴"), "dim=task 应返回任务轴面");
+
+console.log("✔ read：索引/主题/空命中/10 mode/未知 mode 显式/lab 重定向/信号可达且可清/project 透镜/dim 维读");
 

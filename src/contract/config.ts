@@ -47,6 +47,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
       echo: c.capture?.echo === "memory" ? "memory" : "audit",
       consent: c.capture?.consent === true,
       summary: c.capture?.summary === "off" ? "off" : c.capture?.summary === "deterministic" ? "deterministic" : "auto",
+      unit: c.capture?.unit === "atom" ? "atom" : "line",
     },
     recall: {
       budget: Math.max(256, Math.min(8000, numOr(c.recall?.budget, 1600))),
@@ -65,6 +66,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
       staleDays: Math.max(1, numOr(c.forget?.staleDays, 14)),
       minHits: Math.max(0, numOr(c.forget?.minHits, 0)),
       maxActive: Math.max(0, numOr(c.forget?.maxActive, 2000)),
+      auto: c.forget?.auto === true,
     },
     compact: {
       gapMinutes: Math.max(0, numOr(c.compact?.gapMinutes, 60)),

@@ -95,7 +95,7 @@ const ctx: any = {
   inject: (_deps: string[], cb: Function) => cb({ get: (k: string) => services[k] }),
 };
 
-const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" } });
+const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic", unit: "atom" } });
 try {
   await handlers.get("session/event")!(
     { id: "sess-1", header: { cwd: ws } },

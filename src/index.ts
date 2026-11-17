@@ -12,6 +12,7 @@ import type { ContextStatus } from "./contract/types.js";
 import { SignalStore } from "./engine/signals.js";
 import type { ReadDeps } from "./engine/read/types.js";
 import { Capture } from "./engine/write/capture.js";
+import { loadAtomsFromLinesCached, unionByRel, forgetColdLines } from "./engine/lines.js";
 import type { FsPort } from "./store/fs.js";
 import { HostFs } from "./store/host-fs.js";
 import { IndexCache } from "./store/index-cache.js";
@@ -144,6 +145,15 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
           signals.note("archive", "PARTIAL", `写路径归档失败：${r.errors[0]}`, "热文件未删除；下次读/写会重试。");
         } else if (!r.errors.length) {
           signals.clear("archive");
+        }
+        // 线级自动遗忘（默认关）：forget.auto=true 时按 forget.staleDays 把冷线移出读路径（可回退）。
+        if (config.forget.auto) {
+          try {
+            const fg = await forgetColdLines(baseFs, ws, config.forget.staleDays, { apply: true });
+            if (fg.moved) signals.note("forget", "AUTO", `自动遗忘 ${fg.moved} 条冷线`, "已移入 .shadow/.trash/lines-forgotten-*；回退见文档。");
+          } catch (e) {
+            signals.note("forget", "THROW", e instanceof Error ? e.message : String(e), "自动遗忘异常；线未移动。");
+          }
         }
       } catch (e) {
         signals.note("archive", "THROW", e instanceof Error ? e.message : String(e), "写路径归档异常；不影响已写入 atom。");
@@ -290,7 +300,15 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
       signals,
       index,
       verify,
-      loadAtoms: idx ? () => indexCache.load(idx, fsPort, resolved.ws, config.index.verify) : undefined,
+      loadAtoms: async () => {
+        const loaded = idx ? await indexCache.load(idx, fsPort, resolved.ws, config.index.verify) : await loadAtoms(fsPort, resolved.ws);
+        if (!loaded.ok) return loaded;
+        // ADR-0026 Phase D：读 = atoms(热/新点) ∪ lines(含迁走的老点)，按 rel 去重——迁移后不丢老记忆。
+        const fromLines = await loadAtomsFromLinesCached(fsPort, resolved.ws);
+        if (!fromLines.atoms.length) return loaded;
+        const lineErrs = fromLines.errors.map((m) => ({ rel: "", code: "LINE", message: m }));
+        return ok({ atoms: unionByRel(fromLines.atoms, loaded.value.atoms), errors: [...loaded.value.errors, ...lineErrs] });
+      },
       syncIndex: (atoms) => {
         if (!index) return;
         const r = indexCache.sync(index, atoms);

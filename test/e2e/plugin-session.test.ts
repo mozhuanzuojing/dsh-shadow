@@ -22,7 +22,7 @@ const ctx: any = {
 };
 
 // 关键：不配 shadowRoot；session id = s1，agent id = a1，二者不同
-const cleanup = apply(ctx, {});
+const cleanup = apply(ctx, { capture: { unit: "atom" } });
 try {
   await handlers.get("session/event")!({ id: "s1", header: { cwd: ws } }, { type: "user/message", data: { content: [{ type: "text", text: "请改 alpha 入口" }] } });
   await handlers.get("fs/observed")!({ displayPath: `${ws}/src/alpha.ts` }, {}, { agent: { id: "a1" } });

@@ -48,7 +48,9 @@ const toRequest = (args: Record<string, unknown>): ReadRequest => ({
   judgment: args.judgment === true,
   verifyEvidence: args.verifyEvidence === true,
   facts: args.facts === true,
+  project: args.project === true,
   similar: args.similar === true,
+  dim: typeof args.dim === "string" ? args.dim : undefined,
 });
 
 const executeRead = async (depsFactory: DepsFactory, args: Record<string, unknown>, exec: any): Promise<string> => {
@@ -75,13 +77,15 @@ export const makeReadTool = (depsFactory: DepsFactory): RegisteredTool => ({
     limit: num("最多返回条数（默认 10，钳 1..30）。"),
     max_tokens: num("返回预算（粗略 token，默认 1600，钳 256..8000；字符=×4）。"),
     debug: bool("返回召回计数/打分拆解（不改变结果）。"),
-    raw: bool("主题召回不套灵魂规避滤，看原文（v2 预留）。"),
+    raw: bool("主题召回不套灵魂规避滤、且不预置「面」，直接取检索原文（ADR-0025 逃生口）。"),
     soul: bool("读 curated Soul 投影（.shadow/soul/soul.json）。"),
     taste: bool("读 curated Taste 偏好（.shadow/taste/taste.json）。"),
     experience: bool("从记忆派生结构化 Experience。"),
     judgment: bool("从决策记忆派生 Judgment。"),
     verifyEvidence: bool("用 Evidence Gateway 验证材料路径；缺件报 unavailable，不静默当 verified。"),
     facts: bool("读「项目事实」视图：从用户原话抽的「X 是/=/：<路径>」，逐条带 Evidence 状态（✓verified / ✗not_found / ?unavailable）。"),
+    project: bool("投影视图（ADR-0024）：点 → 按 Observer lens（soul.json 的 what_matters/what_to_ignore）取景 → 组装「面」（Episode/Task/Decision/材料）+ 显式盲区/整全边界。不传=按现有 mode 检索。"),
+    dim: str("按维读取（ADR-0026 升降维）：line=线(1维) / face=面(2维·会话轴) / task=面(2维·任务轴·按这件事) / consciousness=观察意识(n维)。不传=按 mode/topic 读。", { enum: ["line", "face", "task", "consciousness"] }),
   }),
   output: { schema: { type: "string" }, render: renderText },
   execute: async (args, exec) => executeRead(depsFactory, args, exec),

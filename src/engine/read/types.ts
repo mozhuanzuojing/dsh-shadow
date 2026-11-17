@@ -45,8 +45,12 @@ export interface ReadRequest {
   verifyEvidence?: boolean;
   /** 读「项目事实」视图（从用户原话抽取的可核验 X=路径，带 Evidence 状态）。 */
   facts?: boolean;
+  /** 投影视图（ADR-0024）：点 → 按 Observer lens 取景 → 组装「面」+ 显式盲区。 */
+  project?: boolean;
   /** 读「相似过往任务」视图（历史任务卡 + 经验，按相关性+新近+重要性召回）。 */
   similar?: boolean;
+  /** 按维读取（ADR-0026）：line / face / consciousness。 */
+  dim?: string;
 }
 
 export interface ModeOutput {

@@ -28,6 +28,10 @@ export interface AtomTextOpts {
   agentId: string;
   project: string;
   goal: string;
+  /** 写侧坐标 soul 轴（来自 soul.json 的 identity）；缺省/default。 */
+  soul?: string;
+  /** 写侧坐标 role 轴（保留位；当前无稳定来源，缺省/default）。 */
+  role?: string;
   summary: "auto" | "off" | "deterministic";
 }
 
@@ -77,8 +81,8 @@ export const buildAtomText = (traces: Trace[], opts: AtomTextOpts): string => {
   const materials = uniq(actions.map((a) => pathOfAction(a.text)).filter((p) => p && !p.startsWith(".shadow") && isPathLike(p))).slice(0, 12);  const axes: AtomAxes = {
     locus: opts.ws,
     when: `${opts.date} ${fmtTime(opts.time)}`,
-    soul: "default",
-    role: "default",
+    soul: cut(opts.soul, 60) || "default",
+    role: cut(opts.role, 60) || "default",
     intent: opts.goal || "capture",
   };
   const lines: string[] = [`# ${entry}`, "", "> 完整线索"];

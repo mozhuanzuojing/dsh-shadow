@@ -12,7 +12,7 @@ const make = (cfg: any = {}) => {
   const signals = new SignalStore();
   const capture = new Capture({
     fs,
-    config: normalizeConfig({ shadowRoot: WS, ...cfg }),
+    config: normalizeConfig({ shadowRoot: WS, ...cfg, capture: { unit: "atom", ...(cfg.capture ?? {}) } }),
     clock,
     signals,
     resolveWs: () => WS,

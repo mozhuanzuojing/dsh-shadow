@@ -25,7 +25,7 @@ const ctx: any = {
   inject: (_deps: string[], cb: Function) => cb({ get: (k: string) => services[k] }),
 };
 
-const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic" } });
+const cleanup = apply(ctx, { shadowRoot: ws, capture: { summary: "deterministic", unit: "atom" } });
 try {
   assert.ok(tools.has("read_shadow"), "read_shadow 应注册");
   assert.ok(tools.has("recall_shadow"), "recall_shadow 应注册");

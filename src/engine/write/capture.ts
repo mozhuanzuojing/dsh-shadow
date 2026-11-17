@@ -8,7 +8,7 @@
  * - consent=true 且无显式「记住」时只进 audit，并留可见信号。
  */
 
-import { AUDIT_DIR } from "../../contract/paths.js";
+import { AUDIT_DIR, SOUL_FILE } from "../../contract/paths.js";
 import { err, ok, type Outcome } from "../../contract/outcome.js";
 import type { Clock } from "../../contract/time.js";
 import { fmtTime } from "../../contract/time.js";
@@ -19,6 +19,7 @@ import { writeAtom } from "../../store/atoms.js";
 import type { FsPort } from "../../store/fs.js";
 import type { SignalStore } from "../signals.js";
 import { buildAtomText, primaryEntry, projectName, type Trace } from "./atom-text.js";
+import { appendPoint, lineIdFor, parseLine, parseLineHeader, renderLineHeader, shouldExtend } from "../../domain/lines.js";
 
 export interface CaptureDeps {
   fs: FsPort;
@@ -55,6 +56,10 @@ export class Capture {
   private goals = new Map<string, string>();
   private attempts = new Map<string, number>();
   private seq = 0;
+  /** workspace → soul.json 的 identity name（写侧 soul 坐标）；undefined = 无/坏件。按 ws 缓存。 */
+  private soulByWs = new Map<string, string | undefined>();
+  /** line 落盘：session|entry → 当前打开的线（续接点用）。 */
+  private openLines = new Map<string, { rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string } }>();
   /** 同一 agent 串行 flush，避免 auto-flush 与 turn-stopping 并发重复写。 */
   private chains = new Map<string, Promise<Outcome<FlushResult>>>();
 
@@ -62,6 +67,36 @@ export class Capture {
 
   private note(capability: string, code: string, message: string, effect: string): void {
     this.deps.signals.note(capability, code, message, effect);
+  }
+
+  /**
+   * 读 workspace 的 soul.json → identity name（写侧坐标 soul 轴）。
+   * 缺件 → undefined（atom-text 回落 default，属正常）；坏件/读失败 → undefined + 可见信号（不静默吞错）。
+   */
+  private async soulAxis(ws: string, fs: FsPort): Promise<string | undefined> {
+    if (this.soulByWs.has(ws)) return this.soulByWs.get(ws);
+    const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
+    const r = await fs.readText(`${base}/${SOUL_FILE}`);
+    if (!r.ok) {
+      if (r.error.code !== "NOT_FOUND") {
+        this.note("capture.soul", r.error.code, r.error.message, "读取 soul.json 失败：soul 坐标退回 default（可见降级）。");
+        return undefined; // 读失败不缓存，下次重试
+      }
+      this.deps.signals.clear("capture.soul");
+      this.soulByWs.set(ws, undefined);
+      return undefined;
+    }
+    try {
+      const j = JSON.parse(r.value);
+      const id = j?.identity && typeof j.identity === "object" ? j.identity.name || j.identity.role : j?.identity;
+      const out = id ? String(id).slice(0, 60) : undefined;
+      this.deps.signals.clear("capture.soul");
+      this.soulByWs.set(ws, out);
+      return out;
+    } catch {
+      this.note("capture.soul", "PARSE", "soul.json 解析失败", "soul 坐标退回 default（可见降级，不静默吞错）。");
+      return undefined;
+    }
   }
 
   push(agentId: string | undefined, rec: Omit<Trace, "at" | "date" | "seq"> & { date?: string }): void {
@@ -203,6 +238,7 @@ export class Capture {
       const date = last.date || this.deps.clock.today();
       const project = projectName(ws);
       const entry = primaryEntry(arr, ws);
+      const soul = await this.soulAxis(ws, fs);
       const text = buildAtomText(arr, {
         ws,
         entry,
@@ -211,14 +247,29 @@ export class Capture {
         agentId: id === UNKNOWN ? "" : id,
         project,
         goal: this.goals.get(id) ?? "",
+        soul,
         summary: this.deps.config.capture.summary,
       });
-      const w = await writeAtom(fs, ws, { entry, text, date, time: last.at.replace(/:/g, "") }, this.deps.clock);
-      if (!w.ok) {
-        const n = (this.attempts.get(id) ?? 0) + 1;
-        this.attempts.set(id, n);
-        this.note("capture.flush", w.error.code, w.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；atoms 未写入。`);
-        return w;
+      const unit = this.deps.config.capture.unit;
+      let rel: string;
+      if (unit === "line") {
+        const r = await this.appendAtomToLine(fs, ws, id, entry, date, last.at, text);
+        if (!r.ok) {
+          const n = (this.attempts.get(id) ?? 0) + 1;
+          this.attempts.set(id, n);
+          this.note("capture.flush", r.error.code, r.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；线未写入。`);
+          return r;
+        }
+        rel = r.value.rel;
+      } else {
+        const w = await writeAtom(fs, ws, { entry, text, date, time: last.at.replace(/:/g, "") }, this.deps.clock);
+        if (!w.ok) {
+          const n = (this.attempts.get(id) ?? 0) + 1;
+          this.attempts.set(id, n);
+          this.note("capture.flush", w.error.code, w.error.message, `本批 ${arr.length} 条事件保留在 pending（第 ${n} 次失败）；atoms 未写入。`);
+          return w;
+        }
+        rel = w.value.rel;
       }
       this.consume(id, lastSeq);
       this.attempts.delete(id);
@@ -230,9 +281,9 @@ export class Capture {
       try {
         this.deps.afterFlush?.(ws);
       } catch (e) {
-        this.note("capture.afterFlush", "THROW", e instanceof Error ? e.message : String(e), "atom 已写入；跨日归档未触发，下次读/写再试。");
+        this.note("capture.afterFlush", "THROW", e instanceof Error ? e.message : String(e), "已写入；跨日归档未触发，下次读/写再试。");
       }
-      return ok({ written: 1, audit: 0, retained: this.pending.get(id)?.length ?? 0, rel: w.value.rel });
+      return ok({ written: 1, audit: 0, retained: this.pending.get(id)?.length ?? 0, rel });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.note("capture.flush", "THROW", message, "flush 抛错；pending 保留，下一次 flush 可重试。");
@@ -247,6 +298,99 @@ export class Capture {
     const rest = cur.filter((t) => t.seq > lastSeq);
     if (rest.length) this.pending.set(id, rest);
     else this.pending.delete(id);
+  }
+
+  /** 重启后续接：在磁盘 `.shadow/lines` 里找同 session+entry、且最后点距 now 在 gap 内的最近一条线。 */
+  private async findOpenLineOnDisk(
+    fs: FsPort,
+    ws: string,
+    session: string,
+    entry: string,
+    nowIso: string,
+    gap: number,
+  ): Promise<{ rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string }; text: string } | undefined> {
+    const dir = `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/.shadow/lines`;
+    const ls = await fs.listDir(dir);
+    if (!ls.ok) return undefined;
+    let best: { rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string }; text: string } | undefined;
+    for (const f of ls.value) {
+      if (!f.name.endsWith(".md")) continue;
+      const r = await fs.readText(`${dir}/${f.name}`);
+      if (!r.ok) continue;
+      const h = parseLineHeader(r.value);
+      if (!h || h.session !== session || h.entry !== entry) continue;
+      const pts = parseLine(r.value).points;
+      if (!pts.length) continue;
+      const last = pts[pts.length - 1]!;
+      const lastIso = `${h.startAt.slice(0, 10)}T${last.at}`;
+      if (!shouldExtend(lastIso, nowIso, gap)) continue;
+      if (!best || lastIso > best.lastAt) {
+        best = { rel: `.shadow/lines/${f.name}`, lineId: h.lineId, lastAt: lastIso, header: { lineId: h.lineId, session, entry, startAt: h.startAt }, text: r.value };
+      }
+    }
+    return best;
+  }
+
+  /** line 落盘：把本回合的点追加到当前线（同 session+entry+连续段）；不再写 atom 文件。 */
+  private async appendAtomToLine(
+    fs: FsPort,
+    ws: string,
+    id: string,
+    entry: string,
+    date: string,
+    at: string,
+    body: string,
+  ): Promise<Outcome<{ rel: string }>> {
+    const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
+    const session = id === UNKNOWN ? "" : id;
+    const nowIso = `${date}T${at}`;
+    const key = `${session}|${entry}`;
+    const gap = this.deps.config.compact.gapMinutes;
+    const sum = (/^> 摘要：(.+)$/m.exec(body)?.[1] ?? entry).trim();
+
+    let open = this.openLines.get(key);
+    if (open && !shouldExtend(open.lastAt, nowIso, gap)) open = undefined;
+
+    let lineId = "";
+    let rel = "";
+    let lineText = "";
+    let header: { lineId: string; session: string; entry: string; startAt: string } = { lineId: "", session, entry, startAt: nowIso };
+    if (open) {
+      const cur = await fs.readText(`${base}/${open.rel}`);
+      if (cur.ok) {
+        lineId = open.lineId;
+        rel = open.rel;
+        lineText = cur.value;
+        header = open.header;
+      } else {
+        open = undefined;
+      }
+    }
+    if (!open) {
+      // 重启后续接：内存无 open 时，从磁盘找同 session|entry 且 gap 内的最近线（而非新开）。
+      const disk = await this.findOpenLineOnDisk(fs, ws, session, entry, nowIso, gap);
+      if (disk) {
+        open = { rel: disk.rel, lineId: disk.lineId, lastAt: disk.lastAt, header: disk.header };
+        lineId = disk.lineId;
+        rel = disk.rel;
+        lineText = disk.text;
+        header = disk.header;
+      }
+    }
+    if (!open) {
+      lineId = lineIdFor(session, entry, nowIso);
+      rel = `.shadow/lines/${lineId}.md`;
+      header = { lineId, session, entry, startAt: nowIso };
+      lineText = renderLineHeader(header);
+    }
+
+    const seq = parseLine(lineText).points.length + 1;
+    const pointRel = `${rel}#${seq}`;
+    const next = appendPoint(lineText, header, { seq, at, kind: "turn", rel: pointRel, text: sum, body });
+    const w = await fs.writeText(`${base}/${rel}`, next);
+    if (!w.ok) return w;
+    this.openLines.set(key, { rel, lineId, lastAt: nowIso, header });
+    return ok({ rel: pointRel });
   }
 
   private async appendAudit(ws: string, agentId: string, arr: Trace[], fs: FsPort): Promise<Outcome<void>> {

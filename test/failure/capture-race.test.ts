@@ -18,7 +18,7 @@ class SlowFs extends MemoryFs {
 // 1) 同一 agent 并发 flush：串行，只写一条
 {
   const fs = new SlowFs();
-  const capture = new Capture({ fs, config: normalizeConfig({ shadowRoot: WS }), clock, signals: new SignalStore(), resolveWs: () => WS });
+  const capture = new Capture({ fs, config: normalizeConfig({ shadowRoot: WS, capture: { unit: "atom" } }), clock, signals: new SignalStore(), resolveWs: () => WS });
   capture.onSessionEvent({ id: "s1", header: { cwd: WS } }, { type: "user/message", data: { content: [{ type: "text", text: "alpha 方案 A" }] } });
   const [a, b] = await Promise.all([capture.flush("s1"), capture.flush("s1")]);
   assert.equal(a.ok && b.ok, true);
@@ -48,7 +48,7 @@ class SlowFs extends MemoryFs {
     }
   }
   const gfs = new GateFs();
-  const capture = new Capture({ fs: gfs, config: normalizeConfig({ shadowRoot: WS }), clock, signals: new SignalStore(), resolveWs: () => WS });
+  const capture = new Capture({ fs: gfs, config: normalizeConfig({ shadowRoot: WS, capture: { unit: "atom" } }), clock, signals: new SignalStore(), resolveWs: () => WS });
   capture.onSessionEvent({ id: "s1", header: { cwd: WS } }, { type: "user/message", data: { content: [{ type: "text", text: "第一条 alpha" }] } });
   const p = capture.flush("s1");
   await started.promise;

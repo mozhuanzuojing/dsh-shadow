@@ -5,7 +5,7 @@
 
 ## 1. 原则
 
-1. **文件是权威**：`.shadow/` 下的人类可读文件是 source；索引、缓存、SQLite 全部可重建。
+1. **证据在 atom，产品是投影，中心是 Observer（ADR-0024）**：`.shadow/` 下的人类可读文件是**不可变证据源**；真正的一等产物是「面」（Projection）——由 Observer 视角把点组装成这件事并披露盲区；索引、缓存、SQLite 全部可重建。
 2. **读写分离**：`read_shadow` 永不改 source；`shadow_lab` 的写型 mode 必须显式 `write:true`。
 3. **缺件不静默**：缺依赖、坏派生件、写失败都返回可见错误，不回落成“成功”。
 4. **未知输入显式失败**：未知 mode / 参数 / 版本一律报错，不落回默认召回。
@@ -79,6 +79,7 @@
 读：read_shadow / recall_shadow / shadow_query
   → surface 归一化参数
   → engine/read.route（10 个核心 mode 或召回入口）
+  → engine/project（默认无参 / 主题读：Observer lens → 面 + 盲区；检索退为下钻；raw:true 跳过）
   → store/source + store/derived 取候选
   → domain.evidence / lifecycle 裁决
   → engine/read.rank + 预算 + 信封
