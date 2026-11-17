@@ -101,16 +101,20 @@ export const materializeLines = async (
 };
 
 /** 回读：线文件 → 点（降维用）。读 hot `.shadow/lines` + 冷 `.shadow/archive/lines`（归档冷但仍可读）。 */
-export const loadLines = async (fs: FsPort, ws: string): Promise<{ rel: string; points: LinePoint[] }[]> => {
+export const loadLines = async (fs: FsPort, ws: string): Promise<{ rel: string; points: LinePoint[]; malformed: number }[]> => {
   const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
-  const out: { rel: string; points: LinePoint[] }[] = [];
+  const out: { rel: string; points: LinePoint[]; malformed: number }[] = [];
   for (const sub of [".shadow/lines", ".shadow/archive/lines"]) {
     const ls = await fs.listDir(`${base}/${sub}`);
     if (!ls.ok) continue;
     for (const f of ls.value) {
       if (!f.name.endsWith(".md")) continue;
       const r = await fs.readText(`${base}/${sub}/${f.name}`);
-      if (r.ok) out.push({ rel: `${sub}/${f.name}`, points: parseLine(r.value).points });
+      if (r.ok) {
+        const pts = parseLine(r.value).points;
+        const starts = (r.value.match(/^- \[点#/gm) ?? []).length; // 看起来是点行却解析失败的条数（半写/损坏）
+        out.push({ rel: `${sub}/${f.name}`, points: pts, malformed: Math.max(0, starts - pts.length) });
+      }
     }
   }
   return out;
@@ -125,6 +129,7 @@ export const loadAtomsFromLines = async (
   const atoms: ParsedAtom[] = [];
   const errors: string[] = [];
   for (const L of lines) {
+    if (L.malformed) errors.push(`${L.rel} 有 ${L.malformed} 行点损坏（可能半写/截断）`);
     for (const p of L.points) {
       if (!p.body) {
         errors.push(`${L.rel}#${p.seq} 无 body（旧线？）`);

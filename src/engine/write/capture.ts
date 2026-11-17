@@ -370,8 +370,12 @@ export class Capture {
     const header = { lineId, session, entry, startAt: nowIso };
     const pt = { seq: 1, at, kind: "turn", rel: `${rel}#1`, text: sum, body };
     const text = `${renderLineHeader(header)}${renderPointLine(pt)}\n`;
-    const w = await fs.writeText(`${base}/${rel}`, text);
-    if (!w.ok) return w;
+    // 新建线：写临时文件再 rename，避免半写（崩溃时不留半条线）。
+    const tmp = `${base}/${rel}.tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const w0 = await fs.writeText(tmp, text);
+    if (!w0.ok) return w0;
+    const mv = await fs.rename(tmp, `${base}/${rel}`);
+    if (!mv.ok) return mv;
     this.openLines.set(key, { rel, lineId, lastAt: nowIso, seq: 1, header });
     return ok({ rel: pt.rel });
   }

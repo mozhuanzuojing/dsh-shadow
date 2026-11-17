@@ -48,12 +48,11 @@ const main = async (): Promise<void> => {
   console.log(`[migrate] 写线 = ${built.length} 条 · 线内点合计 = ${built.reduce((n, l) => n + l.points, 0)}`);
 
   const rec = await loadAtomsFromLines(realFs, WS);
-  const recByRel = new Map(rec.atoms.map((a) => [a.rel, sha(a.body)]));
+  const bodySet = new Set(rec.atoms.map((a) => sha(a.body)));
   let equal = 0;
   const missing: string[] = [];
   for (const a of atoms) {
-    const h = recByRel.get(a.rel);
-    if (h && h === sha(a.body)) equal++;
+    if (bodySet.has(sha(a.body))) equal++;
     else missing.push(a.rel);
   }
   const extras = Math.max(0, rec.atoms.length - equal); // 既有线点（非本次 atom）不算失败

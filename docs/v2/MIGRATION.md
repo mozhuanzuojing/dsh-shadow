@@ -3,6 +3,14 @@
 > 面向 v1 使用者与维护者。验收基线见 `PARITY.md`；工具形态见 `LAB.md`；分层见 `ARCHITECTURE.md`。
 > 原则：**只增不删、旧存储不读取、失败可见、可回滚**。
 
+## 0. v2 → v3（线源）
+
+- **写入改为线源**：`capture.unit` 默认 `line`——同一 `session+入口+连续段`把每回合的点**追加到一条线文件** `.shadow/lines/<…>.md`（`appendText` 原子追加），不再一回合一个 atom。`capture.unit:"atom"` 可回退到旧写法。
+- **读 = atoms ∪ lines**（按 rel 去重）；`dim:line` 读**物理线源**（`.shadow/lines` + `.shadow/archive/lines`），不再按 gap 重算。
+- **保留/归档/遗忘（线级）**：`tools/archive-lines.ts`（冷但可读，移入 `.shadow/archive/lines`）、`tools/forget-lines.ts`（移出读入 `.trash`，可回退）；`forget.auto`（默认 `false`）按 `forget.staleDays` 自动遗忘。
+- **迁移**：`tools/migrate-atoms-to-lines.ts`（atom→线，校验按 body 逐字相等后 `--apply` 移 atom 入 `.trash`）。
+- **升级后**：需重启宿主使新 dist 生效；回滚到 v2 前需把 `.trash/atoms-migrated-*` 移回 `.shadow/atoms`（v2 只读 atoms）。单写者假设：同工作区建议单宿主写（跨进程无锁）。
+
 ## 1. 原则
 
 1. `.shadow/atoms/` 与 v1 完全兼容；v2 不重写、不迁移、不删除旧 atom。

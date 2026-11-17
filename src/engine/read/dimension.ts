@@ -8,7 +8,6 @@
 import type { ParsedAtom } from "../../contract/types.js";
 import { SOUL_FILE } from "../../contract/paths.js";
 import { deriveConsciousness, deriveFaces, downToPoints, type FaceAxis } from "../../domain/dimensions.js";
-import { loadLines } from "../lines.js";
 import type { ModeOutput, ReadDeps } from "./types.js";
 
 const soulIdOf = async (deps: ReadDeps): Promise<string | null> => {
@@ -25,28 +24,46 @@ const soulIdOf = async (deps: ReadDeps): Promise<string | null> => {
 
 export const dimensionView = async (deps: ReadDeps, atoms: ParsedAtom[], dim: string): Promise<ModeOutput> => {
   const axis: FaceAxis = dim === "task" ? "task" : "session";
-  const { faces } = deriveFaces(atoms, axis, deps.config.compact.gapMinutes);
+  const { lines, faces } = deriveFaces(atoms, axis, deps.config.compact.gapMinutes);
   const lim = deps.limit ?? 20;
 
   if (dim === "line") {
-    // 物理线源（.shadow/lines + archive）——不再从点按 gap 重算，避免与磁盘线不一致（一致性）。
-    const physical = await loadLines(deps.fs, deps.ws);
-    const shown = physical.slice(0, lim);
+    // 复用已加载的 atoms（含线重建点，rel=线#seq），不重复读文件；按线文件分组。
+    const linePts = atoms.filter((a) => a.rel.includes("/lines/"));
+    if (linePts.length) {
+      const g = new Map<string, ParsedAtom[]>();
+      for (const a of linePts) {
+        const k = a.rel.split("#")[0]!;
+        const arr = g.get(k) ?? [];
+        arr.push(a);
+        g.set(k, arr);
+      }
+      const keys = [...g.keys()].sort().reverse();
+      const shown = keys.slice(0, lim);
+      const body = [
+        `# 线（1维）· 共 ${keys.length} 条（线点）`,
+        "> 线 = 点沿「时间 × 同一件事」的连续段；降维可回点。",
+        "",
+        ...shown.map((k) => {
+          const pts = (g.get(k) ?? []).sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`));
+          const f = pts[0]!;
+          const l = pts[pts.length - 1]!;
+          const dec = pts.reduce((n, a) => n + a.decisions.length, 0);
+          const title = String(f.summary || f.userMessages[0] || f.goal || f.entry || "").replace(/^用户：/, "").slice(0, 40);
+          return `- ${f.date} ${f.time}「${title}」· ${pts.length} 点 · 末 ${l.time}${dec ? ` · ${dec} 决策` : ""}`;
+        }),
+      ].join("\n");
+      return { body, matched: keys.length, returned: shown.length, dropped: Math.max(0, keys.length - shown.length), examples: [] };
+    }
+    // 回退（纯 atom 模式、尚无线点）：按会话轴从点聚合
+    const shownLines = lines.slice(0, lim);
     const body = [
-      `# 线（1维）· 共 ${physical.length} 条（物理线源）`,
-      "> 线 = 点沿「时间 × 同一件事」的连续段；来自 .shadow/lines（+archive），降维可回点。",
+      `# 线（1维）· 共 ${lines.length} 条（由点聚合）`,
+      "> 线 = 点沿「时间 × 同一件事」的连续段；降维可回点。",
       "",
-      ...shown.map((L) => {
-        const m = /(\d{4}-\d{2}-\d{2})--(\d{2})(\d{2})(\d{2})/.exec(L.rel);
-        const start = m ? `${m[1]} ${m[2]}:${m[3]}:${m[4]}` : "?";
-        const pts = L.points;
-        const last = pts[pts.length - 1];
-        const dec = pts.reduce((n, p) => n + (String(p.body ?? "").match(/^- \[[^\]]*\] 决定/gm)?.length ?? 0), 0);
-        const title = String(pts[0]?.text ?? "").slice(0, 40);
-        return `- ${start}「${title}」· ${pts.length} 点${last ? ` · 末 ${last.at}` : ""}${dec ? ` · ${dec} 决策` : ""}`;
-      }),
+      ...shownLines.map((e) => `- ${e.startedAt}「${String(e.title).slice(0, 40)}」· ${e.memoryCount} 点 · ${e.decisions.length} 决策`),
     ].join("\n");
-    return { body, matched: physical.length, returned: shown.length, dropped: Math.max(0, physical.length - shown.length), examples: [] };
+    return { body, matched: lines.length, returned: shownLines.length, dropped: Math.max(0, lines.length - shownLines.length), examples: [] };
   }
 
   if (dim === "face" || dim === "task") {
