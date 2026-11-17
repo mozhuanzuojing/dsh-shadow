@@ -306,7 +306,7 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
         // ADR-0026 Phase D：读 = atoms(热/新点) ∪ lines(含迁走的老点)，按 rel 去重——迁移后不丢老记忆。
         const fromLines = await loadAtomsFromLinesCached(fsPort, resolved.ws);
         if (!fromLines.atoms.length) return loaded;
-        const lineErrs = fromLines.errors.map((m) => ({ rel: "", code: "LINE", message: m }));
+        const lineErrs = fromLines.errors.map((m) => ({ rel: /^([^\s:]+)/.exec(m)?.[1] ?? "", code: "LINE", message: m }));
         return ok({ atoms: unionByRel(fromLines.atoms, loaded.value.atoms), errors: [...loaded.value.errors, ...lineErrs] });
       },
       syncIndex: (atoms) => {

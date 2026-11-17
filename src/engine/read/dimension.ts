@@ -29,6 +29,7 @@ export const dimensionView = async (deps: ReadDeps, atoms: ParsedAtom[], dim: st
 
   if (dim === "line") {
     // 复用已加载的 atoms（含线重建点，rel=线#seq），不重复读文件；按线文件分组。
+    // 注：混合模式（线点 + 纯 atom-file 点并存）下此处只列线点，纯 atom 点不进线视图（会走 index / 下次物化进线）。
     const linePts = atoms.filter((a) => a.rel.includes("/lines/"));
     if (linePts.length) {
       const g = new Map<string, ParsedAtom[]>();

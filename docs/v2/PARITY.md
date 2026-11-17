@@ -3,6 +3,7 @@
 > 状态：重写已获批（Phase 0）。本文是 v2 的验收基线：实现与本文冲突时以本文为准；本文与 hard 契约冲突时，先改 ADR 再改本文。
 > 证据口径：v1 = v1.22.2（220 产品文件 / 17,640 LOC / 62 mode / 133 参数 / 124 ADR）；行号基于当前工作副本。
 > 目标口径：v2 = **4+1 工具 / 21 核心参数 / 10 core mode + 1 toolset + 51 lab mode**（10+1+51=62，无 mode 丢失）。
+> v3 线源：`capture.unit` 默认 `line`——点落 `.shadow/lines/`（一点带 #seq 句柄，多回合一条线、跨重启续接）；**读 = atoms ∪ lines**（按 rel 去重）；`read_shadow({dim})` 支持 line/face/task/consciousness，`dim:line` 读物理线源；`forget.auto`（默认关）+ `tools/archive-lines.ts` / `tools/forget-lines.ts` 做线级归档/遗忘。详见 `MIGRATION.md` v2→v3、ADR-0026/0028。
 
 ## 0. 判定词
 

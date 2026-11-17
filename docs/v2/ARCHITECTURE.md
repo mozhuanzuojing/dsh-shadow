@@ -5,7 +5,7 @@
 
 ## 1. 原则
 
-1. **证据在 atom，产品是投影，中心是 Observer（ADR-0024）**：`.shadow/` 下的人类可读文件是**不可变证据源**；真正的一等产物是「面」（Projection）——由 Observer 视角把点组装成这件事并披露盲区；索引、缓存、SQLite 全部可重建。
+1. **证据在 atom，产品是投影，中心是 Observer（ADR-0024）**：`.shadow/` 下的人类可读文件是**不可变证据源**；真正的一等产物是「面」（Projection）——由 Observer 视角把点组装成这件事并披露盲区；索引、缓存、SQLite 全部可重建。（v3：`capture.unit=line` 时**线 `.shadow/lines/` 是一等源**，atom 退为证据账本/兼容；读 = atoms ∪ lines。见 ADR-0026/0028。）
 2. **读写分离**：`read_shadow` 永不改 source；`shadow_lab` 的写型 mode 必须显式 `write:true`。
 3. **缺件不静默**：缺依赖、坏派生件、写失败都返回可见错误，不回落成“成功”。
 4. **未知输入显式失败**：未知 mode / 参数 / 版本一律报错，不落回默认召回。
