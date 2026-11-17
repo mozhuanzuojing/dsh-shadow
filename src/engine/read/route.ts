@@ -141,8 +141,8 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
     deps.signals.note(
       "atoms.partial",
       "PARTIAL_READ",
-      `${loaded.value.errors.length} 个记忆文件读取失败（首个：${loaded.value.errors[0]!.rel}）`,
-      "召回面比实际记忆少；坏件与空件不同，请先修复这些文件。",
+      `${loaded.value.errors.length} 个记忆项读取/解析异常（首个：${loaded.value.errors[0]!.rel || "（见消息）"}）`,
+      "召回面比实际记忆少；坏件/半写与空件不同，请先修复（可查 .shadow/lines 坏行）。",
     );
   } else {
     deps.signals.clear("atoms.partial");

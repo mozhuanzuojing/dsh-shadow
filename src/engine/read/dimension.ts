@@ -24,47 +24,35 @@ const soulIdOf = async (deps: ReadDeps): Promise<string | null> => {
 
 export const dimensionView = async (deps: ReadDeps, atoms: ParsedAtom[], dim: string): Promise<ModeOutput> => {
   const axis: FaceAxis = dim === "task" ? "task" : "session";
-  const { lines, faces } = deriveFaces(atoms, axis, deps.config.compact.gapMinutes);
+  const { faces } = deriveFaces(atoms, axis, deps.config.compact.gapMinutes);
   const lim = deps.limit ?? 20;
 
   if (dim === "line") {
-    // 复用已加载的 atoms（含线重建点，rel=线#seq），不重复读文件；按线文件分组。
-    // 注：混合模式（线点 + 纯 atom-file 点并存）下此处只列线点，纯 atom 点不进线视图（会走 index / 下次物化进线）。
-    const linePts = atoms.filter((a) => a.rel.includes("/lines/"));
-    if (linePts.length) {
-      const g = new Map<string, ParsedAtom[]>();
-      for (const a of linePts) {
-        const k = a.rel.split("#")[0]!;
-        const arr = g.get(k) ?? [];
-        arr.push(a);
-        g.set(k, arr);
-      }
-      const keys = [...g.keys()].sort().reverse();
-      const shown = keys.slice(0, lim);
-      const body = [
-        `# 线（1维）· 共 ${keys.length} 条（线点）`,
-        "> 线 = 点沿「时间 × 同一件事」的连续段；降维可回点。",
-        "",
-        ...shown.map((k) => {
-          const pts = (g.get(k) ?? []).sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`));
-          const f = pts[0]!;
-          const l = pts[pts.length - 1]!;
-          const dec = pts.reduce((n, a) => n + a.decisions.length, 0);
-          const title = String(f.summary || f.userMessages[0] || f.goal || f.entry || "").replace(/^用户：/, "").slice(0, 40);
-          return `- ${f.date} ${f.time}「${title}」· ${pts.length} 点 · 末 ${l.time}${dec ? ` · ${dec} 决策` : ""}`;
-        }),
-      ].join("\n");
-      return { body, matched: keys.length, returned: shown.length, dropped: Math.max(0, keys.length - shown.length), examples: [] };
+    // 复用已加载 atoms（含线重建点 rel=线#seq；以及纯 atom-file 点）——不重复读文件。
+    // 线点按线文件分组；纯 atom 点按日期归组（atom@date），确保混合模式不漏点。
+    const groups = new Map<string, ParsedAtom[]>();
+    for (const a of atoms) {
+      const key = a.rel.includes("/lines/") ? a.rel.split("#")[0]! : `atom@${a.date}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(a);
+      groups.set(key, arr);
     }
-    // 回退（纯 atom 模式、尚无线点）：按会话轴从点聚合
-    const shownLines = lines.slice(0, lim);
+    const keys = [...groups.keys()].sort().reverse();
+    const shown = keys.slice(0, lim);
     const body = [
-      `# 线（1维）· 共 ${lines.length} 条（由点聚合）`,
+      `# 线（1维）· 共 ${keys.length} 条（线点 + atom 点）`,
       "> 线 = 点沿「时间 × 同一件事」的连续段；降维可回点。",
       "",
-      ...shownLines.map((e) => `- ${e.startedAt}「${String(e.title).slice(0, 40)}」· ${e.memoryCount} 点 · ${e.decisions.length} 决策`),
+      ...shown.map((k) => {
+        const pts = (groups.get(k) ?? []).sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`));
+        const f = pts[0]!;
+        const l = pts[pts.length - 1]!;
+        const dec = pts.reduce((n, a) => n + a.decisions.length, 0);
+        const title = String(f.summary || f.userMessages[0] || f.goal || f.entry || "").replace(/^用户：/, "").slice(0, 40);
+        return `- ${f.date} ${f.time}「${title}」· ${pts.length} 点 · 末 ${l.time}${dec ? ` · ${dec} 决策` : ""}`;
+      }),
     ].join("\n");
-    return { body, matched: lines.length, returned: shownLines.length, dropped: Math.max(0, lines.length - shownLines.length), examples: [] };
+    return { body, matched: keys.length, returned: shown.length, dropped: Math.max(0, keys.length - shown.length), examples: [] };
   }
 
   if (dim === "face" || dim === "task") {
