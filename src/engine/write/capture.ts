@@ -19,7 +19,7 @@ import { writeAtom } from "../../store/atoms.js";
 import type { FsPort } from "../../store/fs.js";
 import type { SignalStore } from "../signals.js";
 import { buildAtomText, primaryEntry, projectName, type Trace } from "./atom-text.js";
-import { appendPoint, lineIdFor, parseLine, parseLineHeader, renderLineHeader, shouldExtend } from "../../domain/lines.js";
+import { lineIdFor, parseLine, parseLineHeader, renderLineHeader, renderPointLine, shouldExtend } from "../../domain/lines.js";
 
 export interface CaptureDeps {
   fs: FsPort;
@@ -59,7 +59,7 @@ export class Capture {
   /** workspace → soul.json 的 identity name（写侧 soul 坐标）；undefined = 无/坏件。按 ws 缓存。 */
   private soulByWs = new Map<string, string | undefined>();
   /** line 落盘：session|entry → 当前打开的线（续接点用）。 */
-  private openLines = new Map<string, { rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string } }>();
+  private openLines = new Map<string, { rel: string; lineId: string; lastAt: string; seq: number; header: { lineId: string; session: string; entry: string; startAt: string } }>();
   /** 同一 agent 串行 flush，避免 auto-flush 与 turn-stopping 并发重复写。 */
   private chains = new Map<string, Promise<Outcome<FlushResult>>>();
 
@@ -308,11 +308,11 @@ export class Capture {
     entry: string,
     nowIso: string,
     gap: number,
-  ): Promise<{ rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string }; text: string } | undefined> {
+  ): Promise<{ rel: string; lineId: string; lastAt: string; seq: number; header: { lineId: string; session: string; entry: string; startAt: string } } | undefined> {
     const dir = `${String(ws).replace(/\\/g, "/").replace(/\/+$/, "")}/.shadow/lines`;
     const ls = await fs.listDir(dir);
     if (!ls.ok) return undefined;
-    let best: { rel: string; lineId: string; lastAt: string; header: { lineId: string; session: string; entry: string; startAt: string }; text: string } | undefined;
+    let best: { rel: string; lineId: string; lastAt: string; seq: number; header: { lineId: string; session: string; entry: string; startAt: string } } | undefined;
     for (const f of ls.value) {
       if (!f.name.endsWith(".md")) continue;
       const r = await fs.readText(`${dir}/${f.name}`);
@@ -325,7 +325,7 @@ export class Capture {
       const lastIso = `${h.startAt.slice(0, 10)}T${last.at}`;
       if (!shouldExtend(lastIso, nowIso, gap)) continue;
       if (!best || lastIso > best.lastAt) {
-        best = { rel: `.shadow/lines/${f.name}`, lineId: h.lineId, lastAt: lastIso, header: { lineId: h.lineId, session, entry, startAt: h.startAt }, text: r.value };
+        best = { rel: `.shadow/lines/${f.name}`, lineId: h.lineId, lastAt: lastIso, seq: pts.length, header: { lineId: h.lineId, session, entry, startAt: h.startAt } };
       }
     }
     return best;
@@ -350,47 +350,30 @@ export class Capture {
 
     let open = this.openLines.get(key);
     if (open && !shouldExtend(open.lastAt, nowIso, gap)) open = undefined;
-
-    let lineId = "";
-    let rel = "";
-    let lineText = "";
-    let header: { lineId: string; session: string; entry: string; startAt: string } = { lineId: "", session, entry, startAt: nowIso };
-    if (open) {
-      const cur = await fs.readText(`${base}/${open.rel}`);
-      if (cur.ok) {
-        lineId = open.lineId;
-        rel = open.rel;
-        lineText = cur.value;
-        header = open.header;
-      } else {
-        open = undefined;
-      }
-    }
     if (!open) {
-      // 重启后续接：内存无 open 时，从磁盘找同 session|entry 且 gap 内的最近线（而非新开）。
       const disk = await this.findOpenLineOnDisk(fs, ws, session, entry, nowIso, gap);
-      if (disk) {
-        open = { rel: disk.rel, lineId: disk.lineId, lastAt: disk.lastAt, header: disk.header };
-        lineId = disk.lineId;
-        rel = disk.rel;
-        lineText = disk.text;
-        header = disk.header;
-      }
-    }
-    if (!open) {
-      lineId = lineIdFor(session, entry, nowIso);
-      rel = `.shadow/lines/${lineId}.md`;
-      header = { lineId, session, entry, startAt: nowIso };
-      lineText = renderLineHeader(header);
+      if (disk) open = { rel: disk.rel, lineId: disk.lineId, lastAt: disk.lastAt, seq: disk.seq, header: disk.header };
     }
 
-    const seq = parseLine(lineText).points.length + 1;
-    const pointRel = `${rel}#${seq}`;
-    const next = appendPoint(lineText, header, { seq, at, kind: "turn", rel: pointRel, text: sum, body });
-    const w = await fs.writeText(`${base}/${rel}`, next);
+    if (open) {
+      // 原子追加：只 append 本点一行到已有线（O(1)、不重写整条线；避免 read-modify-write 丢更新）。
+      const seq = open.seq + 1;
+      const pt = { seq, at, kind: "turn", rel: `${open.rel}#${seq}`, text: sum, body };
+      const w = await fs.appendText(`${base}/${open.rel}`, `${renderPointLine(pt)}\n`);
+      if (!w.ok) return w;
+      this.openLines.set(key, { rel: open.rel, lineId: open.lineId, lastAt: nowIso, seq, header: open.header });
+      return ok({ rel: pt.rel });
+    }
+
+    const lineId = lineIdFor(session, entry, nowIso);
+    const rel = `.shadow/lines/${lineId}.md`;
+    const header = { lineId, session, entry, startAt: nowIso };
+    const pt = { seq: 1, at, kind: "turn", rel: `${rel}#1`, text: sum, body };
+    const text = `${renderLineHeader(header)}${renderPointLine(pt)}\n`;
+    const w = await fs.writeText(`${base}/${rel}`, text);
     if (!w.ok) return w;
-    this.openLines.set(key, { rel, lineId, lastAt: nowIso, header });
-    return ok({ rel: pointRel });
+    this.openLines.set(key, { rel, lineId, lastAt: nowIso, seq: 1, header });
+    return ok({ rel: pt.rel });
   }
 
   private async appendAudit(ws: string, agentId: string, arr: Trace[], fs: FsPort): Promise<Outcome<void>> {

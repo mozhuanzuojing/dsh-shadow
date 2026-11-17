@@ -71,7 +71,7 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
   const todayAtoms = atoms.filter((a) => a.date === today);
   lines.push(todayAtoms.length ? `今日 ${todayAtoms.length} 条记忆${todayTopics.size ? `，主题：${[...todayTopics].slice(0, 10).join("、")}` : ""}。` : "（今日暂无）");
   const omitted: string[] = [];
-  lines.push("", "## 近期点（按日期 · 句柄）");
+  lines.push("", "## 近期线（按日期 · 线文件）");
   const renderByDate = (list: ParsedAtom[], cap: number, into: string[]): number => {
     const byD = new Map<string, ParsedAtom[]>();
     for (const a of list) {
@@ -90,16 +90,33 @@ export const buildIndexText = (deps: ReadDeps, atoms: ParsedAtom[]): string => {
     }
     return omittedN;
   };
-  const linePts = atoms.filter((a) => a.rel.includes("/.shadow/lines/"));
-  const atomFiles = atoms.filter((a) => !a.rel.includes("/.shadow/lines/"));
-  const primary = linePts.length ? linePts : atomFiles; // line 模式：线点优先
-  if (!primary.length) lines.push("（暂无）");
-  else {
-    const o = renderByDate(primary, 40, lines);
+  const linePts = atoms.filter((a) => a.rel.includes("/lines/"));
+  const atomFiles = atoms.filter((a) => !a.rel.includes("/lines/"));
+  if (linePts.length) {
+    const g = new Map<string, ParsedAtom[]>();
+    for (const a of linePts) {
+      const k = a.rel.split("#")[0]!;
+      const arr = g.get(k) ?? [];
+      arr.push(a);
+      g.set(k, arr);
+    }
+    const keys = [...g.keys()].sort().reverse();
+    const shown = keys.slice(0, 40);
+    if (keys.length > shown.length) omitted.push(`线 ${keys.length - shown.length} 条`);
+    for (const k of shown) {
+      const pts = (g.get(k) ?? []).sort((x, y) => `${x.date} ${x.time}`.localeCompare(`${y.date} ${y.time}`));
+      const first = pts[0]!;
+      const last = pts[pts.length - 1]!;
+      lines.push(`- \`${k}\` · ${pts.length} 点 · ${first.date} ${first.time}–${last.time}`);
+    }
+  } else if (atomFiles.length) {
+    const o = renderByDate(atomFiles, 40, lines);
     if (o > 0) omitted.push(`近期点 ${o} 条`);
+  } else {
+    lines.push("（暂无）");
   }
   if (linePts.length && atomFiles.length) {
-    lines.push("", `## 历史 atom（line 模式不再新增，共 ${atomFiles.length}，可迁移进线）`);
+    lines.push("", `## 历史 atom（line 模式不再新增，共 ${atomFiles.length}）`);
     const o2 = renderByDate(atomFiles, 12, lines);
     if (o2 > 0) omitted.push(`历史 atom ${o2} 条`);
   }

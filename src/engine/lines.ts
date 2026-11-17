@@ -66,7 +66,7 @@ export const buildLineFiles = (atoms: ParsedAtom[], gapMinutes = 60): BuiltLine[
       points = 0;
     }
     seq += 1;
-    const p: LinePoint = { seq, at: at.slice(11), kind: a.kind, rel: a.rel, text: pointTextOf(a), body: a.body };
+    const p: LinePoint = { seq, at: at.slice(11), kind: a.kind, rel: `.shadow/lines/${curId}.md#${seq}`, text: pointTextOf(a), body: a.body };
     curText = appendPoint(curText, { lineId: curId, session: a.agent || "", entry: a.entry || "", startAt }, p);
     points += 1;
     lastAt = at;
@@ -154,19 +154,36 @@ export const loadAtomsFromLines = async (
  */
 export const unionByRel = (fromLines: ParsedAtom[], fromAtoms: ParsedAtom[]): ParsedAtom[] => {
   const m = new Map<string, ParsedAtom>();
-  for (const a of fromAtoms) m.set(a.rel, a); // atoms 优先
-  const bodies = new Set(fromAtoms.map((a) => a.body));
-  for (const a of fromLines) {
-    if (bodies.has(a.body)) continue; // 与 atom 同内容的线点（旧 materialize 派生）→ 去重，防双计
-    if (m.has(a.rel)) continue;
-    m.set(a.rel, a);
-  }
+  for (const a of fromAtoms) m.set(a.rel, a); // atoms 优先（rel 唯一）
+  for (const a of fromLines) if (!m.has(a.rel)) m.set(a.rel, a);
   return [...m.values()];
 };
 
+/** 收集冷线（最后点早于 now-olderThanDays）；archive 与 forget 共用。 */
+const collectCold = async (
+  fs: FsPort,
+  ws: string,
+  olderThanDays: number,
+  now?: string,
+): Promise<{ base: string; cutoff: string; candidates: string[] }> => {
+  const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
+  const dir = `${base}/.shadow/lines`;
+  const ls = await fs.listDir(dir);
+  if (!ls.ok) return { base, cutoff: "", candidates: [] };
+  const entries: { name: string; text: string }[] = [];
+  for (const f of ls.value) {
+    if (!f.name.endsWith(".md")) continue;
+    const r = await fs.readText(`${dir}/${f.name}`);
+    if (r.ok) entries.push({ name: f.name, text: r.value });
+  }
+  const nowMs = now ? new Date(now).getTime() : Date.now();
+  const cutoff = new Date(nowMs - Math.max(0, olderThanDays) * 86_400_000).toISOString();
+  return { base, cutoff, candidates: selectColdLines(entries, cutoff) };
+};
+
 /**
- * 线级遗忘/保留：把「最后点早于 now-olderThanDays 天」的冷线整条移入 `.shadow/.trash/lines-forgotten-<ts>`（不裸删、可回退）。
- * 移动后读路径（loadLines 只读 .shadow/lines）不再加载 → 真正 bound 读规模。opts.apply=false 为 dry-run。
+ * 线级遗忘/保留：把冷线整条移入 `.shadow/.trash/lines-forgotten-<ts>`（不裸删、可回退）。
+ * 移动后读路径（loadLines 只读 .shadow/lines + archive）不再加载 → 真正 bound 读规模。opts.apply=false 为 dry-run。
  */
 export const forgetColdLines = async (
   fs: FsPort,
@@ -174,27 +191,16 @@ export const forgetColdLines = async (
   olderThanDays: number,
   opts: { apply: boolean; now?: string },
 ): Promise<{ cutoff: string; candidates: string[]; moved: number }> => {
-  const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
-  const dir = `${base}/.shadow/lines`;
-  const ls = await fs.listDir(dir);
-  if (!ls.ok) return { cutoff: "", candidates: [], moved: 0 };
-  const entries: { name: string; text: string }[] = [];
-  for (const f of ls.value) {
-    if (!f.name.endsWith(".md")) continue;
-    const r = await fs.readText(`${dir}/${f.name}`);
-    if (r.ok) entries.push({ name: f.name, text: r.value });
-  }
-  const nowMs = opts.now ? new Date(opts.now).getTime() : Date.now();
-  const cutoff = new Date(nowMs - Math.max(0, olderThanDays) * 86_400_000).toISOString();
-  const candidates = selectColdLines(entries, cutoff);
+  const { base, cutoff, candidates } = await collectCold(fs, ws, olderThanDays, opts.now);
   let moved = 0;
   if (opts.apply && candidates.length) {
+    const nowMs = opts.now ? new Date(opts.now).getTime() : Date.now();
     const ts = new Date(nowMs).toISOString().replace(/[:.]/g, "-");
     const trash = `${base}/.shadow/.trash/lines-forgotten-${ts}`;
     const mk = await fs.mkdirp(trash);
     if (mk.ok) {
       for (const name of candidates) {
-        const r = await fs.rename(`${dir}/${name}`, `${trash}/${name}`);
+        const r = await fs.rename(`${base}/.shadow/lines/${name}`, `${trash}/${name}`);
         if (r.ok) moved += 1;
       }
     }
@@ -209,26 +215,14 @@ export const archiveColdLines = async (
   olderThanDays: number,
   opts: { apply: boolean; now?: string },
 ): Promise<{ cutoff: string; candidates: string[]; moved: number }> => {
-  const base = String(ws).replace(/\\/g, "/").replace(/\/+$/, "");
-  const dir = `${base}/.shadow/lines`;
-  const arch = `${base}/.shadow/archive/lines`;
-  const ls = await fs.listDir(dir);
-  if (!ls.ok) return { cutoff: "", candidates: [], moved: 0 };
-  const entries: { name: string; text: string }[] = [];
-  for (const f of ls.value) {
-    if (!f.name.endsWith(".md")) continue;
-    const r = await fs.readText(`${dir}/${f.name}`);
-    if (r.ok) entries.push({ name: f.name, text: r.value });
-  }
-  const nowMs = opts.now ? new Date(opts.now).getTime() : Date.now();
-  const cutoff = new Date(nowMs - Math.max(0, olderThanDays) * 86_400_000).toISOString();
-  const candidates = selectColdLines(entries, cutoff);
+  const { base, cutoff, candidates } = await collectCold(fs, ws, olderThanDays, opts.now);
   let moved = 0;
   if (opts.apply && candidates.length) {
+    const arch = `${base}/.shadow/archive/lines`;
     const mk = await fs.mkdirp(arch);
     if (mk.ok) {
       for (const name of candidates) {
-        const r = await fs.rename(`${dir}/${name}`, `${arch}/${name}`);
+        const r = await fs.rename(`${base}/.shadow/lines/${name}`, `${arch}/${name}`);
         if (r.ok) moved += 1;
       }
     }

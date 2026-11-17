@@ -1,5 +1,5 @@
 /**
- * v2 contract — 配置（11 键）。
+ * v2 contract — 配置（11 个顶层键；capture/forget 含子键 unit/auto）。
  *
  * 原则：显式 0 保留（不写 `|| default`）；未知键在 normalize 时收集为 warnings，不静默。
  */

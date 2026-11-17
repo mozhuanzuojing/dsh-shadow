@@ -20,7 +20,7 @@ assert.equal(built.reduce((n, l) => n + l.points, 0), atoms.length, "Σ线内点
 const s1Line = built.find((l) => l.rel.includes("src-a-ts"))!;
 assert.ok(s1Line, "应存在 s1/src-a.ts 的线文件");
 assert.ok(s1Line.text.includes("点#1") && s1Line.text.includes("点#2"), "一条线文件应装两点");
-assert.ok(s1Line.text.includes("{{rel=.shadow/atoms/"), "点必须带 atom rel 句柄（A 锚可回溯）");
+assert.ok(s1Line.text.includes("{{rel=.shadow/lines/"), "点必须带 线#seq 句柄");
 
 // 物化到 MemoryFs + 回读
 const fs = new MemoryFs();
@@ -31,8 +31,7 @@ const back = await loadLines(fs, "/ws");
 assert.equal(back.length, 2, "回读应得 2 条线");
 const totalPts = back.reduce((n, l) => n + l.points.length, 0);
 assert.equal(totalPts, atoms.length, "回读点数应守恒");
-const relSet = new Set(atoms.map((a) => a.rel));
-assert.ok(back.flatMap((l) => l.points).every((p) => relSet.has(p.rel)), "回读的每个点都应能解析回 atom");
+assert.ok(back.flatMap((l) => l.points).every((p) => p.rel.includes("/lines/")), "回读的点句柄应为线#seq");
 
 // 幂等：再物化不重写（written=0）
 const m2 = await materializeLines(fs, "/ws", atoms, undefined, 60);
@@ -42,26 +41,19 @@ assert.equal(m2.written, 0, "内容不变应幂等不重写");
 const rec = await loadAtomsFromLines(fs, "/ws");
 assert.equal(rec.errors.length, 0, `重建不应有错误：${rec.errors.join("；")}`);
 assert.equal(rec.atoms.length, atoms.length, "重建点数应守恒");
-const origByRel = new Map(atoms.map((a) => [a.rel, a]));
+const origByBody = new Map(atoms.map((a) => [a.body, a]));
 for (const a of rec.atoms) {
-  const o = origByRel.get(a.rel);
-  assert.ok(o, `重建的点 rel 应能对应原 atom：${a.rel}`);
-  assert.equal(a.body, o!.body, "重建 body 必须与原 atom 逐字相等");
+  const o = origByBody.get(a.body);
+  assert.ok(o, "重建点的 body 应能对应原 atom");
   assert.equal(a.date, o!.date, "重建 date 应正确（从 when() 补回）");
   assert.equal(a.time, o!.time, "重建 time 应正确（从 when() 补回）");
   assert.equal(a.decisions.length, o!.decisions.length, "重建 decisions 数应一致");
   assert.equal(a.userMessages.length, o!.userMessages.length, "重建 userMessages 数应一致");
 }
 
-// 并集去重：迁移后 atoms(新点) 与 lines(老点) 都要可见、且按 rel 不重复
-const u = unionByRel(rec.atoms.slice(0, 2), atoms); // 模拟：线里只有部分老点，atoms 里还有全部
-assert.equal(u.length, atoms.length, "并集按 rel 去重后应等于全集");
-assert.equal(new Set(u.map((x) => x.rel)).size, u.length, "并集不应有重复 rel");
-
-// 旧 materialize 派生线点（正文与 atom 相同）不得与 atom 双计
-const dupLine = { ...atoms[0]!, rel: ".shadow/lines/old.md#1" };
-const u2 = unionByRel([dupLine], atoms);
-assert.equal(u2.length, atoms.length, "与 atom 同正文的线点应被去重（防双计）");
+// 并集按 rel 去重（同 rel 不重复；不再按正文去重，避免误删同文不同点）
+const u = unionByRel([rec.atoms[0]!], rec.atoms);
+assert.equal(u.length, rec.atoms.length, "并集按 rel 去重");
 
 console.log("✔ lines-materialize：点→线物化（一文件多点）· Σ线内点守恒 · 点带 rel 句柄 · 回读可解析 · 幂等");
 

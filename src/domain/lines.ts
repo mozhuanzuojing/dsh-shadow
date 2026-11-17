@@ -38,11 +38,14 @@ export const renderLineHeader = (h: LineHeader): string =>
     "",
   ].join("\n");
 
+/** 渲染单个点行（供 append / 追加使用）。 */
+export const renderPointLine = (p: LinePoint): string =>
+  `- [点#${p.seq} ${oneLine(p.at)} ${oneLine(p.kind)}] ${oneLine(p.text)} {{rel=${oneLine(p.rel)}}} {{b64=${toB64(p.body ?? p.text ?? "")}}}`;
+
 /** 把点追加到线文本末尾；lineText=null 时新建线。返回新文本。 */
 export const appendPoint = (lineText: string | null, h: LineHeader, p: LinePoint): string => {
   const base = lineText ?? renderLineHeader(h);
-  const entry = `- [点#${p.seq} ${oneLine(p.at)} ${oneLine(p.kind)}] ${oneLine(p.text)} {{rel=${oneLine(p.rel)}}} {{b64=${toB64(p.body ?? p.text ?? "")}}}`;
-  return `${base.replace(/\s+$/, "")}\n${entry}\n`;
+  return `${base.replace(/\s+$/, "")}\n${renderPointLine(p)}\n`;
 };
 
 /** 解析线文本 → 点列表（含完整正文 body；供重建 / 降维 / 迁移）。 */
