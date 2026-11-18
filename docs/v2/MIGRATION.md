@@ -8,7 +8,7 @@
 - **写入改为线源**：`capture.unit` 默认 `line`——同一 `session+入口+连续段`把每回合的点**追加到一条线文件** `.shadow/lines/<…>.md`（`appendText` 近原子追加；宿主无 `appendText` 能力时退化为整写），不再一回合一个 atom。`capture.unit:"atom"` 可回退到旧写法。
 - **读 = atoms ∪ lines**（按 rel + body 去重）；`dim:line` 读**物理线源**（`.shadow/lines` + `.shadow/archive/lines`），不再按 gap 重算。
 - **两种「线」口径**：`dim:line` 按**物理线文件**（`session + 入口` 连续段）；`episode` / `face` / `recovery` 按 **`project|agent` + gap** 重分段。二者同名不同切法，按用途选用（物理线用于「同一对话段」回放，Episode 用于「同一件事」聚合）。
-- **保留/归档/遗忘（线级）**：`tools/archive-lines.ts`（冷但可读，移入 `.shadow/archive/lines`）、`tools/forget-lines.ts`（移出读入 `.trash`，可回退）；`forget.auto`（默认 `false`）按 `forget.staleDays` 自动遗忘。
+- **保留/归档/遗忘（线级）**：`tools/archive-lines.ts`（冷但可读，移入 `.shadow/archive/lines`）、`tools/forget-lines.ts`（移出读入 `.trash`，可回退）；`forget.auto`（**默认 `true`**，设 `false` 关闭）按 `forget.staleDays` 自动遗忘。
 - **迁移**：`tools/migrate-atoms-to-lines.ts`（atom→线，校验按 body 逐字相等后 `--apply` 移 atom 入 `.trash`）。
 - **性能 / 大语料**：读用 `loadAtomsFromLinesCached`（stat `version` 签名缓存）；写入点后本轮会重解析一次线；超大语料请定期用 `tools/archive-lines.ts`（冷但可读）/ `tools/forget-lines.ts`（移出读）控制热集，并保持**单写者**（同工作区单宿主，跨进程无锁）。
 - **升级后**：需重启宿主使新 dist 生效；回滚到 v2 前需把 `.trash/atoms-migrated-*` 移回 `.shadow/atoms`（v2 只读 atoms）。单写者假设：同工作区建议单宿主写（跨进程无锁）。

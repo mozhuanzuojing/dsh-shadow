@@ -66,7 +66,7 @@ export const normalizeConfig = (raw: ShadowConfig | undefined, warnings: string[
       staleDays: Math.max(1, numOr(c.forget?.staleDays, 14)),
       minHits: Math.max(0, numOr(c.forget?.minHits, 0)),
       maxActive: Math.max(0, numOr(c.forget?.maxActive, 2000)),
-      auto: c.forget?.auto === true,
+      auto: c.forget?.auto !== false,
     },
     compact: {
       gapMinutes: Math.max(0, numOr(c.compact?.gapMinutes, 60)),

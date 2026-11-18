@@ -91,7 +91,7 @@ node tools/archive-maintenance.ts --ws="D:/project/local-workbench" --apply --pu
 
 - `shadow_toolset` 的 install **真机执行路径未验证**（测试用假 runner）；台账版本是 v1 2026-09 快照，不是本机实测；探测失败只说「未检出」（PATH 是宿主启动快照）。
 - `forget` 的陈旧类遗忘仍默认关闭（`minHits=0`）；**`maxActive` 默认 2000**（超出按最旧移出活跃集，标 `archived`，文件不删）。要改上限/启用陈旧遗忘需显式配置。Forget≠Delete：只移出活跃集，文件不删。
-- **按线落盘（v3，默认）**：`capture.unit`（默认 `line`）——同一 `session+入口+连续段`把每回合的点**追加到一条线文件** `.shadow/lines/`（不再一回合一个 atom）；`capture.unit:"atom"` 兼容旧写法。读 = `atoms ∪ lines`。`forget.auto`（默认 `false`）按 `forget.staleDays` 自动把冷线移出读路径（入 `.trash`，可回退）；归档用 `tools/archive-lines.ts`（冷但仍可读）。
+- **按线落盘（v3，默认）**：`capture.unit`（默认 `line`）——同一 `session+入口+连续段`把每回合的点**追加到一条线文件** `.shadow/lines/`（不再一回合一个 atom）；`capture.unit:"atom"` 兼容旧写法。读 = `atoms ∪ lines`。`forget.auto`（**默认 `true`**，设 `false` 关闭）按 `forget.staleDays` 自动把冷线移出读路径（入 `.trash`，可回退）；归档用 `tools/archive-lines.ts`（冷但仍可读）。
 - 派生件只在**无参 `read_shadow`** 时物化（`indexes/{materials,affaires,episodes,abstracts}`）；每次物化会 **GC 孤儿派生卡 + 每个 `.history/` 只留最近 2 个版本**（v1 遗留的 `projections/` 不在 GC 范围）；删除 `indexes/` 可整份重建。
 - **按日归档**：无参 `read_shadow` **及 capture 成功写入后（60s 节流）** 把 `date < today` 的 atoms 写成 `.shadow/archive/<date>.jsonl`（完整原文）+ `<date>.md`（导航）+ `_index.json`（count/sha256/rels/逐条 recordHashes）；逐条 hash 校验通过后才移动热文件到 `.shadow/.trash/<date>/`（保留 7 天，过期清理）；pinned 不删；迟到/内容变化会先补写 archive；坏归档返回部分 atoms + Signal。
   - **仍存在**：真实多进程/断电故障注入未做；`read_shadow` 的 `rel` 是逻辑身份，归档 atom 另带 `archiveRel`；decision/episode 的路径展示已用 archiveRel，但 `memoryRefs` 仍是逻辑 rel；语义 compaction（合并/摘要）与候选预筛（性能）尚未做。
