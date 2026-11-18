@@ -6,11 +6,11 @@
  * 本模块只做纯派生：无 I/O、无时钟、无随机。
  */
 
-/** 观察者透镜：谁在看、关注什么、忽略什么、边界在哪（来自 soul 或默认）。 */
-export interface ObserverLens {
+import type { Lens } from "../../domain/lens.js";
+
+/** 观察者透镜：公共 Lens（关注/忽略）+ 身份/边界（来自 soul 或默认）。 */
+export interface ObserverLens extends Lens {
   id: string;
-  whatMatters: string[];
-  whatToIgnore: string[];
   boundaries: string[];
 }
 

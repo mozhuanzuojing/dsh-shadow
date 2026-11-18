@@ -30,8 +30,8 @@
 | [0024](./0024-observer-projection-core.md) | Observer 为中心的投影核心（路 B）：从「检索点」到「整全→面→点」 | accepted |
 | [0025](./0025-projection-as-default.md) | 投影提为默认：无参/主题读以「面」为第一入口，检索点下钻 | accepted |
 | [0026](./0026-point-line-face-consciousness.md) | 点→线→面→观察意识：升降维双锚记忆（A+B） | accepted |
-| [0027](./0027-task-axis-optional-default.md) | 任务面提为「可选默认轴」（`face.axis`，默认仍会话） | proposal |
-| [0028](./0028-scope-dimension.md) | scope 轴升维：会话 → 工作区 → 用户态（多层根 + scope 坐标） | proposal |
+| [0027](./0027-task-axis-optional-default.md) | 任务面提为「可选默认轴」（`face.axis`，默认仍会话） | accepted |
+| [0028](./0028-scope-dimension.md) | scope 轴升维：会话 → 工作区 → 用户态（多层根 + scope 坐标） | accepted |
 
 ## 状态枚举
 

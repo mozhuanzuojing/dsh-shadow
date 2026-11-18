@@ -8,6 +8,7 @@
  */
 
 import type { ParsedAtom } from "../contract/types.js";
+import type { Lens } from "./lens.js";
 import { deriveConsciousness, deriveFaces, type Consciousness, type Face, type FaceAxis } from "./dimensions.js";
 
 export interface WorkspaceSlice {
@@ -36,11 +37,8 @@ export const splitScopeHandle = (handle: string): { ws: string; rel: string } =>
   return i < 0 ? { ws: "", rel: String(handle) } : { ws: handle.slice(0, i), rel: handle.slice(i + 2) };
 };
 
-/** 面级隐私/视野过滤（ADR-0028）：按 observer 的 whatMatters/whatToIgnore 过滤面，被过滤项显式返回（不静默）。 */
-export interface ScopeLens {
-  whatMatters: string[];
-  whatToIgnore: string[];
-}
+/** 面级隐私/视野过滤（ADR-0028）：按 Observer 公共透镜 `Lens`（whatMatters/whatToIgnore）过滤面，被过滤项显式返回（不静默）。 */
+export type ScopeLens = Lens;
 export const filterFacesByLens = (faces: Face[], lens: ScopeLens): { kept: Face[]; excluded: { key: string; reason: string }[] } => {
   const kept: Face[] = [];
   const excluded: { key: string; reason: string }[] = [];
