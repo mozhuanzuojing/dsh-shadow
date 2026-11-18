@@ -83,8 +83,24 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
   }
   if (req.taste) {
     const r = await deps.fs.readText(`${deps.ws}/${TASTE_FILE}`);
-    if (!r.ok) return `# Taste\n\n（${r.error.code === "NOT_FOUND" ? "尚未配置 .shadow/taste/taste.json" : `读取失败：${r.error.message}`}）`;
-    return `# Taste\n\n\`\`\`json\n${r.value.slice(0, 3000)}\n\`\`\``;
+    if (!r.ok) return `# Taste\n\n（${r.error.code === "NOT_FOUND" ? "尚未配置 .shadow/taste/taste.json（可放 {\"version\":1,\"prefer\":[],\"avoid\":[],\"notes\":[]}）" : `读取失败：${r.error.message}`}）`;
+    const out = ["# Taste（curated 偏好 · 工作区级）", ""];
+    try {
+      const j = JSON.parse(r.value) as Record<string, unknown>;
+      const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))) : []);
+      if (j.version !== undefined) out.push(`- 版本：${String(j.version)}`);
+      const prefer = arr(j.prefer ?? j.like ?? j["喜欢"]);
+      if (prefer.length) out.push("## 偏好", ...prefer.map((x) => `- ${x}`), "");
+      if (arr(j.avoid).length) out.push("## 避免", ...arr(j.avoid).map((x) => `- ${x}`), "");
+      if (arr(j.notes).length) out.push("## 备注", ...arr(j.notes).map((x) => `- ${x}`), "");
+      const known = new Set(["version", "prefer", "like", "喜欢", "avoid", "notes"]);
+      const rest = Object.fromEntries(Object.entries(j).filter(([k]) => !known.has(k)));
+      if (Object.keys(rest).length) out.push("## 其它", "```json", JSON.stringify(rest, null, 2).slice(0, 1500), "```");
+      if (out.length <= 2) out.push("（空；支持 prefer / avoid / notes）");
+    } catch {
+      out.push("（解析失败，原文如下）", "```json", r.value.slice(0, 2000), "```");
+    }
+    return out.join("\n");
   }
   if (req.experience) {
     const tasks = deriveTasks(atoms);

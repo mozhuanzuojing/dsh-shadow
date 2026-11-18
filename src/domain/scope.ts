@@ -61,7 +61,7 @@ export const filterFacesByLens = (faces: Face[], lens: ScopeLens): { kept: Face[
 /** 渲染 user 级摘要 markdown（只派生摘要，不含原文；原文仍留各工作区）。纯函数。 */
 export const renderUserSummary = (
   agg: { faces: Face[]; consciousness: Consciousness; points: number },
-  opts: { roots: string[]; generatedAt: string; lim?: number; excluded?: { key: string; reason: string }[] },
+  opts: { roots: string[]; generatedAt: string; lim?: number; excluded?: { key: string; reason: string }[]; extra?: string[] },
 ): string => {
   const lim = opts.lim ?? 20;
   const seg: string[] = [
@@ -87,5 +87,6 @@ export const renderUserSummary = (
     for (const e of opts.excluded.slice(0, lim)) seg.push(`- ${String(e.key).slice(0, 40)}：${e.reason}`);
     seg.push("");
   }
+  for (const s of opts.extra ?? []) if (s) seg.push("", s);
   return seg.join("\n");
 };

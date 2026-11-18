@@ -80,14 +80,26 @@ const main = async (): Promise<void> => {
   const keptPoints = kept.reduce((n, f) => n + f.points, 0);
   console.log(`[user-aggregate] 隐私/视野：soul=${soulNote} · 保留面 ${kept.length} · 过滤面 ${excluded.length}（${agg.points - keptPoints} 点，显式披露）`);
 
-  const md = renderUserSummary({ faces: kept, consciousness: agg.consciousness, points: agg.points }, { roots, generatedAt: new Date().toISOString(), lim: 30, excluded });
+  // 用户级 taste 锚：<userRoot>/taste.json（用户级）+ 各 workspace 的 .shadow/taste/taste.json（覆盖 user）
+  const tasteSources: { label: string; text: string }[] = [];
+  const ut = await realFs.readText(`${userRoot}/taste.json`);
+  if (ut.ok) tasteSources.push({ label: `userRoot（${userRoot}/taste.json，用户级锚）`, text: ut.value });
+  for (const root of roots) {
+    const wt = await realFs.readText(`${root}/.shadow/taste/taste.json`);
+    if (wt.ok) tasteSources.push({ label: `workspace ${root}（覆盖 user）`, text: wt.value });
+  }
+  const tasteSection = tasteSources.length
+    ? ["## Taste（用户级锚 · workspace 覆盖 user）", ...tasteSources.map((t) => `### ${t.label}\n\`\`\`json\n${t.text.slice(0, 2000)}\n\`\`\``)].join("\n")
+    : "";
+
+  const md = renderUserSummary({ faces: kept, consciousness: agg.consciousness, points: agg.points }, { roots, generatedAt: new Date().toISOString(), lim: 30, excluded, extra: tasteSection ? [tasteSection] : [] });
   if (!apply) {
     console.log(`[user-aggregate] ✅ dry-run。加 --apply 写到：${userRoot}/user.md`);
     console.log("--- 预览（前 600 字）---\n" + md.slice(0, 600));
     return;
   }
   const w1 = await realFs.writeText(`${userRoot}/user.md`, md);
-  const json = JSON.stringify({ generatedAt: new Date().toISOString(), roots, points: total, faces: agg.faces.length, keptFaces: kept.length, excludedFaces: excluded, consciousness: agg.consciousness }, null, 2);
+  const json = JSON.stringify({ generatedAt: new Date().toISOString(), roots, points: total, faces: agg.faces.length, keptFaces: kept.length, excludedFaces: excluded, tasteSources: tasteSources.map((t) => t.label), consciousness: agg.consciousness }, null, 2);
   const w2 = await realFs.writeText(`${userRoot}/user.json`, json);
   if (!w1.ok || !w2.ok) {
     console.log(`[user-aggregate] ❌ 写 userRoot 失败：${(!w1.ok && w1.error.message) || (!w2.ok && w2.error.message)}`);
