@@ -21,8 +21,9 @@ export interface ShadowFact {
 
 const ASSIGN = /^\s*(.{1,40}?)\s*(?:是|为|=|＝|：|:)\s*(.+?)\s*$/;
 const BODY_LINE = /^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/;
+const SENT = /[。！？!?；;\n]+/; // 句界：防止「X 是 …」的主语跨句错配到后句的路径
 
-/** 从单个 atom 的正文抽事实（只认「用户：」行，且必须含路径）。 */
+/** 从单个 atom 的正文抽事实（只认「用户：」行；按句处理；只认同句 value 内含路径）。 */
 export const extractFactsFromAtom = (atom: ParsedAtom): ShadowFact[] => {
   const out: ShadowFact[] = [];
   for (const raw of atom.body.split("\n")) {
@@ -30,14 +31,19 @@ export const extractFactsFromAtom = (atom: ParsedAtom): ShadowFact[] => {
     const txt = (m ? m[1]! : raw).trim();
     if (!/^用户：/.test(txt)) continue;
     const line = txt.replace(/^用户：/, "").trim();
-    const am = ASSIGN.exec(line);
-    if (!am) continue;
-    const subject = am[1]!.trim();
-    const valueRaw = am[2]!.trim();
-    const evidence = evidencePathsOf(valueRaw)[0] ?? evidencePathsOf(line)[0];
-    if (!evidence) continue; // 只抽「带路径」的项目事实（可核验；避免把闲聊当事实）
-    if (subject.length < 2) continue;
-    out.push({ subject, value: evidence, evidence, sourceRel: atom.rel, date: atom.date });
+    for (const clauseRaw of line.split(SENT)) {
+      const clause = clauseRaw.trim();
+      if (!clause) continue;
+      const am = ASSIGN.exec(clause);
+      if (!am) continue;
+      const subject = am[1]!.trim();
+      const valueRaw = am[2]!.trim();
+      if (subject.length < 2) continue;
+      // 只认 value 子句内的路径（同一句），避免把别的句子里的 password.txt/.env 错配给本句主语。
+      const evidence = evidencePathsOf(valueRaw)[0];
+      if (!evidence) continue; // 只抽「带路径」的项目事实（可核验；避免把闲聊当事实）
+      out.push({ subject, value: evidence, evidence, sourceRel: atom.rel, date: atom.date });
+    }
   }
   return out;
 };

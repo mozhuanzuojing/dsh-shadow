@@ -48,3 +48,13 @@ if (!st.ok) throw new Error(st.error.message);
 assert.ok(st.value.text.includes("not_found"), "stale 应标 not_found");
 
 console.log("✔ facts：用户原话抽 X=路径 / 证据状态 / topic 过滤 / 索引并入 / 闲聊不采");
+
+// 5) 回归：跨句不得把后句路径错配给前句主语（"仓库名字改…。…password.txt" 不应产出 仓库名字改=password.txt）
+import { parseAtom } from "../../dist/domain/parse.js";
+import { extractFactsFromAtom } from "../../dist/domain/facts.js";
+const bad = parseAtom(atomText({ entry: "x", user: "仓库名字改为和文件夹一样。同时 支持.env环境变量代替 password.txt" }), ".shadow/atoms/x.md", "x.md");
+const badFacts = extractFactsFromAtom(bad);
+assert.ok(!badFacts.some((f) => f.subject.includes("仓库名字改") && /password/.test(f.value)), `跨句不得错配：${JSON.stringify(badFacts)}`);
+const good = parseAtom(atomText({ entry: "y", user: "工程入口：src/index.ts" }), ".shadow/atoms/y.md", "y.md");
+assert.ok(extractFactsFromAtom(good).some((f) => f.subject.includes("工程入口") && f.value.includes("index.ts")), "同句正常抽取");
+console.log("✔ facts-edge：跨句路径不错配 · 同句正常抽取");
