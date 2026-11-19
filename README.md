@@ -1,22 +1,23 @@
-# dsh-shadow v2
+# dsh-shadow v3
 
-> **给 agent 记「为什么」的投影记忆——Observer 是中心，文件是投影面。** 每条记忆是工作区里的一个 markdown 文件（`.shadow/atoms/`，证据）；真正的产品是「面」：把若干点还原成这件事，并诚实标出看不到的整全（盲区）。换会话能按主题捞回，并告诉你它是否还作数。
+> **给 agent 记「为什么」的多维投影记忆——Observer 是中心，文件是投影面；而每个点都带着它那一句话的庞大背景。** 每句话都不是孤零零一句：背后有坐标、证据链、材料、当时的决策与动作。v3 把这份**完整背景随点一起保存**（点内嵌完整正文），再沿「时间 × 同一件事」升维成 线 → 面 → 观察意识；真正的产品仍是「面」，并诚实标出看不到的整全（盲区）。
 >
-> 状态：**v2.12.4 已发布（2026-11-07）**。v1 的完整实现与文档冻结在 `legacy/v1` 分支与 tag `legacy-v1`；npm registry 尚未发布（按 [ADR-0012](./docs/adr/0012-release-and-versioning.md) 另行执行）。变更见 [CHANGELOG](./CHANGELOG.md)，升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)。
+> 状态：**v3.0.4（2026-11-19）**。v1 冻结在 `legacy/v1`（tag `legacy-v1`）；升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)，变更见 [CHANGELOG](./CHANGELOG.md)。
 
 ## 它做什么
 
-- **采集**：每个回合压成一条 atom（背景/材料 + 用户提示/决策 + 动作 + 概况 + 摘要）。
+- **采集（背景不丢）**：每个回合压成一个「点」——含**完整背景/线索**（坐标 · 证据链 · 材料 · 用户提示/决策 · 动作 · 概况 · 摘要），点内嵌完整正文，追加进 `.shadow/lines/<…>.md`（`capture.unit=line` 默认，不再一回合一个 atom）。完整背景可**无损重建**（`Σ线内点==原子数`、逐字相等）。
+- **载体口径**：**点 = 最小不可变 Atom 证据（内藏完整背景）**；**线 = 容器 / 源视图**；atom 文件退为写侧兼容。读 = `atoms ∪ lines`。
 - **默认读先给「面」**：`read_shadow()` / `read_shadow(topic)` 首段是投影「面」（Observer 视角取景 → 组装 Episode/Task/Decision/材料 + 盲区），随后是「下钻：检索点」；`raw:true` 取纯检索。
 - **召回 / 查询**：`recall_shadow(query)` 任务恢复包；`shadow_query` 跨类型查；`read_shadow({project:true, topic})` 给完整面（默认面是 ≤800 字概览）。
-- **可核查**：每条记忆带路径句柄与证据指针；派生件可整份重建；坏件 ≠ 空件。
+- **可核查**：每条记忆带路径句柄与证据指针；派生件可整份重建；坏件 ≠ 空件。完整背景经重建（`read_shadow(topic)` / `loadAtomsFromLines`）可读；点正文为**单行 base64**（防多行/大括号破坏格式），故人工 `grep` 不友好——这是已知权衡，不是背景丢失。
 - **降级可见**：读/写/索引失败有 `Signal`，恢复后清除；未知 mode 显式失败。
 
 ## 默认面（v2）
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
-| `read_shadow` | 15 | 10 个核心 mode + 7 个核心透镜（含 `facts`、`project`）+ 维读 `dim`（line/face/task/consciousness） |
+| `read_shadow` | 18 | 10 个核心 mode + 核心透镜（含 `facts`、`project`、`direction`、`inquiry`）+ 维读 `dim`；`direction`/`inquiry` 可配 `candidates` 按偏移排序、给 AI 多维背景问询 |
 | `recall_shadow` | 2 | 内部 = `read_shadow({mode:"recovery"})` |
 | `shadow_query` | 3 | 跨类型 ShadowNode（带 evidence） |
 | `recall_similar` | 2 | 相似过往任务卡（当时请求/决策/结果/教训/来源），按相关+新近+重要性召回 |

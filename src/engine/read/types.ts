@@ -51,6 +51,12 @@ export interface ReadRequest {
   similar?: boolean;
   /** 按维读取（ADR-0026）：line / face / consciousness。 */
   dim?: string;
+  /** 隐式偏好方向估计（hybrid 规则信号+稀疏 TF-IDF 质心）：返回「方向假设·非采纳」+ 可选候选排序。 */
+  direction?: boolean;
+  /** 候选方向文本（配合 direction：按偏移最小排序，仅排序用、非采纳）。 */
+  candidates?: string[];
+  /** 对 AI 的问询（ADR-0030）：组装多维背景 + 问题，供 AI 推出「0 偏移方向」；插件只组装证据与问题、不裁决。 */
+  inquiry?: boolean;
 }
 
 export interface ModeOutput {

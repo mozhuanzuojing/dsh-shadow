@@ -32,6 +32,8 @@
 | [0026](./0026-point-line-face-consciousness.md) | 点→线→面→观察意识：升降维双锚记忆（A+B） | accepted |
 | [0027](./0027-task-axis-optional-default.md) | 任务面提为「可选默认轴」（`face.axis`，默认仍会话） | accepted |
 | [0028](./0028-scope-dimension.md) | scope 轴升维：会话 → 工作区 → 用户态（多层根 + scope 坐标） | accepted |
+| [0029](./0029-intent-direction.md) | 隐式偏好→最小偏移方向：规则信号+稀疏 TF-IDF 质心，`read_shadow({direction})` 只排序不裁决 | accepted |
+| [0030](./0030-ai-inquiry-multidim.md) | 对 AI 的多维背景问询：`read_shadow({inquiry})` 组装面/决策/口味/灵魂/证据 + 提问，供 AI 推出 0 偏移方向 | accepted |
 
 ## 状态枚举
 

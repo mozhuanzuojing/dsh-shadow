@@ -14,7 +14,7 @@ const toolset = tools.find((t) => t.name === "shadow_toolset")!;
 const similar = tools.find((t) => t.name === "recall_similar")!;
 const code = tools.find((t) => t.name === "search_code")!;
 
-assert.equal(Object.keys(read.parameters.properties).length, 15);
+assert.equal(Object.keys(read.parameters.properties).length, 18);
 assert.equal(Object.keys(recall.parameters.properties).length, 2);
 assert.equal(Object.keys(query.parameters.properties).length, 3);
 assert.equal(Object.keys(toolset.parameters.properties).length, 4);

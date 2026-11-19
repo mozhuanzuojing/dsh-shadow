@@ -9,6 +9,8 @@ import { CORE_MODES, isCoreMode, isLabMode, nearestModes } from "../../contract/
 import { SOUL_FILE, TASTE_FILE } from "../../contract/paths.js";
 import type { AtomMeta, ParsedAtom } from "../../contract/types.js";
 import { tokenize } from "../../domain/text.js";
+import { buildDirection, rankCandidates } from "../../domain/intent.js";
+import { renderInquiry } from "../../domain/inquiry.js";
 import { runProject } from "../project/run.js";
 import { dimensionView } from "./dimension.js";
 import { deriveDecisions, deriveTasks, renderDecisions, renderTasks } from "../../domain/views.js";
@@ -75,6 +77,24 @@ const metaOf = (deps: ReadDeps, atoms: ParsedAtom[]): Map<string, AtomMeta> => {
   return out;
 };
 
+const BODY_LINE_RE = /^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/;
+const userUtterances = (atoms: ParsedAtom[], topic: string): { text: string; at?: string }[] => {
+  const out: { text: string; at?: string }[] = [];
+  for (const a of atoms) {
+    if (topic && !`${a.entry} ${a.body}`.includes(topic)) continue;
+    for (const raw of a.body.split("\n")) {
+      const m = BODY_LINE_RE.exec(raw.trim());
+      const txt = (m ? m[1]! : raw).trim();
+      if (!/^用户：/.test(txt)) continue;
+      const clean = txt.replace(/^用户：/, "").trim();
+      if (/^(Time sampled|Current DSH|The available skill|Background subagent|This is an automatically|> ⚠|⚠)/i.test(clean)) continue;
+      if (/^\d{4}-\d\d-\d\dT\d/.test(clean)) continue;
+      out.push({ text: clean, at: a.date });
+    }
+  }
+  return out;
+};
+
 const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): Promise<string | undefined> => {
   if (req.soul) {
     const r = await deps.fs.readText(`${deps.ws}/${SOUL_FILE}`);
@@ -101,6 +121,57 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
       out.push("（解析失败，原文如下）", "```json", r.value.slice(0, 2000), "```");
     }
     return out.join("\n");
+  }
+  if (req.direction) {
+    const topic = String(req.topic ?? "").trim();
+    const dir = buildDirection(userUtterances(atoms, topic));
+    const out = ["# 意图方向（隐式偏好 · 方向假设 · 非采纳）", ""];
+    out.push(`- 样本：${dir.samples} 句用户原话 · 置信：${dir.confidence} · 状态：${dir.undecidable ? `不可判（${dir.reason}）` : "可判"}`);
+    if (dir.keywords.length) out.push(`- 方向关键词：${dir.keywords.join("、")}`);
+    if (dir.excluded.length) out.push(`- 已否决/被替换（候选命中即排除）：${dir.excluded.join("、")}`);
+    if (dir.preferred.length) out.push(`- 偏好：${dir.preferred.join("、")}`);
+    const sigCount = new Map<string, number>();
+    for (const s of dir.signals) sigCount.set(s.type, (sigCount.get(s.type) ?? 0) + 1);
+    if (sigCount.size) out.push(`- 信号：${[...sigCount].map(([k, v]) => `${k}×${v}`).join(" · ")}`);
+    if (req.candidates && req.candidates.length) {
+      const r = rankCandidates(dir, req.candidates.map(String));
+      out.push("", "## 候选排序（偏移最小优先）");
+      if (r.undecidable) out.push(`（方向不可判：${r.reason}）`);
+      for (const c of r.ranked) out.push(`- ${c.status === "excluded" ? "✗" : "✔"} ${c.candidate} · 偏移 ${c.deviation.toFixed(2)}${c.reason ? " · " + c.reason : ""}`);
+    }
+    out.push("", "> 仅用于排序（方向假设·非采纳），不判真假、不替用户裁决（C4）；样本不足或候选全否即「不可判」。");
+    return out.join("\n");
+  }
+  if (req.inquiry) {
+    const topic = String(req.topic ?? "").trim();
+    const direction = buildDirection(userUtterances(atoms, topic));
+    const SCAFFOLD = /(This is an automatically|Background subagent|Current DSH|The available skill|自动召回|⚠)/i;
+    const decLines = renderDecisions(deriveDecisions(atoms))
+      .split("\n")
+      .filter((l) => l.includes("〔user〕") && !SCAFFOLD.test(l) && (!topic || l.includes(topic)))
+      .slice(0, 20);
+    const decisionsText = decLines.length ? decLines.join("\n") : "";
+    const taskLines = renderTasks(deriveTasks(atoms), topic || undefined)
+      .split("\n")
+      .filter((l) => !topic || l.includes(topic) || /^#|^>/.test(l))
+      .slice(0, 40);
+    const tasksText = taskLines.length ? taskLines.join("\n") : "";
+    const readIf = async (p: string): Promise<string | undefined> => {
+      const r = await deps.fs.readText(p);
+      return r.ok ? r.value : undefined;
+    };
+    const soul = await readIf(`${deps.ws}/${SOUL_FILE}`);
+    const taste = await readIf(`${deps.ws}/${TASTE_FILE}`);
+    const evAtoms = topic ? atoms.filter((a) => `${a.entry} ${a.body}`.includes(topic)) : atoms;
+    const evidence = (evAtoms.length ? evAtoms : atoms).slice(-12).reverse().map((a) => ({ rel: a.rel, entry: a.entry, date: a.date }));
+    let candidatesText: string | undefined;
+    if (req.candidates && req.candidates.length) {
+      const r = rankCandidates(direction, req.candidates.map(String));
+      candidatesText = r.undecidable
+        ? `（方向不可判：${r.reason}）`
+        : r.ranked.map((c) => `- ${c.status === "excluded" ? "✗" : "✔"} ${c.candidate} · 偏移 ${c.deviation.toFixed(2)}${c.reason ? " · " + c.reason : ""}`).join("\n");
+    }
+    return renderInquiry({ topic, direction, decisionsText, tasksText, soul, taste, evidence, candidatesText });
   }
   if (req.experience) {
     const tasks = deriveTasks(atoms);
@@ -200,7 +271,7 @@ export const runRead = async (deps: ReadDeps, req: ReadRequest): Promise<Outcome
 
   let out: ModeOutput;
   const lensRequested = !String(req.mode ?? "").trim()
-    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true || req.project === true);
+    && (req.soul === true || req.taste === true || req.experience === true || req.judgment === true || req.verifyEvidence === true || req.facts === true || req.project === true || req.direction === true || req.inquiry === true);
   if (req.dim) {
     out = await dimensionView(depsWithMeta, activeAtoms, String(req.dim));
   } else if (req.similar) {

@@ -50,6 +50,9 @@ const toRequest = (args: Record<string, unknown>): ReadRequest => ({
   facts: args.facts === true,
   project: args.project === true,
   similar: args.similar === true,
+  direction: args.direction === true,
+  inquiry: args.inquiry === true,
+  candidates: Array.isArray(args.candidates) ? args.candidates.map(String) : undefined,
   dim: typeof args.dim === "string" ? args.dim : undefined,
 });
 
@@ -86,6 +89,9 @@ export const makeReadTool = (depsFactory: DepsFactory): RegisteredTool => ({
     facts: bool("读「项目事实」视图：从用户原话抽的「X 是/=/：<路径>」，逐条带 Evidence 状态（✓verified / ✗not_found / ?unavailable）。"),
     project: bool("投影视图（ADR-0024）：点 → 按 Observer lens（soul.json 的 what_matters/what_to_ignore）取景 → 组装「面」（Episode/Task/Decision/材料）+ 显式盲区/整全边界。不传=按现有 mode 检索。"),
     dim: str("按维读取（ADR-0026 升降维）：line=线(1维) / face=面(2维·会话轴) / task=面(2维·任务轴·按这件事) / consciousness=观察意识(n维)。不传=按 mode/topic 读。", { enum: ["line", "face", "task", "consciousness"] }),
+    direction: bool("隐式偏好方向估计（ADR-0029）：从用户多轮原话（不显式采纳/否决）用「规则信号+稀疏TF-IDF质心」估意图方向，返回「方向假设·非采纳」+ 已否决/偏好 + 信号；可配 candidates 按偏移最小排序。只排序、不判真假、不替用户裁决；样本不足/全否即不可判。"),
+    inquiry: bool("对 AI 的问询（ADR-0030）：把多维背景（方向假设/决策谱系/任务面/口味/灵魂/证据句柄/盲区）组装成上下文+结构化问题，供 AI 推出「0偏移方向」并校准词法估计；可配 candidates。插件只组装证据与问题，不裁决、不编造。"),
+    candidates: { type: "array", description: "可选：候选方向文本列表；配合 direction 用，按与用户意图方向的偏移最小排序（仅排序，非采纳）。", items: str("候选方向文本") },
   }),
   output: { schema: { type: "string" }, render: renderText },
   execute: async (args, exec) => executeRead(depsFactory, args, exec),
