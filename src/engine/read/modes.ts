@@ -26,7 +26,7 @@ import {
 import type { ForgetResult } from "../../domain/lifecycle.js";
 import { indexDerivedSection } from "../derived.js";
 import { materializeSkills, renderSkillsSection } from "../skills-out.js";
-import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededBy, bm25Fallback } from "./recall.js";
+import { scoreAtoms, selectWithinBudget, renderTopicRecall, supersededBy, bm25Fallback, cleanRetrievalAtoms } from "./recall.js";
 import type { ModeOutput, ReadDeps, ReadRequest } from "./types.js";
 
 const errText = (what: string, e: string): ModeOutput => ({
@@ -195,7 +195,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   if (!tokens.length) {
     return { body: `（查询为空）\n> 下一步：给一个主题词，如 \`read_shadow("auth")\`。`, matched: 0, returned: 0, dropped: 0, examples: [] };
   }
-  const base = scoreAtoms(atoms, tokens, {
+  const base = scoreAtoms(cleanRetrievalAtoms(atoms), tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
@@ -203,7 +203,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   // 证据冲突核验有 I/O：只对基础分前 200 名做，避免 8k 语料 × 12 路径的 stat 风暴。
   const topRels = new Set(base.slice(0, 200).map((s) => s.atom.rel));
   const conflicts = await conflictRels(deps, atoms.filter((a) => topRels.has(a.rel)));
-  let scored = scoreAtoms(atoms, tokens, {
+  let scored = scoreAtoms(cleanRetrievalAtoms(atoms), tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
@@ -213,7 +213,7 @@ export const topicView = async (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRe
   // 宽松兜底：严格匹配整体零结果时才用 BM25（中文 2-gram + 拉丁词）生成并排序候选（不改变既有命中）。
   let loose = false;
   if (!scored.length) {
-    scored = bm25Fallback(atoms, topic, { meta: deps.meta ?? new Map() });
+    scored = bm25Fallback(cleanRetrievalAtoms(atoms), topic, { meta: deps.meta ?? new Map() });
     loose = scored.length > 0;
   }
   const maxChars = deps.maxChars ?? Math.max(256, Math.min(8000, Number(req.maxTokens ?? deps.config.recall.budget))) * 4;
@@ -310,14 +310,14 @@ export const queryView = (deps: ReadDeps, atoms: ParsedAtom[], req: ReadRequest)
   const topic = String(req.topic ?? "").trim();
   const tokens = tokenize(topic);
   if (!tokens.length) return { body: "（查询为空）", matched: 0, returned: 0, dropped: 0, examples: [] };
-  let scored = scoreAtoms(atoms, tokens, {
+  let scored = scoreAtoms(cleanRetrievalAtoms(atoms), tokens, {
     config: deps.config,
     meta: deps.meta ?? new Map(),
     todayStr: deps.clock.today(),
   });
   let loose = false;
   if (!scored.length) {
-    scored = bm25Fallback(atoms, topic, { meta: deps.meta ?? new Map() });
+    scored = bm25Fallback(cleanRetrievalAtoms(atoms), topic, { meta: deps.meta ?? new Map() });
     loose = scored.length > 0;
   }
   const scope = Array.isArray(req.scope) ? new Set(req.scope) : undefined;

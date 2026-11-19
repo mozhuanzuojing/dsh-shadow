@@ -40,6 +40,7 @@
 | [0034](./0034-inquiry-wording-clarification.md) | 术语澄清：inquiry 是"供 AI 纠偏的多维背景（目标 0 偏移）"，非插件推出 0 偏移；真实标注集 n 小非统计 | accepted |
 | [0035](./0035-bundled-routing-skill.md) | 内置 bundled skill provider：`dsh-shadow-routing` 随插件走（不落 ~/.dsh/skills），装即出现、卸载即消失 | accepted |
 | [0036](./0036-dimension-wording.md) | 维度口径澄清：**四层投影（点→线→面→观察意识）+ 时间轴**；意识=全局单层聚合；面 task/project 实质、session/day 聚合 | accepted |
+| [0037](./0037-background-recall.md) | 频率相近的「大背景」召回：`read_shadow({background})` 去噪+用户行打分+2gram/罕见字 + 组装线/决策/口味/句柄；bench-recall 16/16、假阳0/15 | accepted |
 
 ## 状态枚举
 

@@ -36,6 +36,8 @@ export interface ParsedAtom {
   summary: string;
   axes: AtomAxes;
   materials: string[];
+  /** 信息（事实/材料/约束）：与决策并列，背景的一部分（来自 `> 信息：`）。 */
+  info?: string[];
   decisions: string[];
   decisionEvents: DecisionEvent[];
   userMessages: string[];

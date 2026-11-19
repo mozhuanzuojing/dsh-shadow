@@ -13,6 +13,7 @@ export const atomText = (opts: {
   time?: string;
   summary?: string;
   materials?: string[];
+  info?: string[];
   decisions?: { text: string; source?: string }[];
   reasons?: { text: string; source?: string }[];
   user?: string;
@@ -27,6 +28,7 @@ export const atomText = (opts: {
   const lines: string[] = [`# ${entry}`, "", "> 完整线索"];
   lines.push(`> 坐标：locus(${WS}) · when(${date} ${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}) · soul(default) · role(default) · intent(test)`);
   if (opts.materials?.length) lines.push(`> 背景/材料：${opts.materials.join("、")}`);
+  if (opts.info?.length) lines.push(`> 信息：${opts.info.join("；")}`);
   if (opts.decisions?.length) lines.push(`> 决策：${opts.decisions.map((d) => `〔${d.source ?? "user"}〕${d.text}`).join("；")}`);
   if (opts.reasons?.length) lines.push(`> 决策理由：${opts.reasons.map((d) => `〔${d.source ?? "user"}〕${d.text}`).join("；")}`);
   if (opts.summary) lines.push(`> 摘要：${opts.summary}`);

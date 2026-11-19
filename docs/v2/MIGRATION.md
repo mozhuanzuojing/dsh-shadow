@@ -25,7 +25,7 @@
 
 | v1 | v2 | 说明 |
 |---|---|---|
-| `read_shadow`（62 mode / 133 参数） | `read_shadow`（10 mode / 15 参数） | 日常读取与恢复 |
+| `read_shadow`（62 mode / 133 参数） | `read_shadow`（10 mode / 19 参数） | 日常读取与恢复 |
 | 同上 | `shadow_lab`（51 mode / 3 参数） | 研究、边界、写型能力 |
 | 同上（`mode:"toolset"`） | `shadow_toolset`（4 参数） | 独立核心工具 |
 | `recall_shadow`（query/limit） | `recall_shadow` | `mode:"recovery"` 包装，不变 |
@@ -34,7 +34,7 @@
 
 ## 3. 参数映射
 
-**`read_shadow` 15 参数**：`topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim`。核心透镜 = soul/taste/experience/judgment/verifyEvidence/facts/project；`dim` 为升降维读（line/face/consciousness）；`asOf`/`observer`/`kg` + `identity`/`context`/`claim` 移入 `shadow_lab.input`（`project` 经 ADR-0024 回核心）。
+**`read_shadow` 19 参数**：`topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim` `direction` `inquiry` `candidates` `background`。核心透镜 = soul/taste/experience/judgment/verifyEvidence/facts/project/direction/inquiry/background；`dim` 为升降维读（line/face/task/consciousness）；`asOf`/`observer`/`kg` + `identity`/`context`/`claim` 移入 `shadow_lab.input`（`project` 经 ADR-0024 回核心）。
 
 | v1 | v2 | 处置 |
 |---|---|---|

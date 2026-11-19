@@ -63,6 +63,12 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
     .filter(Boolean)
     .slice(0, 12);
 
+  const info = fieldOf(body, "信息")
+    .split(/[；;]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
   const decisions: string[] = [];
   const decisionEvents: DecisionEvent[] = [];
   const addDecision = (stmt: unknown, source: string, reason?: unknown): void => {
@@ -136,6 +142,7 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
     summary,
     axes,
     materials,
+    info,
     decisions: uniq(decisions),
     decisionEvents,
     userMessages: uniq(userMessages),

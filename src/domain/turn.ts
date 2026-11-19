@@ -31,3 +31,25 @@ export const classifyTurn = (text: unknown): TurnClass => {
   if (DESCRIPTIVE_RE.test(t)) return "background";
   return "";
 };
+
+/** 检索去噪：判断一段记忆正文是否为"我方任务 prompt / 脚手架 / 元讨论"，检索时应降噪（不删除存储）。 */
+const PROMPT_PHRASES = [
+  "只读任务，不要改任何文件",
+  "只读，不改文件",
+  "只读，不改任何文件",
+  "只读核验，不改文件",
+  "只读调研，不改文件",
+  "独立代码审查一个 DSH",
+  "请审查下面这份",
+  "请独立挑坑",
+  "请**独立挑坑**",
+  "做一次「用 dsh-shadow",
+];
+export const isPromptNoise = (text: unknown): boolean => {
+  const s = String(text ?? "").trim();
+  if (!s) return false;
+  // 只看开头（正文中段出现"技术评审"等词是合法的，不能整条丢）。
+  const head = s.slice(0, 300);
+  if (NOISE_HEAD.test(head) || NOISE_ANY.test(head)) return true;
+  return PROMPT_PHRASES.some((p) => head.includes(p));
+};

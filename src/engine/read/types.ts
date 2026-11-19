@@ -57,6 +57,8 @@ export interface ReadRequest {
   candidates?: string[];
   /** 对 AI 的问询（ADR-0030）：组装多维背景 + 问题，供 AI 推出「0 偏移方向」；插件只组装证据与问题、不裁决。 */
   inquiry?: boolean;
+  /** 大背景组装（query 聚合）：未来句 → 命中点归并成线 + 相关决策/口味 + 证据句柄。 */
+  background?: boolean;
 }
 
 export interface ModeOutput {

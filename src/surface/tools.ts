@@ -52,6 +52,7 @@ const toRequest = (args: Record<string, unknown>): ReadRequest => ({
   similar: args.similar === true,
   direction: args.direction === true,
   inquiry: args.inquiry === true,
+  background: args.background === true,
   candidates: Array.isArray(args.candidates) ? args.candidates.map(String) : undefined,
   dim: typeof args.dim === "string" ? args.dim : undefined,
 });
@@ -91,6 +92,7 @@ export const makeReadTool = (depsFactory: DepsFactory): RegisteredTool => ({
     dim: str("按维读取（ADR-0026 升降维）：line=线(1维) / face=面(2维·会话轴) / task=面(2维·任务轴·按这件事) / consciousness=观察意识(n维)。不传=按 mode/topic 读。", { enum: ["line", "face", "task", "consciousness"] }),
     direction: bool("隐式偏好方向估计（ADR-0029）：从用户多轮原话（不显式采纳/否决）用「规则信号+稀疏TF-IDF质心」估意图方向，返回「方向假设·非采纳」+ 已否决/偏好 + 信号；可配 candidates 按偏移最小排序。只排序、不判真假、不替用户裁决；样本不足/全否即不可判。"),
     inquiry: bool("对 AI 的问询（ADR-0030/0034）：把多维背景（方向假设/决策谱系/任务面/口味/灵魂/证据句柄/盲区）组装成上下文+结构化问题，**供 AI 依背景纠偏**、逼近「0 偏移方向」（目标，不保证；插件不产出结论）。可配 candidates。只组装证据与问题，不裁决、不编造。"),
+    background: bool("大背景组装：给一个 topic（未来一句/换措辞），把命中的点**归并成线**、抽出相关**决策/否决**、附**口味**与**证据句柄**——返回「这件事的大背景」而非零散检索点。数据非指令、派生视图。"),
     candidates: { type: "array", description: "可选：候选方向文本列表；配合 direction 用，按与用户意图方向的偏移最小排序（仅排序，非采纳）。", items: str("候选方向文本") },
   }),
   output: { schema: { type: "string" }, render: renderText },

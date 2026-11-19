@@ -19,6 +19,11 @@ import { writeAtom } from "../../store/atoms.js";
 import type { FsPort } from "../../store/fs.js";
 import type { SignalStore } from "../signals.js";
 import { buildAtomText, primaryEntry, projectName, type Trace } from "./atom-text.js";
+import { classifyTurn } from "../../domain/turn.js";
+import { evidencePathsOf } from "../../domain/text.js";
+
+const extractPaths = (t: string): string[] =>
+  Array.from(new Set(evidencePathsOf(t).map((p) => p.replace(/\\/g, "/")).filter((p) => p.length >= 3 && !p.startsWith(".shadow")))).slice(0, 6);
 import { lineIdFor, parseLine, parseLineHeader, renderLineHeader, renderPointLine, shouldExtend } from "../../domain/lines.js";
 
 export interface CaptureDeps {
@@ -157,10 +162,15 @@ export class Capture {
       return;
     }
     const sub = classifyUser(text);
+    const cls = classifyTurn(text);
+    const mats = extractPaths(text);
     this.push(id, { kind: "user", text: `用户：${text}`, comp: "", source: "user" });
     if (sub === "decision") {
       const stmt = text.slice(0, 160);
-      this.push(id, { kind: "decision", text: `决定 ${stmt}`, statement: stmt, reason: extractReason(text), comp: "", source: "user" });
+      this.push(id, { kind: "decision", text: `决定 ${stmt}`, statement: stmt, reason: extractReason(text), materials: mats, comp: "", source: "user" });
+    } else if (cls === "background") {
+      // 背景信息（事实/材料/约束）：与决策并列，补采集，供 background 网取用。
+      this.push(id, { kind: "info", text: `信息 ${text}`, materials: mats, comp: "", source: "user" });
     }
   }
 

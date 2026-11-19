@@ -17,7 +17,7 @@
 
 | 工具 | 参数（逐个） | 数量 | 覆盖 |
 |---|---|---:|---|
-| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim` | 15 | 10 core mode + 7 core 透镜 + dim 维读 |
+| `read_shadow` | `topic` `entry` `mode` `limit` `max_tokens` `debug` `raw` `soul` `taste` `experience` `judgment` `verifyEvidence` `facts` `project` `dim` `direction` `inquiry` `candidates` `background` | 19 | 10 core mode + 10 core 透镜 + dim 维读 |
 | `recall_similar` | `query` `limit` | 2 | 相似过往任务卡（派生经验，ADR-0016） |
 | `search_code` | `query` `limit` | 2 | 工作区代码检索（BM25，ADR-0019 阶段 1） |
 | `recall_shadow` | `query` `limit` | 2 | `mode:"recovery"` 包装 |

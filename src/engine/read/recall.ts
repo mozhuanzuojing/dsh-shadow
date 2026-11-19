@@ -8,6 +8,7 @@ import { ageDays } from "../../contract/time.js";
 import { bm25Rank } from "../../domain/bm25.js";
 import { deprioritizeFactor, fuzzyHit, fuzzyOverlap, scoreMemory, snippetFor, tierFor } from "../../domain/rank.js";
 import { renderAtomEntry } from "./render.js";
+import { isPromptNoise } from "../../domain/turn.js";
 
 export interface ScoredAtom {
   atom: ParsedAtom;
@@ -45,6 +46,25 @@ export interface ScoreOpts {
    */
   fuzzy?: boolean;
 }
+
+/** 检索去噪 + 去重：剔「我方任务 prompt / 脚手架 / 元讨论」，按摘要(或正文前 200 字)去重（保留首个）。 */
+export const cleanRetrievalAtoms = (atoms: ParsedAtom[]): ParsedAtom[] => {
+  const seen = new Set<string>();
+  const out: ParsedAtom[] = [];
+  for (const a of atoms) {
+    if (isPromptNoise(a.body)) continue;
+    const key = a.body
+      .replace(/^\s*-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*/gm, "- ")
+      .replace(/\d{4}-\d\d-\d\d(?:[ T]\d{2}:\d{2}:\d{2})?/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(a);
+  }
+  return out;
+};
 
 export const scoreAtoms = (atoms: ParsedAtom[], tokens: string[], opts: ScoreOpts): ScoredAtom[] => {
   const out: ScoredAtom[] = [];

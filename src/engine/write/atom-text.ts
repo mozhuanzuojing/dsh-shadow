@@ -12,12 +12,14 @@ export interface Trace {
   seq: number;
   /** 事件所属本地日期（YYYY-MM-DD）；跨日 flush 时用事件日期，不拿 flush 时刻。 */
   date: string;
-  kind: "action" | "user" | "assistant" | "decision";
+  kind: "action" | "user" | "assistant" | "decision" | "info";
   text: string;
   comp: string;
   source: "fs" | "tool" | "goal" | "user" | "assistant" | "other";
   statement?: string;
   reason?: string;
+  /** 决策/信息里显式提到的材料路径（补采集用）。 */
+  materials?: string[];
 }
 
 export interface AtomTextOpts {
@@ -78,7 +80,12 @@ export const buildAtomText = (traces: Trace[], opts: AtomTextOpts): string => {
   const actions = traces.filter((t) => t.kind === "action");
   const users = traces.filter((t) => t.kind === "user");
   const decisions = traces.filter((t) => t.kind === "decision");
-  const materials = uniq(actions.map((a) => pathOfAction(a.text)).filter((p) => p && !p.startsWith(".shadow") && isPathLike(p))).slice(0, 12);  const axes: AtomAxes = {
+  const infos = traces.filter((t) => t.kind === "info");
+  const materials = uniq([
+    ...actions.map((a) => pathOfAction(a.text)),
+    ...traces.flatMap((t) => t.materials ?? []),
+  ].filter((p) => p && !p.startsWith(".shadow") && isPathLike(p))).slice(0, 12);
+  const axes: AtomAxes = {
     locus: opts.ws,
     when: `${opts.date} ${fmtTime(opts.time)}`,
     soul: cut(opts.soul, 60) || "default",
@@ -88,6 +95,7 @@ export const buildAtomText = (traces: Trace[], opts: AtomTextOpts): string => {
   const lines: string[] = [`# ${entry}`, "", "> 完整线索"];
   lines.push(`> 坐标：locus(${axes.locus}) · when(${axes.when}) · soul(${axes.soul}) · role(${axes.role}) · intent(${axes.intent})`);
   if (materials.length) lines.push(`> 背景/材料：${materials.join("、")}`);
+  if (infos.length) lines.push(`> 信息：${infos.slice(0, 6).map((i) => cut(i.text.replace(/^信息\s*/, ""), 120)).join("；")}`);
   if (decisions.length) {
     lines.push(`> 决策：${decisions.slice(0, 8).map((d) => `〔${d.source}〕${cut(d.statement ?? d.text, 120)}`).join("；")}`);
     const reasons = decisions.filter((d) => d.reason);
