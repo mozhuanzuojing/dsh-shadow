@@ -2,7 +2,7 @@
 
 > **给 agent 记「为什么」的多维投影记忆——Observer 是中心，文件是投影面；而每个点都带着它那一句话的庞大背景。** 每句话都不是孤零零一句：背后有坐标、证据链、材料、当时的决策与动作。v3 把这份**完整背景随点一起保存**（点内嵌完整正文），再沿「时间 × 同一件事」升维成 线 → 面 → 观察意识；真正的产品仍是「面」，并诚实标出看不到的整全（盲区）。
 >
-> 状态：**v3.0.8（2026-11-19）**。v1 冻结在 `legacy/v1`（tag `legacy-v1`）；升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)，变更见 [CHANGELOG](./CHANGELOG.md)。
+> 状态：**v3.0.9（2026-11-19）**。v1 冻结在 `legacy/v1`（tag `legacy-v1`）；升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)，变更见 [CHANGELOG](./CHANGELOG.md)。
 
 ## 它做什么
 

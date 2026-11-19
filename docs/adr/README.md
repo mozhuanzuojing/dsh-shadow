@@ -38,6 +38,7 @@
 | [0032](./0032-direction-semantics-and-real-eval.md) | 方向语义修正（删除≠排除）· inquiry 纳入否决指令 · 真实标注评测 `--labeled`（仓外 JSONL） | accepted |
 | [0033](./0033-direction-p0-fixes.md) | 方向/问询 P0 修正：不可判不显偏移(fail-closed) · "别"误抽 · 泛词误杀 | accepted |
 | [0034](./0034-inquiry-wording-clarification.md) | 术语澄清：inquiry 是"供 AI 纠偏的多维背景（目标 0 偏移）"，非插件推出 0 偏移；真实标注集 n 小非统计 | accepted |
+| [0035](./0035-bundled-routing-skill.md) | 内置 bundled skill provider：`dsh-shadow-routing` 随插件走（不落 ~/.dsh/skills），装即出现、卸载即消失 | accepted |
 
 ## 状态枚举
 

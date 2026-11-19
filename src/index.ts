@@ -17,6 +17,7 @@ import type { FsPort } from "./store/fs.js";
 import { HostFs } from "./store/host-fs.js";
 import { IndexCache } from "./store/index-cache.js";
 import { makeCoreTools, type DepsFactory, type ToolsetDepsFactory } from "./surface/tools.js";
+import { routingProvider } from "./surface/skill-routing.js";
 import { makeLabTools } from "./lab/tool.js";
 import { buildLessonCards, type LessonCard } from "./domain/lessons.js";
 import { buildAutoRecallHint } from "./domain/auto-recall.js";
@@ -380,6 +381,18 @@ export function apply(ctx: CtxLike, rawConfig: any = {}): () => void {
         }
       },
     });
+  });
+
+  // 内置 bundled skill provider（ADR-0035）：随插件提供 `dsh-shadow-routing`，装即出现在技能目录。
+  // 用 ctx.inject(["skills"]) 可选挂载：未启用 skill 注册表的组合自动跳过，不影响其它能力。
+  ctx.inject(["skills"], (skillsCtx: CtxLike) => {
+    const svc = skillsCtx.get("skills");
+    if (!svc || typeof svc.registerProvider !== "function") return;
+    try {
+      svc.registerProvider(() => routingProvider);
+    } catch (e) {
+      console.warn(`[dsh-shadow] 注册 bundled skill 失败（${e instanceof Error ? e.message : String(e)}）`);
+    }
   });
 
   return () => {
