@@ -4,6 +4,8 @@
  * 只抽「原文明确存在」的决策与理由；不补写。
  */
 
+import { classifyTurn } from "./turn.js";
+
 export const SYSTEM_TAG_NAMES = ["system-reminder", "system-instruction", "system_instruction", "persisted-output", "private"];
 const SYSTEM_TAG_RE = new RegExp(`<(${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, "gi");
 const SYSTEM_TAG_RESIDUE_RE = new RegExp(`<\\/?(?:${SYSTEM_TAG_NAMES.join("|")})\\b[^>]*>`, "gi");
@@ -87,8 +89,11 @@ export const decisionClass = (text: unknown): DecisionKind => {
 
 export const classifyUser = (text: unknown): "decision" | "reminder" | "confirmation" | "" => {
   const t = String(text ?? "").trim();
-  if (decisionClass(t)) return "decision";
-  if (NO_FOCUS.test(t)) return "confirmation";
+  // P1 四分类：只有 decision 才算决策；confirmation/noise/background 均不进决策。
+  const c = classifyTurn(t);
+  if (c === "decision") return "decision";
+  if (c === "confirmation") return "confirmation";
+  if (c === "noise") return "";
   if (/(注意|提醒|重点|不要|别|小心|切记|别忘了|另外|补充|但是|错误|不对|错了|反了|前提|前提是|关键是|优先|边界|坑|留[^。]{0,5}(神|意))/.test(t)) return "reminder";
   return "";
 };
