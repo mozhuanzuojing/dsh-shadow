@@ -165,7 +165,8 @@ const cosine = (a: Map<string, number>, b: Map<string, number>): number => {
  * 从多轮**用户话语**估方向。utterances 按时间先后传入（只放 user turn）。
  * α：基线 0.3；遇纠正/否决临时上调（×1.5，上限 0.8），随后每步回落 ×0.9。
  */
-export const buildDirection = (utterances: { text: string; at?: string }[]): DirectionEstimate => {
+export const buildDirection = (utterances: { text: string; at?: string }[], opts?: { minSamples?: number }): DirectionEstimate => {
+  const minSamples = Math.max(1, opts?.minSamples ?? 1);
   const docs = utterances.map((u) => tokenize(u.text)).filter((d) => d.length > 0);
   const N = docs.length;
   const tf = docs.map((toks) => {
@@ -221,6 +222,9 @@ export const buildDirection = (utterances: { text: string; at?: string }[]): Dir
   if (N === 0) {
     undecidable = true;
     reason = "无用户话语样本";
+  } else if (N < minSamples) {
+    undecidable = true;
+    reason = `样本不足（${N}<${minSamples}）→ 方向不可判，勿猜`;
   } else if (negateAllSeen && pfU.length === 0) {
     undecidable = true;
     reason = "整体否决且无替代方向（方向不可判，勿猜最小分）";

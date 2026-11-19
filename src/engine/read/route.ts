@@ -78,9 +78,19 @@ const metaOf = (deps: ReadDeps, atoms: ParsedAtom[]): Map<string, AtomMeta> => {
 };
 
 const BODY_LINE_RE = /^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*(.*)$/;
+const sessionOf = (rel: string): string => {
+  const m = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(rel);
+  return m ? m[1]! : "";
+};
 const userUtterances = (atoms: ParsedAtom[], topic: string): { text: string; at?: string }[] => {
+  // 跨会话去噪：无 topic 时只取**最近会话**的点；有 topic 时以 topic 为锚，可跨会话。
+  let scope = atoms;
+  if (!topic && atoms.length) {
+    const last = sessionOf(atoms[atoms.length - 1]!.rel);
+    if (last) scope = atoms.filter((a) => sessionOf(a.rel) === last);
+  }
   const out: { text: string; at?: string }[] = [];
-  for (const a of atoms) {
+  for (const a of scope) {
     if (topic && !`${a.entry} ${a.body}`.includes(topic)) continue;
     for (const raw of a.body.split("\n")) {
       const m = BODY_LINE_RE.exec(raw.trim());
@@ -124,7 +134,7 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
   }
   if (req.direction) {
     const topic = String(req.topic ?? "").trim();
-    const dir = buildDirection(userUtterances(atoms, topic));
+    const dir = buildDirection(userUtterances(atoms, topic), { minSamples: topic ? 3 : 2 });
     const out = ["# 意图方向（隐式偏好 · 方向假设 · 非采纳）", ""];
     out.push(`- 样本：${dir.samples} 句用户原话 · 置信：${dir.confidence} · 状态：${dir.undecidable ? `不可判（${dir.reason}）` : "可判"}`);
     if (dir.keywords.length) out.push(`- 方向关键词：${dir.keywords.join("、")}`);
@@ -144,7 +154,7 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
   }
   if (req.inquiry) {
     const topic = String(req.topic ?? "").trim();
-    const direction = buildDirection(userUtterances(atoms, topic));
+    const direction = buildDirection(userUtterances(atoms, topic), { minSamples: topic ? 3 : 2 });
     const SCAFFOLD = /(This is an automatically|Background subagent|Current DSH|The available skill|自动召回|⚠)/i;
     const decLines = renderDecisions(deriveDecisions(atoms))
       .split("\n")
