@@ -70,6 +70,9 @@ const STOP = new Set([
   "subagent", "current", "note", "user", "prefer", "avoid",
 ]);
 
+/** 过于泛化、不该作为"排除词"的子串（防误杀，如"不要文件"排除一切含"文件"的候选）。 */
+const GENERIC = new Set(["文件", "方案", "功能", "东西", "事情", "问题", "内容", "系统", "这个", "任何文件", "任何"]);
+
 /** 清洗抽到的术语：去首尾虚词、丢单字/纯数字/停用词/超长（防噪声进否决集）。 */
 const cleanTerm = (t: string): string => {
   const s = String(t ?? "").trim().replace(/^[的地得和与及]+/, "").replace(/[的得了呀呢]$/g, "");
@@ -115,14 +118,14 @@ export const detectSignals = (text: string): IntentSignal[] => {
   const repl = grab(t, /(?:用|拿)\s*([^\s，。；,;]{1,20}?)\s*(?:代替|替换|换掉)\s*([^\s，。；,;]{1,20})/g);
   // 改成Y / 换成Y / 改为Y
   const changeTo = grab(t, /(?:改成|换成|改为)\s*([^\s，。；,;]{1,20})/g);
-  // 「不要/别/不用」= 排除该选项（硬否决）
-  const hardNeg = grab(t, /(?:不要|不用|别用|别再|别)\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
+  // 「不要/别/不用」= 排除该选项（硬否决）。注意 "别" 要排除 区别/特别/别的/差异 等误抽。
+  const hardNeg = grab(t, /(?:不要|不用|别用|别再|(?<![区特级分类])别(?!的|差|异))\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
   // 「删除/去掉/取消」= 要执行的**移除动作**（不该把该词当排除项，否则会误排除"删除X"这个正确方案）
   const removeAct = grab(t, /(?:删除|删掉|去掉|取消)\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
   // 不是X（重述/纠错里的排除，但排除"这个"）
   const notX = grab(t, /不是\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{2,12})/g).filter((x) => !/^这个$/.test(x));
 
-  const excluded = uniq([...repl.filter((_, i) => i % 2 === 1), ...hardNeg, ...notX].filter((x) => !/^(代替|替换|换掉)$/.test(x)).map(cleanTerm).filter(Boolean));
+  const excluded = uniq([...repl.filter((_, i) => i % 2 === 1), ...hardNeg, ...notX].filter((x) => !/^(代替|替换|换掉)$/.test(x)).map(cleanTerm).filter(Boolean)).filter((x) => !GENERIC.has(x));
   const preferred = uniq([...repl.filter((_, i) => i % 2 === 0), ...changeTo, ...removeAct].map(cleanTerm).filter(Boolean));
 
   if (repl.length || changeTo.length)

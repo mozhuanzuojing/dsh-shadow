@@ -27,5 +27,6 @@ const d2 = makeDeps({ "/ws/.shadow/atoms/x.md": atomText({ entry: "x", user: "�
 const r2 = await runRead(d2, { direction: true, candidates: ["A", "B"] });
 if (!r2.ok) throw new Error(r2.error.message);
 assert.ok(r2.value.text.includes("不可判"), "整体否决应不可判");
+assert.ok(!/·\s*偏移\s*\d/.test(r2.value.text), "不可判时不得输出数字偏移值（fail-closed）");
 
 console.log("✔ read·direction：透镜输出 + 候选偏移排序/排除 + 整体否决不可判");

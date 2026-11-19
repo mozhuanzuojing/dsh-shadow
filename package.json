@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "3.0.6",
+  "version": "3.0.7",
   "description": "dsh-shadow v3 — 给 agent 记「为什么」的多维投影记忆：点→线→面→观察意识 + scope（会话/工作区/用户）升维；线为源、atoms 为证据账本，派生可重建、降级可见。",
   "repository": {
     "type": "git",

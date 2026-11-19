@@ -70,4 +70,12 @@ import { buildDirection, rankCandidates, detectSignals } from "../../dist/domain
   assert.ok(dir.keywords.length > 0, "空话语夹中间不得把质心清零（索引须对齐）");
 }
 
+// 9) "别" 不得误抽 区别/特别；泛词不当排除项
+{
+  const s = detectSignals("区别很大，特别复杂");
+  assert.ok(!s.some((x) => x.excluded.some((e) => /区别|特别|别/.test(e))), "『区别/特别』不得被 '别' 误抽");
+  const d = buildDirection([{ text: "不要文件" }]);
+  assert.ok(!d.excluded.includes("文件"), "泛词『文件』不应作为排除项（防误杀）");
+}
+
 console.log("✔ intent：整体否决不可判 / 替换对 / 收窄 / 重述纠正 / 推翻默认 / 软偏好 / 信号抽取 / 空话语对齐");

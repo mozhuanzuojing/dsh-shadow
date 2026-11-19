@@ -152,8 +152,11 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
     if (req.candidates && req.candidates.length) {
       const r = rankCandidates(dir, req.candidates.map(String));
       out.push("", "## 候选排序（偏移最小优先）");
-      if (r.undecidable) out.push(`（方向不可判：${r.reason}）`);
-      for (const c of r.ranked) out.push(`- ${c.status === "excluded" ? "✗" : "✔"} ${c.candidate} · 偏移 ${c.deviation.toFixed(2)}${c.reason ? " · " + c.reason : ""}`);
+      if (r.undecidable) {
+        out.push(`（方向不可判：${r.reason}）`, "> 不输出偏移值（不可判时禁止猜最小分，C4/fail-closed）。");
+      } else {
+        for (const c of r.ranked) out.push(`- ${c.status === "excluded" ? "✗" : "✔"} ${c.candidate} · 偏移 ${c.deviation.toFixed(2)}${c.reason ? " · " + c.reason : ""}`);
+      }
     }
     out.push("", "> 仅用于排序（方向假设·非采纳），不判真假、不替用户裁决（C4）；样本不足或候选全否即「不可判」。");
     return out.join("\n");
