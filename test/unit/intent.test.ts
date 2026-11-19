@@ -63,4 +63,11 @@ import { buildDirection, rankCandidates, detectSignals } from "../../dist/domain
   assert.ok(detectSignals("他们错了，以我为准").some((s) => s.type === "cite"));
 }
 
-console.log("✔ intent：整体否决不可判 / 替换对 / 收窄 / 重述纠正 / 推翻默认 / 软偏好 / 信号抽取");
+// 8) 空 token 话语不得造成向量索引错位（质心被清零）
+{
+  const dir = buildDirection([{ text: "" }, { text: "用 SQLite 代替 PostgreSQL" }, { text: "的" }]);
+  assert.ok(dir.excluded.some((x) => /PostgreSQL/i.test(x)), "空话语夹中间仍应排除 PostgreSQL");
+  assert.ok(dir.keywords.length > 0, "空话语夹中间不得把质心清零（索引须对齐）");
+}
+
+console.log("✔ intent：整体否决不可判 / 替换对 / 收窄 / 重述纠正 / 推翻默认 / 软偏好 / 信号抽取 / 空话语对齐");

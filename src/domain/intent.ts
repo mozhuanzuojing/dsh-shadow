@@ -115,18 +115,20 @@ export const detectSignals = (text: string): IntentSignal[] => {
   const repl = grab(t, /(?:用|拿)\s*([^\s，。；,;]{1,20}?)\s*(?:代替|替换|换掉)\s*([^\s，。；,;]{1,20})/g);
   // 改成Y / 换成Y / 改为Y
   const changeTo = grab(t, /(?:改成|换成|改为)\s*([^\s，。；,;]{1,20})/g);
-  // 不要X / 不用X / 去掉X / 删除X / 取消X / 别X
-  const negItems = grab(t, /(?:不要|不用|别用|别再|去掉|删掉|删除|取消|别)\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
+  // 「不要/别/不用」= 排除该选项（硬否决）
+  const hardNeg = grab(t, /(?:不要|不用|别用|别再|别)\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
+  // 「删除/去掉/取消」= 要执行的**移除动作**（不该把该词当排除项，否则会误排除"删除X"这个正确方案）
+  const removeAct = grab(t, /(?:删除|删掉|去掉|取消)\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{1,16})/g);
   // 不是X（重述/纠错里的排除，但排除"这个"）
   const notX = grab(t, /不是\s*([\u4e00-\u9fffA-Za-z0-9_.+-]{2,12})/g).filter((x) => !/^这个$/.test(x));
 
-  const excluded = uniq([...repl.filter((_, i) => i % 2 === 1), ...negItems, ...notX].filter((x) => !/^(代替|替换|换掉)$/.test(x)).map(cleanTerm).filter(Boolean));
-  const preferred = uniq([...repl.filter((_, i) => i % 2 === 0), ...changeTo].map(cleanTerm).filter(Boolean));
+  const excluded = uniq([...repl.filter((_, i) => i % 2 === 1), ...hardNeg, ...notX].filter((x) => !/^(代替|替换|换掉)$/.test(x)).map(cleanTerm).filter(Boolean));
+  const preferred = uniq([...repl.filter((_, i) => i % 2 === 0), ...changeTo, ...removeAct].map(cleanTerm).filter(Boolean));
 
   if (repl.length || changeTo.length)
     signals.push({ type: "replace", polarity: 1, weight: 0.9, excluded, preferred });
-  if (negItems.length || notX.length)
-    signals.push({ type: "narrow", polarity: -1, weight: 0.8, excluded: uniq([...negItems, ...notX]), preferred: [] });
+  if (hardNeg.length || notX.length || removeAct.length)
+    signals.push({ type: "narrow", polarity: -1, weight: 0.8, excluded, preferred: uniq(removeAct.map(cleanTerm).filter(Boolean)) });
 
   const prefer = grab(t, /(?:更喜欢|偏好|倾向|偏向|可以考虑)\s*([^\s，。；,;]{1,20})/g);
   if (prefer.length) signals.push({ type: "softPrefer", polarity: 1, weight: 0.4, excluded: [], preferred: uniq(prefer) });
@@ -167,16 +169,16 @@ const cosine = (a: Map<string, number>, b: Map<string, number>): number => {
  */
 export const buildDirection = (utterances: { text: string; at?: string }[], opts?: { minSamples?: number }): DirectionEstimate => {
   const minSamples = Math.max(1, opts?.minSamples ?? 1);
-  const docs = utterances.map((u) => tokenize(u.text)).filter((d) => d.length > 0);
-  const N = docs.length;
-  const tf = docs.map((toks) => {
+  const tokensByUtt = utterances.map((u) => tokenize(u.text));
+  const tfByUtt = tokensByUtt.map((toks) => {
     const m = new Map<string, number>();
     for (const t of toks) m.set(t, (m.get(t) ?? 0) + 1);
     return m;
   });
-  // IDF
+  const N = tfByUtt.filter((m) => m.size > 0).length;
+  // IDF（仅非空文档）
   const df = new Map<string, number>();
-  for (const m of tf) for (const k of m.keys()) df.set(k, (df.get(k) ?? 0) + 1);
+  for (const m of tfByUtt) if (m.size) for (const k of m.keys()) df.set(k, (df.get(k) ?? 0) + 1);
   const idf = new Map<string, number>();
   for (const [k, v] of df) idf.set(k, Math.log((N + 1) / (v + 1)) + 1);
 
@@ -196,8 +198,8 @@ export const buildDirection = (utterances: { text: string; at?: string }[], opts
       if (s.type === "negateAll") negateAllSeen = true;
     }
     if (isCorrection(sigs)) alpha = Math.min(0.8, alpha * 1.5);
-    // 归一向量
-    const raw = tf[i] ?? new Map<string, number>();
+    // 归一向量（按原始 utterances 索引对齐，空话语 = 零向量）
+    const raw = tfByUtt[i] ?? new Map<string, number>();
     const vec = new Map<string, number>();
     for (const [k, v] of raw) vec.set(k, v * (idf.get(k) ?? 1));
     const x = l2(vec);

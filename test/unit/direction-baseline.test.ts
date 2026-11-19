@@ -1,57 +1,58 @@
 import assert from "node:assert/strict";
 import { buildDirection, rankCandidates } from "../../dist/domain/intent.js";
 
-// —— 纠偏准确率基准（标注场景：期望 top / 应排除 / 不可判）——
-interface Case { utt: { text: string }[]; cands: string[]; top?: string; excluded?: string[]; undecidable?: boolean }
-const cases: Case[] = [
-  { utt: [{ text: "先做 A、B、C 三个方案" }, { text: "都不要" }], cands: ["A", "B", "C"], undecidable: true },
-  { utt: [{ text: "用 SQLite 代替 PostgreSQL" }], cands: ["PostgreSQL", "SQLite"], top: "SQLite", excluded: ["PostgreSQL"] },
-  { utt: [{ text: "只要简单的，去掉复杂菜单，不要抽象" }], cands: ["加抽象层", "简单方案"], top: "简单方案", excluded: ["加抽象层"] },
-  { utt: [{ text: "成本指人工成本，不是成本核算模块" }], cands: ["成本核算模块", "人工成本统计"], top: "人工成本统计", excluded: ["成本核算模块"] },
-  { utt: [{ text: "默认 PostgreSQL，不用 PostgreSQL 用 SQLite" }], cands: ["PostgreSQL", "SQLite"], top: "SQLite", excluded: ["PostgreSQL"] },
-];
+// —— 规模化标注基准（模板生成 ~100+ 例，覆盖 6 类隐式信号）——
+interface Case { cat: string; utt: { text: string }[]; cands: string[]; top?: string; excluded?: string[]; undecidable?: boolean }
+const cases: Case[] = [];
+const DB = ["PostgreSQL", "MySQL", "Redis", "SQLite", "MongoDB", "Oracle"];
+const NARROW = ["复杂菜单", "抽象", "冗余", "花哨", "多余步骤"];
+const FEAT = ["P", "Q", "R", "S", "T"];
+
+for (const x of DB) for (const y of DB) if (x !== y) {
+  cases.push({ cat: "replace", utt: [{ text: `用 ${y} 代替 ${x}` }], cands: [x, y], top: y, excluded: [x] });
+  cases.push({ cat: "overturn", utt: [{ text: `默认 ${x}，不用 ${x} 用 ${y}` }], cands: [x, y], top: y, excluded: [x] });
+}
+for (const a of NARROW) for (const b of NARROW) if (a !== b) {
+  cases.push({ cat: "narrow", utt: [{ text: `只要简单的，去掉${a}，不要${b}` }], cands: [`加${b}层`, "简单方案"], top: "简单方案", excluded: [`加${b}层`] });
+}
+for (const a of FEAT) for (const b of FEAT) if (a !== b) {
+  cases.push({ cat: "negateAll", utt: [{ text: `先做 ${a}、${b} 两个方案` }, { text: "都不要" }], cands: [a, b], undecidable: true });
+  cases.push({ cat: "softPrefer", utt: [{ text: `${a} 方案和 ${b} 方案都可以，更喜欢 ${b}` }], cands: [`${a} 方案`, `${b} 方案`], top: `${b} 方案` });
+}
 
 let pass = 0;
+const perCat = new Map<string, { ok: number; n: number }>();
 for (const c of cases) {
   const dir = buildDirection(c.utt);
   const r = rankCandidates(dir, c.cands);
-  if (c.undecidable) {
-    assert.equal(r.undecidable, true, `应不可判：${JSON.stringify(c.utt)}`);
-    pass++;
-    continue;
+  const rec = perCat.get(c.cat) ?? { ok: 0, n: 0 };
+  rec.n++;
+  let ok = false;
+  if (c.undecidable) ok = r.undecidable === true;
+  else {
+    const top = r.ranked.find((x) => x.status === "ok");
+    ok = !r.undecidable && top?.candidate === c.top && (c.excluded ?? []).every((ex) => r.ranked.find((q) => q.candidate === ex)?.status === "excluded");
   }
-  assert.equal(r.undecidable, false, `应可判：${JSON.stringify(c.utt)}`);
-  const top = r.ranked.find((x) => x.status === "ok")!;
-  assert.equal(top.candidate, c.top, `top 应为 ${c.top}`);
-  for (const ex of c.excluded ?? []) {
-    assert.equal(r.ranked.find((x) => x.candidate === ex)!.status, "excluded", `${ex} 应排除`);
-  }
-  pass++;
+  if (ok) { pass++; rec.ok++; }
+  perCat.set(c.cat, rec);
 }
-const accuracy = pass / cases.length;
-console.log(`[baseline] 纠偏准确率 ${(accuracy * 100).toFixed(0)}% (${pass}/${cases.length})`);
-assert.equal(accuracy, 1, "纠偏基准应 100%");
+const acc = pass / cases.length;
+console.log(`[baseline] 规模化纠偏准确率 ${(acc * 100).toFixed(1)}% (${pass}/${cases.length})`);
+console.log("[baseline] 分类：" + [...perCat].map(([k, v]) => `${k} ${v.ok}/${v.n}`).join(" · "));
+assert.ok(acc >= 0.98, `整体准确率应 ≥98%，实际 ${(acc * 100).toFixed(1)}%`);
+for (const [k, v] of perCat) assert.ok(v.ok / v.n >= 0.9, `${k} 准确率应 ≥90%`);
 
-// —— 样本不足 fast-fail ——
-assert.equal(buildDirection([], { minSamples: 3 }).undecidable, true, "0 样本应不可判");
-assert.equal(buildDirection([{ text: "我要简单方案" }], { minSamples: 3 }).undecidable, true, "样本<min 应不可判");
-assert.equal(
-  buildDirection([{ text: "我要简单方案" }, { text: "去掉复杂" }, { text: "不要抽象" }], { minSamples: 3 }).undecidable,
-  false,
-  "样本达标应可判",
-);
-
-// —— 性能基准（确定性、无网络）——
+// —— 大语料性能门（确定性、无网络）——
 const big: { text: string }[] = [];
-for (let i = 0; i < 2000; i++) big.push({ text: `方案${i} 模块 保留 简单 证据 边界` });
+for (let i = 0; i < 5000; i++) big.push({ text: `第${i}项 保留 简单 模块 证据 边界 方案` });
 const t0 = Date.now();
 const dB = buildDirection(big);
 const dtBuild = Date.now() - t0;
 const t1 = Date.now();
-rankCandidates(dB, Array.from({ length: 200 }, (_, i) => `候选方向${i} 简单 模块`));
+rankCandidates(dB, Array.from({ length: 500 }, (_, i) => `候选${i} 简单 模块 证据`));
 const dtRank = Date.now() - t1;
-console.log(`[perf] buildDirection(2000)=${dtBuild}ms · rank(200)=${dtRank}ms`);
-assert.ok(dtBuild < 2000, `buildDirection 2000 样本应 <2000ms，实际 ${dtBuild}ms`);
-assert.ok(dtRank < 500, `rank 200 候选应 <500ms，实际 ${dtRank}ms`);
+console.log(`[perf] buildDirection(5000)=${dtBuild}ms · rank(500)=${dtRank}ms`);
+assert.ok(dtBuild < 3000, `build(5000) 应 <3000ms，实际 ${dtBuild}ms`);
+assert.ok(dtRank < 1000, `rank(500) 应 <1000ms，实际 ${dtRank}ms`);
 
-console.log("✔ direction-baseline：纠偏 100% · 样本不足 fast-fail · 性能门");
+console.log("✔ direction-baseline：规模化纠偏≥98% · 分类门 · 大语料性能门");

@@ -86,7 +86,13 @@ const userUtterances = (atoms: ParsedAtom[], topic: string): { text: string; at?
   // 跨会话去噪：无 topic 时只取**最近会话**的点；有 topic 时以 topic 为锚，可跨会话。
   let scope = atoms;
   if (!topic && atoms.length) {
-    const last = sessionOf(atoms[atoms.length - 1]!.rel);
+    const stamp = (rel: string): string => {
+      const m = /(\d{4}-\d\d-\d\d--\d{6})/.exec(rel);
+      return m ? m[1]! : "0";
+    };
+    let latest = atoms[0]!;
+    for (const a of atoms) if (stamp(a.rel) > stamp(latest.rel)) latest = a;
+    const last = sessionOf(latest.rel);
     if (last) scope = atoms.filter((a) => sessionOf(a.rel) === last);
   }
   const out: { text: string; at?: string }[] = [];
@@ -160,7 +166,15 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
       .split("\n")
       .filter((l) => l.includes("〔user〕") && !SCAFFOLD.test(l) && (!topic || l.includes(topic)))
       .slice(0, 20);
-    const decisionsText = decLines.length ? decLines.join("\n") : "";
+    // #3：deriveDecisions 漏"否决/改/替换/定稿"型用户指令 → 额外纳入决策谱系（标〔user·指令〕）
+    const DIRECTIVE = /(不要|别|否决|取消|废弃|改成|改为|换成|用.+代替|更喜欢|就按|就这样|定稿|确认|直接发)/;
+    const extraDec = userUtterances(atoms, topic)
+      .map((u) => u.text)
+      .filter((t) => DIRECTIVE.test(t) && t.length <= 60 && !SCAFFOLD.test(t))
+      .slice(0, 10)
+      .map((t) => `- 〔user·指令〕${t}`);
+    const decisionLines = [...decLines, ...extraDec];
+    const decisionsText = decisionLines.length ? decisionLines.join("\n") : "";
     const taskLines = renderTasks(deriveTasks(atoms), topic || undefined)
       .split("\n")
       .filter((l) => !topic || l.includes(topic) || /^#|^>/.test(l))
@@ -172,7 +186,7 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
     };
     const soul = await readIf(`${deps.ws}/${SOUL_FILE}`);
     const taste = await readIf(`${deps.ws}/${TASTE_FILE}`);
-    const evAtoms = topic ? atoms.filter((a) => `${a.entry} ${a.body}`.includes(topic)) : atoms;
+    const evAtoms = atoms.filter((a) => !SCAFFOLD.test(a.body) && (!topic || `${a.entry} ${a.body}`.includes(topic)));
     const evidence = (evAtoms.length ? evAtoms : atoms).slice(-12).reverse().map((a) => ({ rel: a.rel, entry: a.entry, date: a.date }));
     let candidatesText: string | undefined;
     if (req.candidates && req.candidates.length) {

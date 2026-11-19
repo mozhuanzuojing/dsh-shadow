@@ -35,6 +35,7 @@
 | [0029](./0029-intent-direction.md) | 隐式偏好→最小偏移方向：规则信号+稀疏 TF-IDF 质心，`read_shadow({direction})` 只排序不裁决 | accepted |
 | [0030](./0030-ai-inquiry-multidim.md) | 对 AI 的多维背景问询：`read_shadow({inquiry})` 组装面/决策/口味/灵魂/证据 + 提问，供 AI 推出 0 偏移方向 | accepted |
 | [0031](./0031-direction-hardening.md) | 方向/问询加固：topic 严格采样 · 样本不足 fast-fail · 最近会话去噪 · 纠偏/性能基准门 | accepted |
+| [0032](./0032-direction-semantics-and-real-eval.md) | 方向语义修正（删除≠排除）· inquiry 纳入否决指令 · 真实标注评测 `--labeled`（仓外 JSONL） | accepted |
 
 ## 状态枚举
 
