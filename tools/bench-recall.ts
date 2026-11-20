@@ -28,10 +28,24 @@ if (!ws || !probesPath) {
 }
 
 type Probe = { q: string; expect?: string; note?: string; neg?: boolean };
-const probes: Probe[] = readFileSync(probesPath, "utf8")
-  .split("\n").map((l) => l.trim()).filter(Boolean).map((l) => JSON.parse(l) as Probe);
-const positives = probes.filter((p) => !p.neg && p.expect);
+let probes: Probe[];
+try {
+  probes = readFileSync(probesPath, "utf8")
+    .split("\n").map((l) => l.trim()).filter(Boolean)
+    .map((l, i) => {
+      try { return JSON.parse(l) as Probe; } catch { throw new Error(`probes 第 ${i + 1} 行不是合法 JSON`); }
+    });
+} catch (e) {
+  console.error(`读取 probes 失败：${(e as Error).message}`);
+  process.exit(2);
+}
+for (const [i, p] of probes.entries()) {
+  if (!p.q || !p.q.trim()) { console.error(`probes 第 ${i + 1} 行缺 q`); process.exit(2); }
+  if (!p.neg && !p.expect) { console.error(`probes 第 ${i + 1} 行是正例但缺 expect`); process.exit(2); }
+}
+const positives = probes.filter((p) => !p.neg) as { q: string; expect: string; note?: string }[];
 const negatives = probes.filter((p) => p.neg).map((p) => p.q);
+if (!positives.length) { console.error("probes 没有正例"); process.exit(2); }
 
 const deps = {
   fs: realFs,

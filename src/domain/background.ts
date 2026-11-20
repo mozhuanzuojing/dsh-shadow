@@ -92,38 +92,49 @@ export const buildBackground = (
   const ACK_DEC = /^(都做|同意|可以|好的?|好|行|要|收到|明白|了解|定稿|收尾|重启完成|重启了|就是这样|做上面|更新到本地|修复|剩余什么|不用|是的?|对|没有|有)[。！!，,、\s]*$/;
   const META_DEC = /(goal_round|Objective:|我找到了|人类不会|在 dsh-shadow 插件中落地|只读任务|只读核验|新问题：)/;
   const okDec = (d: string): boolean => d.length >= 3 && !ACK_DEC.test(d) && !META_DEC.test(d);
+  const isQuestion = (s: string): boolean => /[？?]\s*$/.test(s) || /^(为什么|怎么|如何|是否|什么|哪|多少|能不能|可不可以|决策和.+有区别吗)/.test(s);
   const decisions: string[] = [];
   const seen = new Set<string>();
   for (const a of top) {
     // 优先用 decisionEvents（带 reason）；无 reason 的再退回 decisions 文本，按 statement 去重。
     for (const ev of a.decisionEvents ?? []) {
       const st = ev.statement.trim();
-      if (!okDec(st) || seen.has(st)) continue;
+      if (!okDec(st) || isQuestion(st) || seen.has(st)) continue;
       seen.add(st);
       decisions.push(ev.reason ? `${st}（理由：${ev.reason.slice(0, 80)}）` : st);
     }
-    for (const d of a.decisions ?? []) if (okDec(d) && !seen.has(d)) { seen.add(d); decisions.push(d); }
-    for (const u of userLines(a.body)) if (classifyTurn(u) === "decision" && okDec(u) && !seen.has(u)) { seen.add(u); decisions.push(u); }
+    for (const d of a.decisions ?? []) if (okDec(d) && !isQuestion(d) && !seen.has(d)) { seen.add(d); decisions.push(d); }
+    for (const u of userLines(a.body)) if (classifyTurn(u) === "decision" && okDec(u) && !isQuestion(u) && !seen.has(u)) { seen.add(u); decisions.push(u); }
   }
   // 信息（事实/材料/约束）：材料引用 + 背景型原话（描述现状/不一致/来源），与决策并列进"大背景"。
+  // 去重按"裸文本"（去掉 `信息：` 前缀），避免同一句被原话与 info 各推一次。
   const info: string[] = [];
   const seenInfo = new Set<string>();
+  const seenMat = new Set<string>();
+  const bare = (s: string): string => s.replace(/^信息：/, "").trim();
+  const addInfo = (s: string, prefix = false): void => {
+    const b = bare(s);
+    if (!b || isQuestion(b) || seenInfo.has(b)) return;
+    seenInfo.add(b);
+    info.push((prefix ? "信息：" : "") + b.slice(0, 200));
+  };
   for (const a of top) {
     // 材料：显式 materials + 用户原话里出现的路径（仅补背景信息，不写回 ParsedAtom.materials，避免污染材料卡）。
     const userPaths = userLines(a.body).flatMap((u) => evidencePathsOf(u))
       .map((p) => p.replace(/\\/g, "/"))
       .filter((p) => p.length >= 3 && !p.startsWith(".shadow"));
     for (const m of [...(a.materials ?? []), ...userPaths].slice(0, 6)) {
-      const s = `材料：${m}`;
-      if (m && !seenInfo.has(s)) { seenInfo.add(s); info.push(s); }
+      const p = m.replace(/\\/g, "/");
+      // 只收相对、无反斜杠穿越的路径；绝对路径/.. 不进"相关信息"。
+      if (!p || /^([A-Za-z]:|\/)/.test(p) || p.split("/").includes("..")) continue;
+      if (seenMat.has(p)) continue;
+      seenMat.add(p);
+      addInfo(`材料：${p}`);
     }
     for (const u of userLines(a.body)) {
-      if (classifyTurn(u) === "background" && !seenInfo.has(u)) { seenInfo.add(u); info.push(u.slice(0, 120)); }
+      if (classifyTurn(u) === "background") addInfo(u);
     }
-    for (const s of a.info ?? []) {
-      const v = `信息：${s}`;
-      if (s && !seenInfo.has(v)) { seenInfo.add(v); info.push(v.slice(0, 120)); }
-    }
+    for (const s of a.info ?? []) addInfo(s, true);
   }
   return {
     topic,

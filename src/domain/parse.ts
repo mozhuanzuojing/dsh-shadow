@@ -8,7 +8,7 @@
 import { parseAtomName } from "../contract/paths.js";
 import type { AtomAxes, AtomKind, DecisionEvent, ParsedAtom } from "../contract/types.js";
 import { scrubUnsafe } from "./text.js";
-import { classifyTurn } from "./turn.js";
+import { classifyTurn, isPromptNoise } from "./turn.js";
 
 const fieldOf = (text: string, name: string): string => {
   const re = new RegExp(`^> ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}：(.+)$`, "m");
@@ -122,7 +122,7 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
   }
   // 历史回填（读时派生，不写存储）：信息从背景型原话补；单决策可用"因为/由于"行补 reason。
   // 材料不从正文任意路径补（会把"文档里提到的路径"误当材料，污染材料卡）——材料覆盖靠未来采集。
-  const bgInfo = userMessages.filter((u) => classifyTurn(u) === "background").slice(0, 6);
+  const bgInfo = userMessages.filter((u) => classifyTurn(u) === "background" && !isPromptNoise(u)).slice(0, 6);
   const allInfo = uniq([...info, ...bgInfo]).slice(0, 12);
   if (decisionEvents.length === 1 && !decisionEvents[0]!.reason) {
     const rl = userMessages.find((u) => /(因为|由于)/.test(u));

@@ -12,7 +12,7 @@
 export type TurnClass = "decision" | "confirmation" | "background" | "noise" | "";
 
 const NOISE_HEAD = /^(Background subagent|This is an automatically|Current DSH|The available skill|只读任务|只读，不改|只读核验|只读调研|只读（不改|独立代码审查|对一个 DSH|请.{0,10}评审|工作区 `|项目：`)/;
-const NOISE_ANY = /(Background subagent|This is an automatically generated|checkpoint condensing|Current runtime context|The following workspace instructions may be relevant)/i;
+const NOISE_ANY = /(Background subagent|This is an automatically generated|checkpoint condensing|Current runtime context|The following workspace instructions may be relevant|Time sampled while preparing|Browser time zone for this request|Elapsed since the preceding|The user switched|The user changed the approval policy|The user approved|The user declined|Current DSH file policy)/i;
 
 const CONFIRM_RE = /^(都做|同意|可以|好的?|好|行|嗯|收到|明白|了解|收尾|重启(完成|了)?|定稿|就这样|照做|没问题|要$|1$|是的?|对)[，。！!,、\s]*$/;
 
@@ -40,10 +40,12 @@ const PROMPT_PHRASES = [
   "只读核验，不改文件",
   "只读调研，不改文件",
   "独立代码审查一个 DSH",
+  "只针对一个 DSH",
   "请审查下面这份",
   "请独立挑坑",
   "请**独立挑坑**",
   "做一次「用 dsh-shadow",
+  "目标是挑坑",
 ];
 export const isPromptNoise = (text: unknown): boolean => {
   const s = String(text ?? "").trim();

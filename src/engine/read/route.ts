@@ -227,16 +227,35 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
     if (process.env.SHADOW_SEMANTIC === "1") {
       try {
         const { resolveEmbedderChain } = await import("./embedder-chain.js");
-        const emb = resolveEmbedderChain({ provider: process.env.SHADOW_EMBED_PROVIDER || "local" })[0]!;
+        const chain = resolveEmbedderChain({ provider: process.env.SHADOW_EMBED_PROVIDER || "local" });
         const cand = bg.evidence.map((rel) => byRel.get(rel)).filter(Boolean) as ParsedAtom[];
         if (cand.length) {
-          const qv = (await emb.embed([`${emb.queryPrefix ?? ""}${topic}`]))[0]!;
-          const dv = await emb.embed(cand.map((a) => `${emb.docPrefix ?? ""}${a.body.slice(0, 1200)}`));
-          const cos = (x: number[], y: number[]): number => x.reduce((s, v, i) => s + v * (y[i] ?? 0), 0);
-          const order = cand.map((a, i) => ({ rel: a.rel, s: cos(qv, dv[i] ?? []) })).sort((x, y) => y.s - x.s);
-          bg.evidence = order.map((o) => o.rel);
-          bg.handles = order.map((o) => byRel.get(o.rel)?.archiveRel ?? o.rel);
-          semanticNote = `语义重排：on（${emb.id}）`;
+          let done = false;
+          let lastErr = "no embedder";
+          for (const emb of chain) {
+            try {
+              const qv = (await emb.embed([`${emb.queryPrefix ?? ""}${topic}`]))[0];
+              const dv = await emb.embed(cand.map((a) => `${emb.docPrefix ?? ""}${a.body.slice(0, 1200)}`));
+              if (!qv || !dv.length || dv.some((v) => v.length !== qv.length)) {
+                lastErr = `维度不一致(${emb.id})`;
+                continue;
+              }
+              const cos = (x: number[], y: number[]): number => {
+                let s = 0, nx = 0, ny = 0;
+                for (let i = 0; i < x.length; i++) { s += x[i]! * (y[i] ?? 0); nx += x[i]! ** 2; ny += (y[i] ?? 0) ** 2; }
+                return nx && ny ? s / Math.sqrt(nx * ny) : 0;
+              };
+              const order = cand.map((a, i) => ({ rel: a.rel, s: cos(qv, dv[i] ?? []) })).sort((x, y) => y.s - x.s);
+              bg.evidence = order.map((o) => o.rel);
+              bg.handles = order.map((o) => byRel.get(o.rel)?.archiveRel ?? o.rel);
+              semanticNote = `语义重排：on（${emb.id}）`;
+              done = true;
+              break;
+            } catch (e) {
+              lastErr = String((e as Error).message ?? e).slice(0, 50);
+            }
+          }
+          if (!done) semanticNote = `⚠ 语义重排失败：${lastErr}（已回退词法）`;
         }
       } catch (e) {
         semanticNote = `⚠ 语义重排失败：${String((e as Error).message ?? e).slice(0, 60)}（已回退词法）`;
@@ -252,6 +271,10 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
       return out.join("\n");
     }
     out.push(`- 命中 ${bg.matched} 点 · 归并 ${bg.groups.length} 条线`);
+    if (!semanticNote) out.push("> 词法近似（语义默认关）· 决策/信息/边=推断，引用前核对");
+    // 先给"决策/信息"（最有用），再给线/网；避免长网把关键段挤到预算外。
+    if (bg.decisions.length) { out.push("", "## 相关决策/否决"); for (const d of bg.decisions) out.push(`- ${d}`); }
+    if (bg.info.length) { out.push("", "## 相关信息（事实/材料/约束）"); for (const s of bg.info) out.push(`- ${s}`); }
     out.push("", "## 相关线（点聚集）");
     for (const g of bg.groups.slice(0, 10)) out.push(`- ${g.rel.split("/").pop()} · ${g.count} 点 · ${g.from ?? "?"}→${g.to ?? "?"}${g.samples.length ? ` · 例：${g.samples[0]}` : ""}`);
     if (net.nodes.length) {
@@ -267,8 +290,6 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
       const sample = net.edges.slice(0, 5).map((e) => `${e.from.split("/").pop()} —${e.type}→ ${e.to.split("/").pop()}（${e.derivation}）`);
       if (sample.length) out.push(`  - 例边：${sample.join("；")}`);
     }
-    if (bg.decisions.length) { out.push("", "## 相关决策/否决"); for (const d of bg.decisions) out.push(`- ${d}`); }
-    if (bg.info.length) { out.push("", "## 相关信息（事实/材料/约束）"); for (const s of bg.info) out.push(`- ${s}`); }
     if (bg.taste && (bg.taste.prefer.length || bg.taste.avoid.length)) {
       out.push("", "## 相关口味");
       if (bg.taste.prefer.length) out.push(`- 偏好：${bg.taste.prefer.join("、")}`);

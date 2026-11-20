@@ -28,4 +28,4 @@ const missReason = withDec.filter((a) => !(a.decisionEvents ?? []).some((e) => (
 const missMat = withDec.filter((a) => (a.materials?.length ?? 0) === 0).slice(0, 5).map((a) => a.rel);
 console.log("- 待回填 reason（例）:", missReason.length ? missReason : "（无）");
 console.log("- 待回填 materials（例）:", missMat.length ? missMat : "（无）");
-console.log("> 只读审计；回填需另立工具并做备份/可回滚。");
+console.log("> 只读审计；info 已滤脚手架/元文本（parse 侧 isPromptNoise），读数可直采。回填需另立工具并做备份/可回滚。");

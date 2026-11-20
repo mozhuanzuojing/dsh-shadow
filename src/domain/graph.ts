@@ -23,7 +23,7 @@ const edgeCache = new Map<string, Edge[]>();
 const atomsSig = (atoms: ParsedAtom[], perNode: number): string => {
   let h = 0;
   for (const a of atoms) {
-    const s = `${a.rel}|${a.materials?.join(",") ?? ""}|${a.decisionEvents?.length ?? 0}|${perNode}`;
+    const s = `${a.rel}|${a.entry}|${a.date}|${a.time}|${a.materials?.join(",") ?? ""}|${a.decisions?.join(",") ?? ""}|${a.decisionEvents?.map((e) => e.statement + "|" + (e.reason ?? "")).join(",") ?? ""}|${perNode}`;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     // 正文内容也入签名：同长度不同内容不能命中旧缓存。
     for (let i = 0; i < a.body.length; i++) h = (h * 31 + a.body.charCodeAt(i)) | 0;
