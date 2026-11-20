@@ -48,8 +48,9 @@ const PROMPT_PHRASES = [
 export const isPromptNoise = (text: unknown): boolean => {
   const s = String(text ?? "").trim();
   if (!s) return false;
-  // 只看开头（正文中段出现"技术评审"等词是合法的，不能整条丢）。
-  const head = s.slice(0, 300);
+  // 判定对象 = 首条"用户："原话（任务 prompt 通常在用户行）；无用户行才看正文开头。
+  const firstUser = /^-\s*\[[^\]]*\]\s*\[[^\]]*\]\s*用户：(.+)$/m.exec(s)?.[1]?.trim() ?? "";
+  const head = (firstUser || s.slice(0, 300)).slice(0, 400);
   if (NOISE_HEAD.test(head) || NOISE_ANY.test(head)) return true;
   return PROMPT_PHRASES.some((p) => head.includes(p));
 };

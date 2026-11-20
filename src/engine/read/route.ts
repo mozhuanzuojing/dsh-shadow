@@ -222,10 +222,31 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
     const cAtoms = cleanRetrievalAtoms(atoms);
     const bg = buildBackground(cAtoms, topic, taste);
     const byRel = new Map(cAtoms.map((a) => [a.rel, a]));
+    // 可选真语义重排（默认关；SHADOW_SEMANTIC=1 才启用，复用现有 embedder 链 → 不新增依赖）。
+    let semanticNote: string | undefined;
+    if (process.env.SHADOW_SEMANTIC === "1") {
+      try {
+        const { resolveEmbedderChain } = await import("./embedder-chain.js");
+        const emb = resolveEmbedderChain({ provider: process.env.SHADOW_EMBED_PROVIDER || "local" })[0]!;
+        const cand = bg.evidence.map((rel) => byRel.get(rel)).filter(Boolean) as ParsedAtom[];
+        if (cand.length) {
+          const qv = (await emb.embed([`${emb.queryPrefix ?? ""}${topic}`]))[0]!;
+          const dv = await emb.embed(cand.map((a) => `${emb.docPrefix ?? ""}${a.body.slice(0, 1200)}`));
+          const cos = (x: number[], y: number[]): number => x.reduce((s, v, i) => s + v * (y[i] ?? 0), 0);
+          const order = cand.map((a, i) => ({ rel: a.rel, s: cos(qv, dv[i] ?? []) })).sort((x, y) => y.s - x.s);
+          bg.evidence = order.map((o) => o.rel);
+          bg.handles = order.map((o) => byRel.get(o.rel)?.archiveRel ?? o.rel);
+          semanticNote = `语义重排：on（${emb.id}）`;
+        }
+      } catch (e) {
+        semanticNote = `⚠ 语义重排失败：${String((e as Error).message ?? e).slice(0, 60)}（已回退词法）`;
+      }
+    }
     const edges = buildEdges(cAtoms);
     const net = activateNet(edges, bg.evidence.slice(0, 8), 2);
     const out = ["# 大背景（query 聚合 · 未来句 → 相近背景）", ""];
     if (tt.error) out.push(`> ⚠ taste.json 解析失败（口味未纳入）：${tt.error}`);
+    if (semanticNote) out.push(`> ${semanticNote}`);
     if (!bg.matched) {
       out.push(`（未找到与「${topic}」频率相近的记忆）`, "> 换更短/同义词，或 `read_shadow()` 无参看索引。");
       return out.join("\n");
@@ -235,7 +256,7 @@ const lensText = async (deps: ReadDeps, req: ReadRequest, atoms: ParsedAtom[]): 
     for (const g of bg.groups.slice(0, 10)) out.push(`- ${g.rel.split("/").pop()} · ${g.count} 点 · ${g.from ?? "?"}→${g.to ?? "?"}${g.samples.length ? ` · 例：${g.samples[0]}` : ""}`);
     if (net.nodes.length) {
       out.push("", `## 关系网（ego-net · ${net.nodes.length} 节点 / ${net.edges.length} 边 · 2 跳）`);
-      for (const rel of net.nodes.slice(0, 15)) {
+      for (const rel of net.nodes.slice(0, 30)) {
         const h = net.hop.get(rel) ?? 0;
         const a = byRel.get(rel);
         out.push(`- [h${h}] ${rel}${a?.summary ? ` · ${a.summary.slice(0, 60)}` : ""}`);

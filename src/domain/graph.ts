@@ -18,7 +18,23 @@ const ts = (a: ParsedAtom): string => `${a.date}${a.time ? " " + String(a.time) 
 const lineOf = (rel: string): string => rel.split("#")[0] ?? rel;
 
 /** 从 atom 字段确定性派生边（每个节点每类最多 perNode 条，防爆）。 */
+/** 从 atom 字段确定性派生边（每个节点每类最多 perNode 条，防爆）。按 atoms 签名缓存（读多时避免全量重建）。 */
+const edgeCache = new Map<string, Edge[]>();
+const atomsSig = (atoms: ParsedAtom[], perNode: number): string => {
+  let h = 0;
+  for (const a of atoms) {
+    const s = `${a.rel}|${a.materials?.join(",") ?? ""}|${a.decisionEvents?.length ?? 0}|${perNode}`;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    // 正文内容也入签名：同长度不同内容不能命中旧缓存。
+    for (let i = 0; i < a.body.length; i++) h = (h * 31 + a.body.charCodeAt(i)) | 0;
+  }
+  return `${h}:${atoms.length}`;
+};
+
 export const buildEdges = (atoms: ParsedAtom[], perNode = 4): Edge[] => {
+  const key = atomsSig(atoms, perNode);
+  const hit = edgeCache.get(key);
+  if (hit) return hit;
   const out: Edge[] = [];
   const push = (from: string, to: string, type: EdgeType, derivation: string): void => {
     if (from && to && from !== to) out.push({ from, to, type, derivation });
@@ -121,6 +137,8 @@ export const buildEdges = (atoms: ParsedAtom[], perNode = 4): Edge[] => {
     }
   }
 
+  edgeCache.set(key, out);
+  if (edgeCache.size > 2) edgeCache.delete(edgeCache.keys().next().value as string);
   return out;
 };
 

@@ -6,6 +6,7 @@
 import type { ParsedAtom } from "../contract/types.js";
 import { searchTerms } from "./bm25.js";
 import { classifyTurn } from "./turn.js";
+import { evidencePathsOf } from "./text.js";
 
 export interface BackgroundGroup {
   rel: string;
@@ -94,6 +95,13 @@ export const buildBackground = (
   const decisions: string[] = [];
   const seen = new Set<string>();
   for (const a of top) {
+    // 优先用 decisionEvents（带 reason）；无 reason 的再退回 decisions 文本，按 statement 去重。
+    for (const ev of a.decisionEvents ?? []) {
+      const st = ev.statement.trim();
+      if (!okDec(st) || seen.has(st)) continue;
+      seen.add(st);
+      decisions.push(ev.reason ? `${st}（理由：${ev.reason.slice(0, 80)}）` : st);
+    }
     for (const d of a.decisions ?? []) if (okDec(d) && !seen.has(d)) { seen.add(d); decisions.push(d); }
     for (const u of userLines(a.body)) if (classifyTurn(u) === "decision" && okDec(u) && !seen.has(u)) { seen.add(u); decisions.push(u); }
   }
@@ -101,7 +109,11 @@ export const buildBackground = (
   const info: string[] = [];
   const seenInfo = new Set<string>();
   for (const a of top) {
-    for (const m of a.materials ?? []) {
+    // 材料：显式 materials + 用户原话里出现的路径（仅补背景信息，不写回 ParsedAtom.materials，避免污染材料卡）。
+    const userPaths = userLines(a.body).flatMap((u) => evidencePathsOf(u))
+      .map((p) => p.replace(/\\/g, "/"))
+      .filter((p) => p.length >= 3 && !p.startsWith(".shadow"));
+    for (const m of [...(a.materials ?? []), ...userPaths].slice(0, 6)) {
       const s = `材料：${m}`;
       if (m && !seenInfo.has(s)) { seenInfo.add(s); info.push(s); }
     }
