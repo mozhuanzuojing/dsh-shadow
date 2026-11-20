@@ -67,7 +67,7 @@ export const parseAtom = (text: string, rel: string, name: string): ParsedAtom =
   const info = fieldOf(body, "信息")
     .split(/[；;]/)
     .map((s) => s.trim())
-    .filter(Boolean)
+    .filter((s) => s && !isPromptNoise(s))
     .slice(0, 12);
 
   const decisions: string[] = [];
