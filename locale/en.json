@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Shadow memory",
+    "description": "Projection memory that keeps the why behind each turn: point → line → face → observation, with lines as the source and atoms as the evidence ledger. Registers 8 tools for recall, cross-type query, user adjudication, code search, and a capability ledger; derived indexes can be rebuilt from the sources.",
+    "detail": "docs/DETAIL.md"
+  }
+}

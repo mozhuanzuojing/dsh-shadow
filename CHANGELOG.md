@@ -6,6 +6,42 @@
 
 （无）
 
+## [3.0.13] — 2026-11-25
+
+**首次发布到 npm**（包名 `dsh-shadow`），并补齐它作为可安装 bundle 的分发形态。
+v3.0.0–v3.0.12 只发 git tag、未逐版留小节；逐版历史见 tag，当前实现状态见
+[docs/v2/STATUS.md](./docs/v2/STATUS.md)。
+
+### 新增（分发形态）
+
+- `package.json` 补 `author` / `icon`，`exports` 增加 `./icon` 与 `./locale/*.json`，`files` 纳入
+  `icon.svg`、`locale/*.json`、`docs/DETAIL.md`——Plugin Manager 才会显示标题、描述、图标与详情页，
+  而不是回退成包名 + 原始 description + 默认图。
+- 新增 `locale/zh.json` + `locale/en.json`（`meta.title` / `meta.description` / `meta.detail`）与
+  `docs/DETAIL.md`（功能、用法、边界与代价、验证到哪一步）。
+- 新增 `icon.svg`：36×36 透明三层投影（点 → 线 → 面），由 Plugin Manager 自己画底框，不自带底板。
+- `prepack` 接 `npm run build`：`npm publish` / `npm pack` 一律先构建，避免把工作区里过期的
+  `dist/` 发出去（`dist/` 不进 git，新克隆没有产物）。
+- 新增 `tools/check-pack-loadable.ts`（`npm run check:pack`）：真 `npm pack` → 解包 →
+  装进隔离目录 → 真实 `import`，校验入口、随包 skill、`cordis.patch.yml`、locale 与 icon 在
+  **安装形态**下都成立。教训来自 dsh-remote-wsl：仓库内联调能跑 ≠ 从 npm 装上能跑。
+  `verify:release` = `verify` + `release` + `check:pack`。
+- `tools/release-check.ts`：`npm pack` 加 `--ignore-scripts` 保持本门只读；`mustPack` 增加
+  `icon.svg`、`locale/{zh,en}.json`、`docs/DETAIL.md`、`skills/dsh-shadow-routing/SKILL.md`。
+
+### 变更（文档）
+
+- `README.md` 安装节改写为 npm 三种装法（Plugin Manager / 手工 profile / 本地 link），并写明
+  安装代价：本地推理与语法解析会引入 `onnxruntime-*` + `tree-sitter-wasms`，实测装完约 0.5 GB；
+  首次向量检索需从 HuggingFace 下载 e5-small（离线回落哈希并在结果中注明）。
+
+### 已知边界
+
+- `npm install` 体积由 ADR-0022（默认本地神经向量）与 ADR-0020（tree-sitter 符号）决定，
+  属于设计代价；本版只做**如实披露**，不改依赖结构。
+- 插件在 Plugin Manager 里的显示（标题/描述/图标/详情页）在安装后才能确认；本版只校验随包资源
+  与安装形态可加载，不代替界面实测。
+
 ## [2.12.4] — 2026-11-07
 
 ### 修复（WSL/UNC 工作区卡死宿主）

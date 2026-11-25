@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="dsh-shadow">
+  <defs>
+    <linearGradient id="shadow-layer" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 20.5 L30 26.75 L18 33 L6 26.75 Z" fill="url(#shadow-layer)" fill-opacity="0.45"/>
+  <path d="M18 12.5 L30 18.75 L18 25 L6 18.75 Z" fill="url(#shadow-layer)" fill-opacity="0.7"/>
+  <path d="M18 4.5 L30 10.75 L18 17 L6 10.75 Z" fill="url(#shadow-layer)"/>
+  <circle cx="23.2" cy="9.1" r="1.4" fill="#ffffff"/>
+</svg>

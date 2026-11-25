@@ -1,7 +1,8 @@
 /**
  * v2 ops — 发版门（ADR-0012）：版本一致性 + 构建产物 + pack 内容 + tag 指向。
- * 只读：不 build、不写文件、不推送。`npm run verify:release` 先跑 verify（含 build），再跑本检查。
- * 发版顺序：提交 → `git tag v2.0.0` → `npm run verify:release` → push（tag 必须指向发布提交）。
+ * 只读：不 build、不写文件、不推送（`--ignore-scripts` 跳过 prepack，避免本门触发重建）。
+ * `npm run verify:release` 先跑 verify（含 build），再跑本检查与 check:pack（安装形态）。
+ * 发版顺序：提交 → `git tag v3.x.y` → `npm run verify:release` → push（tag 必须指向发布提交）→ `npm publish`。
  */
 
 import { execFileSync } from "node:child_process";
@@ -91,7 +92,9 @@ try {
   // Windows 上 npm 是 .cmd，不能直接 execFile；用 cmd.exe /c 调用，避免 shell:true 的拼接告警。
   const npmCommand = process.platform === "win32" ? "cmd.exe" : "npm";
   const npmArgs =
-    process.platform === "win32" ? ["/c", "npm", "pack", "--dry-run", "--json"] : ["pack", "--dry-run", "--json"];
+    process.platform === "win32"
+      ? ["/c", "npm", "pack", "--dry-run", "--json", "--ignore-scripts"]
+      : ["pack", "--dry-run", "--json", "--ignore-scripts"];
   const raw = execFileSync(npmCommand, npmArgs, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -109,8 +112,13 @@ if (pack) {
     "LICENSE",
     "cordis.patch.yml",
     "CHANGELOG.md",
+    "icon.svg",
+    "locale/zh.json",
+    "locale/en.json",
+    "docs/DETAIL.md",
     "dist/index.js",
     "dist/index.d.ts",
+    "skills/dsh-shadow-routing/SKILL.md",
   ];
   for (const path of mustPack) {
     if (!paths.has(path)) fail(`pack 缺 ${path}`);

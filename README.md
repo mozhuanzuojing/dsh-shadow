@@ -32,21 +32,25 @@
 
 ## 安装
 
-v2.0.0 以 git tag 发布，**npm registry 尚未发布**（ADR-0012）。两种装法：
+已发布到 npm（包名 `dsh-shadow`，MIT）。三种装法：
 
 ```powershell
-# 方式一：本地 link（开发态 / 本机验证）
-# profile package.json: "dsh-shadow": "link:D:/project/dsh-shadow"
+# 方式一：Plugin Manager（推荐）—— Plugins → Add plugin 填包名 dsh-shadow，
+# 等价于 plugin_manager install_bundle（target: "dsh-shadow"）；profile 由宿主自己管。
+
+# 方式二：手工写 profile（桌面版由宿主物化依赖，重启 DSH 生效）
+# profile package.json:
+#   "dependencies": { "dsh-shadow": "^3.0.13" }
+#   "dsh": { "profile": { "bundles": [..., "dsh-shadow"] } }
+
+# 方式三：本地 link（开发态 / 改源码；改完 npm run build，宿主重启）
+# profile package.json: "dsh-shadow": "link:D:/project/dsh1/dsh-shadow"
 npm install
 npm run build
 npm run verify
-
-# 方式二：从 tag 构建 tarball
-git checkout v2.0.0
-npm install; npm run build; npm pack      # → dsh-shadow-2.0.0.tgz
-# 在 DSH profile 目录：pnpm add file:<path>/dsh-shadow-2.0.0.tgz
-# profile 的 dsh.profile.bundles 加 "dsh-shadow"；无功能开关，lab 也始终注册
 ```
+
+装之前先知道代价：`npm install` 会带入本地推理与语法解析（`onnxruntime-node`/`onnxruntime-web`、`tree-sitter-wasms`），实测装完约 **0.5 GB**（包本身 ~0.5 MB）；首次向量检索还要从 HuggingFace 下载 `e5-small` 模型到 `~/.cache/huggingface`。缺件不静默：向量段落回哈希并注明原因，符号段标 `unavailable`。
 
 新克隆后 `npm run verify` 是自包含的（不要求工作区有 `.shadow`）；需要真实语料的 benchmark 走 `npm run verify:corpus`。
 

@@ -2,6 +2,8 @@
   "name": "dsh-shadow",
   "version": "3.0.13",
   "description": "dsh-shadow v3 — 给 agent 记「为什么」的多维投影记忆：点→线→面→观察意识 + scope（会话/工作区/用户）升维；线为源、atoms 为证据账本，派生可重建、降级可见。",
+  "author": "磨砖做镜 (mozhuanzuojing) <mozhuanzuojing2020@163.com>",
+  "icon": "./icon.svg",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mozhuanzuojing/dsh-shadow.git"
@@ -19,12 +21,17 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "dist",
     "skills",
     "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "docs/DETAIL.md",
     "docs/v2/*.md",
     "docs/adr/*.md",
     "CHANGELOG.md",
@@ -46,8 +53,10 @@
     "bench:direction": "node tools/bench-direction.ts",
     "bench:recall": "node tools/bench-recall.ts",
     "audit:enrich": "node tools/audit-enrich.ts",
-    "verify:release": "npm run verify && node tools/release-check.ts",
+    "verify:release": "npm run verify && npm run release && npm run check:pack",
     "release": "node tools/release-check.ts",
+    "check:pack": "node tools/check-pack-loadable.ts",
+    "prepack": "npm run build",
     "lab:modes": "node tools/mode-registry.ts --list --writes",
     "migrate:v1": "node tools/migrate-v1.ts"
   },
