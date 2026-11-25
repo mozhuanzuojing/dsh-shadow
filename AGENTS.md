@@ -5,12 +5,19 @@
 ## 分支与版本
 
 - `main` / `v2`：v2 重写；`legacy/v1` + tag `legacy-v1`：v1 冻结基线（`e755b32`）。
-- 提交后推 `origin`；发版走 `npm run verify:release` + tag `v2.x.y`（Phase 5 落地）。
+- 提交后推 `origin`；发版走 `npm run verify:release`（verify + release 门 + check:pack 安装形态门），
+  再打 tag `v3.x.y` 指向发布提交、push，最后发 npm。ADR-0012 写的是「只发 git tag」，
+  2026-11-25 起已实际发布到 npm（`dsh-shadow@3.0.13`），以本文件与 STATUS 为准。
+- **npm 发布是 staged publishing**：`npm stage publish` 只是暂存，必须在 npmjs.com 上批准
+  （2FA proof-of-presence）才上线；本机 token 只能暂存、`npm publish` 会报 `E_STAGE_REQUIRED`，
+  `npm stage approve` 会报 `EOTP`（需要人）。首次发布会在 registry 留 `0.0.0-stage` 占位版本。
 - 不修改 `legacy/v1` 分支；不删除 v1 归档。
 
 ## 构建与验证
 
-- Node ≥ 26；TypeScript strict；零运行时依赖（只用 `node:` 内置，含 `node:sqlite`）。
+- Node ≥ 26；TypeScript strict。运行时依赖只有三项，且都是**动态 import、缺件即降级**（不静默）：
+  `web-tree-sitter@0.20.8` + `tree-sitter-wasms`（符号，ADR-0020）、`@huggingface/transformers`（本地神经向量，ADR-0022）。
+  安装体积约 0.5 GB 主要来自 `onnxruntime-*`，属设计代价，不在发布时压缩。
 - 构建：`npm run build`（clean + tsc，产物 `dist/`，不进 git）。
 - 验证：`npm run verify`（自包含：typecheck + tools/tests 类型门 + 测试 + 结构门 + 文档门）。
 - 语料基准：`npm run verify:corpus`（需要 `SHADOW_CORPUS`，Phase 2 落地）。
