@@ -2,7 +2,8 @@
 
 > **给 agent 记「为什么」的多维投影记忆——Observer 是中心，文件是投影面；而每个点都带着它那一句话的庞大背景。** 每句话都不是孤零零一句：背后有坐标、证据链、材料、当时的决策与动作。v3 把这份**完整背景随点一起保存**（点内嵌完整正文），再沿「时间 × 同一件事」升维成 线 → 面 → 观察意识；真正的产品仍是「面」，并诚实标出看不到的整全（盲区）。
 >
-> 状态：**v3.0.13（2026-11-20）**。v1 冻结在 `legacy/v1`（tag `legacy-v1`）；升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)，变更见 [CHANGELOG](./CHANGELOG.md)。
+> 状态：**v3.0.14（2026-11-25）**。v1 冻结在 `legacy/v1`（tag `legacy-v1`）；升级/回滚见 [MIGRATION](./docs/v2/MIGRATION.md)，变更见 [CHANGELOG](./CHANGELOG.md)。
+> 运行要求：Node ≥ 26、**DSH ≥ 0.2.2-rc.5**（`engines.dsh` 是宿主真正校验的字段，装到更低版本会被判 `incompatible-version`）。
 >
 > **维度口径（诚实，ADR-0036）**：点 → 线 → 面 → 观察意识 是**四层投影**，**时间只是坐标轴**（无 `dim:time`）。**观察意识当前=全局单层聚合**（计数/频次/盲区固定文案；多视角、盲区来自"被排除点"待落地）。面里 `task`/`project` 为实质取景，`session`/`day` 为聚合；`dim:line` 与 face 的"线"是两套口径。
 
@@ -40,7 +41,7 @@
 
 # 方式二：手工写 profile（桌面版由宿主物化依赖，重启 DSH 生效）
 # profile package.json:
-#   "dependencies": { "dsh-shadow": "^3.0.13" }
+#   "dependencies": { "dsh-shadow": "^3.0.14" }
 #   "dsh": { "profile": { "bundles": [..., "dsh-shadow"] } }
 
 # 方式三：本地 link（开发态 / 改源码；改完 npm run build，宿主重启）

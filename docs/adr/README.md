@@ -1,6 +1,6 @@
 # dsh-shadow v2 · ADR 索引
 
-> 当前态决策记录（28 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
+> 当前态决策记录（38 条）。v1 的 124 条 ADR 冻结在 [`../v1/adr/`](../v1/adr/)，不改正文。
 
 | ID | 标题 | 状态 |
 |---|---|---|
@@ -41,6 +41,7 @@
 | [0035](./0035-bundled-routing-skill.md) | 内置 bundled skill provider：`dsh-shadow-routing` 随插件走（不落 ~/.dsh/skills），装即出现、卸载即消失 | accepted |
 | [0036](./0036-dimension-wording.md) | 维度口径澄清：**四层投影（点→线→面→观察意识）+ 时间轴**；意识=全局单层聚合；面 task/project 实质、session/day 聚合 | accepted |
 | [0037](./0037-background-recall.md) | 频率相近的「大背景」召回：`read_shadow({background})` 去噪+用户行打分+2gram/罕见字 + 组装线/决策/口味/句柄；bench-recall 16/16、假阳0/15 | accepted |
+| [0038](./0038-npm-publish-and-dsh-compat.md) | npm 发布（staged publishing）与 DSH 兼容口径：`engines.dsh` 是唯一被校验字段，`dsh.compatibility.dshReleases` 不被读取 | accepted |
 
 ## 状态枚举
 

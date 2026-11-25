@@ -30,6 +30,6 @@
 
 ## 验证到哪一步
 
-- 仓库内 `npm run verify` 覆盖 typecheck、89 个测试文件（单元 / 失败注入 / e2e / parity）、分层门与文档门。
+- 仓库内 `npm run verify` 覆盖 typecheck、全部测试文件（单元 / 失败注入 / e2e / parity）、分层门与文档门。
 - `npm run check:pack` 会把 `npm pack` 的 tarball 装进隔离目录并真实 `import`，确认安装形态可用（不只是仓库内联调能跑）。
 - 已发布形态在 Plugin Manager 的显示（标题 / 描述 / 图标）需要安装后实际看一眼；未安装时不做断言。

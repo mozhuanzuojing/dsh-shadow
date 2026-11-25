@@ -1,6 +1,6 @@
 # ADR-0012: 发版与版本策略
 
-- 状态：已接受（v2.0-dev）
+- 状态：已接受（v2.0-dev）；**部分被 [ADR-0038](./0038-npm-publish-and-dsh-compat.md) 取代**（2026-11-25：已实际发布到 npm，发布走 staged publishing）
 - 日期：2026-10-28
 - 关联：ADR-0001、ADR-0010
 - 定位：v2.0.0 与 lab 的版本边界。

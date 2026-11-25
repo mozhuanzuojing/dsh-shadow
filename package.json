@@ -1,6 +1,6 @@
 {
   "name": "dsh-shadow",
-  "version": "3.0.13",
+  "version": "3.0.14",
   "description": "dsh-shadow v3 — 给 agent 记「为什么」的多维投影记忆：点→线→面→观察意识 + scope（会话/工作区/用户）升维；线为源、atoms 为证据账本，派生可重建、降级可见。",
   "author": "磨砖做镜 (mozhuanzuojing) <mozhuanzuojing2020@163.com>",
   "icon": "./icon.svg",
@@ -70,7 +70,7 @@
   ],
   "engines": {
     "node": ">=26",
-    "dsh": ">=0.2.2-rc.2"
+    "dsh": ">=0.2.2-rc.5"
   },
   "dsh": {
     "bundle": {

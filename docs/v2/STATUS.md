@@ -153,15 +153,15 @@
 ## 关键数字（可重放）
 
 ```powershell
-npm run verify                 # 34/34 + layers + docs
+npm run verify                 # typecheck + 全量测试 + layers + docs（数字以输出为准）
 node tools/corpus-bench.ts 1000
 node tools/corpus-bench.ts 8000
 node tools/migrate-v1.ts --from fixtures\oracle-v1\corpus --dry-run
 node test/parity/topic.test.ts
 ```
 
-- 核心 schema：`read_shadow` 12 参数；4 工具合计 2,729 字符（toolset 真实台账后）；lab 51 mode 的 input 契约在 `src/lab/schema.ts`。
-- 测试：34 文件/检查（unit + failure + parity + e2e）。
+- 核心 schema：`read_shadow` 的 input 契约在 `src/surface/tools.ts`；lab 51 mode 的 input 契约在 `src/lab/schema.ts`（参数/计数以源码为准，不手写）。
+- 测试：unit + failure + parity + e2e，文件数与通过数以 `npm run verify` 输出为准。
 - 派生件：无参读最多 68 个派生文件（材料卡 24 · 纪要 8 · Episode 12 · abstract 24），内容不变不写。
 - 工具集台账：107 条（provider 2 + reference 105）· 17 分类。
 - 真实语料：168 atoms、0 解析失败（只读 dry-run；未 in-place）。

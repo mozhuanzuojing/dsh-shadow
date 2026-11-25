@@ -18,6 +18,8 @@
 - Node ≥ 26；TypeScript strict。运行时依赖只有三项，且都是**动态 import、缺件即降级**（不静默）：
   `web-tree-sitter@0.20.8` + `tree-sitter-wasms`（符号，ADR-0020）、`@huggingface/transformers`（本地神经向量，ADR-0022）。
   安装体积约 0.5 GB 主要来自 `onnxruntime-*`，属设计代价，不在发布时压缩。
+- **DSH 兼容口径**：只写 `engines.dsh`，取**实际验证过的 DSH 版本**当下限（当前 `>=0.2.2-rc.5`）；
+  不写 `dsh.compatibility.dshReleases`——0.2.2-rc.5 里没有代码读它（ADR-0038）。
 - 构建：`npm run build`（clean + tsc，产物 `dist/`，不进 git）。
 - 验证：`npm run verify`（自包含：typecheck + tools/tests 类型门 + 测试 + 结构门 + 文档门）。
 - 语料基准：`npm run verify:corpus`（需要 `SHADOW_CORPUS`，Phase 2 落地）。
