@@ -24,7 +24,7 @@
 
 - **安装体积**：默认能力带本地推理与符号解析，`npm install` 会拉入 `onnxruntime-node`/`onnxruntime-web` 与 `tree-sitter-wasms`，实测安装后约 0.5 GB（包本身 ~0.5 MB）。
 - **首次向量检索**：需要从 HuggingFace 下载 `Xenova/multilingual-e5-small`（ONNX q8）到 `~/.cache/huggingface`；离线首次会回落哈希向量（非语义），结果里会注明。
-- **运行要求**：Node ≥ 26，DSH ≥ 0.2.2-rc.2。
+- **运行要求**：Node ≥ 26，DSH ≥ 0.2.2-rc.5（`engines.dsh` 是宿主真正校验的字段，低版本会被判 `incompatible-version`）。
 - **远端工作区**：Windows 上的 UNC / WSL（9P）路径会跳过派生 SQLite 索引，直接读 atoms，并留 `index/REMOTE_FS` 信号（派生索引可重建，atoms 是权威）。
 - **隐私**：记忆只写在工作区 `.shadow/`，不上传；`search_code` 只读。
 
